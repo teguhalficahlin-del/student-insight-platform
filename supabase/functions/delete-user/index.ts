@@ -106,7 +106,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
             }
         }
 
-        // 3. Hapus baris di tabel users
+        // 3. Hapus baris dependen yang mereferensi users
+        if (targetUser.role_type === 'ORTU') {
+            const { error: spErr } = await admin
+                .from('student_parents')
+                .delete()
+                .eq('parent_user_id', user_id);
+            if (spErr) {
+                console.error('[delete-user] student_parents delete failed:', spErr);
+                return internalError(spErr);
+            }
+        }
+
+        // 4. Hapus baris di tabel users
         const { error: deleteErr } = await admin
             .from('users')
             .delete()
