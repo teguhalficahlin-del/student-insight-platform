@@ -64,22 +64,22 @@ function createOverlay() {
                 <button type="button" class="btn btn-secondary sched-close">✕ Tutup</button>
             </div>
 
+            <div class="sched-toolbar">
+                <div class="sched-grade-tabs" id="sched-grade-tabs">
+                    ${GRADES.map(g => `<button type="button" class="sched-tab ${g === state.grade ? 'active' : ''}" data-grade="${g}">${GRADE_LABELS[g]}</button>`).join('')}
+                </div>
+                <button type="button" class="btn btn-secondary" id="sched-add-slot" style="padding:6px 12px">+ Slot Mengajar</button>
+                <button type="button" class="btn btn-secondary" id="sched-add-break" style="padding:6px 12px">+ Istirahat/Kegiatan</button>
+                <span class="sched-conflict-count" id="sched-conflict-count"></span>
+                <button type="button" class="btn btn-primary" id="sched-save" style="padding:6px 16px;margin-left:auto">Simpan</button>
+            </div>
+
             <div class="sched-body">
                 <div class="sched-sidebar" id="sched-day-tabs">
                     ${DAYS.map(d => `<button type="button" class="sched-day-btn ${d === state.day ? 'active' : ''}" data-day="${d}">${DAY_LABELS[d]}</button>`).join('')}
                 </div>
 
                 <div class="sched-main">
-                    <div class="sched-toolbar">
-                        <div class="sched-grade-tabs" id="sched-grade-tabs">
-                            ${GRADES.map(g => `<button type="button" class="sched-tab ${g === state.grade ? 'active' : ''}" data-grade="${g}">${GRADE_LABELS[g]}</button>`).join('')}
-                        </div>
-                        <button type="button" class="btn btn-secondary" id="sched-add-slot" style="padding:6px 12px">+ Slot Mengajar</button>
-                        <button type="button" class="btn btn-secondary" id="sched-add-break" style="padding:6px 12px">+ Istirahat/Kegiatan</button>
-                        <span class="sched-conflict-count" id="sched-conflict-count"></span>
-                        <button type="button" class="btn btn-primary" id="sched-save" style="padding:6px 16px;margin-left:auto">Simpan</button>
-                    </div>
-
                     <div class="sched-grid-wrapper" id="sched-grid-wrapper">
                         <p class="hint" style="padding:20px;text-align:center">Memuat...</p>
                     </div>
