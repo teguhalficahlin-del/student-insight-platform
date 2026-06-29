@@ -344,7 +344,11 @@ export async function checkDependencies(table, id) {
 
     const items = [];
     results.forEach(({ count, error }, i) => {
-        if (error) throw error;
+        // RLS bisa menolak SELECT pada tabel tertentu — skip, jangan crash
+        if (error) {
+            console.warn(`[checkDependencies] ${deps[i].table}:`, error.message);
+            return;
+        }
         if (count > 0) {
             items.push({ label: DEPENDENCY_LABELS[deps[i].table] ?? deps[i].table, count });
         }
