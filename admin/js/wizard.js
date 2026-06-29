@@ -18,7 +18,7 @@ import {
     supabase,
     getCurrentUserRow, requireAdministrativeOrRedirect,
     getSchoolConfig, upsertSchoolConfig, markSetupCompleted,
-    getPrograms, getClasses, addProgram, deleteRecord, changePassword,
+    getPrograms, getClasses, addProgram, deleteRecord, deleteBulk, changePassword,
     importPrograms, importClasses, importUsers, importStudents, importSchedules,
     logout,
 } from './api.js';
@@ -908,7 +908,7 @@ async function refreshDataList(step) {
     try {
         const rows = await cfg.fetch();
         el.innerHTML = renderDataTable(cfg, rows);
-        wireDataDeleteButtons(step, cfg);
+        wireDataTable(step, cfg);
     } catch (err) {
         el.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal memuat data.')}</div>`;
     }
@@ -919,33 +919,87 @@ function renderDataTable(cfg, rows) {
     if (!rows.length) {
         return heading + '<p class="hint">Belum ada data. Unggah file di bawah untuk menambahkan.</p>';
     }
-    const delTh = cfg.deleteTable ? '<th style="width:48px"></th>' : '';
-    const head  = cfg.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('') + delTh;
-    const body  = rows.map(r => {
-        const cells = r.cells.map(c => `<td>${escapeHtml(String(c ?? ''))}</td>`).join('');
-        const del   = cfg.deleteTable
-            ? `<td><button type="button" class="btn btn-danger wz-data-del" data-id="${escapeAttr(r.id)}" title="Hapus" style="padding:4px 10px">✕</button></td>`
+
+    const canDelete = !!cfg.deleteTable;
+    const toolbar = canDelete ? `
+        <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap">
+            <button type="button" class="btn btn-danger wz-del-selected" disabled style="padding:6px 12px">Hapus Terpilih (0)</button>
+            <button type="button" class="btn btn-secondary wz-del-all" style="padding:6px 12px">Hapus Semua (${rows.length})</button>
+        </div>` : '';
+
+    const checkTh = canDelete
+        ? '<th style="width:36px"><input type="checkbox" class="wz-check-all" title="Pilih semua" /></th>'
+        : '';
+    const head = checkTh + cfg.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('');
+
+    const body = rows.map(r => {
+        const checkTd = canDelete
+            ? `<td><input type="checkbox" class="wz-check" value="${escapeAttr(r.id)}" /></td>`
             : '';
-        return `<tr>${cells}${del}</tr>`;
+        const cells = r.cells.map(c => `<td>${escapeHtml(String(c ?? ''))}</td>`).join('');
+        return `<tr>${checkTd}${cells}</tr>`;
     }).join('');
-    return heading + `<table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+
+    return heading + toolbar +
+        `<table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
-function wireDataDeleteButtons(step, cfg) {
+function wireDataTable(step, cfg) {
     if (!cfg.deleteTable) return;
-    contentEl.querySelectorAll('.wz-data-del').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            clearError();
-            btn.disabled = true;
-            try {
-                await deleteRecord(cfg.deleteTable, btn.dataset.id);
-                await refreshDataList(step);
-            } catch (err) {
-                showError(err.message ?? 'Gagal menghapus data.');
-                btn.disabled = false;
-            }
+
+    const checks   = Array.from(contentEl.querySelectorAll('.wz-check'));
+    const checkAll = contentEl.querySelector('.wz-check-all');
+    const selBtn   = contentEl.querySelector('.wz-del-selected');
+    const allBtn   = contentEl.querySelector('.wz-del-all');
+
+    const selectedIds = () => checks.filter(c => c.checked).map(c => c.value);
+
+    function syncSelectedBtn() {
+        const n = selectedIds().length;
+        selBtn.textContent = `Hapus Terpilih (${n})`;
+        selBtn.disabled = n === 0;
+        if (checkAll) checkAll.checked = n > 0 && n === checks.length;
+    }
+
+    checks.forEach(c => c.addEventListener('change', syncSelectedBtn));
+    if (checkAll) {
+        checkAll.addEventListener('change', () => {
+            checks.forEach(c => { c.checked = checkAll.checked; });
+            syncSelectedBtn();
         });
+    }
+
+    selBtn.addEventListener('click', () => {
+        const ids = selectedIds();
+        if (!ids.length) return;
+        if (!confirm(`Hapus ${ids.length} data terpilih? Tindakan ini tidak dapat dibatalkan.`)) return;
+        runBulkDelete(step, cfg, ids, selBtn);
     });
+
+    allBtn.addEventListener('click', () => {
+        const ids = checks.map(c => c.value);
+        if (!ids.length) return;
+        if (!confirm(`Hapus SEMUA ${ids.length} data pada langkah ini? Tindakan ini tidak dapat dibatalkan.`)) return;
+        runBulkDelete(step, cfg, ids, allBtn);
+    });
+}
+
+async function runBulkDelete(step, cfg, ids, btn) {
+    clearError();
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = `Menghapus ${ids.length}…`;
+    try {
+        const { deleted, errors } = await deleteBulk(cfg.deleteTable, ids);
+        if (errors.length) {
+            showError(`${deleted} terhapus, ${errors.length} gagal. Contoh: ${errors[0].message}`);
+        }
+    } catch (err) {
+        showError(err.message ?? 'Gagal menghapus data.');
+    } finally {
+        btn.textContent = label;
+        await refreshDataList(step);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
