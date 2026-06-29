@@ -408,16 +408,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
             if (existingSet.has(row.nip_atau_nik)) {
                 // Existing account — update full_name only. Auth/password
                 // and wali_kelas_class_id are intentionally left untouched.
-                const updatePatch: Record<string, unknown> = { full_name: row.nama };
+                const updatePatch: Record<string, unknown> = {
+                    full_name: row.nama,
+                    role_type: row.role_type,
+                };
                 if (row.teacher_code) updatePatch.teacher_code = row.teacher_code;
+                if (!row.teacher_code && row.role_type !== 'GURU') updatePatch.teacher_code = null;
                 if (row.wali_kelas_class_id) updatePatch.wali_kelas_class_id = row.wali_kelas_class_id;
                 if (row.kaprodi_program_id) updatePatch.kaprodi_program_id = row.kaprodi_program_id;
-                if (row.jabatan) {
-                    updatePatch.is_bk = row.is_bk ?? false;
-                    updatePatch.is_kepsek = row.is_kepsek ?? false;
-                    updatePatch.is_waka_kurikulum = row.is_waka_kurikulum ?? false;
-                    updatePatch.is_waka_kesiswaan = row.is_waka_kesiswaan ?? false;
-                }
+                updatePatch.is_bk = row.is_bk ?? false;
+                updatePatch.is_kepsek = row.is_kepsek ?? false;
+                updatePatch.is_waka_kurikulum = row.is_waka_kurikulum ?? false;
+                updatePatch.is_waka_kesiswaan = row.is_waka_kesiswaan ?? false;
 
                 const { error: updateErr } = await admin
                     .from('users')

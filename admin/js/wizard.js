@@ -742,7 +742,7 @@ function importFnForStep(step) {
     switch (step) {
         case 3: return importPrograms;
         case 4: return importClasses;
-        case 5: return (csv) => importUsers(injectColumn(csv, 'role_type', 'GURU', true));
+        case 5: return importUsers;
         case 6: return importStudents;
         case 7: return importParents;
         case 8: return importDudi;
