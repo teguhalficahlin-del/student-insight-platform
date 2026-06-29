@@ -952,6 +952,9 @@ function wireDataTable(step, cfg) {
     const selBtn   = contentEl.querySelector('.wz-del-selected');
     const allBtn   = contentEl.querySelector('.wz-del-all');
 
+    // Tabel kosong (tanpa toolbar/checkbox) — tidak ada yang perlu di-wire.
+    if (!selBtn || !allBtn) return;
+
     const selectedIds = () => checks.filter(c => c.checked).map(c => c.value);
 
     function syncSelectedBtn() {
