@@ -810,8 +810,9 @@ const STEP_LIST = {
     },
     4: {
         title: 'Kelas terdaftar',
-        headers: ['Nama Kelas', 'Program', 'Tingkat'],
+        headers: ['Nama Kelas', 'Tingkat'],
         deleteTable: 'classes',
+        groupBy: 'group',
         editFields: [
             { key: 'name', label: 'Nama Kelas' },
         ],
@@ -819,9 +820,11 @@ const STEP_LIST = {
         fetch: async () => {
             const [classes, programs] = await Promise.all([getClasses(), getPrograms()]);
             const pm = new Map(programs.map(p => [p.program_id, p.code]));
+            const pn = new Map(programs.map(p => [p.program_id, p.name]));
             return classes.map(c => ({
                 id: c.class_id,
-                cells: [c.name, pm.get(c.program_id) ?? '—', c.grade_level],
+                cells: [c.name, c.grade_level],
+                group: pn.get(c.program_id) ?? '—',
                 editData: { name: c.name },
             }));
         },
@@ -1012,6 +1015,10 @@ function renderDataTable(cfg, rows) {
         return heading + toolbar + renderNestedAccordion(cfg, rows) + allIdsJson;
     }
 
+    if (cfg.groupBy) {
+        return heading + toolbar + renderGroupedAccordion(cfg, rows) + allIdsJson;
+    }
+
     const hasEdit = !!cfg.editFields;
     const checkTh = canDelete
         ? '<th style="width:36px"><input type="checkbox" class="wz-check-all" title="Pilih semua" /></th>'
@@ -1040,6 +1047,34 @@ function renderRow(r, canDelete, hasEdit) {
         ? `<td><button type="button" class="btn btn-secondary wz-edit-btn" data-id="${escapeAttr(r.id)}" data-edit='${escapeAttr(JSON.stringify(r.editData ?? {}))}' style="padding:2px 8px;font-size:12px">✎</button></td>`
         : '';
     return `<tr>${checkTd}${cells}${editTd}</tr>`;
+}
+
+function renderGroupedAccordion(cfg, rows) {
+    const canDelete = !!cfg.deleteTable;
+    const hasEdit = !!cfg.editFields;
+    const groups = new Map();
+    for (const r of rows) {
+        const key = r[cfg.groupBy] ?? '—';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(r);
+    }
+
+    const checkTh = canDelete
+        ? '<th style="width:36px"><input type="checkbox" class="wz-group-check-all" title="Pilih semua" /></th>'
+        : '';
+    const editTh = hasEdit ? '<th style="width:40px"></th>' : '';
+    const head = checkTh + cfg.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('') + editTh;
+
+    const sortedKeys = [...groups.keys()].sort((a, b) => a.localeCompare(b, 'id'));
+    return sortedKeys.map(key => {
+        const groupRows = groups.get(key);
+        const body = groupRows.map(r => renderRow(r, canDelete, hasEdit)).join('');
+        return `
+            <details class="wz-accordion" style="margin-bottom:8px">
+                <summary class="wz-accordion-header">${escapeHtml(key)} (${groupRows.length})</summary>
+                <table class="table" style="margin-top:4px"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+            </details>`;
+    }).join('');
 }
 
 function renderNestedAccordion(cfg, rows) {
