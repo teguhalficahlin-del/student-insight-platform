@@ -41,6 +41,7 @@ html, body {
 html.page-wizard,
 body.page-wizard {
     min-width: 360px;
+    overflow-x: hidden;
 }
 
 h1, h2, h3, h4 { margin: 0 0 8px; font-weight: 600; }
@@ -631,9 +632,12 @@ label {
 @media (max-width: 768px) {
     .wz-sidebar { display: none; }
     .wz-progress-mobile { display: flex; }
-    .wz-content { padding: 20px 16px; }
-    .wz-panel { padding: 20px; }
+    .wz-content { padding: 16px 14px; }
+    .wz-panel { padding: 18px 16px; }
     .wz-header { padding: 12px 16px; }
-    .wz-footer { padding: 14px 16px; }
+    .wz-header .wz-brand { font-size: 15px; }
+    .wz-header .wz-active-name { display: none; }
+    .wz-footer { padding: 12px 16px; }
+    .wz-footer .btn { flex: 1; padding: 12px; }
     .wz-logout-btn { font-size: 12px; padding: 5px 10px; }
 }
