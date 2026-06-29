@@ -28,7 +28,7 @@ import {
 
 import { openScheduleBuilder } from './schedule-builder.js';
 
-const TOTAL_STEPS = 10;
+const TOTAL_STEPS = 11;
 
 const STEP_NAMES = {
     1: 'Profil Sekolah',
@@ -39,8 +39,9 @@ const STEP_NAMES = {
     6: 'Siswa',
     7: 'Orang Tua',
     8: 'DUDI',
-    9: 'Jadwal',
-    10: 'Selesai',
+    9: 'Stakeholder',
+    10: 'Jadwal',
+    11: 'Selesai',
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -297,6 +298,62 @@ async function renderStep3() {
     nextBtn.disabled = programs.length < 1;
 }
 
+async function renderStakeholderStep() {
+    contentEl.innerHTML = `
+        <div class="step-label">Langkah 9 dari ${TOTAL_STEPS}</div>
+        <h3>Stakeholder</h3>
+        <p class="hint">Tambahkan akun stakeholder (komite sekolah, dinas pendidikan, dll). Stakeholder hanya bisa melihat ringkasan data sekolah, tidak bisa mengubah apa pun. Login menggunakan kode khusus yang Anda tentukan.</p>
+
+        <div id="wz-data-list"><p class="hint">Memuat data…</p></div>
+
+        <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
+        <h4 style="margin:0 0 12px">Tambah Stakeholder</h4>
+        <div class="field">
+            <label for="wz-sh-name">Nama</label>
+            <input type="text" id="wz-sh-name" class="input" placeholder="contoh: Komite Sekolah" />
+        </div>
+        <div class="field">
+            <label for="wz-sh-code">Kode Login</label>
+            <input type="text" id="wz-sh-code" class="input" maxlength="50" placeholder="contoh: KOMITE01" />
+            <p class="hint">Kode unik untuk login. Akan otomatis menjadi huruf besar.</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="wz-sh-add">Tambah</button>
+    `;
+
+    const codeInput = document.getElementById('wz-sh-code');
+    codeInput.addEventListener('input', () => { codeInput.value = codeInput.value.toUpperCase(); });
+
+    document.getElementById('wz-sh-add').addEventListener('click', async () => {
+        clearError();
+        const nameEl = document.getElementById('wz-sh-name');
+        const codeEl = document.getElementById('wz-sh-code');
+        const name = nameEl.value.trim();
+        const code = codeEl.value.trim().toUpperCase();
+
+        if (!name) { showError('Nama stakeholder wajib diisi.'); return; }
+        if (!code) { showError('Kode login wajib diisi.'); return; }
+
+        const addBtn = document.getElementById('wz-sh-add');
+        addBtn.disabled = true;
+        addBtn.textContent = 'Menyimpan…';
+        try {
+            const csv = `nama,nip_atau_nik,role_type\n${name},${code},STAKEHOLDER`;
+            await importUsers(csv);
+            nameEl.value = '';
+            codeEl.value = '';
+            await refreshDataList(9);
+        } catch (err) {
+            showError(err.message ?? 'Gagal menambah stakeholder.');
+        } finally {
+            addBtn.disabled = false;
+            addBtn.textContent = 'Tambah';
+        }
+    });
+
+    await refreshDataList(9);
+    nextBtn.disabled = false;
+}
+
 const STEP_RENDERERS = {
     1: renderStep1,
     2: renderStep2,
@@ -306,8 +363,9 @@ const STEP_RENDERERS = {
     6: renderImportStep,
     7: renderImportStep,
     8: renderImportStep,
-    9: renderImportStep,
-    10: renderSummaryStep,
+    9: renderStakeholderStep,
+    10: renderImportStep,
+    11: renderSummaryStep,
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -325,7 +383,7 @@ async function saveCurrentStep() {
         case 3: return saveStep3();
         // Langkah 4–9 berbasis impor: data tersimpan langsung saat unggah,
         // dan langkah-langkah ini opsional (boleh dilewati / dilanjutkan dari dashboard).
-        case 4: case 5: case 6: case 7: case 8: case 9: return;
+        case 4: case 5: case 6: case 7: case 8: case 9: case 10: return;
         default: throw new Error('Langkah ini belum tersedia. Gunakan tombol Sebelumnya untuk kembali.');
     }
 }
@@ -520,7 +578,7 @@ const EXCEL_TEMPLATES = {
              ['PT Mitra Teknologi Nusantara', 'Hendra Setiawan'],
              ['CV Karya Mandiri Elektronik', 'Yulia Permatasari'],
          ] },
-    9: { filename: 'template_jadwal.xlsx',
+    10: { filename: 'template_jadwal.xlsx',
          headers: ['nama_guru', 'nama_kelas', 'hari', 'start_time', 'end_time'],
          exampleRows: [
              ['Budi Santoso', 'X TKJ 1', 'Senin', '07:00', '08:30'],
@@ -590,8 +648,8 @@ const IMPORT_STEP_INFO = {
          desc: 'Impor akun orang tua/wali dan tautkan ke siswanya (lewat NIS). Siswa (Langkah 6) harus sudah ada. Satu orang tua dengan beberapa anak: tulis NIK yang sama di beberapa baris dengan NIS berbeda. NIK menjadi identitas login orang tua di Portal Orang Tua — orang tua masuk dengan NIK + password untuk melihat data anak. Upload ulang file akan memperbarui nama. Jika NIK salah ketik, hapus orang tua tersebut terlebih dahulu lalu impor ulang.' },
     8: { title: 'DUDI',
          desc: 'Impor data DUDI (Dunia Usaha/Dunia Industri) mitra PKL. Akun DUDI login memakai nama usaha (bukan NIK). Upload ulang file akan memperbarui nama usaha dan penanggung jawab.' },
-    9: { title: 'Jadwal',
-         desc: 'Impor jadwal mengajar mingguan: nama guru + kelas + waktu (tanpa mata pelajaran). Guru & kelas harus sudah terdaftar. Satu guru tidak boleh mengajar di kelas berbeda pada waktu yang tumpang-tindih — baris yang bentrok akan ditolak & dilaporkan.' },
+    10: { title: 'Jadwal',
+          desc: 'Impor jadwal mengajar mingguan: nama guru + kelas + waktu (tanpa mata pelajaran). Guru & kelas harus sudah terdaftar. Satu guru tidak boleh mengajar di kelas berbeda pada waktu yang tumpang-tindih — baris yang bentrok akan ditolak & dilaporkan.' },
 };
 
 /** Fungsi impor (edge function) untuk tiap langkah. Guru menyuntikkan
@@ -604,7 +662,7 @@ function importFnForStep(step) {
         case 6: return importStudents;
         case 7: return importParents;
         case 8: return importDudi;
-        case 9: return importSchedules;
+        case 10: return importSchedules;
         default: throw new Error(`Tidak ada importer untuk langkah ${step}`);
     }
 }
@@ -795,8 +853,8 @@ async function renderImportStep() {
     wireImportBlock(step, { onDone: () => refreshDataList(step) });
     await refreshDataList(step);
 
-    // Step 9: tombol Susun Jadwal visual
-    if (step === 9) {
+    // Step 10: tombol Susun Jadwal visual
+    if (step === 10) {
         const schedBtn = document.createElement('button');
         schedBtn.type = 'button';
         schedBtn.className = 'btn btn-primary';
@@ -980,6 +1038,27 @@ const STEP_LIST = {
         },
     },
     9: {
+        title: 'Stakeholder terdaftar',
+        headers: ['Nama', 'Kode Login'],
+        deleteTable: 'users',
+        editFields: [
+            { key: 'full_name', label: 'Nama' },
+            { key: 'login_identifier', label: 'Kode Login' },
+        ],
+        save: (id, vals) => updateUserIdentifier(id, vals),
+        fetch: async () => {
+            const data = await fetchAllRows('users',
+                q => q.select('user_id, full_name, login_identifier')
+                      .eq('role_type', 'STAKEHOLDER')
+                      .order('full_name'));
+            return data.map(u => ({
+                id: u.user_id,
+                cells: [u.full_name, u.login_identifier],
+                editData: { full_name: u.full_name, login_identifier: u.login_identifier },
+            }));
+        },
+    },
+    10: {
         title: 'Jadwal terdaftar',
         headers: ['Tanggal', 'Waktu', 'Kelas', 'Guru'],
         deleteTable: 'teaching_schedules',
@@ -1311,13 +1390,13 @@ const DELETE_ORDER_CHECKS = {
         { label: 'Kelas (langkah 4)',  table: 'classes',  query: q => q.select('class_id', { count: 'exact', head: true }) },
         { label: 'Siswa (langkah 6)',  table: 'students', query: q => q.select('student_id', { count: 'exact', head: true }) },
     ],
-    4: [ // Kelas: jadwal & enrollment harus kosong (enrollment di-cascade via siswa, tapi jadwal manual)
-        { label: 'Jadwal (langkah 9)', table: 'teaching_schedules', query: q => q.select('schedule_id', { count: 'exact', head: true }) },
-        { label: 'Siswa (langkah 6)',  table: 'students', query: q => q.select('student_id', { count: 'exact', head: true }) },
+    4: [ // Kelas: jadwal & siswa harus kosong
+        { label: 'Jadwal (langkah 10)', table: 'teaching_schedules', query: q => q.select('schedule_id', { count: 'exact', head: true }) },
+        { label: 'Siswa (langkah 6)',   table: 'students', query: q => q.select('student_id', { count: 'exact', head: true }) },
     ],
-    5: [ // Guru: jadwal harus kosong (teaching_assignments di-cascade via edge function)
-        { label: 'Jadwal (langkah 9)', table: 'teaching_schedules', query: q => q.select('schedule_id', { count: 'exact', head: true }) },
-        { label: 'Guru pengganti',     table: 'substitute_schedules', query: q => q.select('substitute_id', { count: 'exact', head: true }) },
+    5: [ // Staf: jadwal harus kosong
+        { label: 'Jadwal (langkah 10)', table: 'teaching_schedules', query: q => q.select('schedule_id', { count: 'exact', head: true }) },
+        { label: 'Guru pengganti',      table: 'substitute_schedules', query: q => q.select('substitute_id', { count: 'exact', head: true }) },
     ],
     6: [ // Siswa: data transaksional harus kosong (enrollment & student_parents di-cascade)
         { label: 'Kehadiran',   table: 'attendance',    query: q => q.select('attendance_id', { count: 'exact', head: true }) },
@@ -1328,7 +1407,7 @@ const DELETE_ORDER_CHECKS = {
     8: [ // DUDI: PKL harus kosong
         { label: 'PKL',         table: 'pkl_placements', query: q => q.select('placement_id', { count: 'exact', head: true }) },
     ],
-    9: [ // Jadwal: data transaksional harus kosong
+    10: [ // Jadwal: data transaksional harus kosong
         { label: 'Kehadiran',       table: 'attendance',           query: q => q.select('attendance_id', { count: 'exact', head: true }) },
         { label: 'Observasi',       table: 'observations',         query: q => q.select('observation_id', { count: 'exact', head: true }).not('schedule_id', 'is', null) },
         { label: 'Guru pengganti',  table: 'substitute_schedules', query: q => q.select('substitute_id', { count: 'exact', head: true }) },
