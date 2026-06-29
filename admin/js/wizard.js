@@ -19,6 +19,7 @@ import {
     getCurrentUserRow, requireAdministrativeOrRedirect,
     getSchoolConfig, upsertSchoolConfig, markSetupCompleted,
     getPrograms, getClasses, addProgram, deleteRecord, deleteBulk, changePassword,
+    fetchAllRows,
     importPrograms, importClasses, importUsers, importStudents, importSchedules,
     importParents, importDudi,
     logout,
@@ -879,12 +880,9 @@ const STEP_LIST = {
         headers: ['Nama', 'NIS'],
         deleteTable: 'students',
         fetch: async () => {
-            const { data, error } = await supabase
-                .from('students')
-                .select('student_id, full_name, nis')
-                .order('full_name');
-            if (error) throw error;
-            return (data ?? []).map(s => ({ id: s.student_id, cells: [s.full_name, s.nis] }));
+            const data = await fetchAllRows('students',
+                q => q.select('student_id, full_name, nis').order('full_name'));
+            return data.map(s => ({ id: s.student_id, cells: [s.full_name, s.nis] }));
         },
     },
     7: {
@@ -899,26 +897,24 @@ const STEP_LIST = {
         headers: ['Nama Usaha', 'Penanggung Jawab'],
         deleteTable: 'users',
         fetch: async () => {
-            const { data, error } = await supabase
-                .from('users')
-                .select('user_id, full_name, dudi_org_name')
-                .eq('role_type', 'DUDI')
-                .order('dudi_org_name');
-            if (error) throw error;
-            return (data ?? []).map(u => ({ id: u.user_id, cells: [u.dudi_org_name ?? '—', u.full_name] }));
+            const data = await fetchAllRows('users',
+                q => q.select('user_id, full_name, dudi_org_name')
+                      .eq('role_type', 'DUDI')
+                      .order('dudi_org_name'));
+            return data.map(u => ({ id: u.user_id, cells: [u.dudi_org_name ?? '—', u.full_name] }));
         },
     },
 };
 
-/** Ambil users untuk satu role lalu petakan tiap baris ke sel tabel. */
+/** Ambil users untuk satu role lalu petakan tiap baris ke sel tabel.
+ *  Mem-paginasi (fetchAllRows) agar daftar ribuan (mis. ORTU) tidak terpotong
+ *  di 1000 dan jumlah yang tampil akurat. */
 async function fetchUsersByRole(roleType, toCells) {
-    const { data, error } = await supabase
-        .from('users')
-        .select('user_id, full_name, login_identifier, teacher_code, wali_kelas_class_id')
-        .eq('role_type', roleType)
-        .order('full_name');
-    if (error) throw error;
-    return (data ?? []).map(u => ({ id: u.user_id, cells: toCells(u) }));
+    const data = await fetchAllRows('users',
+        q => q.select('user_id, full_name, login_identifier, teacher_code, wali_kelas_class_id')
+              .eq('role_type', roleType)
+              .order('full_name'));
+    return data.map(u => ({ id: u.user_id, cells: toCells(u) }));
 }
 
 /** Muat ulang & render daftar data terkini untuk langkah aktif. */
@@ -1015,9 +1011,10 @@ async function runBulkDelete(step, cfg, ids, btn) {
     clearError();
     const label = btn.textContent;
     btn.disabled = true;
-    btn.textContent = `Menghapus ${ids.length}…`;
+    btn.textContent = `Menghapus 0/${ids.length}…`;
+    const onProgress = (done, total) => { btn.textContent = `Menghapus ${done}/${total}…`; };
     try {
-        const { deleted, errors } = await deleteBulk(cfg.deleteTable, ids);
+        const { deleted, errors } = await deleteBulk(cfg.deleteTable, ids, onProgress);
         if (errors.length) {
             showError(`${deleted} terhapus, ${errors.length} gagal. Contoh: ${errors[0].message}`);
         }

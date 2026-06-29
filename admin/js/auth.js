@@ -26,7 +26,20 @@ form.addEventListener('submit', async (e) => {
         await loginWithIdentifier(identifierEl.value.trim(), passwordEl.value);
 
         const userRow = await getCurrentUserRow();
-        if (!userRow || userRow.role_type !== 'ADMINISTRATIVE') {
+        if (!userRow) {
+            errorEl.textContent = 'Akun tidak ditemukan.';
+            errorEl.style.display = 'block';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Masuk';
+            return;
+        }
+
+        if (userRow.role_type === 'ORTU') {
+            window.location.href = '../parent/portal.html';
+            return;
+        }
+
+        if (userRow.role_type !== 'ADMINISTRATIVE') {
             errorEl.textContent = 'Akun ini tidak memiliki akses ke konsol admin.';
             errorEl.style.display = 'block';
             submitBtn.disabled = false;

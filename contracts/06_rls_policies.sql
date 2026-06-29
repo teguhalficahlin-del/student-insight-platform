@@ -233,6 +233,7 @@ CREATE POLICY rls_students_write_admin ON students
 -- Substitute: read/write for their substitute_schedule sessions.
 -- BK, WALI_KELAS, KAPRODI, KEPSEK: read all.
 -- SISWA: read own records (non-void only).
+-- ORTU: read records of their linked children (non-void only).
 -- ============================================================
 
 CREATE POLICY rls_attendance_read_staff ON attendance
@@ -271,6 +272,20 @@ CREATE POLICY rls_attendance_read_student ON attendance
         AND is_void = FALSE
     );
 
+-- ORTU: kehadiran tiap anak yang tertaut lewat student_parents (non-void).
+-- Satu login melihat semua anak — cakupan diresolusikan via student_parents,
+-- pola yang sama dengan rls_students_read_parent.
+CREATE POLICY rls_attendance_read_parent ON attendance
+    FOR SELECT USING (
+        fn_current_user_role() = 'ORTU'
+        AND is_void = FALSE
+        AND EXISTS (
+            SELECT 1 FROM student_parents sp
+            WHERE sp.student_id     = attendance.student_id
+              AND sp.parent_user_id = fn_current_user_id()
+        )
+    );
+
 
 -- ============================================================
 -- OBSERVATIONS
@@ -278,7 +293,7 @@ CREATE POLICY rls_attendance_read_student ON attendance
 -- Read:
 --   Staff: all (regardless of visibility).
 --   SISWA: only STUDENT_VISIBLE records for their student_id.
---   ORTU: blocked entirely.
+--   ORTU: only STUDENT_VISIBLE records of their linked children.
 --   DUDI: blocked entirely.
 -- ============================================================
 
@@ -299,6 +314,19 @@ CREATE POLICY rls_observations_read_student ON observations
         AND visibility = 'STUDENT_VISIBLE'
         AND student_id = (
             SELECT student_id FROM students WHERE user_id = fn_current_user_id()
+        )
+    );
+
+-- ORTU: hanya observasi STUDENT_VISIBLE milik anak yang tertaut. Catatan
+-- internal guru (INTERNAL_SCHOOL/PRIVATE) tidak pernah terlihat orang tua.
+CREATE POLICY rls_observations_read_parent ON observations
+    FOR SELECT USING (
+        fn_current_user_role() = 'ORTU'
+        AND visibility = 'STUDENT_VISIBLE'
+        AND EXISTS (
+            SELECT 1 FROM student_parents sp
+            WHERE sp.student_id     = observations.student_id
+              AND sp.parent_user_id = fn_current_user_id()
         )
     );
 

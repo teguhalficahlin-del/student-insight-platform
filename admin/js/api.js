@@ -118,6 +118,36 @@ export async function changePassword(newPassword) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// PAGINATION
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Membaca SELURUH baris yang cocok dengan men-paginasi lewat .range(),
+ * menembus batas default PostgREST (db-max-rows, biasanya 1000). Tanpa ini,
+ * daftar siswa/orang tua ribuan hanya tampil 1000 baris pertama dan jumlahnya
+ * salah (mentok di 1000). Sekolah bisa punya ribuan siswa & orang tua, jadi
+ * tidak boleh ada plafon implisit.
+ *
+ * @param build  (query) => query  — terima builder `supabase.from(table)`,
+ *               pasang .select()/.eq()/.order() yang diperlukan, kembalikan.
+ *               JANGAN pasang .range() di dalamnya; helper ini yang mengatur.
+ * @param pageSize  ukuran halaman (default 1000).
+ * @returns array berisi semua baris yang cocok.
+ */
+export async function fetchAllRows(table, build, pageSize = 1000) {
+    const all = [];
+    for (let from = 0; ; from += pageSize) {
+        const query = build(supabase.from(table)).range(from, from + pageSize - 1);
+        const { data, error } = await query;
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < pageSize) break; // halaman terakhir
+    }
+    return all;
+}
+
+// ─────────────────────────────────────────────────────────────
 // MASTER DATA
 // ─────────────────────────────────────────────────────────────
 
@@ -342,19 +372,25 @@ export async function deleteRecord(table, id) {
  * Return { deleted, errors } — errors berisi { id, message } untuk baris yang gagal
  * (mis. karena FK violation pada baris tertentu).
  */
-export async function deleteBulk(table, ids) {
-    // Tabel users harus lewat Edge Function satu per satu
-    // karena setiap user punya Auth account yang harus dihapus
+export async function deleteBulk(table, ids, onProgress) {
     if (table === 'users') {
+        const CONCURRENCY = 10;
         const errors = [];
         let deleted = 0;
-        for (const id of ids) {
-            try {
-                await deleteUserWithAuth(id);
-                deleted++;
-            } catch (err) {
-                errors.push({ id, message: err.message });
+
+        for (let i = 0; i < ids.length; i += CONCURRENCY) {
+            const batch = ids.slice(i, i + CONCURRENCY);
+            const results = await Promise.allSettled(
+                batch.map(id => deleteUserWithAuth(id))
+            );
+            for (let j = 0; j < results.length; j++) {
+                if (results[j].status === 'fulfilled') {
+                    deleted++;
+                } else {
+                    errors.push({ id: batch[j], message: results[j].reason?.message ?? 'Gagal' });
+                }
             }
+            onProgress?.(deleted + errors.length, ids.length);
         }
         return { deleted, errors };
     }
@@ -362,26 +398,36 @@ export async function deleteBulk(table, ids) {
     const pkColumn = PK_COLUMNS[table];
     if (!pkColumn) throw new Error(`Tabel "${table}" tidak didukung untuk hapus.`);
 
-    const { error, count } = await supabase
-        .from(table)
-        .delete({ count: 'exact' })
-        .in(pkColumn, ids);
-
-    if (!error) {
-        return { deleted: count ?? ids.length, errors: [] };
-    }
-    if (error.code !== '23503') throw asDeleteError(error);
-
-    // Salah satu baris punya dependency — hapus satu per satu agar baris
-    // yang aman tetap terhapus dan yang gagal dilaporkan per id.
+    // Pecah jadi beberapa batch: satu .in() dengan ribuan id menghasilkan URL
+    // sangat panjang yang ditolak server. "Hapus Semua" pada sekolah ribuan
+    // siswa harus tetap berjalan.
+    const CHUNK = 200;
     const errors = [];
     let deleted = 0;
-    for (const id of ids) {
-        try {
-            await deleteRecord(table, id);
-            deleted++;
-        } catch (err) {
-            errors.push({ id, message: err.message });
+
+    for (let i = 0; i < ids.length; i += CHUNK) {
+        const batch = ids.slice(i, i + CHUNK);
+        const { error, count } = await supabase
+            .from(table)
+            .delete({ count: 'exact' })
+            .in(pkColumn, batch);
+
+        if (!error) {
+            deleted += count ?? batch.length;
+            onProgress?.(deleted + errors.length, ids.length);
+            continue;
+        }
+        if (error.code !== '23503') throw asDeleteError(error);
+
+        // Salah satu baris di batch ini punya dependency — hapus satu per satu
+        // agar baris yang aman tetap terhapus dan yang gagal dilaporkan per id.
+        for (const id of batch) {
+            try {
+                await deleteRecord(table, id);
+                deleted++;
+            } catch (err) {
+                errors.push({ id, message: err.message });
+            }
         }
     }
     return { deleted, errors };

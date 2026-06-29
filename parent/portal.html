@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Portal Orang Tua</title>
+    <link rel="stylesheet" href="css/parent.css" />
+</head>
+<body>
+    <div class="portal-shell">
+        <header class="topbar">
+            <div>
+                <h2 id="portal-title">Portal Orang Tua</h2>
+                <p id="portal-user-name"></p>
+            </div>
+            <button id="logout-btn" type="button" class="btn btn-secondary">Keluar</button>
+        </header>
+
+        <div id="child-selector" class="child-selector" style="display:none">
+            <label for="select-child">Pilih Anak:</label>
+            <select id="select-child" class="input"></select>
+        </div>
+
+        <div id="loading" class="loading">Memuat data...</div>
+
+        <section id="section-attendance" class="section" style="display:none">
+            <h3>Kehadiran</h3>
+            <div class="filter-row">
+                <div class="field" style="margin-bottom:0">
+                    <label for="filter-date-start">Dari</label>
+                    <input id="filter-date-start" class="input" type="date" />
+                </div>
+                <div class="field" style="margin-bottom:0">
+                    <label for="filter-date-end">Sampai</label>
+                    <input id="filter-date-end" class="input" type="date" />
+                </div>
+                <button id="btn-filter" class="btn btn-primary">Tampilkan</button>
+            </div>
+            <div class="summary-cards" id="attendance-summary"></div>
+            <table class="data-table" id="attendance-table">
+                <thead>
+                    <tr>
+                        <th>Tanggal</th>
+                        <th>Waktu</th>
+                        <th>Mata Pelajaran</th>
+                        <th>Guru</th>
+                        <th>Status</th>
+                        <th>Catatan</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <p id="attendance-empty" class="hint" style="display:none">Tidak ada data kehadiran untuk periode ini.</p>
+        </section>
+
+        <section id="section-observations" class="section" style="display:none">
+            <h3>Catatan Guru</h3>
+            <div id="observations-list"></div>
+            <p id="observations-empty" class="hint" style="display:none">Belum ada catatan guru untuk anak ini.</p>
+        </section>
+    </div>
+
+    <script type="module" src="js/portal.js"></script>
+</body>
+</html>
