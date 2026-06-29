@@ -243,10 +243,19 @@ async function renderSummaryStep() {
             </tr>
         `);
     }
+    const incomplete = [];
+    for (let i = 1; i < TOTAL_STEPS; i++) {
+        if (!state.completedSteps.has(i)) incomplete.push(STEP_NAMES[i]);
+    }
+    const warningHtml = incomplete.length > 0
+        ? `<div class="alert alert-warning">Langkah belum selesai: ${incomplete.join(', ')}. Anda tetap bisa melanjutkan, tapi sebaiknya selesaikan semua langkah agar platform berfungsi penuh.</div>`
+        : '';
+
     contentEl.innerHTML = `
         <div class="step-label">Langkah ${TOTAL_STEPS} dari ${TOTAL_STEPS}</div>
         <h3>Selesai</h3>
         <p>Tinjau status setiap langkah sebelum membuka dashboard.</p>
+        ${warningHtml}
         <table class="table"><tbody>${rows.join('')}</tbody></table>
         <p class="hint">Klik "Buka Dashboard" untuk menandai setup selesai dan masuk ke konsol admin.</p>
     `;
@@ -693,6 +702,7 @@ function wireImportBlock(step, { importFn, onDone } = {}) {
         fileInput.disabled = true;
         resultEl.innerHTML = '';
 
+        importRunning = true;
         const rowCount = csvText.split(/\r\n|\n|\r/).filter(l => l.trim()).length - 1;
         let dots = 0;
         const ticker = setInterval(() => {
@@ -713,12 +723,14 @@ function wireImportBlock(step, { importFn, onDone } = {}) {
                 resetImportBtn();
             }
             fileInput.disabled = false;
+            importRunning = false;
             if (onDone) await onDone(result);
         } catch (err) {
             clearInterval(ticker);
             resultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Impor gagal.')}</div>`;
             resetImportBtn();
             fileInput.disabled = false;
+            importRunning = false;
         }
     });
 }
@@ -899,7 +911,9 @@ function renderDataTable(cfg, rows) {
         : '';
     const head = checkTh + cfg.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('');
 
-    const body = rows.map(r => {
+    const MAX_DISPLAY = 100;
+    const displayRows = rows.slice(0, MAX_DISPLAY);
+    const body = displayRows.map(r => {
         const checkTd = canDelete
             ? `<td><input type="checkbox" class="wz-check" value="${escapeAttr(r.id)}" /></td>`
             : '';
@@ -907,8 +921,14 @@ function renderDataTable(cfg, rows) {
         return `<tr>${checkTd}${cells}</tr>`;
     }).join('');
 
+    const truncNote = rows.length > MAX_DISPLAY
+        ? `<p class="hint" style="margin-top:8px">Menampilkan ${MAX_DISPLAY} dari ${rows.length} data. Hapus Semua tetap menghapus seluruh ${rows.length} data.</p>`
+        : '';
+
+    const allIdsJson = canDelete ? `<script type="application/json" class="wz-all-ids">${JSON.stringify(rows.map(r => r.id))}</script>` : '';
+
     return heading + toolbar +
-        `<table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+        `<table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` + truncNote + allIdsJson;
 }
 
 function wireDataTable(step, cfg) {
@@ -949,7 +969,8 @@ function wireDataTable(step, cfg) {
     });
 
     allBtn.addEventListener('click', async () => {
-        const ids = checks.map(c => c.value);
+        const allIdsEl = contentEl.querySelector('.wz-all-ids');
+        const ids = allIdsEl ? JSON.parse(allIdsEl.textContent) : checks.map(c => c.value);
         if (!ids.length) return;
         const blockMsg = await checkDeleteOrder(step);
         if (blockMsg) { showError(blockMsg); return; }
@@ -1034,6 +1055,15 @@ async function runBulkDelete(step, cfg, ids, btn) {
 // ─────────────────────────────────────────────────────────────
 // INIT (auth guard + render langkah 1)
 // ─────────────────────────────────────────────────────────────
+
+// Guard: peringatan saat TU menutup/refresh halaman di tengah wizard
+let importRunning = false;
+window.addEventListener('beforeunload', (e) => {
+    if (importRunning) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
 
 (async function init() {
     const { data: authData } = await supabase.auth.getUser();
