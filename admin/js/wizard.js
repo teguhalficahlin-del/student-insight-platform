@@ -18,7 +18,7 @@ import {
     supabase,
     getCurrentUserRow, requireAdministrativeOrRedirect,
     getSchoolConfig, upsertSchoolConfig, markSetupCompleted,
-    getPrograms, addProgram, deleteRecord, changePassword,
+    getPrograms, getClasses, addProgram, deleteRecord, changePassword,
     importPrograms, importClasses, importUsers, importStudents, importSchedules,
     logout,
 } from './api.js';
@@ -782,14 +782,129 @@ async function renderImportStep() {
         <div class="step-label">Langkah ${step} dari ${TOTAL_STEPS}</div>
         <h3>${info.title}</h3>
         <p class="hint">${info.desc}</p>
+        <div class="wz-data-list" id="wz-data-list"><p class="hint">Memuat data…</p></div>
+        <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
+        <h4 style="margin:0 0 8px">Impor dari file</h4>
         ${templateButtonHtml(step)}
         ${importBlockHtml(step)}
     `;
     wireTemplateButton(step);
-    wireImportBlock(step);
+    wireImportBlock(step, { onDone: () => refreshDataList(step) });
+    await refreshDataList(step);
 
     // Langkah impor bersifat opsional — boleh dilanjutkan tanpa unggah.
     nextBtn.disabled = false;
+}
+
+// ── Daftar data terkini per langkah (tampil + hapus) ──────────
+
+const STEP_LIST = {
+    4: {
+        title: 'Kelas terdaftar',
+        headers: ['Nama Kelas', 'Program', 'Tingkat'],
+        deleteTable: 'classes',
+        fetch: async () => {
+            const [classes, programs] = await Promise.all([getClasses(), getPrograms()]);
+            const pm = new Map(programs.map(p => [p.program_id, p.code]));
+            return classes.map(c => ({
+                id: c.class_id,
+                cells: [c.name, pm.get(c.program_id) ?? '—', c.grade_level],
+            }));
+        },
+    },
+    5: {
+        title: 'Guru terdaftar',
+        headers: ['Nama', 'NIP/NIK', 'Kode Guru'],
+        deleteTable: 'users',
+        fetch: () => fetchUsersByRole('GURU',
+            u => [u.full_name, u.login_identifier, u.teacher_code ?? '—']),
+    },
+    6: {
+        title: 'Siswa terdaftar',
+        headers: ['Nama', 'NIS'],
+        deleteTable: 'students',
+        fetch: async () => {
+            const { data, error } = await supabase
+                .from('students')
+                .select('student_id, full_name, nis')
+                .order('full_name');
+            if (error) throw error;
+            return (data ?? []).map(s => ({ id: s.student_id, cells: [s.full_name, s.nis] }));
+        },
+    },
+    7: {
+        title: 'Wali Kelas terdaftar',
+        headers: ['Nama', 'NIP/NIK', 'Kelas'],
+        deleteTable: 'users',
+        fetch: async () => {
+            const classes = await getClasses();
+            const cm = new Map(classes.map(c => [c.class_id, c.name]));
+            return fetchUsersByRole('WALI_KELAS',
+                u => [u.full_name, u.login_identifier, cm.get(u.wali_kelas_class_id) ?? '—']);
+        },
+    },
+};
+
+/** Ambil users untuk satu role lalu petakan tiap baris ke sel tabel. */
+async function fetchUsersByRole(roleType, toCells) {
+    const { data, error } = await supabase
+        .from('users')
+        .select('user_id, full_name, login_identifier, teacher_code, wali_kelas_class_id')
+        .eq('role_type', roleType)
+        .order('full_name');
+    if (error) throw error;
+    return (data ?? []).map(u => ({ id: u.user_id, cells: toCells(u) }));
+}
+
+/** Muat ulang & render daftar data terkini untuk langkah aktif. */
+async function refreshDataList(step) {
+    const el = contentEl.querySelector('#wz-data-list');
+    if (!el) return;
+    const cfg = STEP_LIST[step];
+    if (!cfg) { el.innerHTML = ''; return; }
+
+    el.innerHTML = '<p class="hint">Memuat data…</p>';
+    try {
+        const rows = await cfg.fetch();
+        el.innerHTML = renderDataTable(cfg, rows);
+        wireDataDeleteButtons(step, cfg);
+    } catch (err) {
+        el.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal memuat data.')}</div>`;
+    }
+}
+
+function renderDataTable(cfg, rows) {
+    const heading = `<h4 style="margin:0 0 8px">${escapeHtml(cfg.title)} (${rows.length})</h4>`;
+    if (!rows.length) {
+        return heading + '<p class="hint">Belum ada data. Unggah file di bawah untuk menambahkan.</p>';
+    }
+    const delTh = cfg.deleteTable ? '<th style="width:48px"></th>' : '';
+    const head  = cfg.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('') + delTh;
+    const body  = rows.map(r => {
+        const cells = r.cells.map(c => `<td>${escapeHtml(String(c ?? ''))}</td>`).join('');
+        const del   = cfg.deleteTable
+            ? `<td><button type="button" class="btn btn-danger wz-data-del" data-id="${escapeAttr(r.id)}" title="Hapus" style="padding:4px 10px">✕</button></td>`
+            : '';
+        return `<tr>${cells}${del}</tr>`;
+    }).join('');
+    return heading + `<table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function wireDataDeleteButtons(step, cfg) {
+    if (!cfg.deleteTable) return;
+    contentEl.querySelectorAll('.wz-data-del').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            clearError();
+            btn.disabled = true;
+            try {
+                await deleteRecord(cfg.deleteTable, btn.dataset.id);
+                await refreshDataList(step);
+            } catch (err) {
+                showError(err.message ?? 'Gagal menghapus data.');
+                btn.disabled = false;
+            }
+        });
+    });
 }
 
 // ─────────────────────────────────────────────────────────────
