@@ -816,18 +816,52 @@ const STEP_LIST = {
         title: 'Siswa terdaftar',
         headers: ['Nama', 'NIS'],
         deleteTable: 'students',
+        groupBy: 'group',
         fetch: async () => {
             const data = await fetchAllRows('students',
-                q => q.select('student_id, full_name, nis').order('full_name'));
-            return data.map(s => ({ id: s.student_id, cells: [s.full_name, s.nis] }));
+                q => q.select(`student_id, full_name, nis,
+                    enrollment:class_enrollments ( class:classes ( name ) )
+                `).order('full_name'));
+            return data.map(s => {
+                const enrollments = Array.isArray(s.enrollment) ? s.enrollment : (s.enrollment ? [s.enrollment] : []);
+                const className = enrollments[0]?.class?.name ?? 'Belum ada kelas';
+                return { id: s.student_id, cells: [s.full_name, s.nis], group: className };
+            });
         },
     },
     7: {
         title: 'Orang Tua terdaftar',
-        headers: ['Nama', 'NIK'],
+        headers: ['Nama', 'NIK', 'Anak'],
         deleteTable: 'users',
-        fetch: () => fetchUsersByRole('ORTU',
-            u => [u.full_name, u.login_identifier]),
+        groupBy: 'group',
+        fetch: async () => {
+            const parents = await fetchAllRows('users',
+                q => q.select('user_id, full_name, login_identifier')
+                      .eq('role_type', 'ORTU')
+                      .order('full_name'));
+            if (parents.length === 0) return [];
+
+            const links = await fetchAllRows('student_parents',
+                q => q.select(`parent_user_id, students ( full_name,
+                    enrollment:class_enrollments ( class:classes ( name ) )
+                )`));
+
+            const parentChildMap = new Map();
+            for (const link of links) {
+                const pid = link.parent_user_id;
+                if (!parentChildMap.has(pid)) parentChildMap.set(pid, []);
+                const enrollments = Array.isArray(link.students?.enrollment) ? link.students.enrollment : (link.students?.enrollment ? [link.students.enrollment] : []);
+                const className = enrollments[0]?.class?.name ?? 'Belum ada kelas';
+                parentChildMap.get(pid).push({ name: link.students?.full_name, className });
+            }
+
+            return parents.map(u => {
+                const children = parentChildMap.get(u.user_id) ?? [];
+                const childNames = children.map(c => c.name).join(', ') || '—';
+                const className = children[0]?.className ?? 'Belum ada kelas';
+                return { id: u.user_id, cells: [u.full_name, u.login_identifier, childNames], group: className };
+            });
+        },
     },
     8: {
         title: 'DUDI terdaftar',
@@ -906,6 +940,12 @@ function renderDataTable(cfg, rows) {
             <button type="button" class="btn btn-secondary wz-del-all" style="padding:6px 12px">Hapus Semua (${rows.length})</button>
         </div>` : '';
 
+    const allIdsJson = canDelete ? `<script type="application/json" class="wz-all-ids">${JSON.stringify(rows.map(r => r.id))}</script>` : '';
+
+    if (cfg.groupBy) {
+        return heading + toolbar + renderGroupedAccordion(cfg, rows) + allIdsJson;
+    }
+
     const checkTh = canDelete
         ? '<th style="width:36px"><input type="checkbox" class="wz-check-all" title="Pilih semua" /></th>'
         : '';
@@ -913,22 +953,48 @@ function renderDataTable(cfg, rows) {
 
     const MAX_DISPLAY = 100;
     const displayRows = rows.slice(0, MAX_DISPLAY);
-    const body = displayRows.map(r => {
-        const checkTd = canDelete
-            ? `<td><input type="checkbox" class="wz-check" value="${escapeAttr(r.id)}" /></td>`
-            : '';
-        const cells = r.cells.map(c => `<td>${escapeHtml(String(c ?? ''))}</td>`).join('');
-        return `<tr>${checkTd}${cells}</tr>`;
-    }).join('');
+    const body = displayRows.map(r => renderRow(r, canDelete)).join('');
 
     const truncNote = rows.length > MAX_DISPLAY
         ? `<p class="hint" style="margin-top:8px">Menampilkan ${MAX_DISPLAY} dari ${rows.length} data. Hapus Semua tetap menghapus seluruh ${rows.length} data.</p>`
         : '';
 
-    const allIdsJson = canDelete ? `<script type="application/json" class="wz-all-ids">${JSON.stringify(rows.map(r => r.id))}</script>` : '';
-
     return heading + toolbar +
         `<table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` + truncNote + allIdsJson;
+}
+
+function renderRow(r, canDelete) {
+    const checkTd = canDelete
+        ? `<td><input type="checkbox" class="wz-check" value="${escapeAttr(r.id)}" /></td>`
+        : '';
+    const cells = r.cells.map(c => `<td>${escapeHtml(String(c ?? ''))}</td>`).join('');
+    return `<tr>${checkTd}${cells}</tr>`;
+}
+
+function renderGroupedAccordion(cfg, rows) {
+    const canDelete = !!cfg.deleteTable;
+    const groups = new Map();
+    for (const r of rows) {
+        const key = r[cfg.groupBy] ?? '—';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(r);
+    }
+
+    const checkTh = canDelete
+        ? '<th style="width:36px"><input type="checkbox" class="wz-group-check-all" title="Pilih semua di kelas ini" /></th>'
+        : '';
+    const head = checkTh + cfg.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('');
+
+    const sortedKeys = [...groups.keys()].sort((a, b) => a.localeCompare(b, 'id'));
+    return sortedKeys.map(key => {
+        const groupRows = groups.get(key);
+        const body = groupRows.map(r => renderRow(r, canDelete)).join('');
+        return `
+            <details class="wz-accordion" style="margin-bottom:8px">
+                <summary class="wz-accordion-header">${escapeHtml(key)} (${groupRows.length})</summary>
+                <table class="table" style="margin-top:4px"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+            </details>`;
+    }).join('');
 }
 
 function wireDataTable(step, cfg) {
@@ -958,6 +1024,17 @@ function wireDataTable(step, cfg) {
             syncSelectedBtn();
         });
     }
+
+    // Per-group "check all" di accordion
+    contentEl.querySelectorAll('.wz-group-check-all').forEach(groupCheckAll => {
+        const groupChecks = Array.from(
+            groupCheckAll.closest('table').querySelectorAll('.wz-check')
+        );
+        groupCheckAll.addEventListener('change', () => {
+            groupChecks.forEach(c => { c.checked = groupCheckAll.checked; });
+            syncSelectedBtn();
+        });
+    });
 
     selBtn.addEventListener('click', async () => {
         const ids = selectedIds();
