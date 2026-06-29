@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" class="page-dashboard">
 <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard — Admin Console</title>
     <link rel="stylesheet" href="css/admin.css" />
 </head>
-<body>
+<body class="page-dashboard">
     <div class="app-shell">
         <aside class="sidebar">
             <div class="brand">Admin Console</div>
@@ -44,9 +45,12 @@
 
         <main class="main-content">
             <div class="topbar">
-                <div>
-                    <h2 id="dashboard-school-name">Memuat...</h2>
-                    <p id="dashboard-user-name"></p>
+                <div style="display:flex;align-items:center;gap:12px">
+                    <button id="menu-toggle" type="button" class="btn btn-secondary menu-toggle">☰</button>
+                    <div>
+                        <h2 id="dashboard-school-name">Memuat...</h2>
+                        <p id="dashboard-user-name"></p>
+                    </div>
                 </div>
                 <button id="logout-btn" type="button" class="btn btn-secondary">Keluar</button>
             </div>

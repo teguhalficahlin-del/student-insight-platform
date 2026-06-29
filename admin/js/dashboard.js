@@ -40,6 +40,28 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
     window.location.href = 'index.html';
 });
 
+// Hamburger menu toggle (mobile)
+const sidebar = document.querySelector('.sidebar');
+const menuToggle = document.getElementById('menu-toggle');
+menuToggle?.addEventListener('click', () => {
+    sidebar.classList.add('open');
+    const backdrop = document.createElement('div');
+    backdrop.className = 'sidebar-backdrop';
+    document.body.appendChild(backdrop);
+    backdrop.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        backdrop.remove();
+    });
+});
+
+// Close sidebar when nav link clicked (mobile)
+document.querySelectorAll('.nav-link').forEach(link => {
+    link.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        document.querySelector('.sidebar-backdrop')?.remove();
+    });
+});
+
 function renderComingSoon(panel) {
     panelContent.innerHTML = `<p class="hint">Panel "${panel}" belum diimplementasikan.</p>`;
 }

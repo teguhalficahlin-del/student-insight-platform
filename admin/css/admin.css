@@ -38,6 +38,12 @@ html, body {
     background: var(--color-bg);
 }
 
+html.page-dashboard,
+body.page-dashboard {
+    min-width: 360px;
+    overflow-x: hidden;
+}
+
 html.page-wizard,
 body.page-wizard {
     min-width: 360px;
@@ -589,15 +595,49 @@ label {
     padding: 24px;
 }
 
-/* ── Panel toolbar / bulk select ─────────────────────────── */
+/* ── Hamburger menu toggle (hidden on desktop) ──────────── */
 
-.panel-toolbar {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 12px;
+.menu-toggle { display: none; }
+
+/* ── Dashboard mobile responsive ────────────────────────── */
+
+@media (max-width: 768px) {
+    .page-dashboard .sidebar {
+        position: fixed; top: 0; left: 0; bottom: 0;
+        z-index: 100; width: 260px;
+        transform: translateX(-100%);
+        transition: transform 0.2s;
+        box-shadow: var(--shadow-md);
+    }
+
+    .page-dashboard .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .page-dashboard .sidebar-backdrop {
+        position: fixed; inset: 0; z-index: 99;
+        background: rgba(0,0,0,0.3);
+    }
+
+    .page-dashboard .main-content {
+        padding: 16px;
+    }
+
+    .page-dashboard .topbar h2 { font-size: 16px; }
+
+    .page-dashboard .menu-toggle { display: inline-flex; }
+
+    .page-dashboard .panel { padding: 16px; }
+
+    .page-dashboard .table {
+        font-size: 13px;
+    }
+
+    .page-dashboard .table th,
+    .page-dashboard .table td {
+        padding: 8px 6px;
+    }
 }
-
-.checkbox-col { width: 40px; text-align: center; }
 
 /* ── Delete confirmation modal ───────────────────────────── */
 
