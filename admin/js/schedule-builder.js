@@ -271,12 +271,22 @@ function renderGrid() {
 }
 
 function wireGridEvents() {
-    // Time inputs
+    // Time inputs — sinkronisasi: end_time baris N = start_time baris N+1
     overlayEl.querySelectorAll('.sched-time-input').forEach(input => {
         input.addEventListener('change', () => {
             const idx = Number(input.dataset.idx);
-            state.slots[idx][input.dataset.field] = input.value;
+            const field = input.dataset.field;
+            state.slots[idx][field] = input.value;
             state.dirty = true;
+
+            if (field === 'end_time' && idx + 1 < state.slots.length) {
+                state.slots[idx + 1].start_time = input.value;
+                renderGrid();
+            }
+            if (field === 'start_time' && idx > 0) {
+                state.slots[idx - 1].end_time = input.value;
+                renderGrid();
+            }
         });
     });
 
