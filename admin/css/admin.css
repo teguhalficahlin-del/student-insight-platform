@@ -38,6 +38,10 @@ html, body {
     background: var(--color-bg);
 }
 
+body.page-wizard {
+    min-width: 360px;
+}
+
 h1, h2, h3, h4 { margin: 0 0 8px; font-weight: 600; }
 p { margin: 0 0 8px; color: var(--color-text-muted); }
 
