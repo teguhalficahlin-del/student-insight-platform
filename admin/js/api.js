@@ -106,6 +106,12 @@ export async function markSetupCompleted() {
     return upsertSchoolConfig({ setup_completed: true });
 }
 
+export async function changePassword(newPassword) {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    await upsertSchoolConfig({ password_changed: true });
+}
+
 // ─────────────────────────────────────────────────────────────
 // MASTER DATA
 // ─────────────────────────────────────────────────────────────
