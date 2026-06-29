@@ -35,7 +35,7 @@ const STEP_NAMES = {
     2: 'Tahun Ajaran',
     3: 'Program Keahlian',
     4: 'Kelas & Rombel',
-    5: 'Guru',
+    5: 'Staf & Peran',
     6: 'Siswa',
     7: 'Orang Tua',
     8: 'DUDI',
@@ -492,11 +492,15 @@ const EXCEL_TEMPLATES = {
              ['X TKJ 1', 'TKJ', '10'],
              ['XI AKL 1', 'AKL', '11'],
          ] },
-    5: { filename: 'template_guru.xlsx',
-         headers: ['nama', 'nip_atau_nik'],
+    5: { filename: 'template_staf.xlsx',
+         headers: ['nama', 'nip_atau_nik', 'teacher_code', 'wali_kelas', 'program_kaprodi', 'jabatan'],
          exampleRows: [
-             ['Budi Santoso', '198501012010011001'],
-             ['Sari Dewi', '198703022011012002'],
+             ['Budi Santoso', '198501012010011001', 'BSS', '', '', ''],
+             ['Ririn Novianti', '198812052015032001', 'RRN', 'XII TKJ 1', '', ''],
+             ['Supriadi', '197706152003011005', 'SPR', '', 'TKJ', ''],
+             ['Ahmad Fauzi', '196811051994031005', 'AFM', '', '', 'KEPSEK'],
+             ['Susi Marlina', '198501032010012003', 'SSM', '', '', 'WAKA_KURIKULUM'],
+             ['Dewi Lestari', '198903152012032001', 'DWL', '', '', 'BK,WAKA_KESISWAAN'],
          ] },
     6: { filename: 'template_siswa.xlsx',
          headers: ['nama', 'nis', 'kode_program', 'class_name'],
@@ -578,8 +582,8 @@ function generateExcelTemplate(filename, headers, exampleRows) {
 const IMPORT_STEP_INFO = {
     4: { title: 'Kelas & Rombel',
          desc: 'Impor daftar kelas. Program keahlian (Langkah 3) dan tahun ajaran aktif harus sudah ada — tahun ajaran diambil otomatis dari konfigurasi sekolah. Upload ulang file akan memperbarui program dan tingkat kelas. Jika nama kelas salah ketik, hapus kelas tersebut terlebih dahulu lalu impor ulang.' },
-    5: { title: 'Guru',
-         desc: 'Impor akun guru. NIP/NIK menjadi identitas login dan setiap baris otomatis berperan sebagai GURU. Upload ulang file yang sama akan memperbarui nama dan kode guru. Jika NIP/NIK salah ketik, hapus guru tersebut terlebih dahulu lalu impor ulang dengan NIP/NIK yang benar.' },
+    5: { title: 'Staf & Peran',
+         desc: 'Impor semua staf sekolah: guru, BK, wali kelas, kaprodi, kepsek, waka, dan stakeholder. NIP/NIK menjadi identitas login. Kolom opsional: wali_kelas (nama kelas), program_kaprodi (kode program), jabatan (BK, KEPSEK, WAKA_KURIKULUM, WAKA_KESISWAAN — bisa dikombinasi dengan koma). Upload ulang file akan memperbarui nama, kode, dan jabatan. Jika NIP salah ketik, hapus terlebih dahulu lalu impor ulang.' },
     6: { title: 'Siswa',
          desc: 'Impor data siswa sekaligus penempatan kelas. Program & kelas harus sudah ada; tahun ajaran & semester diambil otomatis. Upload ulang file akan memperbarui nama, program, dan kelas. Jika NIS salah ketik, hapus siswa tersebut terlebih dahulu lalu impor ulang.' },
     7: { title: 'Orang Tua',
@@ -596,7 +600,7 @@ function importFnForStep(step) {
     switch (step) {
         case 3: return importPrograms;
         case 4: return importClasses;
-        case 5: return (csv) => importUsers(injectColumn(csv, 'role_type', 'GURU'));
+        case 5: return (csv) => importUsers(injectColumn(csv, 'role_type', 'GURU', true));
         case 6: return importStudents;
         case 7: return importParents;
         case 8: return importDudi;
@@ -607,9 +611,11 @@ function importFnForStep(step) {
 
 /** Tambah satu kolom konstan ke setiap baris data CSV (mis. role_type).
  *  Hanya menempel kolom di akhir tiap baris, jadi aman terhadap quoting. */
-function injectColumn(csvText, columnName, value) {
+function injectColumn(csvText, columnName, value, defaultOnly = false) {
     const lines = csvText.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0);
     if (lines.length === 0) return csvText;
+    // Kalau kolom sudah ada di header, jangan inject
+    if (defaultOnly && lines[0].toLowerCase().includes(columnName.toLowerCase())) return csvText;
     const header = `${lines[0]},${columnName}`;
     const dataLines = lines.slice(1).map(line => `${line},${value}`);
     return [header, ...dataLines].join('\r\n');
@@ -844,8 +850,8 @@ const STEP_LIST = {
         },
     },
     5: {
-        title: 'Guru terdaftar',
-        headers: ['Nama', 'NIP/NIK', 'Kode Guru'],
+        title: 'Staf terdaftar',
+        headers: ['Nama', 'NIP/NIK', 'Kode', 'Jabatan'],
         deleteTable: 'users',
         editFields: [
             { key: 'full_name', label: 'Nama' },
@@ -853,9 +859,28 @@ const STEP_LIST = {
             { key: 'teacher_code', label: 'Kode Guru' },
         ],
         save: (id, vals) => updateUserIdentifier(id, vals),
-        fetch: () => fetchUsersByRole('GURU',
-            u => [u.full_name, u.login_identifier, u.teacher_code ?? '—'],
-            u => ({ full_name: u.full_name, login_identifier: u.login_identifier, teacher_code: u.teacher_code ?? '' })),
+        fetch: async () => {
+            const data = await fetchAllRows('users',
+                q => q.select('user_id, full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, wali_kelas_class_id, kaprodi_program_id')
+                      .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE")')
+                      .order('full_name'));
+            return data.map(u => {
+                const jabatan = [];
+                if (u.role_type === 'GURU') jabatan.push('Guru');
+                if (u.wali_kelas_class_id) jabatan.push('Wali Kelas');
+                if (u.is_bk) jabatan.push('BK');
+                if (u.kaprodi_program_id) jabatan.push('Kaprodi');
+                if (u.is_kepsek) jabatan.push('Kepsek');
+                if (u.is_waka_kurikulum) jabatan.push('Waka Kurikulum');
+                if (u.is_waka_kesiswaan) jabatan.push('Waka Kesiswaan');
+                if (u.role_type === 'STAKEHOLDER') jabatan.push('Stakeholder');
+                return {
+                    id: u.user_id,
+                    cells: [u.full_name, u.login_identifier, u.teacher_code ?? '—', jabatan.join(', ') || u.role_type],
+                    editData: { full_name: u.full_name, login_identifier: u.login_identifier, teacher_code: u.teacher_code ?? '' },
+                };
+            });
+        },
     },
     6: {
         title: 'Siswa terdaftar',

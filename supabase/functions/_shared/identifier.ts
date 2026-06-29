@@ -18,13 +18,14 @@
  *   const safe  = resolveCollision(slug, existingSlugs);
  */
 
-export type IdentifierType = 'NIP' | 'NIS' | 'NIK' | 'NAMA_USAHA';
+export type IdentifierType = 'NIP' | 'NIS' | 'NIK' | 'NAMA_USAHA' | 'KODE_KHUSUS';
 
 const DOMAIN_BY_TYPE: Record<IdentifierType, string> = {
-    NIP:        'staff.internal',
-    NIS:        'siswa.internal',
-    NIK:        'ortu.internal',
-    NAMA_USAHA: 'dudi.internal',
+    NIP:          'staff.internal',
+    NIS:          'siswa.internal',
+    NIK:          'ortu.internal',
+    NAMA_USAHA:   'dudi.internal',
+    KODE_KHUSUS:  'stakeholder.internal',
 };
 
 /**

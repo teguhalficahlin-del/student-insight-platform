@@ -80,11 +80,20 @@ interface ImportRow {
     nip_atau_nik:      string;
     role_type:         string;
     kode_program?:     string;
-    program_id?:       string; // resolved from kode_program via programs.code lookup
+    program_id?:       string;
     nama_kelas?:       string;
-    wali_kelas_class_id?: string; // resolved from nama_kelas via classes.name lookup
+    wali_kelas_class_id?: string;
     email?:            string;
-    teacher_code?:     string; // GURU only — from CSV or auto-generated from nama initials
+    teacher_code?:     string;
+    // Multi-role fields
+    wali_kelas?:       string;    // nama kelas walian
+    program_kaprodi?:  string;    // kode program untuk kaprodi
+    kaprodi_program_id?: string;  // resolved
+    jabatan?:          string;    // comma-separated: BK, KEPSEK, WAKA_KURIKULUM, WAKA_KESISWAAN
+    is_bk?:            boolean;
+    is_kepsek?:        boolean;
+    is_waka_kurikulum?: boolean;
+    is_waka_kesiswaan?: boolean;
 }
 
 interface ImportError {
@@ -101,7 +110,7 @@ interface ImportedUser {
 }
 
 const STAFF_ROLES = ROLE_TYPE.filter(
-    r => r !== 'SISWA' && r !== 'ORTU' && r !== 'KEPSEK' && r !== 'ADMINISTRATIVE'
+    r => !['SISWA', 'ORTU', 'ADMINISTRATIVE'].includes(r)
 );
 
 function generateTempPassword(): string {
@@ -145,16 +154,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return badRequest('CSV tidak berisi baris data');
         }
 
-        const rows: ImportRow[] = rawRows.map((r, i) => ({
-            rowNumber:    i + 2, // +1 header, +1 to make it 1-based
-            nama:         r.nama ?? '',
-            nip_atau_nik: r.nip_atau_nik ?? '',
-            role_type:    (r.role_type ?? '').toUpperCase(),
-            kode_program: r.kode_program || undefined,
-            nama_kelas:   r.nama_kelas || undefined,
-            email:        r.email || undefined,
-            teacher_code: r.teacher_code ?? '',
-        }));
+        const rows: ImportRow[] = rawRows.map((r, i) => {
+            const jabatan = (r.jabatan ?? '').toUpperCase().split(',').map((s: string) => s.trim()).filter(Boolean);
+            return {
+                rowNumber:    i + 2,
+                nama:         r.nama ?? '',
+                nip_atau_nik: r.nip_atau_nik ?? '',
+                role_type:    (r.role_type ?? 'GURU').toUpperCase(),
+                kode_program: r.kode_program || undefined,
+                nama_kelas:   r.nama_kelas || undefined,
+                email:        r.email || undefined,
+                teacher_code: r.teacher_code ?? '',
+                wali_kelas:   r.wali_kelas || undefined,
+                program_kaprodi: r.program_kaprodi || undefined,
+                jabatan:      r.jabatan || undefined,
+                is_bk:            jabatan.includes('BK'),
+                is_kepsek:        jabatan.includes('KEPSEK'),
+                is_waka_kurikulum: jabatan.includes('WAKA_KURIKULUM'),
+                is_waka_kesiswaan: jabatan.includes('WAKA_KESISWAAN'),
+            };
+        });
 
         // ── 6. Per-row structural validation ───────────────────
         const errors: ImportError[] = [];
@@ -222,8 +241,37 @@ Deno.serve(async (req: Request): Promise<Response> => {
             }
         }
 
-        // ── 8. Resolve nama_kelas -> wali_kelas_class_id ────────
+        // ── 7b. Resolve program_kaprodi -> kaprodi_program_id ────
         if (validRows.length > 0) {
+            const kaprodiCodes = [...new Set(
+                validRows.map(r => r.program_kaprodi).filter((c): c is string => !!c),
+            )];
+            if (kaprodiCodes.length > 0) {
+                const { data: kpPrograms } = await admin
+                    .from('programs').select('program_id, code').in('code', kaprodiCodes);
+                const kpMap = new Map(
+                    (kpPrograms ?? []).map((p: { program_id: string; code: string }) => [p.code, p.program_id]),
+                );
+                for (const row of [...validRows]) {
+                    if (!row.program_kaprodi) continue;
+                    const pid = kpMap.get(row.program_kaprodi);
+                    if (!pid) {
+                        errors.push({ row: row.rowNumber, message: `Kode program kaprodi tidak ditemukan: "${row.program_kaprodi}"` });
+                        validRows.splice(validRows.indexOf(row), 1);
+                        continue;
+                    }
+                    row.kaprodi_program_id = pid;
+                }
+            }
+        }
+
+        // ── 8. Resolve wali_kelas/nama_kelas -> wali_kelas_class_id ──
+        if (validRows.length > 0) {
+            // wali_kelas column takes priority over legacy nama_kelas
+            for (const row of validRows) {
+                if (row.wali_kelas && !row.nama_kelas) row.nama_kelas = row.wali_kelas;
+            }
+
             const classNames = [...new Set(
                 validRows
                     .map(r => r.nama_kelas?.trim().toUpperCase())
@@ -351,6 +399,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 // and wali_kelas_class_id are intentionally left untouched.
                 const updatePatch: Record<string, unknown> = { full_name: row.nama };
                 if (row.teacher_code) updatePatch.teacher_code = row.teacher_code;
+                if (row.wali_kelas_class_id) updatePatch.wali_kelas_class_id = row.wali_kelas_class_id;
+                if (row.kaprodi_program_id) updatePatch.kaprodi_program_id = row.kaprodi_program_id;
+                if (row.jabatan) {
+                    updatePatch.is_bk = row.is_bk ?? false;
+                    updatePatch.is_kepsek = row.is_kepsek ?? false;
+                    updatePatch.is_waka_kurikulum = row.is_waka_kurikulum ?? false;
+                    updatePatch.is_waka_kesiswaan = row.is_waka_kesiswaan ?? false;
+                }
 
                 const { error: updateErr } = await admin
                     .from('users')
@@ -368,7 +424,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 continue;
             }
 
-            const identifierType: IdentifierType = row.role_type === 'DUDI' ? 'NAMA_USAHA' : 'NIP';
+            const identifierType: IdentifierType = row.role_type === 'DUDI' ? 'NAMA_USAHA'
+                : row.role_type === 'STAKEHOLDER' ? 'KODE_KHUSUS' : 'NIP';
             const internalEmail  = row.email ?? toInternalEmail(
                 identifierType === 'NAMA_USAHA' ? row.nama : row.nip_atau_nik,
                 identifierType,
@@ -400,6 +457,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 wali_kelas_class_id: row.wali_kelas_class_id ?? null,
                 dudi_org_name:       row.role_type === 'DUDI' ? row.nama : null,
                 teacher_code:        row.teacher_code ?? null,
+                kaprodi_program_id:  row.kaprodi_program_id ?? null,
+                is_bk:               row.is_bk ?? false,
+                is_kepsek:           row.is_kepsek ?? false,
+                is_waka_kurikulum:   row.is_waka_kurikulum ?? false,
+                is_waka_kesiswaan:   row.is_waka_kesiswaan ?? false,
             });
 
             if (insertErr) {
