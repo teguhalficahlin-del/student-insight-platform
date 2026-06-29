@@ -275,6 +275,7 @@ const PK_COLUMNS = {
 
 const DEPENDENCY_LABELS = {
     classes:              'kelas',
+    students:             'siswa',
     class_enrollments:    'enrollment siswa',
     teaching_assignments: 'penugasan mengajar',
     teaching_schedules:   'sesi jadwal',
@@ -284,21 +285,28 @@ const DEPENDENCY_LABELS = {
     cases:                'kasus siswa',
     student_parents:      'data orang tua',
     substitute_schedules: 'jadwal guru pengganti',
+    schedule_templates:   'template jadwal',
+    pkl_placements:       'penempatan PKL',
 };
 
 const DEPENDENCY_MAP = {
     programs: [
         { table: 'classes', column: 'program_id' },
+        { table: 'students', column: 'program_id' },
+        { table: 'teaching_assignments', column: 'program_id' },
     ],
     classes: [
         { table: 'class_enrollments',    column: 'class_id' },
         { table: 'teaching_assignments', column: 'class_id' },
         { table: 'teaching_schedules',   column: 'class_id' },
+        { table: 'schedule_templates',   column: 'class_id' },
         { table: 'observations',         column: 'class_id' },
     ],
     users: [
         { table: 'teaching_assignments', column: 'user_id' },
         { table: 'teaching_schedules',   column: 'scheduled_teacher_id' },
+        { table: 'schedule_templates',   column: 'teacher_id' },
+        { table: 'substitute_schedules', column: 'substitute_user_id' },
         { table: 'attendance',           column: 'recorded_by_user_id' },
         { table: 'observations',         column: 'author_user_id' },
     ],
@@ -352,10 +360,15 @@ function asDeleteError(err) {
     return err instanceof Error ? err : new Error(err?.message ?? 'Gagal menghapus data');
 }
 
-/** Hapus satu baris dari `table` berdasarkan primary key. */
+/** Hapus satu baris dari `table` berdasarkan primary key.
+ *  Cek dependency dulu — kalau ada, throw error dengan detail. */
 export async function deleteRecord(table, id) {
-    // Tabel users harus lewat Edge Function
-    // karena perlu hapus Auth account sekaligus
+    const { canDelete, items } = await checkDependencies(table, id);
+    if (!canDelete) {
+        const detail = items.map(i => `${i.count} ${i.label}`).join(', ');
+        throw new Error(`Tidak bisa menghapus — masih ada data terkait: ${detail}.`);
+    }
+
     if (table === 'users') {
         return deleteUserWithAuth(id);
     }
