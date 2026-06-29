@@ -284,6 +284,24 @@ const CASCADE_DEPS = {
         { table: 'parent_messages',   fk: 'student_id' },
         { table: 'cases',             fk: 'student_id' },
     ],
+    classes: [
+        // teaching_schedules children first
+        { table: 'attendance',           fk: 'schedule_id', via: 'teaching_schedules', viaFk: 'class_id' },
+        { table: 'observations',         fk: 'schedule_id', via: 'teaching_schedules', viaFk: 'class_id' },
+        { table: 'substitute_schedules', fk: 'schedule_id', via: 'teaching_schedules', viaFk: 'class_id' },
+        // then direct children
+        { table: 'teaching_schedules',   fk: 'class_id' },
+        { table: 'class_enrollments',    fk: 'class_id' },
+        { table: 'schedule_templates',   fk: 'class_id' },
+    ],
+    programs: [
+        { table: 'teaching_assignments', fk: 'program_id' },
+    ],
+    teaching_schedules: [
+        { table: 'attendance',           fk: 'schedule_id' },
+        { table: 'observations',         fk: 'schedule_id' },
+        { table: 'substitute_schedules', fk: 'schedule_id' },
+    ],
 };
 
 const DEPENDENCY_LABELS = {
@@ -421,12 +439,22 @@ export async function deleteBulk(table, ids, onProgress) {
         // Cascade: hapus data dependen sebelum hapus baris utama
         if (CASCADE_DEPS[table]) {
             for (const dep of CASCADE_DEPS[table]) {
-                const { error: depErr } = await supabase
-                    .from(dep.table)
-                    .delete()
-                    .in(dep.fk, batch);
-                if (depErr) {
-                    console.error(`[deleteBulk] cascade ${dep.table} failed:`, depErr);
+                if (dep.via) {
+                    // Indirect: cari ID perantara dulu, lalu hapus child
+                    const { data: viaRows } = await supabase
+                        .from(dep.via)
+                        .select(dep.fk)
+                        .in(dep.viaFk, batch);
+                    const viaIds = (viaRows || []).map(r => r[dep.fk]);
+                    if (viaIds.length > 0) {
+                        const { error: depErr } = await supabase
+                            .from(dep.table).delete().in(dep.fk, viaIds);
+                        if (depErr) console.error(`[deleteBulk] cascade ${dep.table} via ${dep.via} failed:`, depErr);
+                    }
+                } else {
+                    const { error: depErr } = await supabase
+                        .from(dep.table).delete().in(dep.fk, batch);
+                    if (depErr) console.error(`[deleteBulk] cascade ${dep.table} failed:`, depErr);
                 }
             }
         }
