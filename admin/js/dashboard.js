@@ -25,14 +25,12 @@ const PANEL_RENDERERS = {
     setup:             renderSetupPanel,
     programs:          renderProgramsPanel,
     classes:           renderClassesPanel,
-    subjects:          renderSubjectsPanel,
-    staff:             renderUsersPanel('GURU,BK,WALI_KELAS,KAPRODI,KEPSEK,ADMINISTRATIVE'.split(',')),
+    staff:             renderStaffPanel,
     students:          renderStudentsPanel,
     parents:           renderUsersPanel(['ORTU']),
-    'import-parents':   renderImportParentsPanel,
-    'import-dudi':      renderImportDudiPanel,
+    dudi:              renderUsersPanel(['DUDI']),
+    stakeholders:      renderUsersPanel(['STAKEHOLDER']),
     'schedules-active': renderSchedulesPanel,
-    'schedules-import': renderScheduleImportPanel,
     substitutes:       renderSubstitutesPanel,
     tutupsemester:      renderTutupSemesterPanel,
     'academic-year':    renderAcademicYearPanel,
@@ -169,6 +167,46 @@ async function renderSubjectsPanel() {
             }
         });
     });
+}
+
+async function renderStaffPanel() {
+    const { data: users, error } = await supabase
+        .from('users')
+        .select('user_id, full_name, login_identifier, teacher_code, role_type, is_active, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, wali_kelas_class_id, kaprodi_program_id')
+        .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")')
+        .order('full_name');
+    if (error) { console.error(error); panelContent.innerHTML = `<div class="alert alert-danger">${sanitizeErrorMessage(error)}</div>`; return; }
+
+    panelContent.innerHTML = `
+        <h3>Staf & Peran</h3>
+        <table class="table">
+            <thead><tr>
+                <th>Nama</th><th>NIP/NIK</th><th>Kode</th><th>Jabatan</th><th>Status</th>
+            </tr></thead>
+            <tbody>${users.map(u => {
+                const jabatan = [];
+                if (u.role_type === 'GURU') jabatan.push('Guru');
+                if (u.wali_kelas_class_id) jabatan.push('Wali Kelas');
+                if (u.is_bk) jabatan.push('BK');
+                if (u.kaprodi_program_id) jabatan.push('Kaprodi');
+                if (u.is_kepsek) jabatan.push('Kepsek');
+                if (u.is_waka_kurikulum) jabatan.push('Waka Kurikulum');
+                if (u.is_waka_kesiswaan) jabatan.push('Waka Kesiswaan');
+                if (u.role_type === 'KEPSEK' && !jabatan.length) jabatan.push('Kepsek');
+                if (u.role_type === 'BK' && !jabatan.includes('BK')) jabatan.push('BK');
+                if (u.role_type === 'WAKA_KURIKULUM') jabatan.push('Waka Kurikulum');
+                if (u.role_type === 'WAKA_KESISWAAN') jabatan.push('Waka Kesiswaan');
+                return `
+                    <tr>
+                        <td>${u.full_name}</td>
+                        <td>${u.login_identifier}</td>
+                        <td>${u.teacher_code ?? '—'}</td>
+                        <td>${jabatan.join(', ') || u.role_type}</td>
+                        <td><span class="badge ${u.is_active ? 'badge-success' : 'badge-muted'}">${u.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
+                    </tr>`;
+            }).join('')}</tbody>
+        </table>
+    `;
 }
 
 function renderUsersPanel(roles) {
