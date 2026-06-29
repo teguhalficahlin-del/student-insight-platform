@@ -19,6 +19,7 @@ import {
     getCurrentUserRow, requireAdministrativeOrRedirect,
     getSchoolConfig, upsertSchoolConfig, markSetupCompleted,
     getPrograms, addProgram, deleteRecord, changePassword,
+    logout,
 } from './api.js';
 
 const TOTAL_STEPS = 9;
@@ -596,6 +597,23 @@ function generateExcelTemplate(filename, headers, exampleRows) {
 
     const userRow = await getCurrentUserRow();
     if (!requireAdministrativeOrRedirect(userRow)) return;
+
+    // Tombol logout di header — di-wire lebih awal agar tetap berfungsi
+    // bahkan saat wizard terblokir oleh modal ganti password.
+    const logoutBtn = document.getElementById('wizard-logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            logoutBtn.disabled = true;
+            logoutBtn.textContent = 'Keluar...';
+            try {
+                await logout();
+            } catch (_) {
+                // signOut gagal pun session lokal tetap dihapus oleh Supabase client
+            } finally {
+                window.location.replace('index.html');
+            }
+        });
+    }
 
     // Cek apakah password default sudah diganti
     let config = null;

@@ -462,7 +462,7 @@ label {
 /* Header: brand + nama langkah aktif */
 .wz-header {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 12px;
     padding: 16px 32px;
     background: var(--color-surface);
@@ -481,6 +481,24 @@ label {
 .wz-header .wz-active-name::before {
     content: "—";
     margin-right: 8px;
+}
+
+.wz-logout-btn {
+    margin-left: auto;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+}
+.wz-logout-btn:hover {
+    color: var(--color-danger, #dc2626);
+    border-color: var(--color-danger, #dc2626);
 }
 
 /* Body: sidebar kiri + konten kanan */
@@ -599,4 +617,5 @@ label {
     .wz-panel { padding: 20px; }
     .wz-header { padding: 14px 16px; flex-wrap: wrap; }
     .wz-footer { padding: 14px 16px; }
+    .wz-logout-btn { font-size: 12px; padding: 5px 10px; }
 }
