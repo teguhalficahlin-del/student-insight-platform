@@ -289,34 +289,27 @@ const DEPENDENCY_LABELS = {
     pkl_placements:       'penempatan PKL',
 };
 
+// Dependency check HANYA untuk tabel yang TIDAK di-cascade otomatis.
+// Byproduct impor (class_enrollments, student_parents, teaching_assignments,
+// schedule_templates) di-cascade oleh deleteBulk/edge function — JANGAN list di sini,
+// karena checkDependencies akan salah menolak hapus yang seharusnya berhasil.
 const DEPENDENCY_MAP = {
     programs: [
         { table: 'classes', column: 'program_id' },
         { table: 'students', column: 'program_id' },
-        { table: 'teaching_assignments', column: 'program_id' },
     ],
     classes: [
-        { table: 'class_enrollments',    column: 'class_id' },
-        { table: 'teaching_assignments', column: 'class_id' },
         { table: 'teaching_schedules',   column: 'class_id' },
-        { table: 'schedule_templates',   column: 'class_id' },
-        { table: 'observations',         column: 'class_id' },
     ],
     users: [
-        { table: 'teaching_assignments', column: 'user_id' },
         { table: 'teaching_schedules',   column: 'scheduled_teacher_id' },
-        { table: 'schedule_templates',   column: 'teacher_id' },
         { table: 'substitute_schedules', column: 'substitute_user_id' },
-        { table: 'attendance',           column: 'recorded_by_user_id' },
-        { table: 'observations',         column: 'author_user_id' },
     ],
     students: [
-        { table: 'class_enrollments', column: 'student_id' },
         { table: 'attendance',        column: 'student_id' },
         { table: 'observations',      column: 'student_id' },
-        { table: 'achievements',      column: 'student_id' },
         { table: 'cases',             column: 'student_id' },
-        { table: 'student_parents',   column: 'student_id' },
+        { table: 'pkl_placements',    column: 'student_id' },
     ],
     teaching_schedules: [
         { table: 'attendance',           column: 'schedule_id' },

@@ -1075,7 +1075,11 @@ async function checkDeleteOrder(step) {
     );
 
     const blockers = [];
-    results.forEach(({ count }, i) => {
+    results.forEach(({ count, error }, i) => {
+        if (error) {
+            console.warn(`[checkDeleteOrder] ${checks[i].table}:`, error.message);
+            return;
+        }
         if (count > 0) blockers.push(`${checks[i].label} (${count})`);
     });
 
