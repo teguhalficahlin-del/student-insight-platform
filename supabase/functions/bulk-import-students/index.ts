@@ -5,9 +5,9 @@
  *
  * Bulk-creates student records + their initial class enrollment
  * from a CSV file during the ADMINISTRATIVE setup wizard.
- * Re-importing an existing NIS updates that student's full_name only
- * (program_id/class enrollment from the original import are left
- * untouched) instead of failing.
+ * Re-importing an existing NIS updates full_name, program_id,
+ * and class enrollment — so TU can fix typos, wrong program,
+ * or wrong class placement without deleting and re-importing.
  *
  * CONTRACT:
  *   POST /functions/v1/bulk-import-students
@@ -29,8 +29,9 @@
  *   8.  Resolve kode_program -> program_id (per programs.code)
  *   9.  Resolve class_name -> class_id (per active academic_year)
  *  10.  Batch existing-NIS check against DB
- *  11.  Existing NIS rows: UPDATE full_name only. New rows: RPC
- *       fn_bulk_import_students — atomic per-row insert (unchanged).
+ *  11.  Existing NIS rows: UPDATE full_name + program_id + class
+ *       enrollment. New rows: RPC fn_bulk_import_students — atomic
+ *       per-row insert (unchanged).
  *  12.  Response: { total, success, updated, failed, errors[] }
  *
  * WHY NOT supabase-js .upsert() HERE:
@@ -235,18 +236,44 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const existingRows = validRows.filter(r => existingNisSet.has(r.nis));
         const newRows       = validRows.filter(r => !existingNisSet.has(r.nis));
 
-        // ── 11a. Existing NIS: update full_name only ────────────
+        // ── 11a. Existing NIS: update full_name + program_id + class enrollment
         let updated = 0;
         for (const row of existingRows) {
+            const { data: studentRow, error: fetchErr } = await admin
+                .from('students')
+                .select('student_id')
+                .eq('nis', row.nis)
+                .single();
+
+            if (fetchErr || !studentRow) {
+                errors.push({ row: row.rowNumber, message: `Gagal mencari NIS ${row.nis}: ${fetchErr?.message ?? 'tidak ditemukan'}` });
+                continue;
+            }
+
             const { error: updateErr } = await admin
                 .from('students')
-                .update({ full_name: row.nama })
-                .eq('nis', row.nis);
+                .update({ full_name: row.nama, program_id: row.program_id })
+                .eq('student_id', studentRow.student_id);
 
             if (updateErr) {
                 errors.push({ row: row.rowNumber, message: `Gagal memperbarui NIS ${row.nis}: ${updateErr.message}` });
                 continue;
             }
+
+            const { error: enrollErr } = await admin
+                .from('class_enrollments')
+                .upsert({
+                    student_id:    studentRow.student_id,
+                    class_id:      row.class_id,
+                    academic_year: academicYear,
+                    semester:      semester,
+                }, { onConflict: 'student_id,academic_year,semester' });
+
+            if (enrollErr) {
+                errors.push({ row: row.rowNumber, message: `Gagal memperbarui kelas NIS ${row.nis}: ${enrollErr.message}` });
+                continue;
+            }
+
             updated++;
         }
 
