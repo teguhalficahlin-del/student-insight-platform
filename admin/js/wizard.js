@@ -1164,6 +1164,66 @@ async function runBulkDelete(step, cfg, ids, btn) {
 // INIT (auth guard + render langkah 1)
 // ─────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────
+// GANTI PASSWORD (modal)
+// ─────────────────────────────────────────────────────────────
+
+function showPasswordModal(isFirstTime) {
+    const modal      = document.getElementById('password-modal');
+    const newPassEl  = document.getElementById('modal-new-password');
+    const confirmEl  = document.getElementById('modal-confirm-password');
+    const submitBtn  = document.getElementById('modal-submit-btn');
+    const modalErrEl = document.getElementById('password-modal-error');
+
+    newPassEl.value  = '';
+    confirmEl.value  = '';
+    modalErrEl.style.display = 'none';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Simpan Password';
+    modal.style.display = 'flex';
+
+    const handler = async () => {
+        const newPass     = newPassEl.value;
+        const confirmPass = confirmEl.value;
+
+        modalErrEl.style.display = 'none';
+        modalErrEl.textContent = '';
+
+        if (newPass.length < 8) {
+            modalErrEl.textContent = 'Password minimal 8 karakter.';
+            modalErrEl.style.display = 'block';
+            return;
+        }
+        if (newPass === 'Admin1234') {
+            modalErrEl.textContent = 'Password tidak boleh sama dengan password default.';
+            modalErrEl.style.display = 'block';
+            return;
+        }
+        if (newPass !== confirmPass) {
+            modalErrEl.textContent = 'Konfirmasi password tidak cocok.';
+            modalErrEl.style.display = 'block';
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Menyimpan...';
+
+        try {
+            await changePassword(newPass);
+            modal.style.display = 'none';
+            submitBtn.removeEventListener('click', handler);
+            if (isFirstTime) await goToStep(1);
+        } catch (err) {
+            modalErrEl.textContent = err.message ?? 'Gagal menyimpan password. Coba lagi.';
+            modalErrEl.style.display = 'block';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Simpan Password';
+        }
+    };
+
+    submitBtn.addEventListener('click', handler);
+}
+
 // Guard: peringatan saat TU menutup/refresh halaman di tengah wizard
 let importRunning = false;
 window.addEventListener('beforeunload', (e) => {
@@ -1197,61 +1257,18 @@ window.addEventListener('beforeunload', (e) => {
         });
     }
 
+    // Tombol ganti password di header — selalu tersedia
+    const changePwBtn = document.getElementById('wizard-change-pw-btn');
+    if (changePwBtn) {
+        changePwBtn.addEventListener('click', () => showPasswordModal(false));
+    }
+
     // Cek apakah password default sudah diganti
     let config = null;
     try { config = await getSchoolConfig(); } catch (_) { config = null; }
 
     if (!config?.password_changed) {
-        // Tampilkan modal — blokir wizard sampai password diganti
-        const modal       = document.getElementById('password-modal');
-        const newPassEl   = document.getElementById('modal-new-password');
-        const confirmEl   = document.getElementById('modal-confirm-password');
-        const submitBtn   = document.getElementById('modal-submit-btn');
-        const modalErrEl  = document.getElementById('password-modal-error');
-
-        modal.style.display = 'flex';
-
-        submitBtn.addEventListener('click', async () => {
-            const newPass     = newPassEl.value;
-            const confirmPass = confirmEl.value;
-
-            // Reset error
-            modalErrEl.style.display = 'none';
-            modalErrEl.textContent = '';
-
-            // Validasi
-            if (newPass.length < 8) {
-                modalErrEl.textContent = 'Password minimal 8 karakter.';
-                modalErrEl.style.display = 'block';
-                return;
-            }
-            if (newPass === 'Admin1234') {
-                modalErrEl.textContent = 'Password tidak boleh sama dengan password default.';
-                modalErrEl.style.display = 'block';
-                return;
-            }
-            if (newPass !== confirmPass) {
-                modalErrEl.textContent = 'Konfirmasi password tidak cocok.';
-                modalErrEl.style.display = 'block';
-                return;
-            }
-
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Menyimpan...';
-
-            try {
-                await changePassword(newPass);
-                modal.style.display = 'none';
-                await goToStep(1);
-            } catch (err) {
-                modalErrEl.textContent = err.message ?? 'Gagal menyimpan password. Coba lagi.';
-                modalErrEl.style.display = 'block';
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Simpan Password';
-            }
-        });
-
-        // Jangan panggil goToStep — wizard tetap terblokir sampai modal selesai
+        showPasswordModal(true);
         return;
     }
 
