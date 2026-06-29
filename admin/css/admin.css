@@ -38,6 +38,7 @@ html, body {
     background: var(--color-bg);
 }
 
+html.page-wizard,
 body.page-wizard {
     min-width: 360px;
 }
