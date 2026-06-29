@@ -268,7 +268,7 @@ async function renderStep3() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 3 dari ${TOTAL_STEPS}</div>
         <h3>Program Keahlian</h3>
-        <p class="hint">Impor program keahlian (jurusan) yang ada di sekolah Anda.</p>
+        <p class="hint">Impor program keahlian (jurusan) yang ada di sekolah Anda. Upload ulang file akan memperbarui nama program. Jika kode program salah ketik, hapus program tersebut terlebih dahulu lalu impor ulang.</p>
         ${templateButtonHtml(3)}
         <div id="wz-data-list"></div>
 
@@ -564,7 +564,7 @@ function generateExcelTemplate(filename, headers, exampleRows) {
 
 const IMPORT_STEP_INFO = {
     4: { title: 'Kelas & Rombel',
-         desc: 'Impor daftar kelas. Program keahlian (Langkah 3) dan tahun ajaran aktif harus sudah ada — tahun ajaran diambil otomatis dari konfigurasi sekolah.' },
+         desc: 'Impor daftar kelas. Program keahlian (Langkah 3) dan tahun ajaran aktif harus sudah ada — tahun ajaran diambil otomatis dari konfigurasi sekolah. Upload ulang file akan memperbarui program dan tingkat kelas. Jika nama kelas salah ketik, hapus kelas tersebut terlebih dahulu lalu impor ulang.' },
     5: { title: 'Guru',
          desc: 'Impor akun guru. NIP/NIK menjadi identitas login dan setiap baris otomatis berperan sebagai GURU. Upload ulang file yang sama akan memperbarui nama dan kode guru. Jika NIP/NIK salah ketik, hapus guru tersebut terlebih dahulu lalu impor ulang dengan NIP/NIK yang benar.' },
     6: { title: 'Siswa',
