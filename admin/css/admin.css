@@ -199,14 +199,43 @@ label {
 
 .sched-header h3 { margin: 0; font-size: 16px; }
 
+.sched-body {
+    display: flex; flex: 1; overflow: hidden;
+}
+
+.sched-sidebar {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 10px 8px;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    min-width: 100px;
+}
+
+.sched-day-btn {
+    padding: 10px 16px; border: none;
+    border-radius: var(--radius); background: transparent;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    color: var(--color-text-muted); text-align: left;
+}
+
+.sched-day-btn:hover { background: var(--color-bg); }
+
+.sched-day-btn.active {
+    background: var(--color-primary); color: #fff;
+}
+
+.sched-main {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+}
+
 .sched-toolbar {
     display: flex; gap: 16px; padding: 10px 20px;
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
-    flex-wrap: wrap;
+    flex-wrap: wrap; align-items: center;
 }
 
-.sched-tabs, .sched-grade-tabs { display: flex; gap: 4px; }
+.sched-grade-tabs { display: flex; gap: 4px; }
 
 .sched-tab {
     padding: 6px 14px; border: 1px solid var(--color-border);

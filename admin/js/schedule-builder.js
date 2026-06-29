@@ -64,27 +64,31 @@ function createOverlay() {
                 <button type="button" class="btn btn-secondary sched-close">✕ Tutup</button>
             </div>
 
-            <div class="sched-toolbar">
-                <div class="sched-tabs" id="sched-day-tabs">
-                    ${DAYS.map(d => `<button type="button" class="sched-tab ${d === state.day ? 'active' : ''}" data-day="${d}">${DAY_LABELS[d]}</button>`).join('')}
+            <div class="sched-body">
+                <div class="sched-sidebar" id="sched-day-tabs">
+                    ${DAYS.map(d => `<button type="button" class="sched-day-btn ${d === state.day ? 'active' : ''}" data-day="${d}">${DAY_LABELS[d]}</button>`).join('')}
                 </div>
-                <div class="sched-grade-tabs" id="sched-grade-tabs">
-                    ${GRADES.map(g => `<button type="button" class="sched-tab ${g === state.grade ? 'active' : ''}" data-grade="${g}">${GRADE_LABELS[g]}</button>`).join('')}
+
+                <div class="sched-main">
+                    <div class="sched-toolbar">
+                        <div class="sched-grade-tabs" id="sched-grade-tabs">
+                            ${GRADES.map(g => `<button type="button" class="sched-tab ${g === state.grade ? 'active' : ''}" data-grade="${g}">${GRADE_LABELS[g]}</button>`).join('')}
+                        </div>
+                        <div class="sched-actions">
+                            <button type="button" class="btn btn-secondary" id="sched-add-slot" style="padding:6px 12px">+ Slot Mengajar</button>
+                            <button type="button" class="btn btn-secondary" id="sched-add-break" style="padding:6px 12px">+ Istirahat/Kegiatan</button>
+                            <span class="sched-conflict-count" id="sched-conflict-count"></span>
+                            <button type="button" class="btn btn-primary" id="sched-save" style="padding:6px 16px;margin-left:auto">Simpan</button>
+                        </div>
+                    </div>
+
+                    <div class="sched-grid-wrapper" id="sched-grid-wrapper">
+                        <p class="hint" style="padding:20px;text-align:center">Memuat...</p>
+                    </div>
+
+                    <div id="sched-status" class="sched-status"></div>
                 </div>
             </div>
-
-            <div class="sched-actions">
-                <button type="button" class="btn btn-secondary" id="sched-add-slot" style="padding:6px 12px">+ Slot Mengajar</button>
-                <button type="button" class="btn btn-secondary" id="sched-add-break" style="padding:6px 12px">+ Istirahat/Kegiatan</button>
-                <span class="sched-conflict-count" id="sched-conflict-count"></span>
-                <button type="button" class="btn btn-primary" id="sched-save" style="padding:6px 16px;margin-left:auto">Simpan</button>
-            </div>
-
-            <div class="sched-grid-wrapper" id="sched-grid-wrapper">
-                <p class="hint" style="padding:20px;text-align:center">Memuat...</p>
-            </div>
-
-            <div id="sched-status" class="sched-status"></div>
         </div>
     `;
 
@@ -100,7 +104,7 @@ function createOverlay() {
         if (!day || day === state.day) return;
         if (state.dirty && !confirm('Ada perubahan belum disimpan. Pindah hari?')) return;
         state.day = day;
-        overlayEl.querySelectorAll('#sched-day-tabs .sched-tab').forEach(t => t.classList.toggle('active', t.dataset.day === day));
+        overlayEl.querySelectorAll('#sched-day-tabs .sched-day-btn').forEach(t => t.classList.toggle('active', t.dataset.day === day));
         await loadDay();
     });
 
