@@ -252,14 +252,19 @@ label {
 .sched-no { font-weight: 600; background: var(--color-bg); }
 
 .sched-time-cell {
-    display: flex; flex-direction: column; gap: 2px;
-    background: var(--color-bg); padding: 2px !important;
+    display: flex; flex-direction: row; align-items: center; gap: 2px;
+    background: var(--color-bg); padding: 4px !important;
+    white-space: nowrap;
 }
 
 .sched-time-input {
-    width: 72px; border: 1px solid var(--color-border);
+    width: 62px; border: 1px solid var(--color-border);
     border-radius: 3px; padding: 2px 4px; font-size: 11px;
     text-align: center;
+}
+
+.sched-time-sep {
+    font-size: 11px; color: var(--color-text-muted);
 }
 
 .sched-break-row { background: #fef3c7; }

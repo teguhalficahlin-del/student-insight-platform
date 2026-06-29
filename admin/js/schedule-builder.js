@@ -224,6 +224,7 @@ function renderGrid() {
             html += `<td></td>`;
             html += `<td class="sched-time-cell">
                 <input type="time" class="sched-time-input" value="${slot.start_time}" data-idx="${idx}" data-field="start_time" />
+                <span class="sched-time-sep">—</span>
                 <input type="time" class="sched-time-input" value="${slot.end_time}" data-idx="${idx}" data-field="end_time" />
             </td>`;
             html += `<td colspan="${colCount * 2}" class="sched-break-label">
@@ -237,6 +238,7 @@ function renderGrid() {
             html += `<td class="sched-no">${slotNo}</td>`;
             html += `<td class="sched-time-cell">
                 <input type="time" class="sched-time-input" value="${slot.start_time}" data-idx="${idx}" data-field="start_time" />
+                <span class="sched-time-sep">—</span>
                 <input type="time" class="sched-time-input" value="${slot.end_time}" data-idx="${idx}" data-field="end_time" />
             </td>`;
 
