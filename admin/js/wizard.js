@@ -261,8 +261,15 @@ async function renderStep3() {
         <h3>Program Keahlian</h3>
         <p class="hint">Tambahkan program keahlian (jurusan) yang ada di sekolah Anda.</p>
         ${templateButtonHtml(3)}
+        <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap">
+            <button type="button" class="btn btn-danger wz-prog-del-selected" disabled style="padding:6px 12px">Hapus Terpilih (0)</button>
+            <button type="button" class="btn btn-secondary wz-prog-del-all" style="padding:6px 12px">Hapus Semua (${programs.length})</button>
+        </div>
         <table class="table">
-            <thead><tr><th style="width:120px">Kode</th><th>Nama Program</th><th style="width:48px"></th></tr></thead>
+            <thead><tr>
+                <th style="width:36px"><input type="checkbox" class="wz-prog-check-all" title="Pilih semua" /></th>
+                <th style="width:120px">Kode</th><th>Nama Program</th><th style="width:48px"></th>
+            </tr></thead>
             <tbody id="wz-program-tbody">${renderProgramRows(programs)}</tbody>
         </table>
         <div class="field">
@@ -291,6 +298,7 @@ async function renderStep3() {
 
     document.getElementById('wz-program-add-btn').addEventListener('click', onAddProgram);
     wireProgramDeleteButtons();
+    wireProgramBulkDelete();
     wireTemplateButton(3);
     wireImportBlock(3, {
         importFn: importPrograms,
@@ -299,6 +307,7 @@ async function renderStep3() {
             const tbody = contentEl.querySelector('#wz-program-tbody');
             if (tbody) tbody.innerHTML = renderProgramRows(updated);
             wireProgramDeleteButtons();
+            wireProgramBulkDelete();
             nextBtn.disabled = updated.length < 1;
         },
     });
@@ -309,10 +318,11 @@ async function renderStep3() {
 
 function renderProgramRows(programs) {
     if (!programs.length) {
-        return '<tr><td colspan="3" class="hint">Belum ada program. Tambahkan minimal satu.</td></tr>';
+        return '<tr><td colspan="4" class="hint">Belum ada program. Tambahkan minimal satu.</td></tr>';
     }
     return programs.map(p => `
         <tr>
+            <td><input type="checkbox" class="wz-prog-check" value="${escapeAttr(p.program_id)}" /></td>
             <td>${escapeHtml(p.code)}</td>
             <td>${escapeHtml(p.name)}</td>
             <td><button type="button" class="btn btn-danger wz-program-del"
@@ -368,6 +378,68 @@ function wireProgramDeleteButtons() {
             }
         });
     });
+}
+
+function wireProgramBulkDelete() {
+    const checks   = Array.from(contentEl.querySelectorAll('.wz-prog-check'));
+    const checkAll = contentEl.querySelector('.wz-prog-check-all');
+    const selBtn   = contentEl.querySelector('.wz-prog-del-selected');
+    const allBtn   = contentEl.querySelector('.wz-prog-del-all');
+    if (!selBtn || !allBtn || !checks.length) return;
+
+    const selectedIds = () => checks.filter(c => c.checked).map(c => c.value);
+
+    function sync() {
+        const n = selectedIds().length;
+        selBtn.textContent = `Hapus Terpilih (${n})`;
+        selBtn.disabled = n === 0;
+        if (checkAll) checkAll.checked = n > 0 && n === checks.length;
+    }
+
+    checks.forEach(c => c.addEventListener('change', sync));
+    if (checkAll) {
+        checkAll.addEventListener('change', () => {
+            checks.forEach(c => { c.checked = checkAll.checked; });
+            sync();
+        });
+    }
+
+    selBtn.addEventListener('click', async () => {
+        const ids = selectedIds();
+        if (!ids.length) return;
+        const blockMsg = await checkDeleteOrder(3);
+        if (blockMsg) { showError(blockMsg); return; }
+        if (!confirm(`Hapus ${ids.length} program terpilih?`)) return;
+        await runProgramBulkDelete(ids, selBtn);
+    });
+
+    allBtn.addEventListener('click', async () => {
+        const ids = checks.map(c => c.value);
+        if (!ids.length) return;
+        const blockMsg = await checkDeleteOrder(3);
+        if (blockMsg) { showError(blockMsg); return; }
+        if (!confirm(`Hapus SEMUA ${ids.length} program?`)) return;
+        await runProgramBulkDelete(ids, allBtn);
+    });
+}
+
+async function runProgramBulkDelete(ids, btn) {
+    clearError();
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = `Menghapus 0/${ids.length}…`;
+    const onProgress = (done, total) => { btn.textContent = `Menghapus ${done}/${total}…`; };
+    try {
+        const { deleted, errors } = await deleteBulk('programs', ids, onProgress);
+        if (errors.length) {
+            showError(`${deleted} terhapus, ${errors.length} gagal. Contoh: ${errors[0].message}`);
+        }
+    } catch (err) {
+        showError(err.message ?? 'Gagal menghapus program.');
+    } finally {
+        btn.textContent = label;
+        await renderStep3();
+    }
 }
 
 const STEP_RENDERERS = {
@@ -656,7 +728,7 @@ const IMPORT_STEP_INFO = {
     6: { title: 'Siswa',
          desc: 'Impor data siswa sekaligus penempatan kelas. Program & kelas harus sudah ada; tahun ajaran & semester diambil otomatis.' },
     7: { title: 'Orang Tua',
-         desc: 'Impor akun orang tua/wali dan tautkan ke siswanya (lewat NIS). Siswa (Langkah 6) harus sudah ada. Satu orang tua dengan beberapa anak: tulis NIK yang sama di beberapa baris dengan NIS berbeda.' },
+         desc: 'Impor akun orang tua/wali dan tautkan ke siswanya (lewat NIS). Siswa (Langkah 6) harus sudah ada. Satu orang tua dengan beberapa anak: tulis NIK yang sama di beberapa baris dengan NIS berbeda. NIK menjadi identitas login orang tua di Portal Orang Tua — orang tua masuk dengan NIK + password untuk melihat data anak.' },
     8: { title: 'DUDI',
          desc: 'Impor data DUDI (Dunia Usaha/Dunia Industri) mitra PKL. Akun DUDI login memakai nama usaha (bukan NIK).' },
     9: { title: 'Jadwal',
