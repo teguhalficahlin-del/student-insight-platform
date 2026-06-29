@@ -19,6 +19,7 @@ import {
     getCurrentUserRow, requireAdministrativeOrRedirect,
     getSchoolConfig, upsertSchoolConfig, markSetupCompleted,
     getPrograms, addProgram, deleteRecord, changePassword,
+    importPrograms, importClasses, importUsers, importStudents, importSchedules,
     logout,
 } from './api.js';
 
@@ -259,7 +260,7 @@ async function renderStep3() {
         ${templateButtonHtml(3)}
         <table class="table">
             <thead><tr><th style="width:120px">Kode</th><th>Nama Program</th><th style="width:48px"></th></tr></thead>
-            <tbody>${renderProgramRows(programs)}</tbody>
+            <tbody id="wz-program-tbody">${renderProgramRows(programs)}</tbody>
         </table>
         <div class="field">
             <label for="wz-program-name">Nama Program</label>
@@ -273,6 +274,10 @@ async function renderStep3() {
             <p class="hint">Maksimal 20 karakter, otomatis menjadi huruf besar.</p>
         </div>
         <button type="button" class="btn btn-secondary" id="wz-program-add-btn">Tambah</button>
+
+        <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
+        <h4 style="margin:0 0 8px">Atau impor massal dari file</h4>
+        ${importBlockHtml(3)}
     `;
 
     // Kode program: uppercase otomatis saat mengetik
@@ -284,6 +289,16 @@ async function renderStep3() {
     document.getElementById('wz-program-add-btn').addEventListener('click', onAddProgram);
     wireProgramDeleteButtons();
     wireTemplateButton(3);
+    wireImportBlock(3, {
+        importFn: importPrograms,
+        onDone: async () => {
+            const updated = await getPrograms();
+            const tbody = contentEl.querySelector('#wz-program-tbody');
+            if (tbody) tbody.innerHTML = renderProgramRows(updated);
+            wireProgramDeleteButtons();
+            nextBtn.disabled = updated.length < 1;
+        },
+    });
 
     // "Selanjutnya" hanya aktif jika minimal 1 program
     nextBtn.disabled = programs.length < 1;
@@ -356,6 +371,11 @@ const STEP_RENDERERS = {
     1: renderStep1,
     2: renderStep2,
     3: renderStep3,
+    4: renderImportStep,
+    5: renderImportStep,
+    6: renderImportStep,
+    7: renderImportStep,
+    8: renderImportStep,
     9: renderStep9,
 };
 
@@ -372,6 +392,9 @@ async function saveCurrentStep() {
         case 1: return saveStep1();
         case 2: return saveStep2();
         case 3: return saveStep3();
+        // Langkah 4–8 berbasis impor: data tersimpan langsung saat unggah,
+        // dan langkah-langkah ini opsional (boleh dilewati / dilanjutkan dari dashboard).
+        case 4: case 5: case 6: case 7: case 8: return;
         default: throw new Error('Langkah ini belum tersedia. Gunakan tombol Sebelumnya untuk kembali.');
     }
 }
@@ -522,6 +545,9 @@ function escapeAttr(s) {
 // CSV TEMPLATES (unduh contoh format per langkah)
 // ─────────────────────────────────────────────────────────────
 
+// Kolom HARUS sama persis dengan kontrak edge function bulk-import-*.
+// role_type untuk Guru (5) & Wali Kelas (7) disuntik client-side
+// (lihat importFnForStep), jadi tidak ada di template.
 const EXCEL_TEMPLATES = {
     3: { filename: 'template_program_keahlian.xlsx',
          headers: ['kode', 'nama'],
@@ -536,24 +562,26 @@ const EXCEL_TEMPLATES = {
              ['XI AKL 1', 'AKL', '11'],
          ] },
     5: { filename: 'template_guru.xlsx',
-         headers: ['nip', 'nama_lengkap', 'email'],
+         headers: ['nama', 'nip_atau_nik'],
          exampleRows: [
-             ['198501012010011001', 'Budi Santoso', 'budi@sekolah.sch.id'],
+             ['Budi Santoso', '198501012010011001'],
+             ['Sari Dewi', '198703022011012002'],
          ] },
     6: { filename: 'template_siswa.xlsx',
-         headers: ['nis', 'nama_lengkap', 'nama_kelas', 'kode_program'],
+         headers: ['nama', 'nis', 'kode_program', 'class_name'],
          exampleRows: [
-             ['2024001', 'Ani Rahayu', 'X TKJ 1', 'TKJ'],
+             ['Ani Rahayu', '2024001', 'TKJ', 'X TKJ 1'],
+             ['Doni Pratama', '2024002', 'AKL', 'XI AKL 1'],
          ] },
     7: { filename: 'template_wali_kelas.xlsx',
-         headers: ['nip_guru', 'nama_kelas'],
+         headers: ['nama', 'nip_atau_nik', 'nama_kelas'],
          exampleRows: [
-             ['198501012010011001', 'X TKJ 1'],
+             ['Budi Santoso', '198501012010011001', 'X TKJ 1'],
          ] },
     8: { filename: 'template_jadwal.xlsx',
-         headers: ['kode_guru', 'nama_kelas', 'nama_mapel', 'hari', 'jam_mulai', 'jam_selesai'],
+         headers: ['hari', 'start_time', 'end_time', 'kelas', 'kode_guru', 'kode_mapel'],
          exampleRows: [
-             ['BUD.S', 'X TKJ 1', 'Matematika', 'Senin', '07:00', '08:30'],
+             ['Senin', '07:00', '08:30', 'X TKJ 1', 'BS', 'MTK'],
          ] },
 };
 
@@ -585,6 +613,183 @@ function generateExcelTemplate(filename, headers, exampleRows) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Template');
     XLSX.writeFile(wb, filename);
+}
+
+// ─────────────────────────────────────────────────────────────
+// BULK IMPORT (unggah Excel/CSV → edge function)
+// ─────────────────────────────────────────────────────────────
+
+const IMPORT_STEP_INFO = {
+    4: { title: 'Kelas & Rombel',
+         desc: 'Impor daftar kelas. Program keahlian (Langkah 3) dan tahun ajaran aktif harus sudah ada — tahun ajaran diambil otomatis dari konfigurasi sekolah.' },
+    5: { title: 'Guru',
+         desc: 'Impor akun guru. NIP/NIK menjadi identitas login dan setiap baris otomatis berperan sebagai GURU.' },
+    6: { title: 'Siswa',
+         desc: 'Impor data siswa sekaligus penempatan kelas. Program & kelas harus sudah ada; tahun ajaran & semester diambil otomatis.' },
+    7: { title: 'Wali Kelas',
+         desc: 'Daftarkan akun wali kelas dan tautkan ke kelasnya. Kelas (Langkah 4) harus sudah ada. Gunakan NIP/NIK yang belum dipakai akun lain.' },
+    8: { title: 'Jadwal',
+         desc: 'Impor jadwal mengajar mingguan. Nama kelas, kode guru, dan kode mata pelajaran harus sudah terdaftar di sistem.' },
+};
+
+/** Fungsi impor (edge function) untuk tiap langkah. Guru & Wali Kelas
+ *  menyuntikkan role_type karena perannya sudah tersirat dari langkah. */
+function importFnForStep(step) {
+    switch (step) {
+        case 3: return importPrograms;
+        case 4: return importClasses;
+        case 5: return (csv) => importUsers(injectColumn(csv, 'role_type', 'GURU'));
+        case 6: return importStudents;
+        case 7: return (csv) => importUsers(injectColumn(csv, 'role_type', 'WALI_KELAS'));
+        case 8: return importSchedules;
+        default: throw new Error(`Tidak ada importer untuk langkah ${step}`);
+    }
+}
+
+/** Tambah satu kolom konstan ke setiap baris data CSV (mis. role_type).
+ *  Hanya menempel kolom di akhir tiap baris, jadi aman terhadap quoting. */
+function injectColumn(csvText, columnName, value) {
+    const lines = csvText.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0);
+    if (lines.length === 0) return csvText;
+    const header = `${lines[0]},${columnName}`;
+    const dataLines = lines.slice(1).map(line => `${line},${value}`);
+    return [header, ...dataLines].join('\r\n');
+}
+
+/** Baca file unggahan (.xlsx/.xls/.csv) menjadi teks CSV.
+ *  Excel dikonversi via SheetJS (global XLSX dari CDN di wizard.html). */
+async function fileToCsv(file) {
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+        if (typeof XLSX === 'undefined') {
+            throw new Error('Pustaka Excel gagal dimuat. Periksa koneksi internet, atau unggah file CSV.');
+        }
+        const buf = await file.arrayBuffer();
+        const wb  = XLSX.read(buf, { type: 'array' });
+        const ws  = wb.Sheets[wb.SheetNames[0]];
+        return XLSX.utils.sheet_to_csv(ws);
+    }
+    return await file.text();
+}
+
+/** Buang baris yang seluruh selnya kosong (sisa baris kosong di Excel). */
+function stripEmptyCsvLines(csv) {
+    return csv
+        .split(/\r\n|\n|\r/)
+        .filter(line => line.split(',').some(cell => cell.trim().length > 0))
+        .join('\r\n');
+}
+
+/** HTML blok unggah: input file + tombol impor + area hasil. */
+function importBlockHtml(step) {
+    const headers = EXCEL_TEMPLATES[step]?.headers ?? [];
+    return `
+        <div class="wz-import">
+            <p class="hint">Kolom yang diharapkan: <code>${headers.join(', ')}</code></p>
+            <input type="file" class="input wz-file-input" accept=".xlsx,.xls,.csv"
+                style="padding:8px; margin-bottom:12px" />
+            <button type="button" class="btn btn-primary wz-import-btn" disabled>Unggah &amp; Impor</button>
+            <div class="wz-import-result" style="margin-top:16px"></div>
+        </div>
+    `;
+}
+
+/** Pasang handler unggah+impor pada blok yang dirender importBlockHtml. */
+function wireImportBlock(step, { importFn, onDone } = {}) {
+    const fn        = importFn ?? importFnForStep(step);
+    const fileInput = contentEl.querySelector('.wz-file-input');
+    const importBtn = contentEl.querySelector('.wz-import-btn');
+    const resultEl  = contentEl.querySelector('.wz-import-result');
+    if (!fileInput || !importBtn || !resultEl) return;
+
+    let csvText = null;
+
+    function resetImportBtn() {
+        importBtn.disabled = !csvText;
+        importBtn.textContent = 'Unggah & Impor';
+        importBtn.classList.remove('btn-success');
+        importBtn.classList.add('btn-primary');
+    }
+
+    fileInput.addEventListener('change', async () => {
+        resultEl.innerHTML = '';
+        const file = fileInput.files?.[0];
+        if (!file) { csvText = null; resetImportBtn(); return; }
+        try {
+            csvText = stripEmptyCsvLines(await fileToCsv(file));
+            if (!csvText.trim()) throw new Error('File kosong atau tidak ada baris data.');
+            resetImportBtn();
+        } catch (err) {
+            csvText = null;
+            resetImportBtn();
+            resultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal membaca file.')}</div>`;
+        }
+    });
+
+    importBtn.addEventListener('click', async () => {
+        if (!csvText) return;
+        importBtn.disabled = true;
+        importBtn.textContent = 'Mengimpor…';
+        resultEl.innerHTML = '';
+        try {
+            const result = await fn(csvText);
+            renderImportResult(resultEl, result);
+            const changed = (result?.success ?? 0) > 0 || (result?.updated ?? 0) > 0;
+            if (changed) {
+                importBtn.textContent = '✓ Impor Selesai';
+                importBtn.classList.remove('btn-primary');
+                importBtn.classList.add('btn-success');
+                importBtn.disabled = true; // cegah submit ganda; pilih file lain untuk impor lagi
+            } else {
+                resetImportBtn();
+            }
+            if (onDone) await onDone(result);
+        } catch (err) {
+            resultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Impor gagal.')}</div>`;
+            resetImportBtn();
+        }
+    });
+}
+
+/** Render ringkasan + tabel error/konflik hasil impor. */
+function renderImportResult(el, result) {
+    const { total = 0, success = 0, updated = 0, failed = 0, errors = [], conflicts = [] } = result ?? {};
+    const problems = [...errors, ...conflicts];
+    const allGood  = failed === 0 && problems.length === 0;
+
+    const summary = `Total ${total} baris — berhasil ${success}` +
+        (updated ? `, diperbarui ${updated}` : '') +
+        `, gagal ${failed}` +
+        (conflicts.length ? `, konflik ${conflicts.length}` : '') + '.';
+
+    let html = `<div class="alert ${allGood ? 'alert-success' : 'alert-warning'}">${escapeHtml(summary)}</div>`;
+    if (problems.length) {
+        html += `
+            <table class="table">
+                <thead><tr><th style="width:64px">Baris</th><th>Pesan</th></tr></thead>
+                <tbody>${problems.map(e => `<tr><td>${e.row ?? '-'}</td><td>${escapeHtml(e.message ?? '')}</td></tr>`).join('')}</tbody>
+            </table>`;
+    }
+    el.innerHTML = html;
+}
+
+/** Renderer generik untuk langkah berbasis impor (4–8). */
+async function renderImportStep() {
+    const step = state.currentStep;
+    const info = IMPORT_STEP_INFO[step] ?? { title: STEP_NAMES[step], desc: '' };
+
+    contentEl.innerHTML = `
+        <div class="step-label">Langkah ${step} dari ${TOTAL_STEPS}</div>
+        <h3>${info.title}</h3>
+        <p class="hint">${info.desc}</p>
+        ${templateButtonHtml(step)}
+        ${importBlockHtml(step)}
+    `;
+    wireTemplateButton(step);
+    wireImportBlock(step);
+
+    // Langkah impor bersifat opsional — boleh dilanjutkan tanpa unggah.
+    nextBtn.disabled = false;
 }
 
 // ─────────────────────────────────────────────────────────────
