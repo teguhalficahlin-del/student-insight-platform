@@ -1,10 +1,10 @@
 /**
  * @file admin/js/wizard.js
  *
- * Controller untuk admin/wizard.html — wizard onboarding 9 langkah.
- * Step 1 (Profil Sekolah) dan Step 2 (Tahun Ajaran) terimplementasi
- * penuh; Step 3–8 placeholder "Segera hadir"; Step 9 ringkasan +
- * tombol "Buka Dashboard".
+ * Controller untuk admin/wizard.html — wizard onboarding 10 langkah.
+ * Step 1–2 (Profil & Tahun Ajaran) form manual; Step 3 (Program) form
+ * manual + impor; Step 4–9 berbasis impor Excel/CSV (Kelas, Guru, Siswa,
+ * Orang Tua, DUDI, Jadwal); Step 10 ringkasan + tombol "Buka Dashboard".
  *
  * State disimpan di memory saja (tidak localStorage) — refresh
  * memulai ulang wizard, tetapi data yang sudah tersimpan di DB
@@ -20,10 +20,11 @@ import {
     getSchoolConfig, upsertSchoolConfig, markSetupCompleted,
     getPrograms, getClasses, addProgram, deleteRecord, deleteBulk, changePassword,
     importPrograms, importClasses, importUsers, importStudents, importSchedules,
+    importParents, importDudi,
     logout,
 } from './api.js';
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 10;
 
 const STEP_NAMES = {
     1: 'Profil Sekolah',
@@ -32,9 +33,10 @@ const STEP_NAMES = {
     4: 'Kelas & Rombel',
     5: 'Guru',
     6: 'Siswa',
-    7: 'Wali Kelas',
-    8: 'Jadwal',
-    9: 'Selesai',
+    7: 'Orang Tua',
+    8: 'DUDI',
+    9: 'Jadwal',
+    10: 'Selesai',
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -228,7 +230,7 @@ function renderPlaceholder() {
     nextBtn.disabled = true;
 }
 
-async function renderStep9() {
+async function renderSummaryStep() {
     const rows = [];
     for (let i = 1; i <= TOTAL_STEPS; i++) {
         const done = state.completedSteps.has(i);
@@ -376,7 +378,8 @@ const STEP_RENDERERS = {
     6: renderImportStep,
     7: renderImportStep,
     8: renderImportStep,
-    9: renderStep9,
+    9: renderImportStep,
+    10: renderSummaryStep,
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -392,9 +395,9 @@ async function saveCurrentStep() {
         case 1: return saveStep1();
         case 2: return saveStep2();
         case 3: return saveStep3();
-        // Langkah 4–8 berbasis impor: data tersimpan langsung saat unggah,
+        // Langkah 4–9 berbasis impor: data tersimpan langsung saat unggah,
         // dan langkah-langkah ini opsional (boleh dilewati / dilanjutkan dari dashboard).
-        case 4: case 5: case 6: case 7: case 8: return;
+        case 4: case 5: case 6: case 7: case 8: case 9: return;
         default: throw new Error('Langkah ini belum tersedia. Gunakan tombol Sebelumnya untuk kembali.');
     }
 }
@@ -546,8 +549,8 @@ function escapeAttr(s) {
 // ─────────────────────────────────────────────────────────────
 
 // Kolom HARUS sama persis dengan kontrak edge function bulk-import-*.
-// role_type untuk Guru (5) & Wali Kelas (7) disuntik client-side
-// (lihat importFnForStep), jadi tidak ada di template.
+// role_type untuk Guru (5) disuntik client-side (lihat importFnForStep),
+// jadi tidak ada di template.
 const EXCEL_TEMPLATES = {
     3: { filename: 'template_program_keahlian.xlsx',
          headers: ['kode', 'nama'],
@@ -573,12 +576,19 @@ const EXCEL_TEMPLATES = {
              ['Ani Rahayu', '2024001', 'TKJ', 'X TKJ 1'],
              ['Doni Pratama', '2024002', 'AKL', 'XI AKL 1'],
          ] },
-    7: { filename: 'template_wali_kelas.xlsx',
-         headers: ['nama', 'nip_atau_nik', 'nama_kelas'],
+    7: { filename: 'template_orang_tua.xlsx',
+         headers: ['nama_ortu', 'nik', 'nis_siswa'],
          exampleRows: [
-             ['Budi Santoso', '198501012010011001', 'X TKJ 1'],
+             ['Bambang Wijaya', '3201012003800001', '2024001'],
+             ['Bambang Wijaya', '3201012003800001', '2024002'],
          ] },
-    8: { filename: 'template_jadwal.xlsx',
+    8: { filename: 'template_dudi.xlsx',
+         headers: ['nama_usaha', 'nama_penanggung_jawab'],
+         exampleRows: [
+             ['PT Mitra Teknologi Nusantara', 'Hendra Setiawan'],
+             ['CV Karya Mandiri Elektronik', 'Yulia Permatasari'],
+         ] },
+    9: { filename: 'template_jadwal.xlsx',
          headers: ['nama_guru', 'nama_kelas', 'hari', 'start_time', 'end_time'],
          exampleRows: [
              ['Budi Santoso', 'X TKJ 1', 'Senin', '07:00', '08:30'],
@@ -644,22 +654,25 @@ const IMPORT_STEP_INFO = {
          desc: 'Impor akun guru. NIP/NIK menjadi identitas login dan setiap baris otomatis berperan sebagai GURU.' },
     6: { title: 'Siswa',
          desc: 'Impor data siswa sekaligus penempatan kelas. Program & kelas harus sudah ada; tahun ajaran & semester diambil otomatis.' },
-    7: { title: 'Wali Kelas',
-         desc: 'Daftarkan akun wali kelas dan tautkan ke kelasnya. Kelas (Langkah 4) harus sudah ada. Gunakan NIP/NIK yang belum dipakai akun lain.' },
-    8: { title: 'Jadwal',
+    7: { title: 'Orang Tua',
+         desc: 'Impor akun orang tua/wali dan tautkan ke siswanya (lewat NIS). Siswa (Langkah 6) harus sudah ada. Satu orang tua dengan beberapa anak: tulis NIK yang sama di beberapa baris dengan NIS berbeda.' },
+    8: { title: 'DUDI',
+         desc: 'Impor data DUDI (Dunia Usaha/Dunia Industri) mitra PKL. Akun DUDI login memakai nama usaha (bukan NIK).' },
+    9: { title: 'Jadwal',
          desc: 'Impor jadwal mengajar mingguan: nama guru + kelas + waktu (tanpa mata pelajaran). Guru & kelas harus sudah terdaftar. Satu guru tidak boleh mengajar di kelas berbeda pada waktu yang tumpang-tindih — baris yang bentrok akan ditolak & dilaporkan.' },
 };
 
-/** Fungsi impor (edge function) untuk tiap langkah. Guru & Wali Kelas
- *  menyuntikkan role_type karena perannya sudah tersirat dari langkah. */
+/** Fungsi impor (edge function) untuk tiap langkah. Guru menyuntikkan
+ *  role_type karena perannya tersirat dari langkah. */
 function importFnForStep(step) {
     switch (step) {
         case 3: return importPrograms;
         case 4: return importClasses;
         case 5: return (csv) => importUsers(injectColumn(csv, 'role_type', 'GURU'));
         case 6: return importStudents;
-        case 7: return (csv) => importUsers(injectColumn(csv, 'role_type', 'WALI_KELAS'));
-        case 8: return importSchedules;
+        case 7: return importParents;
+        case 8: return importDudi;
+        case 9: return importSchedules;
         default: throw new Error(`Tidak ada importer untuk langkah ${step}`);
     }
 }
@@ -720,7 +733,7 @@ function stripEmptyCsvLines(csv) {
 /** HTML blok unggah: input file + tombol impor + area hasil. */
 function importBlockHtml(step) {
     const headers = EXCEL_TEMPLATES[step]?.headers ?? [];
-    const hasIdentifier = headers.some(h => h === 'nip_atau_nik' || h === 'nis');
+    const hasIdentifier = headers.some(h => ['nip_atau_nik', 'nis', 'nik', 'nis_siswa'].includes(h));
     const idTip = hasIdentifier
         ? `<p class="hint" style="margin-top:8px">Jika NIP/NIS panjang berubah jadi angka di Excel, format kolomnya sebagai <b>Teks</b> atau awali dengan tanda kutip satu (<code>'</code>) — tanda itu otomatis dihapus saat impor.</p>`
         : '';
@@ -875,14 +888,24 @@ const STEP_LIST = {
         },
     },
     7: {
-        title: 'Wali Kelas terdaftar',
-        headers: ['Nama', 'NIP/NIK', 'Kelas'],
+        title: 'Orang Tua terdaftar',
+        headers: ['Nama', 'NIK'],
+        deleteTable: 'users',
+        fetch: () => fetchUsersByRole('ORTU',
+            u => [u.full_name, u.login_identifier]),
+    },
+    8: {
+        title: 'DUDI terdaftar',
+        headers: ['Nama Usaha', 'Penanggung Jawab'],
         deleteTable: 'users',
         fetch: async () => {
-            const classes = await getClasses();
-            const cm = new Map(classes.map(c => [c.class_id, c.name]));
-            return fetchUsersByRole('WALI_KELAS',
-                u => [u.full_name, u.login_identifier, cm.get(u.wali_kelas_class_id) ?? '—']);
+            const { data, error } = await supabase
+                .from('users')
+                .select('user_id, full_name, dudi_org_name')
+                .eq('role_type', 'DUDI')
+                .order('dudi_org_name');
+            if (error) throw error;
+            return (data ?? []).map(u => ({ id: u.user_id, cells: [u.dudi_org_name ?? '—', u.full_name] }));
         },
     },
 };
