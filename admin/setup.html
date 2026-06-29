@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <title>Setup Awal — Admin Console</title>
+    <link rel="stylesheet" href="css/admin.css" />
+</head>
+<body>
+    <div class="wizard-shell">
+        <h2 style="text-align:center">Setup Awal Sekolah</h2>
+        <p style="text-align:center" id="wizard-progress-label">Tahap 1 dari 11</p>
+
+        <div class="wizard-progress" id="wizard-progress">
+            <div class="step-dot" data-step="1">Data Sekolah</div>
+            <div class="step-dot" data-step="2">Program Keahlian</div>
+            <div class="step-dot" data-step="3">Kelas &amp; Rombel</div>
+            <div class="step-dot" data-step="4">Kepsek</div>
+            <div class="step-dot" data-step="5">Kaprodi</div>
+            <div class="step-dot" data-step="6">Wali Kelas</div>
+            <div class="step-dot" data-step="7">Guru</div>
+            <div class="step-dot" data-step="8">BK</div>
+            <div class="step-dot" data-step="9">Siswa</div>
+            <div class="step-dot" data-step="10">DUDI</div>
+            <div class="step-dot" data-step="11">Verifikasi</div>
+        </div>
+
+        <div class="wizard-panel">
+            <div id="wizard-error" class="alert alert-danger" style="display:none"></div>
+
+            <!-- STEP 1: Data Sekolah -->
+            <section class="wizard-step" data-step="1">
+                <div class="step-label">Tahap 1 dari 11</div>
+                <h3>Data Sekolah</h3>
+                <div class="field">
+                    <label for="school-name">Nama Sekolah</label>
+                    <input id="school-name" class="input" type="text" required />
+                </div>
+                <div class="field">
+                    <label for="academic-year">Tahun Ajaran Aktif</label>
+                    <input id="academic-year" class="input" type="text" placeholder="2024/2025" required />
+                </div>
+                <div class="field">
+                    <label for="active-semester">Semester Aktif</label>
+                    <select id="active-semester" class="input">
+                        <option value="1">Semester 1</option>
+                        <option value="2">Semester 2</option>
+                    </select>
+                </div>
+            </section>
+
+            <!-- STEP 2: Program Keahlian -->
+            <section class="wizard-step" data-step="2"></section>
+
+            <!-- STEP 3: Kelas & Rombel -->
+            <section class="wizard-step" data-step="3">
+                <div class="step-label">Tahap 3 dari 11</div>
+                <h3>Kelas &amp; Rombel</h3>
+                <table class="table" id="class-table">
+                    <thead><tr><th>Nama Kelas</th><th>Program</th><th>Tingkat</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+                <div style="display:flex; gap:8px; flex-wrap:wrap">
+                    <input id="new-class-name" class="input" placeholder="Nama Kelas (e.g. X TKJ 1)" style="width:200px" />
+                    <select id="new-class-program" class="input" style="width:200px"></select>
+                    <select id="new-class-grade" class="input" style="width:120px">
+                        <option value="10">Kelas 10</option>
+                        <option value="11">Kelas 11</option>
+                        <option value="12">Kelas 12</option>
+                    </select>
+                    <button id="add-class-btn" type="button" class="btn btn-secondary">Tambah Kelas</button>
+                </div>
+            </section>
+
+            <!-- STEP 4: Import Kepsek -->
+            <section class="wizard-step" data-step="4">
+                <div class="step-label">Tahap 4 dari 11</div>
+                <h3>Import Kepala Sekolah</h3>
+                <div id="import-kepsek-mount"></div>
+            </section>
+
+            <!-- STEP 5: Import Kaprodi -->
+            <section class="wizard-step" data-step="5">
+                <div class="step-label">Tahap 5 dari 11</div>
+                <h3>Import Kaprodi</h3>
+                <div id="import-kaprodi-mount"></div>
+            </section>
+
+            <!-- STEP 6: Import Wali Kelas -->
+            <section class="wizard-step" data-step="6">
+                <div class="step-label">Tahap 6 dari 11</div>
+                <h3>Import Wali Kelas</h3>
+                <div id="import-walikelas-mount"></div>
+            </section>
+
+            <!-- STEP 7: Import Guru -->
+            <section class="wizard-step" data-step="7">
+                <div class="step-label">Tahap 7 dari 11</div>
+                <h3>Import Guru</h3>
+                <div id="import-guru-mount"></div>
+            </section>
+
+            <!-- STEP 8: Import BK -->
+            <section class="wizard-step" data-step="8">
+                <div class="step-label">Tahap 8 dari 11</div>
+                <h3>Import BK</h3>
+                <div id="import-bk-mount"></div>
+            </section>
+
+            <!-- STEP 9: Import Siswa + Orang Tua -->
+            <section class="wizard-step" data-step="9">
+                <div class="step-label">Tahap 9 dari 11</div>
+                <h3>Import Siswa</h3>
+                <div id="import-students-mount"></div>
+
+                <div class="optional-section" style="margin-top: 2rem">
+                    <h4>Import Orang Tua (Opsional)</h4>
+                    <p class="hint">Dapat dilewati dan dilakukan kapan saja melalui dashboard.</p>
+                    <div id="import-parents-mount"></div>
+                </div>
+            </section>
+
+            <!-- STEP 10: Import DUDI (Opsional) -->
+            <section class="wizard-step" data-step="10">
+                <div class="step-label">Tahap 10 dari 11</div>
+                <h3>Import DUDI (Opsional)</h3>
+                <p class="hint">
+                    DUDI (Dunia Usaha/Industri) login dengan nama usaha, bukan NIK — supervisi siswa PKL.
+                    Dapat dilewati dan dilakukan kapan saja melalui dashboard.
+                </p>
+                <div id="import-dudi-mount"></div>
+            </section>
+
+            <!-- STEP 11: Verifikasi Final -->
+            <section class="wizard-step" data-step="11">
+                <div class="step-label">Tahap 11 dari 11</div>
+                <h3>Verifikasi Final</h3>
+                <p class="hint">Ringkasan data yang akan diaktifkan:</p>
+                <div id="final-summary" class="panel" style="box-shadow:none; border:1px solid var(--color-border)"></div>
+            </section>
+
+            <div class="wizard-actions">
+                <button id="wizard-back-btn" type="button" class="btn btn-secondary">Kembali</button>
+                <button id="wizard-dashboard-btn" type="button" class="btn btn-secondary" style="display:none">Buka Dashboard</button>
+                <button id="wizard-next-btn" type="button" class="btn btn-primary">Lanjut</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/setup-wizard.js"></script>
+</body>
+</html>

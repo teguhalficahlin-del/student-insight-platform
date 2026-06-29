@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <title>Tutup Tahun Ajaran — Admin Console</title>
+    <link rel="stylesheet" href="css/admin.css" />
+</head>
+<body>
+    <div class="wizard-shell">
+        <h2 style="text-align:center">Tutup Tahun Ajaran</h2>
+        <p style="text-align:center" id="wizard-progress-label">Langkah 1 dari 5</p>
+
+        <div class="wizard-progress" id="wizard-progress">
+            <div class="step-dot" data-step="1">Review Kelas XII</div>
+            <div class="step-dot" data-step="2">Kelulusan</div>
+            <div class="step-dot" data-step="3">Kenaikan Kelas</div>
+            <div class="step-dot" data-step="4">Tahun Ajaran Baru</div>
+            <div class="step-dot" data-step="5">Ringkasan</div>
+        </div>
+
+        <div class="wizard-panel">
+            <div id="wizard-error" class="alert alert-danger" style="display:none"></div>
+
+            <!-- LANGKAH 1: Review Siswa Kelas XII -->
+            <section class="wizard-step" data-step="1">
+                <div class="step-label">Langkah 1 dari 5</div>
+                <h3>Review Siswa Kelas XII</h3>
+                <p class="hint">Siswa yang terdaftar di kelas tingkat 12 pada tahun ajaran aktif.</p>
+                <table class="table" id="grade12-table">
+                    <thead><tr><th>Nama</th><th>NIS</th><th>Kelas</th><th>Status</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+
+            <!-- LANGKAH 2: Kelulusan Massal -->
+            <section class="wizard-step" data-step="2">
+                <div class="step-label">Langkah 2 dari 5</div>
+                <h3>Kelulusan Massal</h3>
+                <p class="hint">Semua siswa kelas XII ter-check secara default (akan diluluskan). Hilangkan centang untuk siswa yang TIDAK lulus.</p>
+                <table class="table" id="graduation-table">
+                    <thead><tr><th></th><th>Nama</th><th>NIS</th><th>Kelas</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+                <p id="graduation-preview" class="hint"></p>
+                <div id="graduation-result"></div>
+                <button id="confirm-graduation-btn" type="button" class="btn btn-danger">Konfirmasi Kelulusan</button>
+            </section>
+
+            <!-- LANGKAH 3: Kenaikan Kelas -->
+            <section class="wizard-step" data-step="3">
+                <div class="step-label">Langkah 3 dari 5</div>
+                <h3>Kenaikan Kelas</h3>
+                <p class="hint">
+                    Pemetaan kelas asal ke kelas tujuan untuk tahun ajaran baru. Sistem menyarankan
+                    otomatis berdasarkan nama kelas — ubah dropdown jika perlu.
+                </p>
+                <table class="table" id="promotion-table">
+                    <thead><tr><th>Kelas Asal</th><th>Jumlah Siswa</th><th>Kelas Tujuan</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+                <div id="promotion-error" class="alert alert-danger" style="display:none"></div>
+                <div id="promotion-result"></div>
+                <button id="confirm-promotion-btn" type="button" class="btn btn-primary">Konfirmasi Kenaikan Kelas</button>
+            </section>
+
+            <!-- LANGKAH 4: Buka Tahun Ajaran Baru -->
+            <section class="wizard-step" data-step="4">
+                <div class="step-label">Langkah 4 dari 5</div>
+                <h3>Buka Tahun Ajaran Baru</h3>
+                <p class="hint">Mengonfirmasi langkah ini akan menyimpan kelulusan (sudah tersimpan), membuat kelas tujuan yang belum ada, dan memindahkan siswa yang naik kelas ke kelas barunya.</p>
+                <div class="field">
+                    <label for="new-academic-year">Tahun Ajaran Baru</label>
+                    <input id="new-academic-year" class="input" type="text" placeholder="2027/2028" />
+                </div>
+                <div class="field">
+                    <label for="new-semester">Semester</label>
+                    <select id="new-semester" class="input">
+                        <option value="1">Semester 1</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="new-period-start">Tanggal Mulai Semester 1</label>
+                    <input id="new-period-start" class="input" type="date" />
+                </div>
+                <div class="field">
+                    <label for="new-period-end">Tanggal Selesai Semester 1</label>
+                    <input id="new-period-end" class="input" type="date" />
+                </div>
+                <div id="new-year-result"></div>
+                <button id="confirm-new-year-btn" type="button" class="btn btn-primary">Konfirmasi</button>
+            </section>
+
+            <!-- LANGKAH 5: Ringkasan -->
+            <section class="wizard-step" data-step="5">
+                <div class="step-label">Langkah 5 dari 5</div>
+                <h3>Ringkasan</h3>
+                <div id="final-summary" class="panel" style="box-shadow:none; border:1px solid var(--color-border)"></div>
+            </section>
+
+            <div class="wizard-actions">
+                <button id="wizard-back-btn" type="button" class="btn btn-secondary">Kembali</button>
+                <button id="wizard-next-btn" type="button" class="btn btn-primary">Lanjut</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/tutup-tahun.js"></script>
+</body>
+</html>

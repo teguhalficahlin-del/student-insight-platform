@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <title>Dashboard — Admin Console</title>
+    <link rel="stylesheet" href="css/admin.css" />
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="brand">Admin Console</div>
+
+            <nav>
+                <div class="nav-group">
+                    <div class="nav-group-title">Setup</div>
+                    <a class="nav-link" data-panel="setup">Setup Sekolah</a>
+                </div>
+                <div class="nav-group">
+                    <div class="nav-group-title">Data Master</div>
+                    <a class="nav-link" data-panel="programs">Program</a>
+                    <a class="nav-link" data-panel="classes">Kelas</a>
+                    <a class="nav-link" data-panel="subjects">Mata Pelajaran</a>
+                </div>
+                <div class="nav-group">
+                    <div class="nav-group-title">Pengguna</div>
+                    <a class="nav-link" data-panel="staff">Guru &amp; Staf</a>
+                    <a class="nav-link" data-panel="students">Siswa</a>
+                    <a class="nav-link" data-panel="parents">Orang Tua</a>
+                    <a class="nav-link" data-panel="import-parents">Import Orang Tua</a>
+                    <a class="nav-link" data-panel="import-dudi">Import DUDI</a>
+                </div>
+                <div class="nav-group">
+                    <div class="nav-group-title">Jadwal</div>
+                    <a class="nav-link" data-panel="schedules-active">Jadwal Aktif</a>
+                    <a class="nav-link" data-panel="schedules-import">Import Jadwal Baru</a>
+                    <a class="nav-link" data-panel="substitutes">Guru Pengganti</a>
+                </div>
+                <div class="nav-group">
+                    <div class="nav-group-title">Sistem</div>
+                    <a class="nav-link" data-panel="tutupsemester">Tutup Semester</a>
+                    <a class="nav-link" data-panel="academic-year">Tahun Ajaran Baru</a>
+                    <a class="nav-link" data-panel="export">Export Data</a>
+                    <a class="nav-link" data-panel="activity-log">Log Aktivitas</a>
+                </div>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <div class="topbar">
+                <div>
+                    <h2 id="dashboard-school-name">Memuat...</h2>
+                    <p id="dashboard-user-name"></p>
+                </div>
+                <button id="logout-btn" type="button" class="btn btn-secondary">Keluar</button>
+            </div>
+
+            <div class="panel" id="panel-content">
+                <p class="hint">Pilih menu di samping untuk mulai.</p>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="js/dashboard.js"></script>
+</body>
+</html>

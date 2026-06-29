@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Setup Wizard — Student Insight Platform</title>
+    <link rel="stylesheet" href="css/admin.css" />
+</head>
+<body>
+    <div class="wz-shell">
+
+        <!-- Header: brand + nama langkah aktif -->
+        <header class="wz-header">
+            <span class="wz-brand">Student Insight Platform</span>
+            <span class="wz-active-name" id="wizard-active-step-name">Profil Sekolah</span>
+        </header>
+
+        <!-- Progress horizontal — hanya tampil di mobile -->
+        <div class="wz-progress-mobile" id="wizard-progress-mobile" aria-hidden="true">
+            <span class="wz-bar" data-step="1"></span>
+            <span class="wz-bar" data-step="2"></span>
+            <span class="wz-bar" data-step="3"></span>
+            <span class="wz-bar" data-step="4"></span>
+            <span class="wz-bar" data-step="5"></span>
+            <span class="wz-bar" data-step="6"></span>
+            <span class="wz-bar" data-step="7"></span>
+            <span class="wz-bar" data-step="8"></span>
+            <span class="wz-bar" data-step="9"></span>
+        </div>
+
+        <div class="wz-body">
+
+            <!-- Sidebar progress vertikal (desktop) -->
+            <aside class="wz-sidebar">
+                <ol class="wz-steps" id="wizard-steps">
+                    <li class="wz-step-item" data-step="1"><span class="wz-marker">1</span><span>Profil Sekolah</span></li>
+                    <li class="wz-step-item" data-step="2"><span class="wz-marker">2</span><span>Tahun Ajaran</span></li>
+                    <li class="wz-step-item" data-step="3"><span class="wz-marker">3</span><span>Program Keahlian</span></li>
+                    <li class="wz-step-item" data-step="4"><span class="wz-marker">4</span><span>Kelas &amp; Rombel</span></li>
+                    <li class="wz-step-item" data-step="5"><span class="wz-marker">5</span><span>Guru</span></li>
+                    <li class="wz-step-item" data-step="6"><span class="wz-marker">6</span><span>Siswa</span></li>
+                    <li class="wz-step-item" data-step="7"><span class="wz-marker">7</span><span>Wali Kelas</span></li>
+                    <li class="wz-step-item" data-step="8"><span class="wz-marker">8</span><span>Jadwal</span></li>
+                    <li class="wz-step-item" data-step="9"><span class="wz-marker">9</span><span>Selesai</span></li>
+                </ol>
+            </aside>
+
+            <!-- Area konten: setiap langkah dirender oleh wizard.js -->
+            <main class="wz-content">
+                <div class="alert alert-danger" id="wizard-error" style="display:none"></div>
+                <div class="wz-panel" id="wizard-step-content">
+                    <!-- wizard.js merender isi langkah aktif di sini -->
+                </div>
+            </main>
+
+        </div>
+
+        <!-- Footer: navigasi -->
+        <footer class="wz-footer">
+            <button type="button" class="btn btn-secondary" id="wizard-prev-btn">Sebelumnya</button>
+            <button type="button" class="btn btn-primary" id="wizard-next-btn">Selanjutnya</button>
+        </footer>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script type="module" src="js/wizard.js"></script>
+</body>
+</html>

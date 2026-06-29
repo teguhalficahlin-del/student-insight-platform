@@ -1,0 +1,602 @@
+/* ============================================================
+   admin/css/admin.css
+   Desktop-only (min-width 1024px) admin console styling.
+   No external CSS framework — hand-written, token-based.
+   ============================================================ */
+
+:root {
+    --color-bg:          #f4f6f8;
+    --color-surface:     #ffffff;
+    --color-border:      #dde3e9;
+    --color-text:        #1f2937;
+    --color-text-muted:  #6b7280;
+    --color-primary:     #1d4ed8;
+    --color-primary-dark:#1e3a8a;
+    --color-primary-bg:  #eff4ff;
+    --color-success:     #16a34a;
+    --color-success-bg:  #ecfdf3;
+    --color-danger:      #dc2626;
+    --color-danger-bg:   #fef2f2;
+    --color-warning:     #d97706;
+    --color-warning-bg:  #fffbeb;
+
+    --radius:    8px;
+    --radius-lg: 12px;
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+    --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
+
+    --font-sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    min-width: 1024px;
+    margin: 0;
+    font-family: var(--font-sans);
+    color: var(--color-text);
+    background: var(--color-bg);
+}
+
+h1, h2, h3, h4 { margin: 0 0 8px; font-weight: 600; }
+p { margin: 0 0 8px; color: var(--color-text-muted); }
+
+a { color: var(--color-primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Buttons ─────────────────────────────────────────────── */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.btn-primary { background: var(--color-primary); color: #fff; }
+.btn-primary:hover { background: var(--color-primary-dark); }
+.btn-primary:disabled { background: #a8bce6; cursor: not-allowed; }
+
+.btn-secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
+.btn-secondary:hover { background: var(--color-bg); }
+
+.btn-danger { background: var(--color-danger); color: #fff; }
+.btn-danger:hover { background: #b91c1c; }
+
+.btn-success {
+    background: var(--color-success);
+    color: #ffffff;
+    border: none;
+}
+.btn-success:disabled {
+    opacity: 0.85;
+    cursor: default;
+}
+
+/* ── Form elements ───────────────────────────────────────── */
+
+label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--color-text);
+}
+
+.field { margin-bottom: 18px; }
+
+.input, select.input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    background: var(--color-surface);
+    color: var(--color-text);
+}
+
+.input:focus, select.input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+
+.hint { font-size: 12px; color: var(--color-text-muted); margin-top: 4px; }
+
+/* ── Alerts ──────────────────────────────────────────────── */
+
+.alert {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    margin-bottom: 16px;
+    border: 1px solid transparent;
+}
+.alert-danger  { background: var(--color-danger-bg);  color: var(--color-danger);  border-color: #fecaca; }
+.alert-success { background: var(--color-success-bg); color: var(--color-success); border-color: #bbf7d0; }
+.alert-warning { background: var(--color-warning-bg); color: var(--color-warning); border-color: #fde68a; }
+
+/* ── Badges ──────────────────────────────────────────────── */
+
+.badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.badge-success { background: var(--color-success-bg); color: var(--color-success); }
+.badge-danger  { background: var(--color-danger-bg);  color: var(--color-danger); }
+.badge-muted   { background: var(--color-bg); color: var(--color-text-muted); }
+
+/* ── Login page ──────────────────────────────────────────── */
+
+.login-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-card {
+    width: 400px;
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 36px 32px;
+}
+
+.login-card .brand {
+    text-align: center;
+    margin-bottom: 24px;
+}
+.login-card .brand .logo-dot {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: var(--color-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+/* ── Wizard ──────────────────────────────────────────────── */
+
+.wizard-shell {
+    max-width: 880px;
+    margin: 40px auto;
+    padding: 0 24px;
+}
+
+.wizard-progress {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 32px;
+}
+
+.wizard-progress .step-dot {
+    flex: 1;
+    text-align: center;
+    font-size: 12px;
+    color: var(--color-text-muted);
+    position: relative;
+    padding-top: 28px;
+}
+
+.wizard-progress .step-dot::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 50%;
+    width: 20px; height: 20px;
+    margin-left: -10px;
+    border-radius: 50%;
+    background: var(--color-surface);
+    border: 2px solid var(--color-border);
+}
+
+.wizard-progress .step-dot.is-active::before { border-color: var(--color-primary); background: var(--color-primary); }
+.wizard-progress .step-dot.is-active { color: var(--color-primary); font-weight: 600; }
+.wizard-progress .step-dot.is-done::before { border-color: var(--color-success); background: var(--color-success); }
+
+.wizard-panel {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 32px;
+}
+
+.wizard-panel .step-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+    margin-bottom: 4px;
+}
+
+.wizard-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid var(--color-border);
+}
+
+.wizard-step { display: none; }
+.wizard-step.is-active { display: block; }
+
+/* ── CSV import widgets ──────────────────────────────────── */
+
+.dropzone {
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius);
+    padding: 28px;
+    text-align: center;
+    color: var(--color-text-muted);
+    margin-bottom: 16px;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-bottom: 16px;
+}
+.table th, .table td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--color-border);
+}
+.table th { color: var(--color-text-muted); font-weight: 600; }
+
+.import-summary {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.import-summary .stat {
+    flex: 1;
+    background: var(--color-bg);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    text-align: center;
+}
+.import-summary .stat .num { font-size: 22px; font-weight: 700; }
+.import-summary .stat .label { font-size: 12px; color: var(--color-text-muted); }
+
+/* ── Dashboard shell ─────────────────────────────────────── */
+
+.app-shell {
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 240px;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    padding: 20px 0;
+    flex-shrink: 0;
+}
+
+.sidebar .brand {
+    padding: 0 20px 20px;
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.sidebar .nav-group {
+    margin-bottom: 18px;
+}
+.sidebar .nav-group-title {
+    padding: 0 20px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    margin-bottom: 6px;
+}
+.sidebar .nav-link {
+    display: block;
+    padding: 9px 20px;
+    color: var(--color-text);
+    font-size: 14px;
+    cursor: pointer;
+}
+.sidebar .nav-link:hover { background: var(--color-bg); text-decoration: none; }
+.sidebar .nav-link.is-active { background: var(--color-primary-bg); color: var(--color-primary); font-weight: 600; }
+
+.main-content {
+    flex: 1;
+    padding: 32px 40px;
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+}
+
+.panel {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 24px;
+}
+
+/* ── Panel toolbar / bulk select ─────────────────────────── */
+
+.panel-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
+.checkbox-col { width: 40px; text-align: center; }
+
+/* ── Delete confirmation modal ───────────────────────────── */
+
+.delete-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.delete-modal {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    max-width: 480px;
+    width: 90%;
+    padding: 28px;
+}
+
+.delete-modal h3 { margin-bottom: 12px; }
+
+.delete-modal-warning {
+    border-left: 4px solid var(--color-danger);
+    background: var(--color-danger-bg);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+
+.delete-modal-deps {
+    font-family: monospace;
+    font-size: 12px;
+    margin: 8px 0 0;
+    padding-left: 18px;
+}
+
+.delete-modal-input { margin-top: 8px; }
+
+.delete-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Welcome screen (first-time setup) ──────────────────── */
+
+.welcome-screen-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--color-surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 24px;
+}
+
+.welcome-screen-card {
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+}
+
+.welcome-screen-brand {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-primary);
+    margin-bottom: 16px;
+}
+
+.welcome-screen-greeting {
+    font-size: 16px;
+    color: var(--color-text);
+    margin-bottom: 16px;
+}
+
+.welcome-screen-desc { margin-bottom: 8px; }
+
+.welcome-screen-estimate {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    margin-bottom: 24px;
+}
+
+.welcome-screen-cta {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.welcome-screen-footer {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin: 0;
+}
+
+/* ── Wizard layout (wz-*) ───────────────────────────────── */
+/* Layout sidebar-progress vertikal untuk admin/wizard.html.
+   Memakai token (--color-*, --radius*, --shadow*) dari :root.
+   Prefix `wz-` agar tidak bentrok dengan .wizard-* lama
+   (layout horizontal yang masih dipakai setup.html).
+   .wz-shell meng-override min-width admin.css agar responsif. */
+
+.wz-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    min-width: 0;
+}
+
+/* Header: brand + nama langkah aktif */
+.wz-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 16px 32px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+.wz-header .wz-brand {
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--color-text);
+}
+.wz-header .wz-active-name {
+    font-size: 14px;
+    color: var(--color-text-muted);
+}
+.wz-header .wz-active-name::before {
+    content: "—";
+    margin-right: 8px;
+}
+
+/* Body: sidebar kiri + konten kanan */
+.wz-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.wz-sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    padding: 24px 0;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.wz-steps { list-style: none; margin: 0; padding: 0; }
+
+.wz-step-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 24px;
+    font-size: 14px;
+    color: var(--color-text-muted);
+    cursor: default;
+}
+.wz-step-item .wz-marker {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 2px solid var(--color-border);
+    background: var(--color-surface);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+}
+
+.wz-step-item.is-active {
+    color: var(--color-primary);
+    font-weight: 600;
+    background: var(--color-primary-bg);
+}
+.wz-step-item.is-active .wz-marker {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.wz-step-item.is-done { color: var(--color-text); }
+.wz-step-item.is-done .wz-marker {
+    border-color: var(--color-success);
+    background: var(--color-success);
+    color: #fff;
+}
+
+/* Konten kanan (scrollable) */
+.wz-content {
+    flex: 1;
+    min-width: 0;
+    padding: 32px 40px;
+    overflow-y: auto;
+}
+.wz-panel {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 32px;
+    max-width: 760px;
+}
+
+/* Progress horizontal (mobile only) */
+.wz-progress-mobile {
+    display: none;
+    gap: 6px;
+    padding: 12px 20px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+}
+.wz-progress-mobile .wz-bar {
+    flex: 1;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--color-border);
+}
+.wz-progress-mobile .wz-bar.is-active { background: var(--color-primary); }
+.wz-progress-mobile .wz-bar.is-done   { background: var(--color-success); }
+
+/* Footer aksi */
+.wz-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 40px;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+/* Responsif: sidebar disembunyikan di mobile */
+@media (max-width: 768px) {
+    .wz-sidebar { display: none; }
+    .wz-progress-mobile { display: flex; }
+    .wz-content { padding: 20px 16px; }
+    .wz-panel { padding: 20px; }
+    .wz-header { padding: 14px 16px; flex-wrap: wrap; }
+    .wz-footer { padding: 14px 16px; }
+}
