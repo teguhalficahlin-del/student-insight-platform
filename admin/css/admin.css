@@ -229,11 +229,13 @@ label {
 }
 
 .sched-toolbar {
-    display: flex; gap: 16px; padding: 10px 20px;
+    display: flex; gap: 12px; padding: 10px 20px;
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
     flex-wrap: wrap; align-items: center;
 }
+
+.sched-toolbar .sched-grade-tabs { margin-right: auto; }
 
 .sched-grade-tabs { display: flex; gap: 4px; }
 
@@ -247,11 +249,6 @@ label {
 .sched-tab.active {
     background: var(--color-primary); color: #fff;
     border-color: var(--color-primary);
-}
-
-.sched-actions {
-    display: flex; gap: 8px; padding: 10px 20px;
-    align-items: center; flex-wrap: wrap;
 }
 
 .sched-conflict-count { font-size: 13px; font-weight: 600; margin-left: 12px; }

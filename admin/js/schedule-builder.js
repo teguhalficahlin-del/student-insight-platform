@@ -74,12 +74,10 @@ function createOverlay() {
                         <div class="sched-grade-tabs" id="sched-grade-tabs">
                             ${GRADES.map(g => `<button type="button" class="sched-tab ${g === state.grade ? 'active' : ''}" data-grade="${g}">${GRADE_LABELS[g]}</button>`).join('')}
                         </div>
-                        <div class="sched-actions">
-                            <button type="button" class="btn btn-secondary" id="sched-add-slot" style="padding:6px 12px">+ Slot Mengajar</button>
-                            <button type="button" class="btn btn-secondary" id="sched-add-break" style="padding:6px 12px">+ Istirahat/Kegiatan</button>
-                            <span class="sched-conflict-count" id="sched-conflict-count"></span>
-                            <button type="button" class="btn btn-primary" id="sched-save" style="padding:6px 16px;margin-left:auto">Simpan</button>
-                        </div>
+                        <button type="button" class="btn btn-secondary" id="sched-add-slot" style="padding:6px 12px">+ Slot Mengajar</button>
+                        <button type="button" class="btn btn-secondary" id="sched-add-break" style="padding:6px 12px">+ Istirahat/Kegiatan</button>
+                        <span class="sched-conflict-count" id="sched-conflict-count"></span>
+                        <button type="button" class="btn btn-primary" id="sched-save" style="padding:6px 16px;margin-left:auto">Simpan</button>
                     </div>
 
                     <div class="sched-grid-wrapper" id="sched-grid-wrapper">
