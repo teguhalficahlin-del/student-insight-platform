@@ -7,7 +7,7 @@
  * finished yet, otherwise to dashboard.html.
  */
 
-import { loginWithIdentifier, getCurrentUserRow } from './api.js';
+import { loginWithIdentifier, getCurrentUserRow, getSchoolConfig } from './api.js';
 
 const form        = document.getElementById('login-form');
 const identifierEl = document.getElementById('login-identifier');
@@ -34,7 +34,18 @@ form.addEventListener('submit', async (e) => {
             return;
         }
 
-        window.location.href = 'dashboard.html';
+        let config = null;
+        try {
+            config = await getSchoolConfig();
+        } catch (_) {
+            errorEl.textContent = 'Gagal memeriksa status setup. Coba lagi.';
+            errorEl.style.display = 'block';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Masuk';
+            return;
+        }
+        const setupDone = config?.setup_completed === true;
+        window.location.href = setupDone ? 'dashboard.html' : 'wizard.html';
 
     } catch (err) {
         errorEl.textContent = err.message ?? 'Login gagal. Periksa identifier dan password Anda.';
