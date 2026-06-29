@@ -398,12 +398,31 @@ export async function deleteBulk(table, ids, onProgress) {
     const pkColumn = PK_COLUMNS[table];
     if (!pkColumn) throw new Error(`Tabel "${table}" tidak didukung untuk hapus.`);
 
+    // Byproduct impor: data yang otomatis dibuat saat impor entitas induk.
+    // Aman di-cascade karena bukan data transaksional/operasional.
+    const IMPORT_BYPRODUCTS = {
+        students: [
+            { table: 'class_enrollments', fk: 'student_id' },
+            { table: 'student_parents',   fk: 'student_id' },
+        ],
+    };
+
     const CHUNK = 200;
     const errors = [];
     let deleted = 0;
 
     for (let i = 0; i < ids.length; i += CHUNK) {
         const batch = ids.slice(i, i + CHUNK);
+
+        // Hapus byproduct impor sebelum hapus baris utama
+        const byproducts = IMPORT_BYPRODUCTS[table];
+        if (byproducts) {
+            for (const bp of byproducts) {
+                const { error: bpErr } = await supabase
+                    .from(bp.table).delete().in(bp.fk, batch);
+                if (bpErr) console.error(`[deleteBulk] byproduct ${bp.table} failed:`, bpErr);
+            }
+        }
 
         const { error, count } = await supabase
             .from(table)

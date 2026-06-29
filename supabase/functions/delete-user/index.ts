@@ -106,15 +106,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
             }
         }
 
-        // 3. Hapus relasi kepemilikan langsung (bukan data transaksional)
+        // 3. Hapus byproduct impor (bukan data transaksional)
+        //    Data transaksional (attendance, observations, cases, dll)
+        //    harus sudah kosong — dijaga oleh validasi urutan di wizard.
+        const byproductDeletes: { table: string; column: string }[] = [];
+
         if (targetUser.role_type === 'ORTU') {
-            const { error: spErr } = await admin
-                .from('student_parents')
-                .delete()
-                .eq('parent_user_id', user_id);
-            if (spErr) {
-                console.error('[delete-user] student_parents delete failed:', spErr);
-                return internalError(spErr);
+            byproductDeletes.push({ table: 'student_parents', column: 'parent_user_id' });
+        }
+
+        if (['GURU', 'WALI_KELAS'].includes(targetUser.role_type)) {
+            byproductDeletes.push(
+                { table: 'teaching_assignments', column: 'user_id' },
+                { table: 'schedule_templates',   column: 'teacher_id' },
+            );
+        }
+
+        for (const bp of byproductDeletes) {
+            const { error: bpErr } = await admin
+                .from(bp.table).delete().eq(bp.column, user_id);
+            if (bpErr) {
+                console.error(`[delete-user] ${bp.table} delete failed:`, bpErr);
+                return internalError(bpErr);
             }
         }
 

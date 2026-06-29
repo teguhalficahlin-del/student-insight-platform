@@ -904,6 +904,28 @@ const STEP_LIST = {
             return data.map(u => ({ id: u.user_id, cells: [u.dudi_org_name ?? '—', u.full_name] }));
         },
     },
+    9: {
+        title: 'Jadwal terdaftar',
+        headers: ['Tanggal', 'Waktu', 'Kelas', 'Guru'],
+        deleteTable: 'teaching_schedules',
+        fetch: async () => {
+            const data = await fetchAllRows('teaching_schedules',
+                q => q.select(`
+                    schedule_id, session_date, session_start, session_end,
+                    class:classes ( name ),
+                    teacher:users!teaching_schedules_scheduled_teacher_id_fkey ( full_name )
+                `).order('session_date', { ascending: false }));
+            return data.map(s => ({
+                id: s.schedule_id,
+                cells: [
+                    s.session_date,
+                    `${s.session_start?.slice(0,5)}–${s.session_end?.slice(0,5)}`,
+                    s.class?.name ?? '—',
+                    s.teacher?.full_name ?? '—',
+                ],
+            }));
+        },
+    },
 };
 
 /** Ambil users untuk satu role lalu petakan tiap baris ke sel tabel.
@@ -1011,25 +1033,36 @@ function wireDataTable(step, cfg) {
     });
 }
 
-// Urutan hapus: dari bawah ke atas. Setiap langkah hanya bisa dihapus
-// kalau langkah-langkah di bawahnya sudah kosong.
+// Validasi urutan hapus: cek tabel yang mereferensi data pada langkah ini.
+// Byproduct impor (class_enrollments, student_parents, teaching_assignments,
+// schedule_templates) di-cascade otomatis — tidak perlu dicek di sini.
+// Yang dicek: data transaksional/operasional yang harus dihapus manual.
 const DELETE_ORDER_CHECKS = {
-    3: [ // Program: kelas & siswa harus kosong
-        { step: 4, label: 'Kelas',  table: 'classes',  query: q => q.select('class_id', { count: 'exact', head: true }) },
-        { step: 6, label: 'Siswa',  table: 'students', query: q => q.select('student_id', { count: 'exact', head: true }) },
+    3: [ // Program: kelas & siswa harus kosong dulu
+        { label: 'Kelas (langkah 4)',  table: 'classes',  query: q => q.select('class_id', { count: 'exact', head: true }) },
+        { label: 'Siswa (langkah 6)',  table: 'students', query: q => q.select('student_id', { count: 'exact', head: true }) },
     ],
-    4: [ // Kelas: guru, siswa, jadwal harus kosong
-        { step: 5, label: 'Guru',   table: 'users',    query: q => q.select('user_id', { count: 'exact', head: true }).eq('role_type', 'GURU') },
-        { step: 6, label: 'Siswa',  table: 'students', query: q => q.select('student_id', { count: 'exact', head: true }) },
-        { step: 9, label: 'Jadwal', table: 'teaching_schedules', query: q => q.select('schedule_id', { count: 'exact', head: true }) },
+    4: [ // Kelas: jadwal & enrollment harus kosong (enrollment di-cascade via siswa, tapi jadwal manual)
+        { label: 'Jadwal (langkah 9)', table: 'teaching_schedules', query: q => q.select('schedule_id', { count: 'exact', head: true }) },
+        { label: 'Siswa (langkah 6)',  table: 'students', query: q => q.select('student_id', { count: 'exact', head: true }) },
     ],
-    5: [ // Guru: jadwal harus kosong
-        { step: 9, label: 'Jadwal', table: 'teaching_schedules', query: q => q.select('schedule_id', { count: 'exact', head: true }) },
+    5: [ // Guru: jadwal harus kosong (teaching_assignments di-cascade via edge function)
+        { label: 'Jadwal (langkah 9)', table: 'teaching_schedules', query: q => q.select('schedule_id', { count: 'exact', head: true }) },
+        { label: 'Guru pengganti',     table: 'substitute_schedules', query: q => q.select('substitute_id', { count: 'exact', head: true }) },
     ],
-    6: [ // Siswa: orang tua, DUDI, jadwal harus kosong
-        { step: 7, label: 'Orang Tua', table: 'users', query: q => q.select('user_id', { count: 'exact', head: true }).eq('role_type', 'ORTU') },
-        { step: 8, label: 'DUDI',      table: 'users', query: q => q.select('user_id', { count: 'exact', head: true }).eq('role_type', 'DUDI') },
-        { step: 9, label: 'Jadwal',    table: 'teaching_schedules', query: q => q.select('schedule_id', { count: 'exact', head: true }) },
+    6: [ // Siswa: data transaksional harus kosong (enrollment & student_parents di-cascade)
+        { label: 'Kehadiran',   table: 'attendance',    query: q => q.select('attendance_id', { count: 'exact', head: true }) },
+        { label: 'Observasi',   table: 'observations',  query: q => q.select('observation_id', { count: 'exact', head: true }) },
+        { label: 'Kasus',       table: 'cases',         query: q => q.select('case_id', { count: 'exact', head: true }) },
+        { label: 'PKL',         table: 'pkl_placements', query: q => q.select('placement_id', { count: 'exact', head: true }) },
+    ],
+    8: [ // DUDI: PKL harus kosong
+        { label: 'PKL',         table: 'pkl_placements', query: q => q.select('placement_id', { count: 'exact', head: true }) },
+    ],
+    9: [ // Jadwal: data transaksional harus kosong
+        { label: 'Kehadiran',       table: 'attendance',           query: q => q.select('attendance_id', { count: 'exact', head: true }) },
+        { label: 'Observasi',       table: 'observations',         query: q => q.select('observation_id', { count: 'exact', head: true }).not('schedule_id', 'is', null) },
+        { label: 'Guru pengganti',  table: 'substitute_schedules', query: q => q.select('substitute_id', { count: 'exact', head: true }) },
     ],
 };
 
@@ -1043,11 +1076,11 @@ async function checkDeleteOrder(step) {
 
     const blockers = [];
     results.forEach(({ count }, i) => {
-        if (count > 0) blockers.push(`${checks[i].label} (langkah ${checks[i].step})`);
+        if (count > 0) blockers.push(`${checks[i].label} (${count})`);
     });
 
     if (blockers.length === 0) return null;
-    return `Hapus dulu data di: ${blockers.join(', ')} sebelum menghapus data pada langkah ini.`;
+    return `Tidak bisa menghapus — masih ada data terkait: ${blockers.join(', ')}. Hapus data tersebut terlebih dahulu.`;
 }
 
 async function runBulkDelete(step, cfg, ids, btn) {
