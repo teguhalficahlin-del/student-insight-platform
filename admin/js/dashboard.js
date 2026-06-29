@@ -224,13 +224,56 @@ async function renderStudentsPanel() {
 }
 
 async function renderParentsPanel() {
-    const data = await fetchAllRows('users', q => q.select('full_name, login_identifier').eq('role_type', 'ORTU').order('full_name'));
+    const parents = await fetchAllRows('users', q => q.select('user_id, full_name, login_identifier').eq('role_type', 'ORTU').order('full_name'));
+    const links = await fetchAllRows('student_parents',
+        q => q.select('parent_user_id, students ( full_name, student_status, graduated_academic_year )'));
+
+    const childMap = new Map();
+    for (const l of links) {
+        if (!childMap.has(l.parent_user_id)) childMap.set(l.parent_user_id, []);
+        if (l.students) childMap.get(l.parent_user_id).push(l.students);
+    }
+
+    const aktif = [];
+    const alumniByYear = new Map();
+    for (const p of parents) {
+        const children = childMap.get(p.user_id) ?? [];
+        const hasAktif = children.some(c => c.student_status === 'AKTIF');
+        if (hasAktif || children.length === 0) {
+            aktif.push(p);
+        } else {
+            const year = [...children].map(c => c.graduated_academic_year).sort().reverse()[0] ?? 'Tidak diketahui';
+            if (!alumniByYear.has(year)) alumniByYear.set(year, []);
+            alumniByYear.get(year).push(p);
+        }
+    }
+
+    const sortedYears = [...alumniByYear.keys()].sort().reverse();
+    const alumniHtml = sortedYears.map(year => {
+        const list = alumniByYear.get(year);
+        return `
+            <details style="margin-bottom:8px">
+                <summary style="cursor:pointer;font-weight:600">Lulusan ${year} (${list.length})</summary>
+                <table class="table" style="margin-top:4px">
+                    <thead><tr><th>Nama</th><th>NIK</th></tr></thead>
+                    <tbody>${list.map(u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td></tr>`).join('')}</tbody>
+                </table>
+            </details>`;
+    }).join('');
+
+    const alumniCount = parents.length - aktif.length;
     panelContent.innerHTML = `
-        <h3>Orang Tua (${data.length})</h3>
+        <h3>Orang Tua Siswa Aktif (${aktif.length})</h3>
         <table class="table">
             <thead><tr><th>Nama</th><th>NIK</th></tr></thead>
-            <tbody>${data.map(u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td></tr>`).join('')}</tbody>
+            <tbody>${aktif.map(u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td></tr>`).join('')}</tbody>
         </table>
+        ${alumniCount > 0 ? `
+            <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
+            <h3>Orang Tua Alumni (${alumniCount})</h3>
+            <p class="hint" style="margin-bottom:12px">Orang tua yang semua anaknya sudah lulus, dikelompokkan per tahun kelulusan terakhir.</p>
+            ${alumniHtml}
+        ` : ''}
     `;
 }
 

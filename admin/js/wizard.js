@@ -1053,7 +1053,7 @@ const STEP_LIST = {
         },
     },
     7: {
-        title: 'Orang Tua terdaftar',
+        title: 'Orang Tua (siswa aktif)',
         headers: ['Nama', 'NIK', 'Anak'],
         deleteTable: 'users',
         nestedGroup: true,
@@ -1069,10 +1069,13 @@ const STEP_LIST = {
                       .order('full_name'));
             if (parents.length === 0) return [];
 
+            const config = await getSchoolConfig();
+            const ay = config?.current_academic_year;
+
             const links = await fetchAllRows('student_parents',
-                q => q.select(`parent_user_id, students ( full_name,
+                q => q.select(`parent_user_id, students ( full_name, student_status,
                     program:programs ( name ),
-                    enrollment:class_enrollments ( class:classes ( name ) )
+                    enrollment:class_enrollments ( class:classes ( name, academic_year ) )
                 )`));
 
             const parentChildMap = new Map();
@@ -1080,25 +1083,32 @@ const STEP_LIST = {
                 const pid = link.parent_user_id;
                 if (!parentChildMap.has(pid)) parentChildMap.set(pid, []);
                 const enrollments = Array.isArray(link.students?.enrollment) ? link.students.enrollment : (link.students?.enrollment ? [link.students.enrollment] : []);
+                const currentEnrollment = enrollments.find(e => e.class?.academic_year === ay) ?? enrollments[0];
                 parentChildMap.get(pid).push({
                     name: link.students?.full_name,
+                    status: link.students?.student_status,
                     program: link.students?.program?.name ?? 'Tanpa program',
-                    kelas: enrollments[0]?.class?.name ?? 'Belum ada kelas',
+                    kelas: currentEnrollment?.class?.name ?? 'Belum ada kelas',
                 });
             }
 
-            return parents.map(u => {
-                const children = parentChildMap.get(u.user_id) ?? [];
-                const childNames = children.map(c => c.name).join(', ') || '—';
-                return {
-                    id: u.user_id,
-                    cells: [u.full_name, u.login_identifier, childNames],
-                    editData: { full_name: u.full_name, login_identifier: u.login_identifier },
-                    program: children[0]?.program ?? 'Tanpa program',
-                    kelas: children[0]?.kelas ?? 'Belum ada kelas',
-                };
-            });
+            return parents
+                .map(u => {
+                    const children = parentChildMap.get(u.user_id) ?? [];
+                    const aktifChildren = children.filter(c => c.status === 'AKTIF');
+                    if (aktifChildren.length === 0) return null; // semua anak lulus — masuk section Alumni
+                    const childNames = aktifChildren.map(c => c.name).join(', ') || '—';
+                    return {
+                        id: u.user_id,
+                        cells: [u.full_name, u.login_identifier, childNames],
+                        editData: { full_name: u.full_name, login_identifier: u.login_identifier },
+                        program: aktifChildren[0]?.program ?? 'Tanpa program',
+                        kelas: aktifChildren[0]?.kelas ?? 'Belum ada kelas',
+                    };
+                })
+                .filter(Boolean);
         },
+        afterRender: renderAlumniParentsSection,
     },
     8: {
         title: 'DUDI terdaftar',
@@ -1220,6 +1230,74 @@ async function renderEmptyClassesNotice(parentEl) {
             — kelas ini tidak muncul di daftar di bawah sampai siswa diimpor.
             <ul style="margin:8px 0 0">${list}</ul>
         </div>
+    `);
+}
+
+// ── Alumni Parents Section (ortu yang SEMUA anaknya LULUS) ───
+
+async function renderAlumniParentsSection(parentEl) {
+    const parents = await fetchAllRows('users',
+        q => q.select('user_id, full_name, login_identifier')
+              .eq('role_type', 'ORTU')
+              .order('full_name'));
+    if (parents.length === 0) return;
+
+    const links = await fetchAllRows('student_parents',
+        q => q.select(`parent_user_id, students ( full_name, student_status, graduated_academic_year )`));
+
+    const parentChildMap = new Map();
+    for (const link of links) {
+        const pid = link.parent_user_id;
+        if (!parentChildMap.has(pid)) parentChildMap.set(pid, []);
+        parentChildMap.get(pid).push(link.students);
+    }
+
+    const alumniParents = parents
+        .map(u => {
+            const children = (parentChildMap.get(u.user_id) ?? []).filter(Boolean);
+            if (children.length === 0) return null;
+            const allLulus = children.every(c => c.student_status === 'LULUS');
+            if (!allLulus) return null;
+            const latestYear = children
+                .map(c => c.graduated_academic_year)
+                .sort()
+                .reverse()[0] ?? 'Tidak diketahui';
+            return { ...u, children, year: latestYear };
+        })
+        .filter(Boolean);
+
+    if (alumniParents.length === 0) return;
+
+    const byYear = new Map();
+    for (const p of alumniParents) {
+        if (!byYear.has(p.year)) byYear.set(p.year, []);
+        byYear.get(p.year).push(p);
+    }
+    const sortedYears = [...byYear.keys()].sort().reverse();
+
+    const accordions = sortedYears.map(year => {
+        const list = byYear.get(year);
+        return `
+            <details class="wz-accordion" style="margin-bottom:8px">
+                <summary class="wz-accordion-header">Lulusan ${escapeHtml(year)} (${list.length} orang tua)</summary>
+                <table class="table" style="margin-top:4px">
+                    <thead><tr><th>Nama</th><th>NIK</th><th>Anak</th></tr></thead>
+                    <tbody>${list.map(p => `
+                        <tr>
+                            <td>${escapeHtml(p.full_name)}</td>
+                            <td>${escapeHtml(p.login_identifier)}</td>
+                            <td>${p.children.map(c => escapeHtml(c.full_name)).join(', ')}</td>
+                        </tr>
+                    `).join('')}</tbody>
+                </table>
+            </details>`;
+    }).join('');
+
+    parentEl.insertAdjacentHTML('beforeend', `
+        <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
+        <h4 style="margin:0 0 8px">Orang Tua Alumni (${alumniParents.length})</h4>
+        <p class="hint" style="margin-bottom:12px">Orang tua yang semua anaknya sudah lulus, dikelompokkan per tahun kelulusan terakhir.</p>
+        ${accordions}
     `);
 }
 
