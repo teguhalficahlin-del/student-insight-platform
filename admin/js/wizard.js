@@ -690,24 +690,35 @@ function wireImportBlock(step, { importFn, onDone } = {}) {
     importBtn.addEventListener('click', async () => {
         if (!csvText) return;
         importBtn.disabled = true;
-        importBtn.textContent = 'Mengimpor…';
+        fileInput.disabled = true;
         resultEl.innerHTML = '';
+
+        const rowCount = csvText.split(/\r\n|\n|\r/).filter(l => l.trim()).length - 1;
+        let dots = 0;
+        const ticker = setInterval(() => {
+            dots = (dots + 1) % 4;
+            importBtn.textContent = `Mengimpor ${rowCount} baris${'.'.repeat(dots)}`;
+        }, 400);
         try {
             const result = await fn(csvText);
+            clearInterval(ticker);
             renderImportResult(resultEl, result);
             const changed = (result?.success ?? 0) > 0 || (result?.updated ?? 0) > 0;
             if (changed) {
                 importBtn.textContent = '✓ Impor Selesai';
                 importBtn.classList.remove('btn-primary');
                 importBtn.classList.add('btn-success');
-                importBtn.disabled = true; // cegah submit ganda; pilih file lain untuk impor lagi
+                importBtn.disabled = true;
             } else {
                 resetImportBtn();
             }
+            fileInput.disabled = false;
             if (onDone) await onDone(result);
         } catch (err) {
+            clearInterval(ticker);
             resultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Impor gagal.')}</div>`;
             resetImportBtn();
+            fileInput.disabled = false;
         }
     });
 }
