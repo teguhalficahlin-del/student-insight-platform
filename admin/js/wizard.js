@@ -18,7 +18,7 @@ import {
     supabase,
     getCurrentUserRow, requireAdministrativeOrRedirect,
     getSchoolConfig, upsertSchoolConfig, markSetupCompleted,
-    getPrograms, getClasses, addProgram, deleteRecord, deleteBulk, changePassword,
+    getPrograms, getClasses, deleteBulk, changePassword,
     fetchAllRows,
     importPrograms, importClasses, importUsers, importStudents, importSchedules,
     importParents, importDudi,
@@ -259,187 +259,20 @@ async function renderStep3() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 3 dari ${TOTAL_STEPS}</div>
         <h3>Program Keahlian</h3>
-        <p class="hint">Tambahkan program keahlian (jurusan) yang ada di sekolah Anda.</p>
+        <p class="hint">Impor program keahlian (jurusan) yang ada di sekolah Anda.</p>
         ${templateButtonHtml(3)}
-        <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap">
-            <button type="button" class="btn btn-danger wz-prog-del-selected" disabled style="padding:6px 12px">Hapus Terpilih (0)</button>
-            <button type="button" class="btn btn-secondary wz-prog-del-all" style="padding:6px 12px">Hapus Semua (${programs.length})</button>
-        </div>
-        <table class="table">
-            <thead><tr>
-                <th style="width:36px"><input type="checkbox" class="wz-prog-check-all" title="Pilih semua" /></th>
-                <th style="width:120px">Kode</th><th>Nama Program</th><th style="width:48px"></th>
-            </tr></thead>
-            <tbody id="wz-program-tbody">${renderProgramRows(programs)}</tbody>
-        </table>
-        <div class="field">
-            <label for="wz-program-name">Nama Program</label>
-            <input type="text" id="wz-program-name" class="input"
-                placeholder="contoh: Teknik Komputer dan Jaringan" />
-        </div>
-        <div class="field">
-            <label for="wz-program-code">Kode Program</label>
-            <input type="text" id="wz-program-code" class="input" maxlength="20"
-                placeholder="contoh: TKJ" />
-            <p class="hint">Maksimal 20 karakter, otomatis menjadi huruf besar.</p>
-        </div>
-        <button type="button" class="btn btn-secondary" id="wz-program-add-btn">Tambah</button>
+        <div id="wz-data-list"></div>
 
         <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
-        <h4 style="margin:0 0 8px">Atau impor massal dari file</h4>
+        <h4 style="margin:0 0 8px">Impor dari file</h4>
         ${importBlockHtml(3)}
     `;
 
-    // Kode program: uppercase otomatis saat mengetik
-    const codeInput = document.getElementById('wz-program-code');
-    codeInput.addEventListener('input', () => {
-        codeInput.value = codeInput.value.toUpperCase();
-    });
-
-    document.getElementById('wz-program-add-btn').addEventListener('click', onAddProgram);
-    wireProgramDeleteButtons();
-    wireProgramBulkDelete();
     wireTemplateButton(3);
-    wireImportBlock(3, {
-        importFn: importPrograms,
-        onDone: async () => {
-            const updated = await getPrograms();
-            const tbody = contentEl.querySelector('#wz-program-tbody');
-            if (tbody) tbody.innerHTML = renderProgramRows(updated);
-            wireProgramDeleteButtons();
-            wireProgramBulkDelete();
-            nextBtn.disabled = updated.length < 1;
-        },
-    });
+    wireImportBlock(3, { onDone: () => refreshDataList(3) });
+    await refreshDataList(3);
 
-    // "Selanjutnya" hanya aktif jika minimal 1 program
     nextBtn.disabled = programs.length < 1;
-}
-
-function renderProgramRows(programs) {
-    if (!programs.length) {
-        return '<tr><td colspan="4" class="hint">Belum ada program. Tambahkan minimal satu.</td></tr>';
-    }
-    return programs.map(p => `
-        <tr>
-            <td><input type="checkbox" class="wz-prog-check" value="${escapeAttr(p.program_id)}" /></td>
-            <td>${escapeHtml(p.code)}</td>
-            <td>${escapeHtml(p.name)}</td>
-            <td><button type="button" class="btn btn-danger wz-program-del"
-                data-id="${escapeAttr(p.program_id)}" title="Hapus"
-                style="padding:4px 10px">✕</button></td>
-        </tr>
-    `).join('');
-}
-
-async function onAddProgram() {
-    clearError();
-    const nameEl = document.getElementById('wz-program-name');
-    const codeEl = document.getElementById('wz-program-code');
-    const addBtn = document.getElementById('wz-program-add-btn');
-
-    const name = nameEl.value.trim();
-    const code = codeEl.value.trim().toUpperCase();
-
-    if (!name) { showError('Nama program wajib diisi.'); return; }
-    if (!code) { showError('Kode program wajib diisi.'); return; }
-
-    // Cek duplikat kode dari DB (sumber kebenaran, bukan state memory)
-    const existing = await getPrograms();
-    if (existing.some(p => p.code === code)) {
-        showError(`Kode program "${code}" sudah ada.`);
-        return;
-    }
-
-    addBtn.disabled = true;
-    addBtn.textContent = 'Menyimpan…';
-    try {
-        await addProgram({ name, code });
-        await renderStep3(); // re-render daftar + reset form
-    } catch (err) {
-        showError(err.message ?? 'Gagal menambah program.');
-        addBtn.disabled = false;
-        addBtn.textContent = 'Tambah';
-    }
-}
-
-function wireProgramDeleteButtons() {
-    contentEl.querySelectorAll('.wz-program-del').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            clearError();
-            btn.disabled = true;
-            try {
-                await deleteRecord('programs', btn.dataset.id);
-                await renderStep3();
-            } catch (err) {
-                // asDeleteError di api.js sudah memberi pesan ramah bila ada FK (mis. kelas terkait)
-                showError(err.message ?? 'Gagal menghapus program.');
-                btn.disabled = false;
-            }
-        });
-    });
-}
-
-function wireProgramBulkDelete() {
-    const checks   = Array.from(contentEl.querySelectorAll('.wz-prog-check'));
-    const checkAll = contentEl.querySelector('.wz-prog-check-all');
-    const selBtn   = contentEl.querySelector('.wz-prog-del-selected');
-    const allBtn   = contentEl.querySelector('.wz-prog-del-all');
-    if (!selBtn || !allBtn || !checks.length) return;
-
-    const selectedIds = () => checks.filter(c => c.checked).map(c => c.value);
-
-    function sync() {
-        const n = selectedIds().length;
-        selBtn.textContent = `Hapus Terpilih (${n})`;
-        selBtn.disabled = n === 0;
-        if (checkAll) checkAll.checked = n > 0 && n === checks.length;
-    }
-
-    checks.forEach(c => c.addEventListener('change', sync));
-    if (checkAll) {
-        checkAll.addEventListener('change', () => {
-            checks.forEach(c => { c.checked = checkAll.checked; });
-            sync();
-        });
-    }
-
-    selBtn.addEventListener('click', async () => {
-        const ids = selectedIds();
-        if (!ids.length) return;
-        const blockMsg = await checkDeleteOrder(3);
-        if (blockMsg) { showError(blockMsg); return; }
-        if (!confirm(`Hapus ${ids.length} program terpilih?`)) return;
-        await runProgramBulkDelete(ids, selBtn);
-    });
-
-    allBtn.addEventListener('click', async () => {
-        const ids = checks.map(c => c.value);
-        if (!ids.length) return;
-        const blockMsg = await checkDeleteOrder(3);
-        if (blockMsg) { showError(blockMsg); return; }
-        if (!confirm(`Hapus SEMUA ${ids.length} program?`)) return;
-        await runProgramBulkDelete(ids, allBtn);
-    });
-}
-
-async function runProgramBulkDelete(ids, btn) {
-    clearError();
-    const label = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = `Menghapus 0/${ids.length}…`;
-    const onProgress = (done, total) => { btn.textContent = `Menghapus ${done}/${total}…`; };
-    try {
-        const { deleted, errors } = await deleteBulk('programs', ids, onProgress);
-        if (errors.length) {
-            showError(`${deleted} terhapus, ${errors.length} gagal. Contoh: ${errors[0].message}`);
-        }
-    } catch (err) {
-        showError(err.message ?? 'Gagal menghapus program.');
-    } finally {
-        btn.textContent = label;
-        await renderStep3();
-    }
 }
 
 const STEP_RENDERERS = {
@@ -927,6 +760,15 @@ async function renderImportStep() {
 // ── Daftar data terkini per langkah (tampil + hapus) ──────────
 
 const STEP_LIST = {
+    3: {
+        title: 'Program terdaftar',
+        headers: ['Kode', 'Nama Program'],
+        deleteTable: 'programs',
+        fetch: async () => {
+            const data = await getPrograms();
+            return data.map(p => ({ id: p.program_id, cells: [p.code, p.name] }));
+        },
+    },
     4: {
         title: 'Kelas terdaftar',
         headers: ['Nama Kelas', 'Program', 'Tingkat'],
