@@ -551,14 +551,30 @@ const EXCEL_TEMPLATES = {
              ['XI AKL 1', 'AKL', '11'],
          ] },
     5: { filename: 'template_staf.xlsx',
-         headers: ['nama', 'nip_atau_nik', 'teacher_code', 'wali_kelas', 'program_kaprodi', 'jabatan'],
+         headers: ['nama', 'nip_atau_nik', 'mengajar', 'teacher_code', 'wali_kelas', 'program_kaprodi', 'jabatan'],
          exampleRows: [
-             ['Budi Santoso', '198501012010011001', 'BSS', '', '', ''],
-             ['Ririn Novianti', '198812052015032001', 'RRN', 'XII TKJ 1', '', ''],
-             ['Supriadi', '197706152003011005', 'SPR', '', 'TKJ', ''],
-             ['Ahmad Fauzi', '196811051994031005', 'AFM', '', '', 'KEPSEK'],
-             ['Susi Marlina', '198501032010012003', 'SSM', '', '', 'WAKA_KURIKULUM'],
-             ['Dewi Lestari', '198903152012032001', 'DWL', '', '', 'BK,WAKA_KESISWAAN'],
+             ['Budi Santoso, S.Pd', '198501012010011001', 'YA', 'BSS', '', '', ''],
+             ['Ririn Novianti, S.Pd', '198812052015032001', 'YA', 'RRN', 'XII TKJ 1', '', ''],
+             ['Supriadi, M.Pd', '197706152003011005', 'YA', 'SPR', '', 'TKJ', ''],
+             ['Ahmad Fauzi, M.Pd', '196811051994031005', '', '', '', '', 'KEPSEK'],
+             ['Susi Marlina, S.Pd', '198501032010012003', '', '', '', '', 'WAKA_KURIKULUM'],
+             ['Dewi Lestari, S.Pd', '198903152012032001', 'YA', 'DWL', '', '', 'BK'],
+         ],
+         guide: [
+             ['Kolom', 'Wajib?', 'Penjelasan'],
+             ['nama', 'Wajib', 'Nama lengkap beserta gelar'],
+             ['nip_atau_nik', 'Wajib', 'NIP atau NIK — menjadi identitas login. Harus unik.'],
+             ['mengajar', 'Opsional', 'Isi YA jika staf ini mengajar. Kosongkan jika tidak mengajar (misal Kepsek, BK murni).'],
+             ['teacher_code', 'Opsional', 'Kode guru untuk jadwal (maks 20 karakter). Wajib jika mengajar=YA. Kosongkan untuk auto-generate dari inisial nama.'],
+             ['wali_kelas', 'Opsional', 'Nama kelas yang diwalikan. Contoh: XII TKJ 1. Harus sesuai dengan data di langkah Kelas.'],
+             ['program_kaprodi', 'Opsional', 'Kode program keahlian jika staf ini Kaprodi. Contoh: TKJ. Harus sesuai data di langkah Program.'],
+             ['jabatan', 'Opsional', 'Jabatan tambahan, pisahkan dengan koma. Nilai yang valid: BK, KEPSEK, WAKA_KURIKULUM, WAKA_KESISWAAN, WAKA_HUMAS'],
+             ['', '', ''],
+             ['CATATAN', '', ''],
+             ['1.', '', 'Staf yang mengajar (mengajar=YA) otomatis berperan sebagai GURU dan muncul di jadwal.'],
+             ['2.', '', 'Staf yang tidak mengajar tetap bisa login dan mengakses fitur sesuai jabatannya.'],
+             ['3.', '', 'Satu staf bisa rangkap jabatan. Contoh: guru yang juga BK, isi mengajar=YA dan jabatan=BK.'],
+             ['4.', '', 'Upload ulang file akan memperbarui nama, kode, dan jabatan. Jika NIP salah ketik, hapus terlebih dahulu.'],
          ] },
     6: { filename: 'template_siswa.xlsx',
          headers: ['nama', 'nis', 'kode_program', 'class_name'],
@@ -599,22 +615,19 @@ function wireTemplateButton(step) {
     const btn = contentEl.querySelector('.wz-template-btn');
     if (btn) {
         btn.addEventListener('click', () =>
-            generateExcelTemplate(cfg.filename, cfg.headers, cfg.exampleRows));
+            generateExcelTemplate(cfg.filename, cfg.headers, cfg.exampleRows, cfg.guide));
     }
 }
 
 /** Generate file Excel (.xlsx) dari headers + exampleRows via SheetJS,
  *  lalu trigger unduhan di browser. Membutuhkan global XLSX (CDN). */
-function generateExcelTemplate(filename, headers, exampleRows) {
+function generateExcelTemplate(filename, headers, exampleRows, guide) {
     if (typeof XLSX === 'undefined') {
         showError('Fitur unduh template membutuhkan koneksi internet.');
         return;
     }
     const ws = XLSX.utils.aoa_to_sheet([headers, ...exampleRows]);
 
-    // Format SEMUA sel (termasuk ratusan baris kosong) sebagai TEKS (@)
-    // agar NIP/NIS panjang yang diketik TU tidak diubah Excel menjadi angka
-    // (yang membulatkan / menghilangkan digit).
     const PAD_ROWS = 300;
     const ncols = headers.length;
     for (let R = 0; R <= PAD_ROWS; R++) {
@@ -629,7 +642,13 @@ function generateExcelTemplate(filename, headers, exampleRows) {
     ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: PAD_ROWS, c: ncols - 1 } });
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+    XLSX.utils.book_append_sheet(wb, ws, 'DATA');
+
+    if (guide) {
+        const gsw = XLSX.utils.aoa_to_sheet(guide);
+        XLSX.utils.book_append_sheet(wb, gsw, 'PETUNJUK');
+    }
+
     XLSX.writeFile(wb, filename);
 }
 
