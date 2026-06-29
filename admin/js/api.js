@@ -186,28 +186,36 @@ export async function addClass({ name, program_id, academic_year, grade_level })
 // ─────────────────────────────────────────────────────────────
 
 export async function updateProgram(programId, { code, name }, oldCode) {
+    // Ambil kode saat ini dari DB (lebih reliable daripada oldCode dari UI)
+    const { data: currentProg } = await supabase.from('programs')
+        .select('code').eq('program_id', programId).single();
+    const dbOldCode = currentProg?.code;
+
     const { error } = await supabase.from('programs')
         .update({ code, name }).eq('program_id', programId);
     if (error) throw new Error(error.message);
 
-    // Rename kelas yang mengandung kode lama
-    if (oldCode && code !== oldCode) {
-        const { data: classes } = await supabase.from('classes')
-            .select('class_id, name')
-            .eq('program_id', programId);
+    // Rename kelas: coba kode dari DB, lalu kode dari UI sebagai fallback
+    const codesToTry = [...new Set([dbOldCode, oldCode].filter(Boolean))];
+    if (codesToTry.length === 0 || codesToTry.every(c => c === code)) return [];
 
-        const renames = [];
-        for (const c of (classes ?? [])) {
-            if (c.name.includes(oldCode)) {
-                const newName = c.name.replace(oldCode, code);
+    const { data: classes } = await supabase.from('classes')
+        .select('class_id, name')
+        .eq('program_id', programId);
+
+    const renames = [];
+    for (const c of (classes ?? [])) {
+        for (const tryCode of codesToTry) {
+            if (tryCode !== code && c.name.includes(tryCode)) {
+                const newName = c.name.replace(new RegExp(tryCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), code);
                 const { error: renameErr } = await supabase.from('classes')
                     .update({ name: newName }).eq('class_id', c.class_id);
                 if (!renameErr) renames.push({ from: c.name, to: newName });
+                break;
             }
         }
-        return renames;
     }
-    return [];
+    return renames;
 }
 
 export async function updateClass(classId, { name }) {
