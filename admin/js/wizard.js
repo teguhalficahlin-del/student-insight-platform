@@ -1115,6 +1115,7 @@ const STEP_LIST = {
     },
     9: {
         title: 'Stakeholder terdaftar',
+        emptyHint: 'Gunakan form di bawah untuk menambahkan.',
         headers: ['Nama', 'Kode Login'],
         deleteTable: 'users',
         editFields: [
@@ -1138,6 +1139,7 @@ const STEP_LIST = {
         title: 'Jadwal terdaftar',
         headers: ['Tanggal', 'Waktu', 'Kelas', 'Guru'],
         deleteTable: 'teaching_schedules',
+        emptyHint: 'Klik "Susun Jadwal Visual" di atas untuk menyusun jadwal.',
         fetch: async () => {
             const data = await fetchAllRows('teaching_schedules',
                 q => q.select(`
@@ -1193,7 +1195,8 @@ async function refreshDataList(step) {
 function renderDataTable(cfg, rows) {
     const heading = `<h4 style="margin:0 0 8px">${escapeHtml(cfg.title)} (${rows.length})</h4>`;
     if (!rows.length) {
-        return heading + '<p class="hint">Belum ada data. Unggah file di bawah untuk menambahkan.</p>';
+        const hint = cfg.emptyHint ?? 'Unduh template dan unggah file untuk menambahkan.';
+        return heading + `<p class="hint">Belum ada data. ${hint}</p>`;
     }
 
     const canDelete = !!cfg.deleteTable;
