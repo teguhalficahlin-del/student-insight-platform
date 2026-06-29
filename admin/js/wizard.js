@@ -610,6 +610,23 @@ function generateExcelTemplate(filename, headers, exampleRows) {
         return;
     }
     const ws = XLSX.utils.aoa_to_sheet([headers, ...exampleRows]);
+
+    // Format SEMUA sel (termasuk ratusan baris kosong) sebagai TEKS (@)
+    // agar NIP/NIS panjang yang diketik TU tidak diubah Excel menjadi angka
+    // (yang membulatkan / menghilangkan digit).
+    const PAD_ROWS = 300;
+    const ncols = headers.length;
+    for (let R = 0; R <= PAD_ROWS; R++) {
+        for (let C = 0; C < ncols; C++) {
+            const addr = XLSX.utils.encode_cell({ r: R, c: C });
+            const cell = ws[addr] ?? { t: 's', v: '' };
+            cell.t = 's';
+            cell.z = '@';
+            ws[addr] = cell;
+        }
+    }
+    ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: PAD_ROWS, c: ncols - 1 } });
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Template');
     XLSX.writeFile(wb, filename);
@@ -667,9 +684,28 @@ async function fileToCsv(file) {
         const buf = await file.arrayBuffer();
         const wb  = XLSX.read(buf, { type: 'array' });
         const ws  = wb.Sheets[wb.SheetNames[0]];
+        stripLeadingApostropheCells(ws);
         return XLSX.utils.sheet_to_csv(ws);
     }
-    return await file.text();
+    return stripLeadingApostropheCsv(await file.text());
+}
+
+/** Buang tanda kutip satu di awal nilai sel (penanda teks Excel yang
+ *  kadang ikut tersimpan), agar NIP/NIS tidak berawalan '. */
+function stripLeadingApostropheCells(ws) {
+    Object.keys(ws).forEach(addr => {
+        if (addr[0] === '!') return;
+        const cell = ws[addr];
+        if (cell && typeof cell.v === 'string' && cell.v.startsWith("'")) {
+            cell.v = cell.v.replace(/^'+/, '');
+            delete cell.w; // buang teks ter-cache agar nilai baru yang dipakai
+        }
+    });
+}
+
+/** Versi CSV: hapus ' di awal baris atau tepat setelah pemisah koma. */
+function stripLeadingApostropheCsv(text) {
+    return text.replace(/(^|,)'+/gm, '$1');
 }
 
 /** Buang baris yang seluruh selnya kosong (sisa baris kosong di Excel). */
@@ -683,12 +719,17 @@ function stripEmptyCsvLines(csv) {
 /** HTML blok unggah: input file + tombol impor + area hasil. */
 function importBlockHtml(step) {
     const headers = EXCEL_TEMPLATES[step]?.headers ?? [];
+    const hasIdentifier = headers.some(h => h === 'nip_atau_nik' || h === 'nis');
+    const idTip = hasIdentifier
+        ? `<p class="hint" style="margin-top:8px">Jika NIP/NIS panjang berubah jadi angka di Excel, format kolomnya sebagai <b>Teks</b> atau awali dengan tanda kutip satu (<code>'</code>) — tanda itu otomatis dihapus saat impor.</p>`
+        : '';
     return `
         <div class="wz-import">
             <p class="hint">Kolom yang diharapkan: <code>${headers.join(', ')}</code></p>
             <input type="file" class="input wz-file-input" accept=".xlsx,.xls,.csv"
                 style="padding:8px; margin-bottom:12px" />
             <button type="button" class="btn btn-primary wz-import-btn" disabled>Unggah &amp; Impor</button>
+            ${idTip}
             <div class="wz-import-result" style="margin-top:16px"></div>
         </div>
     `;

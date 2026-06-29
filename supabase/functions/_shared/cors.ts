@@ -20,7 +20,7 @@ export const corsHeaders: Record<string, string> = {
         'content-type',
         'x-schema-version',
     ].join(', '),
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
 };
 
 /**
