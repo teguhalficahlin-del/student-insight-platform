@@ -212,6 +212,16 @@ label {
     border-top: 1px solid var(--color-border);
 }
 
+.wz-accordion-inner {
+    border-color: var(--color-border);
+}
+
+.wz-accordion-inner > .wz-accordion-header {
+    font-size: 13px;
+    padding: 8px 12px;
+    background: var(--color-surface);
+}
+
 /* ── Wizard ──────────────────────────────────────────────── */
 
 .wizard-shell {

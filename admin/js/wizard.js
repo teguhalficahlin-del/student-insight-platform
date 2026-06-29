@@ -816,16 +816,21 @@ const STEP_LIST = {
         title: 'Siswa terdaftar',
         headers: ['Nama', 'NIS'],
         deleteTable: 'students',
-        groupBy: 'group',
+        nestedGroup: true,
         fetch: async () => {
             const data = await fetchAllRows('students',
                 q => q.select(`student_id, full_name, nis,
+                    program:programs ( name ),
                     enrollment:class_enrollments ( class:classes ( name ) )
                 `).order('full_name'));
             return data.map(s => {
                 const enrollments = Array.isArray(s.enrollment) ? s.enrollment : (s.enrollment ? [s.enrollment] : []);
-                const className = enrollments[0]?.class?.name ?? 'Belum ada kelas';
-                return { id: s.student_id, cells: [s.full_name, s.nis], group: className };
+                return {
+                    id: s.student_id,
+                    cells: [s.full_name, s.nis],
+                    program: s.program?.name ?? 'Tanpa program',
+                    kelas: enrollments[0]?.class?.name ?? 'Belum ada kelas',
+                };
             });
         },
     },
@@ -833,7 +838,7 @@ const STEP_LIST = {
         title: 'Orang Tua terdaftar',
         headers: ['Nama', 'NIK', 'Anak'],
         deleteTable: 'users',
-        groupBy: 'group',
+        nestedGroup: true,
         fetch: async () => {
             const parents = await fetchAllRows('users',
                 q => q.select('user_id, full_name, login_identifier')
@@ -843,6 +848,7 @@ const STEP_LIST = {
 
             const links = await fetchAllRows('student_parents',
                 q => q.select(`parent_user_id, students ( full_name,
+                    program:programs ( name ),
                     enrollment:class_enrollments ( class:classes ( name ) )
                 )`));
 
@@ -851,15 +857,22 @@ const STEP_LIST = {
                 const pid = link.parent_user_id;
                 if (!parentChildMap.has(pid)) parentChildMap.set(pid, []);
                 const enrollments = Array.isArray(link.students?.enrollment) ? link.students.enrollment : (link.students?.enrollment ? [link.students.enrollment] : []);
-                const className = enrollments[0]?.class?.name ?? 'Belum ada kelas';
-                parentChildMap.get(pid).push({ name: link.students?.full_name, className });
+                parentChildMap.get(pid).push({
+                    name: link.students?.full_name,
+                    program: link.students?.program?.name ?? 'Tanpa program',
+                    kelas: enrollments[0]?.class?.name ?? 'Belum ada kelas',
+                });
             }
 
             return parents.map(u => {
                 const children = parentChildMap.get(u.user_id) ?? [];
                 const childNames = children.map(c => c.name).join(', ') || '—';
-                const className = children[0]?.className ?? 'Belum ada kelas';
-                return { id: u.user_id, cells: [u.full_name, u.login_identifier, childNames], group: className };
+                return {
+                    id: u.user_id,
+                    cells: [u.full_name, u.login_identifier, childNames],
+                    program: children[0]?.program ?? 'Tanpa program',
+                    kelas: children[0]?.kelas ?? 'Belum ada kelas',
+                };
             });
         },
     },
@@ -942,8 +955,8 @@ function renderDataTable(cfg, rows) {
 
     const allIdsJson = canDelete ? `<script type="application/json" class="wz-all-ids">${JSON.stringify(rows.map(r => r.id))}</script>` : '';
 
-    if (cfg.groupBy) {
-        return heading + toolbar + renderGroupedAccordion(cfg, rows) + allIdsJson;
+    if (cfg.nestedGroup) {
+        return heading + toolbar + renderNestedAccordion(cfg, rows) + allIdsJson;
     }
 
     const checkTh = canDelete
@@ -971,13 +984,18 @@ function renderRow(r, canDelete) {
     return `<tr>${checkTd}${cells}</tr>`;
 }
 
-function renderGroupedAccordion(cfg, rows) {
+function renderNestedAccordion(cfg, rows) {
     const canDelete = !!cfg.deleteTable;
-    const groups = new Map();
+
+    // Level 1: program, Level 2: kelas
+    const programs = new Map();
     for (const r of rows) {
-        const key = r[cfg.groupBy] ?? '—';
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(r);
+        const prog = r.program ?? '—';
+        const kls  = r.kelas ?? '—';
+        if (!programs.has(prog)) programs.set(prog, new Map());
+        const classes = programs.get(prog);
+        if (!classes.has(kls)) classes.set(kls, []);
+        classes.get(kls).push(r);
     }
 
     const checkTh = canDelete
@@ -985,14 +1003,27 @@ function renderGroupedAccordion(cfg, rows) {
         : '';
     const head = checkTh + cfg.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('');
 
-    const sortedKeys = [...groups.keys()].sort((a, b) => a.localeCompare(b, 'id'));
-    return sortedKeys.map(key => {
-        const groupRows = groups.get(key);
-        const body = groupRows.map(r => renderRow(r, canDelete)).join('');
+    const sortedProgs = [...programs.keys()].sort((a, b) => a.localeCompare(b, 'id'));
+    return sortedProgs.map(prog => {
+        const classMap = programs.get(prog);
+        let progTotal = 0;
+        classMap.forEach(arr => { progTotal += arr.length; });
+
+        const sortedClasses = [...classMap.keys()].sort((a, b) => a.localeCompare(b, 'id'));
+        const classAccordions = sortedClasses.map(kls => {
+            const classRows = classMap.get(kls);
+            const body = classRows.map(r => renderRow(r, canDelete)).join('');
+            return `
+                <details class="wz-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
+                    <summary class="wz-accordion-header">${escapeHtml(kls)} (${classRows.length})</summary>
+                    <table class="table" style="margin-top:4px"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+                </details>`;
+        }).join('');
+
         return `
             <details class="wz-accordion" style="margin-bottom:8px">
-                <summary class="wz-accordion-header">${escapeHtml(key)} (${groupRows.length})</summary>
-                <table class="table" style="margin-top:4px"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+                <summary class="wz-accordion-header">${escapeHtml(prog)} (${progTotal})</summary>
+                <div style="padding:4px 0">${classAccordions}</div>
             </details>`;
     }).join('');
 }
