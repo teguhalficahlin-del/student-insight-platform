@@ -148,6 +148,113 @@ export async function fetchAllRows(table, build, pageSize = 1000) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// SCHEDULE BUILDER
+// ─────────────────────────────────────────────────────────────
+
+export async function getTimeSlots(academicYear, semester, dayOfWeek) {
+    const { data, error } = await supabase
+        .from('schedule_time_slots')
+        .select('*')
+        .eq('academic_year', academicYear)
+        .eq('semester', semester)
+        .eq('day_of_week', dayOfWeek)
+        .order('slot_number');
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function saveTimeSlots(academicYear, semester, dayOfWeek, slots) {
+    // Hapus slot lama untuk hari ini, lalu insert baru
+    const { error: delErr } = await supabase
+        .from('schedule_time_slots')
+        .delete()
+        .eq('academic_year', academicYear)
+        .eq('semester', semester)
+        .eq('day_of_week', dayOfWeek);
+    if (delErr) throw delErr;
+
+    if (slots.length === 0) return;
+
+    const rows = slots.map((s, i) => ({
+        academic_year: academicYear,
+        semester,
+        day_of_week: dayOfWeek,
+        slot_number: i + 1,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        is_break: s.is_break ?? false,
+        break_label: s.break_label ?? null,
+    }));
+
+    const { error: insErr } = await supabase
+        .from('schedule_time_slots').insert(rows);
+    if (insErr) throw insErr;
+}
+
+export async function getScheduleTemplates(academicYear, semester, dayOfWeek) {
+    const { data, error } = await supabase
+        .from('schedule_templates')
+        .select('template_id, start_time, end_time, class_id, teacher_id, subject_label')
+        .eq('academic_year', academicYear)
+        .eq('semester', semester)
+        .eq('day_of_week', dayOfWeek);
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function saveScheduleTemplates(academicYear, semester, dayOfWeek, templates) {
+    // Hapus template lama untuk hari ini, lalu insert baru
+    const { error: delErr } = await supabase
+        .from('schedule_templates')
+        .delete()
+        .eq('academic_year', academicYear)
+        .eq('semester', semester)
+        .eq('day_of_week', dayOfWeek);
+    if (delErr) throw delErr;
+
+    if (templates.length === 0) return;
+
+    const rows = templates.map(t => ({
+        academic_year: academicYear,
+        semester,
+        day_of_week: dayOfWeek,
+        start_time: t.start_time,
+        end_time: t.end_time,
+        class_id: t.class_id,
+        teacher_id: t.teacher_id,
+        subject_label: t.subject_label || null,
+    }));
+
+    const CHUNK = 200;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+        const { error: insErr } = await supabase
+            .from('schedule_templates').insert(rows.slice(i, i + CHUNK));
+        if (insErr) throw insErr;
+    }
+}
+
+export async function getTeacherList() {
+    const { data, error } = await supabase
+        .from('users')
+        .select('user_id, full_name, teacher_code')
+        .eq('role_type', 'GURU')
+        .order('teacher_code');
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function getClassesByGrade(academicYear, gradeLevel) {
+    const { data, error } = await supabase
+        .from('classes')
+        .select('class_id, name, program_id, grade_level')
+        .eq('academic_year', academicYear)
+        .eq('grade_level', gradeLevel)
+        .order('name');
+    if (error) throw error;
+    return data ?? [];
+}
+
+// ─────────────────────────────────────────────────────────────
 // MASTER DATA
 // ─────────────────────────────────────────────────────────────
 

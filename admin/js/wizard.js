@@ -26,6 +26,8 @@ import {
     logout,
 } from './api.js';
 
+import { openScheduleBuilder } from './schedule-builder.js';
+
 const TOTAL_STEPS = 10;
 
 const STEP_NAMES = {
@@ -786,6 +788,18 @@ async function renderImportStep() {
     wireTemplateButton(step);
     wireImportBlock(step, { onDone: () => refreshDataList(step) });
     await refreshDataList(step);
+
+    // Step 9: tombol Susun Jadwal visual
+    if (step === 9) {
+        const schedBtn = document.createElement('button');
+        schedBtn.type = 'button';
+        schedBtn.className = 'btn btn-primary';
+        schedBtn.style.cssText = 'margin-bottom:16px;padding:10px 20px;font-size:14px';
+        schedBtn.textContent = '📋 Susun Jadwal Visual';
+        const dataList = contentEl.querySelector('#wz-data-list');
+        if (dataList) dataList.before(schedBtn);
+        schedBtn.addEventListener('click', () => openScheduleBuilder());
+    }
 
     // Langkah impor bersifat opsional — boleh dilanjutkan tanpa unggah.
     nextBtn.disabled = false;
