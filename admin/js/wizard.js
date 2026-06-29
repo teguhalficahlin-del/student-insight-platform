@@ -579,9 +579,10 @@ const EXCEL_TEMPLATES = {
              ['Budi Santoso', '198501012010011001', 'X TKJ 1'],
          ] },
     8: { filename: 'template_jadwal.xlsx',
-         headers: ['hari', 'start_time', 'end_time', 'kelas', 'kode_guru', 'kode_mapel'],
+         headers: ['nama_guru', 'nama_kelas', 'hari', 'start_time', 'end_time'],
          exampleRows: [
-             ['Senin', '07:00', '08:30', 'X TKJ 1', 'BS', 'MTK'],
+             ['Budi Santoso', 'X TKJ 1', 'Senin', '07:00', '08:30'],
+             ['Budi Santoso', 'X TKJ 1', 'Senin', '08:30', '10:00'],
          ] },
 };
 
@@ -646,7 +647,7 @@ const IMPORT_STEP_INFO = {
     7: { title: 'Wali Kelas',
          desc: 'Daftarkan akun wali kelas dan tautkan ke kelasnya. Kelas (Langkah 4) harus sudah ada. Gunakan NIP/NIK yang belum dipakai akun lain.' },
     8: { title: 'Jadwal',
-         desc: 'Impor jadwal mengajar mingguan. Nama kelas, kode guru, dan kode mata pelajaran harus sudah terdaftar di sistem.' },
+         desc: 'Impor jadwal mengajar mingguan: nama guru + kelas + waktu (tanpa mata pelajaran). Guru & kelas harus sudah terdaftar. Satu guru tidak boleh mengajar di kelas berbeda pada waktu yang tumpang-tindih — baris yang bentrok akan ditolak & dilaporkan.' },
 };
 
 /** Fungsi impor (edge function) untuk tiap langkah. Guru & Wali Kelas
