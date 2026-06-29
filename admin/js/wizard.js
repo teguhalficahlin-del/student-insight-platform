@@ -282,7 +282,7 @@ async function renderStep3() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 3 dari ${TOTAL_STEPS}</div>
         <h3>Program Keahlian</h3>
-        <p class="hint">Impor program keahlian (jurusan) yang ada di sekolah Anda. Lihat sheet PETUNJUK di template untuk panduan pengisian.</p>
+        <p class="hint">Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.</p>
         ${templateButtonHtml(3)}
         <div id="wz-data-list"></div>
 
@@ -723,17 +723,17 @@ function generateExcelTemplate(filename, headers, exampleRows, guide) {
 
 const IMPORT_STEP_INFO = {
     4: { title: 'Kelas & Rombel',
-         desc: 'Impor daftar kelas. Program keahlian (langkah 3) harus sudah ada. Lihat sheet PETUNJUK di template untuk panduan pengisian.' },
+         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
     5: { title: 'Staf & Peran',
-         desc: 'Impor semua staf sekolah: guru, BK, wali kelas, kaprodi, kepsek, dan waka. NIP/NIK menjadi identitas login. Lihat sheet PETUNJUK di template untuk panduan pengisian kolom jabatan dan peran.' },
+         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
     6: { title: 'Siswa',
-         desc: 'Impor data siswa sekaligus penempatan kelas. Program (langkah 3) dan kelas (langkah 4) harus sudah ada. Lihat sheet PETUNJUK di template untuk panduan pengisian.' },
+         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
     7: { title: 'Orang Tua',
-         desc: 'Impor akun orang tua/wali dan tautkan ke siswanya lewat NIS. Siswa (langkah 6) harus sudah ada. NIK menjadi identitas login di Portal Orang Tua. Lihat sheet PETUNJUK di template untuk panduan pengisian.' },
+         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
     8: { title: 'DUDI',
-         desc: 'Impor data DUDI (Dunia Usaha/Dunia Industri) mitra PKL. Login memakai nama usaha. Lihat sheet PETUNJUK di template untuk panduan pengisian.' },
+         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
     10: { title: 'Jadwal',
-          desc: 'Impor jadwal mengajar mingguan, atau gunakan Susun Jadwal Visual. Guru (langkah 5) dan kelas (langkah 4) harus sudah ada. Lihat sheet PETUNJUK di template untuk panduan pengisian.' },
+          desc: 'Unduh template, isi data, lalu unggah. Atau gunakan Susun Jadwal Visual. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
 };
 
 /** Fungsi impor (edge function) untuk tiap langkah. Guru menyuntikkan
