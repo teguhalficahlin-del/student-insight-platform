@@ -273,6 +273,19 @@ const PK_COLUMNS = {
     teaching_schedules: 'schedule_id',
 };
 
+// Hapus data dependen sebelum baris utama (urutan: child dulu).
+const CASCADE_DEPS = {
+    students: [
+        { table: 'attendance',        fk: 'student_id' },
+        { table: 'observations',      fk: 'student_id' },
+        { table: 'student_parents',   fk: 'student_id' },
+        { table: 'class_enrollments', fk: 'student_id' },
+        { table: 'pkl_placements',    fk: 'student_id' },
+        { table: 'parent_messages',   fk: 'student_id' },
+        { table: 'cases',             fk: 'student_id' },
+    ],
+};
+
 const DEPENDENCY_LABELS = {
     classes:              'kelas',
     class_enrollments:    'enrollment siswa',
@@ -398,15 +411,26 @@ export async function deleteBulk(table, ids, onProgress) {
     const pkColumn = PK_COLUMNS[table];
     if (!pkColumn) throw new Error(`Tabel "${table}" tidak didukung untuk hapus.`);
 
-    // Pecah jadi beberapa batch: satu .in() dengan ribuan id menghasilkan URL
-    // sangat panjang yang ditolak server. "Hapus Semua" pada sekolah ribuan
-    // siswa harus tetap berjalan.
     const CHUNK = 200;
     const errors = [];
     let deleted = 0;
 
     for (let i = 0; i < ids.length; i += CHUNK) {
         const batch = ids.slice(i, i + CHUNK);
+
+        // Cascade: hapus data dependen sebelum hapus baris utama
+        if (CASCADE_DEPS[table]) {
+            for (const dep of CASCADE_DEPS[table]) {
+                const { error: depErr } = await supabase
+                    .from(dep.table)
+                    .delete()
+                    .in(dep.fk, batch);
+                if (depErr) {
+                    console.error(`[deleteBulk] cascade ${dep.table} failed:`, depErr);
+                }
+            }
+        }
+
         const { error, count } = await supabase
             .from(table)
             .delete({ count: 'exact' })
@@ -419,8 +443,6 @@ export async function deleteBulk(table, ids, onProgress) {
         }
         if (error.code !== '23503') throw asDeleteError(error);
 
-        // Salah satu baris di batch ini punya dependency — hapus satu per satu
-        // agar baris yang aman tetap terhapus dan yang gagal dilaporkan per id.
         for (const id of batch) {
             try {
                 await deleteRecord(table, id);
