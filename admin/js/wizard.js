@@ -1047,7 +1047,10 @@ const STEP_LIST = {
                 };
             });
         },
-        afterRender: renderAlumniSection,
+        afterRender: async (el) => {
+            await renderEmptyClassesNotice(el);
+            await renderAlumniSection(el);
+        },
     },
     7: {
         title: 'Orang Tua terdaftar',
@@ -1178,6 +1181,46 @@ async function fetchUsersByRole(roleType, toCells, toEditData) {
         if (toEditData) row.editData = toEditData(u);
         return row;
     });
+}
+
+// ── Kelas Kosong Notice (kelas tahun ajaran aktif tanpa siswa) ─
+
+async function renderEmptyClassesNotice(parentEl) {
+    const config = await getSchoolConfig();
+    const ay = config?.current_academic_year;
+    if (!ay) return;
+
+    const [classes, enrollments] = await Promise.all([
+        fetchAllRows('classes',
+            q => q.select('class_id, name, grade_level, program:programs ( name )')
+                  .eq('academic_year', ay)
+                  .order('name')),
+        fetchAllRows('class_enrollments',
+            q => q.select('class_id').is('withdrawn_at', null)),
+    ]);
+
+    const enrolledClassIds = new Set(enrollments.map(e => e.class_id));
+    const emptyClasses = classes.filter(c => !enrolledClassIds.has(c.class_id));
+    if (emptyClasses.length === 0) return;
+
+    const byProgram = new Map();
+    for (const c of emptyClasses) {
+        const prog = c.program?.name ?? 'Tanpa program';
+        if (!byProgram.has(prog)) byProgram.set(prog, []);
+        byProgram.get(prog).push(c.name);
+    }
+    const list = [...byProgram.entries()]
+        .sort(([a], [b]) => a.localeCompare(b, 'id'))
+        .map(([prog, names]) => `<li><strong>${escapeHtml(prog)}</strong>: ${names.map(escapeHtml).join(', ')}</li>`)
+        .join('');
+
+    parentEl.insertAdjacentHTML('afterbegin', `
+        <div class="alert alert-warning" style="margin-bottom:16px">
+            <strong>${emptyClasses.length} kelas tahun ajaran ${escapeHtml(ay)} belum ada siswa</strong>
+            — kelas ini tidak muncul di daftar di bawah sampai siswa diimpor.
+            <ul style="margin:8px 0 0">${list}</ul>
+        </div>
+    `);
 }
 
 // ── Alumni Section (siswa LULUS) ─────────────────────────────
