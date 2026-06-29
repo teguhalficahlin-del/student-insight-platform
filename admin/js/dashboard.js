@@ -7,6 +7,7 @@
 
 import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows } from './api.js';
 import { supabase } from './api.js';
+import { mountSemesterPanel } from './semester.js';
 
 const panelContent = document.getElementById('panel-content');
 
@@ -20,8 +21,8 @@ const PANEL_RENDERERS = {
     dudi:               renderDudiPanel,
     stakeholders:       renderStakeholdersPanel,
     jadwal:             renderJadwalPanel,
-    tutupsemester:      renderComingSoon,
-    'academic-year':    renderComingSoon,
+    tutupsemester:      () => mountSemesterPanel(panelContent),
+    'academic-year':    () => { window.location.href = 'tutup-tahun.html'; },
     export:             renderComingSoon,
     'activity-log':     renderComingSoon,
 };

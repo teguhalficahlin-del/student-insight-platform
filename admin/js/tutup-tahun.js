@@ -240,7 +240,7 @@ async function fetchPromotableClasses(config) {
     const nextClassMap = new Map(
         (nextClasses ?? []).map(c => [
             c.name.trim().toUpperCase(),
-            { class_id: c.class_id, grade_level: c.grade_level },
+            { class_id: c.class_id, grade_level: c.grade_level, displayName: c.name },
         ])
     );
 
@@ -281,10 +281,10 @@ async function setupStep3() {
     // Kelompokkan kelas tujuan per tingkat dari nextClassMap
     // grade 10 → butuh grade 11, grade 11 → butuh grade 12
     const nextClassesByGrade = new Map();
-    for (const [name, { class_id, grade_level }] of nextClassMap) {
+    for (const [upperName, { class_id, grade_level, displayName }] of nextClassMap) {
         if (!nextClassesByGrade.has(grade_level))
             nextClassesByGrade.set(grade_level, []);
-        nextClassesByGrade.get(grade_level).push({ name, class_id });
+        nextClassesByGrade.get(grade_level).push({ name: upperName, displayName, class_id });
     }
 
     const tbody = document.querySelector('#promotion-table tbody');
@@ -313,7 +313,7 @@ async function setupStep3() {
                         ${options.map(o => `
                             <option value="${o.class_id}"
                                 ${suggested && o.name === suggested.name ? 'selected' : ''}>
-                                ${o.name}
+                                ${o.displayName}
                             </option>
                         `).join('')}
                     </select>` : `<span style="color:var(--color-danger)">Tidak ada kelas tujuan</span>`}
@@ -515,5 +515,54 @@ function setupStep5() {
     if (!requireAdministrativeOrRedirect(userRow)) return;
 
     state.config = await getSchoolConfig();
+
+    const canProceed = await checkSemestersClosed(state.config);
+    if (!canProceed) return;
+
     await renderStep();
 })();
+
+async function checkSemestersClosed(config) {
+    const { data: periods, error } = await supabase
+        .from('academic_periods')
+        .select('semester, status')
+        .eq('academic_year', config.current_academic_year);
+    if (error) {
+        document.querySelector('.wizard-panel').innerHTML = `
+            <div class="alert alert-danger">Gagal memeriksa status semester: ${error.message}</div>`;
+        return false;
+    }
+
+    const sem1 = periods?.find(p => p.semester === '1');
+    const sem2 = periods?.find(p => p.semester === '2');
+
+    const sem1Closed = sem1?.status === 'CLOSED';
+    const sem2Closed = sem2?.status === 'CLOSED';
+
+    if (!sem1Closed || !sem2Closed) {
+        const missing = [];
+        if (!sem1Closed) missing.push('Semester 1');
+        if (!sem2Closed) missing.push('Semester 2');
+
+        document.querySelector('.wizard-panel').innerHTML = `
+            <div class="alert alert-danger" style="margin:2rem;">
+                <h3 style="margin-top:0">Tidak Dapat Melanjutkan</h3>
+                <p>
+                    <strong>${missing.join(' dan ')}</strong> tahun ajaran
+                    ${config.current_academic_year} belum ditutup.
+                </p>
+                <p>
+                    Tutup kedua semester terlebih dahulu melalui menu
+                    <strong>Tutup Semester</strong> di dashboard sebelum
+                    memulai wizard Tutup Tahun Ajaran.
+                </p>
+                <a href="dashboard.html" class="btn btn-primary" style="margin-top:1rem;">
+                    Kembali ke Dashboard
+                </a>
+            </div>`;
+        nextBtn.style.display = 'none';
+        backBtn.style.display = 'none';
+        return false;
+    }
+    return true;
+}
