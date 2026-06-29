@@ -273,37 +273,6 @@ const PK_COLUMNS = {
     teaching_schedules: 'schedule_id',
 };
 
-// Hapus data dependen sebelum baris utama (urutan: child dulu).
-const CASCADE_DEPS = {
-    students: [
-        { table: 'attendance',        fk: 'student_id' },
-        { table: 'observations',      fk: 'student_id' },
-        { table: 'student_parents',   fk: 'student_id' },
-        { table: 'class_enrollments', fk: 'student_id' },
-        { table: 'pkl_placements',    fk: 'student_id' },
-        { table: 'parent_messages',   fk: 'student_id' },
-        { table: 'cases',             fk: 'student_id' },
-    ],
-    classes: [
-        // teaching_schedules children first
-        { table: 'attendance',           fk: 'schedule_id', via: 'teaching_schedules', viaFk: 'class_id' },
-        { table: 'observations',         fk: 'schedule_id', via: 'teaching_schedules', viaFk: 'class_id' },
-        { table: 'substitute_schedules', fk: 'schedule_id', via: 'teaching_schedules', viaFk: 'class_id' },
-        // then direct children
-        { table: 'teaching_schedules',   fk: 'class_id' },
-        { table: 'class_enrollments',    fk: 'class_id' },
-        { table: 'schedule_templates',   fk: 'class_id' },
-    ],
-    programs: [
-        { table: 'teaching_assignments', fk: 'program_id' },
-    ],
-    teaching_schedules: [
-        { table: 'attendance',           fk: 'schedule_id' },
-        { table: 'observations',         fk: 'schedule_id' },
-        { table: 'substitute_schedules', fk: 'schedule_id' },
-    ],
-};
-
 const DEPENDENCY_LABELS = {
     classes:              'kelas',
     class_enrollments:    'enrollment siswa',
@@ -435,29 +404,6 @@ export async function deleteBulk(table, ids, onProgress) {
 
     for (let i = 0; i < ids.length; i += CHUNK) {
         const batch = ids.slice(i, i + CHUNK);
-
-        // Cascade: hapus data dependen sebelum hapus baris utama
-        if (CASCADE_DEPS[table]) {
-            for (const dep of CASCADE_DEPS[table]) {
-                if (dep.via) {
-                    // Indirect: cari ID perantara dulu, lalu hapus child
-                    const { data: viaRows } = await supabase
-                        .from(dep.via)
-                        .select(dep.fk)
-                        .in(dep.viaFk, batch);
-                    const viaIds = (viaRows || []).map(r => r[dep.fk]);
-                    if (viaIds.length > 0) {
-                        const { error: depErr } = await supabase
-                            .from(dep.table).delete().in(dep.fk, viaIds);
-                        if (depErr) console.error(`[deleteBulk] cascade ${dep.table} via ${dep.via} failed:`, depErr);
-                    }
-                } else {
-                    const { error: depErr } = await supabase
-                        .from(dep.table).delete().in(dep.fk, batch);
-                    if (depErr) console.error(`[deleteBulk] cascade ${dep.table} failed:`, depErr);
-                }
-            }
-        }
 
         const { error, count } = await supabase
             .from(table)

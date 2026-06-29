@@ -106,65 +106,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
             }
         }
 
-        // 3. Hapus baris dependen yang mereferensi users
-        //    Service role key bypass RLS, tapi FK constraint tetap berlaku.
-        //    Urutan: child tables dulu, baru parent tables.
-
-        // Deps yang mereferensi user_id di berbagai kolom
-        const userDeps: { table: string; column: string }[] = [];
-
+        // 3. Hapus relasi kepemilikan langsung (bukan data transaksional)
         if (targetUser.role_type === 'ORTU') {
-            userDeps.push({ table: 'student_parents', column: 'parent_user_id' });
-        }
-
-        if (['GURU', 'WALI_KELAS'].includes(targetUser.role_type)) {
-            // teaching_schedules → attendance, observations, substitute_schedules, dst
-            // Ambil schedule_id milik guru ini untuk hapus child tables
-            const { data: schedIds } = await admin
-                .from('teaching_schedules')
-                .select('schedule_id')
-                .eq('scheduled_teacher_id', user_id);
-            const sids = (schedIds || []).map((r: { schedule_id: string }) => r.schedule_id);
-
-            if (sids.length > 0) {
-                // Child tables dari teaching_schedules
-                for (const t of ['attendance', 'observations', 'substitute_schedules']) {
-                    const { error: e } = await admin.from(t).delete().in('schedule_id', sids);
-                    if (e) console.error(`[delete-user] cascade ${t} failed:`, e);
-                }
-            }
-
-            // schedule_templates milik guru
-            const { error: stErr } = await admin
-                .from('schedule_templates').delete().eq('teacher_id', user_id);
-            if (stErr) console.error('[delete-user] cascade schedule_templates failed:', stErr);
-
-            // teaching_schedules sendiri
-            const { error: tsErr } = await admin
-                .from('teaching_schedules').delete().eq('scheduled_teacher_id', user_id);
-            if (tsErr) console.error('[delete-user] cascade teaching_schedules failed:', tsErr);
-
-            // teaching_assignments
-            const { error: taErr } = await admin
-                .from('teaching_assignments').delete().eq('user_id', user_id);
-            if (taErr) console.error('[delete-user] cascade teaching_assignments failed:', taErr);
-
-            // Juga hapus substitute_schedules dimana guru ini jadi substitute
-            const { error: subErr } = await admin
-                .from('substitute_schedules').delete().eq('substitute_user_id', user_id);
-            if (subErr) console.error('[delete-user] cascade substitute (as sub) failed:', subErr);
-        }
-
-        if (targetUser.role_type === 'DUDI') {
-            userDeps.push({ table: 'pkl_placements', column: 'dudi_user_id' });
-        }
-
-        for (const dep of userDeps) {
-            const { error: depErr } = await admin
-                .from(dep.table).delete().eq(dep.column, user_id);
-            if (depErr) {
-                console.error(`[delete-user] cascade ${dep.table} failed:`, depErr);
-                return internalError(depErr);
+            const { error: spErr } = await admin
+                .from('student_parents')
+                .delete()
+                .eq('parent_user_id', user_id);
+            if (spErr) {
+                console.error('[delete-user] student_parents delete failed:', spErr);
+                return internalError(spErr);
             }
         }
 

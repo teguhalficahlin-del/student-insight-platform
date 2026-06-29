@@ -992,19 +992,62 @@ function wireDataTable(step, cfg) {
         });
     }
 
-    selBtn.addEventListener('click', () => {
+    selBtn.addEventListener('click', async () => {
         const ids = selectedIds();
         if (!ids.length) return;
+        const blockMsg = await checkDeleteOrder(step);
+        if (blockMsg) { showError(blockMsg); return; }
         if (!confirm(`Hapus ${ids.length} data terpilih? Tindakan ini tidak dapat dibatalkan.`)) return;
         runBulkDelete(step, cfg, ids, selBtn);
     });
 
-    allBtn.addEventListener('click', () => {
+    allBtn.addEventListener('click', async () => {
         const ids = checks.map(c => c.value);
         if (!ids.length) return;
+        const blockMsg = await checkDeleteOrder(step);
+        if (blockMsg) { showError(blockMsg); return; }
         if (!confirm(`Hapus SEMUA ${ids.length} data pada langkah ini? Tindakan ini tidak dapat dibatalkan.`)) return;
         runBulkDelete(step, cfg, ids, allBtn);
     });
+}
+
+// Urutan hapus: dari bawah ke atas. Setiap langkah hanya bisa dihapus
+// kalau langkah-langkah di bawahnya sudah kosong.
+const DELETE_ORDER_CHECKS = {
+    3: [ // Program: kelas & siswa harus kosong
+        { step: 4, label: 'Kelas',  table: 'classes',  query: q => q.select('class_id', { count: 'exact', head: true }) },
+        { step: 6, label: 'Siswa',  table: 'students', query: q => q.select('student_id', { count: 'exact', head: true }) },
+    ],
+    4: [ // Kelas: guru, siswa, jadwal harus kosong
+        { step: 5, label: 'Guru',   table: 'users',    query: q => q.select('user_id', { count: 'exact', head: true }).eq('role_type', 'GURU') },
+        { step: 6, label: 'Siswa',  table: 'students', query: q => q.select('student_id', { count: 'exact', head: true }) },
+        { step: 9, label: 'Jadwal', table: 'teaching_schedules', query: q => q.select('schedule_id', { count: 'exact', head: true }) },
+    ],
+    5: [ // Guru: jadwal harus kosong
+        { step: 9, label: 'Jadwal', table: 'teaching_schedules', query: q => q.select('schedule_id', { count: 'exact', head: true }) },
+    ],
+    6: [ // Siswa: orang tua, DUDI, jadwal harus kosong
+        { step: 7, label: 'Orang Tua', table: 'users', query: q => q.select('user_id', { count: 'exact', head: true }).eq('role_type', 'ORTU') },
+        { step: 8, label: 'DUDI',      table: 'users', query: q => q.select('user_id', { count: 'exact', head: true }).eq('role_type', 'DUDI') },
+        { step: 9, label: 'Jadwal',    table: 'teaching_schedules', query: q => q.select('schedule_id', { count: 'exact', head: true }) },
+    ],
+};
+
+async function checkDeleteOrder(step) {
+    const checks = DELETE_ORDER_CHECKS[step];
+    if (!checks) return null;
+
+    const results = await Promise.all(
+        checks.map(c => c.query(supabase.from(c.table)))
+    );
+
+    const blockers = [];
+    results.forEach(({ count }, i) => {
+        if (count > 0) blockers.push(`${checks[i].label} (langkah ${checks[i].step})`);
+    });
+
+    if (blockers.length === 0) return null;
+    return `Hapus dulu data di: ${blockers.join(', ')} sebelum menghapus data pada langkah ini.`;
 }
 
 async function runBulkDelete(step, cfg, ids, btn) {
