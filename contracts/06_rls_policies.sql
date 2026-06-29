@@ -764,3 +764,21 @@ CREATE POLICY rls_substitute_write_administrative ON substitute_schedules
 
 CREATE POLICY rls_enrollments_write_administrative ON class_enrollments
     FOR ALL USING (fn_current_user_role() = 'ADMINISTRATIVE');
+
+-- DELETE on transactional tables — needed for cascade delete when
+-- removing students via wizard (attendance, observations, etc. must
+-- be cleared before the student row can be deleted).
+CREATE POLICY rls_attendance_delete_administrative ON attendance
+    FOR DELETE USING (fn_current_user_role() = 'ADMINISTRATIVE');
+
+CREATE POLICY rls_observations_delete_administrative ON observations
+    FOR DELETE USING (fn_current_user_role() = 'ADMINISTRATIVE');
+
+CREATE POLICY rls_cases_delete_administrative ON cases
+    FOR DELETE USING (fn_current_user_role() = 'ADMINISTRATIVE');
+
+CREATE POLICY rls_case_events_delete_administrative ON case_events
+    FOR DELETE USING (fn_current_user_role() = 'ADMINISTRATIVE');
+
+CREATE POLICY rls_parent_msg_delete_administrative ON parent_messages
+    FOR DELETE USING (fn_current_user_role() = 'ADMINISTRATIVE');

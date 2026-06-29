@@ -450,6 +450,7 @@ export async function deleteBulk(table, ids, onProgress) {
             } catch (err) {
                 errors.push({ id, message: err.message });
             }
+            onProgress?.(deleted + errors.length, ids.length);
         }
     }
     return { deleted, errors };
