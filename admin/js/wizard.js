@@ -82,6 +82,16 @@ function clearError() {
     errorEl.style.display = 'none';
 }
 
+function showSuccess(msg) {
+    errorEl.textContent = msg;
+    errorEl.className = 'alert alert-success';
+    errorEl.style.display = 'block';
+    setTimeout(() => {
+        errorEl.style.display = 'none';
+        errorEl.className = 'alert alert-danger';
+    }, 5000);
+}
+
 // ─────────────────────────────────────────────────────────────
 // NAVIGATION / RENDER
 // ─────────────────────────────────────────────────────────────
@@ -792,7 +802,7 @@ const STEP_LIST = {
             { key: 'code', label: 'Kode Program' },
             { key: 'name', label: 'Nama Program' },
         ],
-        save: (id, vals) => updateProgram(id, vals),
+        save: (id, vals, oldData) => updateProgram(id, vals, oldData?.code),
         fetch: async () => {
             const data = await getPrograms();
             return data.map(p => ({ id: p.program_id, cells: [p.code, p.name], editData: { code: p.code, name: p.name } }));
@@ -1199,8 +1209,15 @@ function showEditModal(step, cfg, id, editData) {
         saveBtn.disabled = true;
         saveBtn.textContent = 'Menyimpan...';
         try {
-            await cfg.save(id, vals);
+            const result = await cfg.save(id, vals, editData);
             modal.remove();
+
+            // Tampilkan info kelas yang ikut di-rename
+            if (Array.isArray(result) && result.length > 0) {
+                const renameList = result.map(r => `${r.from} → ${r.to}`).join(', ');
+                showSuccess(`Data diperbarui. Kelas ikut di-rename: ${renameList}`);
+            }
+
             await refreshDataList(step);
         } catch (err) {
             errEl.textContent = err.message ?? 'Gagal menyimpan perubahan.';

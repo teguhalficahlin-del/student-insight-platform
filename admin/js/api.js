@@ -185,10 +185,29 @@ export async function addClass({ name, program_id, academic_year, grade_level })
 // INLINE EDIT — update identifier & fields langsung dari wizard
 // ─────────────────────────────────────────────────────────────
 
-export async function updateProgram(programId, { code, name }) {
+export async function updateProgram(programId, { code, name }, oldCode) {
     const { error } = await supabase.from('programs')
         .update({ code, name }).eq('program_id', programId);
     if (error) throw new Error(error.message);
+
+    // Rename kelas yang mengandung kode lama
+    if (oldCode && code !== oldCode) {
+        const { data: classes } = await supabase.from('classes')
+            .select('class_id, name')
+            .eq('program_id', programId);
+
+        const renames = [];
+        for (const c of (classes ?? [])) {
+            if (c.name.includes(oldCode)) {
+                const newName = c.name.replace(oldCode, code);
+                const { error: renameErr } = await supabase.from('classes')
+                    .update({ name: newName }).eq('class_id', c.class_id);
+                if (!renameErr) renames.push({ from: c.name, to: newName });
+            }
+        }
+        return renames;
+    }
+    return [];
 }
 
 export async function updateClass(classId, { name }) {
