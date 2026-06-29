@@ -182,6 +182,52 @@ export async function addClass({ name, program_id, academic_year, grade_level })
 }
 
 // ─────────────────────────────────────────────────────────────
+// INLINE EDIT — update identifier & fields langsung dari wizard
+// ─────────────────────────────────────────────────────────────
+
+export async function updateProgram(programId, { code, name }) {
+    const { error } = await supabase.from('programs')
+        .update({ code, name }).eq('program_id', programId);
+    if (error) throw new Error(error.message);
+}
+
+export async function updateClass(classId, { name }) {
+    const { error } = await supabase.from('classes')
+        .update({ name }).eq('class_id', classId);
+    if (error) throw new Error(error.message);
+}
+
+export async function updateStudent(studentId, { full_name, nis }) {
+    const { error } = await supabase.from('students')
+        .update({ full_name, nis }).eq('student_id', studentId);
+    if (error) throw new Error(error.message);
+}
+
+export async function updateUserIdentifier(userId, fields) {
+    return callEdgePatch('update-user-identifier', { user_id: userId, ...fields });
+}
+
+async function callEdgePatch(functionName, body) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) throw new Error('Sesi login tidak ditemukan. Silakan login ulang.');
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, {
+        method:  'PATCH',
+        headers: {
+            'Content-Type':     'application/json',
+            'Authorization':    `Bearer ${token}`,
+            'x-schema-version': '1.0.0',
+        },
+        body: JSON.stringify(body),
+    });
+
+    const resBody = await res.json();
+    if (!res.ok) throw new Error(resBody?.error?.message ?? 'Gagal memperbarui data');
+    return resBody.data;
+}
+
+// ─────────────────────────────────────────────────────────────
 // EDGE FUNCTIONS — bulk import
 // ─────────────────────────────────────────────────────────────
 

@@ -20,6 +20,7 @@ import {
     getSchoolConfig, upsertSchoolConfig, markSetupCompleted,
     getPrograms, getClasses, deleteBulk, changePassword,
     fetchAllRows,
+    updateProgram, updateClass, updateStudent, updateUserIdentifier,
     importPrograms, importClasses, importUsers, importStudents, importSchedules,
     importParents, importDudi,
     logout,
@@ -787,21 +788,31 @@ const STEP_LIST = {
         title: 'Program terdaftar',
         headers: ['Kode', 'Nama Program'],
         deleteTable: 'programs',
+        editFields: [
+            { key: 'code', label: 'Kode Program' },
+            { key: 'name', label: 'Nama Program' },
+        ],
+        save: (id, vals) => updateProgram(id, vals),
         fetch: async () => {
             const data = await getPrograms();
-            return data.map(p => ({ id: p.program_id, cells: [p.code, p.name] }));
+            return data.map(p => ({ id: p.program_id, cells: [p.code, p.name], editData: { code: p.code, name: p.name } }));
         },
     },
     4: {
         title: 'Kelas terdaftar',
         headers: ['Nama Kelas', 'Program', 'Tingkat'],
         deleteTable: 'classes',
+        editFields: [
+            { key: 'name', label: 'Nama Kelas' },
+        ],
+        save: (id, vals) => updateClass(id, vals),
         fetch: async () => {
             const [classes, programs] = await Promise.all([getClasses(), getPrograms()]);
             const pm = new Map(programs.map(p => [p.program_id, p.code]));
             return classes.map(c => ({
                 id: c.class_id,
                 cells: [c.name, pm.get(c.program_id) ?? '—', c.grade_level],
+                editData: { name: c.name },
             }));
         },
     },
@@ -809,14 +820,26 @@ const STEP_LIST = {
         title: 'Guru terdaftar',
         headers: ['Nama', 'NIP/NIK', 'Kode Guru'],
         deleteTable: 'users',
+        editFields: [
+            { key: 'full_name', label: 'Nama' },
+            { key: 'login_identifier', label: 'NIP/NIK' },
+            { key: 'teacher_code', label: 'Kode Guru' },
+        ],
+        save: (id, vals) => updateUserIdentifier(id, vals),
         fetch: () => fetchUsersByRole('GURU',
-            u => [u.full_name, u.login_identifier, u.teacher_code ?? '—']),
+            u => [u.full_name, u.login_identifier, u.teacher_code ?? '—'],
+            u => ({ full_name: u.full_name, login_identifier: u.login_identifier, teacher_code: u.teacher_code ?? '' })),
     },
     6: {
         title: 'Siswa terdaftar',
         headers: ['Nama', 'NIS'],
         deleteTable: 'students',
         nestedGroup: true,
+        editFields: [
+            { key: 'full_name', label: 'Nama' },
+            { key: 'nis', label: 'NIS' },
+        ],
+        save: (id, vals) => updateStudent(id, vals),
         fetch: async () => {
             const data = await fetchAllRows('students',
                 q => q.select(`student_id, full_name, nis,
@@ -828,6 +851,7 @@ const STEP_LIST = {
                 return {
                     id: s.student_id,
                     cells: [s.full_name, s.nis],
+                    editData: { full_name: s.full_name, nis: s.nis },
                     program: s.program?.name ?? 'Tanpa program',
                     kelas: enrollments[0]?.class?.name ?? 'Belum ada kelas',
                 };
@@ -839,6 +863,11 @@ const STEP_LIST = {
         headers: ['Nama', 'NIK', 'Anak'],
         deleteTable: 'users',
         nestedGroup: true,
+        editFields: [
+            { key: 'full_name', label: 'Nama' },
+            { key: 'login_identifier', label: 'NIK' },
+        ],
+        save: (id, vals) => updateUserIdentifier(id, vals),
         fetch: async () => {
             const parents = await fetchAllRows('users',
                 q => q.select('user_id, full_name, login_identifier')
@@ -870,6 +899,7 @@ const STEP_LIST = {
                 return {
                     id: u.user_id,
                     cells: [u.full_name, u.login_identifier, childNames],
+                    editData: { full_name: u.full_name, login_identifier: u.login_identifier },
                     program: children[0]?.program ?? 'Tanpa program',
                     kelas: children[0]?.kelas ?? 'Belum ada kelas',
                 };
@@ -880,12 +910,21 @@ const STEP_LIST = {
         title: 'DUDI terdaftar',
         headers: ['Nama Usaha', 'Penanggung Jawab'],
         deleteTable: 'users',
+        editFields: [
+            { key: 'dudi_org_name', label: 'Nama Usaha' },
+            { key: 'full_name', label: 'Penanggung Jawab' },
+        ],
+        save: (id, vals) => updateUserIdentifier(id, vals),
         fetch: async () => {
             const data = await fetchAllRows('users',
                 q => q.select('user_id, full_name, dudi_org_name')
                       .eq('role_type', 'DUDI')
                       .order('dudi_org_name'));
-            return data.map(u => ({ id: u.user_id, cells: [u.dudi_org_name ?? '—', u.full_name] }));
+            return data.map(u => ({
+                id: u.user_id,
+                cells: [u.dudi_org_name ?? '—', u.full_name],
+                editData: { dudi_org_name: u.dudi_org_name ?? '', full_name: u.full_name },
+            }));
         },
     },
     9: {
@@ -915,12 +954,16 @@ const STEP_LIST = {
 /** Ambil users untuk satu role lalu petakan tiap baris ke sel tabel.
  *  Mem-paginasi (fetchAllRows) agar daftar ribuan (mis. ORTU) tidak terpotong
  *  di 1000 dan jumlah yang tampil akurat. */
-async function fetchUsersByRole(roleType, toCells) {
+async function fetchUsersByRole(roleType, toCells, toEditData) {
     const data = await fetchAllRows('users',
         q => q.select('user_id, full_name, login_identifier, teacher_code, wali_kelas_class_id')
               .eq('role_type', roleType)
               .order('full_name'));
-    return data.map(u => ({ id: u.user_id, cells: toCells(u) }));
+    return data.map(u => {
+        const row = { id: u.user_id, cells: toCells(u) };
+        if (toEditData) row.editData = toEditData(u);
+        return row;
+    });
 }
 
 /** Muat ulang & render daftar data terkini untuk langkah aktif. */
@@ -959,14 +1002,16 @@ function renderDataTable(cfg, rows) {
         return heading + toolbar + renderNestedAccordion(cfg, rows) + allIdsJson;
     }
 
+    const hasEdit = !!cfg.editFields;
     const checkTh = canDelete
         ? '<th style="width:36px"><input type="checkbox" class="wz-check-all" title="Pilih semua" /></th>'
         : '';
-    const head = checkTh + cfg.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('');
+    const editTh = hasEdit ? '<th style="width:40px"></th>' : '';
+    const head = checkTh + cfg.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('') + editTh;
 
     const MAX_DISPLAY = 100;
     const displayRows = rows.slice(0, MAX_DISPLAY);
-    const body = displayRows.map(r => renderRow(r, canDelete)).join('');
+    const body = displayRows.map(r => renderRow(r, canDelete, hasEdit)).join('');
 
     const truncNote = rows.length > MAX_DISPLAY
         ? `<p class="hint" style="margin-top:8px">Menampilkan ${MAX_DISPLAY} dari ${rows.length} data. Hapus Semua tetap menghapus seluruh ${rows.length} data.</p>`
@@ -976,16 +1021,20 @@ function renderDataTable(cfg, rows) {
         `<table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` + truncNote + allIdsJson;
 }
 
-function renderRow(r, canDelete) {
+function renderRow(r, canDelete, hasEdit) {
     const checkTd = canDelete
         ? `<td><input type="checkbox" class="wz-check" value="${escapeAttr(r.id)}" /></td>`
         : '';
     const cells = r.cells.map(c => `<td>${escapeHtml(String(c ?? ''))}</td>`).join('');
-    return `<tr>${checkTd}${cells}</tr>`;
+    const editTd = hasEdit
+        ? `<td><button type="button" class="btn btn-secondary wz-edit-btn" data-id="${escapeAttr(r.id)}" data-edit='${escapeAttr(JSON.stringify(r.editData ?? {}))}' style="padding:2px 8px;font-size:12px">✎</button></td>`
+        : '';
+    return `<tr>${checkTd}${cells}${editTd}</tr>`;
 }
 
 function renderNestedAccordion(cfg, rows) {
     const canDelete = !!cfg.deleteTable;
+    const hasEdit = !!cfg.editFields;
 
     // Level 1: program, Level 2: kelas
     const programs = new Map();
@@ -1001,7 +1050,8 @@ function renderNestedAccordion(cfg, rows) {
     const checkTh = canDelete
         ? '<th style="width:36px"><input type="checkbox" class="wz-group-check-all" title="Pilih semua di kelas ini" /></th>'
         : '';
-    const head = checkTh + cfg.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('');
+    const editTh = hasEdit ? '<th style="width:40px"></th>' : '';
+    const head = checkTh + cfg.headers.map(h => `<th>${escapeHtml(h)}</th>`).join('') + editTh;
 
     const sortedProgs = [...programs.keys()].sort((a, b) => a.localeCompare(b, 'id'));
     return sortedProgs.map(prog => {
@@ -1012,7 +1062,7 @@ function renderNestedAccordion(cfg, rows) {
         const sortedClasses = [...classMap.keys()].sort((a, b) => a.localeCompare(b, 'id'));
         const classAccordions = sortedClasses.map(kls => {
             const classRows = classMap.get(kls);
-            const body = classRows.map(r => renderRow(r, canDelete)).join('');
+            const body = classRows.map(r => renderRow(r, canDelete, hasEdit)).join('');
             return `
                 <details class="wz-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
                     <summary class="wz-accordion-header">${escapeHtml(kls)} (${classRows.length})</summary>
@@ -1084,6 +1134,80 @@ function wireDataTable(step, cfg) {
         if (blockMsg) { showError(blockMsg); return; }
         if (!confirm(`Hapus SEMUA ${ids.length} data pada langkah ini? Tindakan ini tidak dapat dibatalkan.`)) return;
         runBulkDelete(step, cfg, ids, allBtn);
+    });
+
+    // Wire edit buttons
+    if (cfg.editFields) {
+        contentEl.querySelectorAll('.wz-edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset.id;
+                const editData = JSON.parse(btn.dataset.edit || '{}');
+                showEditModal(step, cfg, id, editData);
+            });
+        });
+    }
+}
+
+function showEditModal(step, cfg, id, editData) {
+    let existing = document.getElementById('wz-edit-modal');
+    if (existing) existing.remove();
+
+    const fields = cfg.editFields.map(f => `
+        <div class="field">
+            <label>${escapeHtml(f.label)}</label>
+            <input type="text" class="input wz-edit-field" data-key="${escapeAttr(f.key)}"
+                value="${escapeAttr(editData[f.key] ?? '')}" />
+        </div>
+    `).join('');
+
+    const modal = document.createElement('div');
+    modal.id = 'wz-edit-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:999';
+    modal.innerHTML = `
+        <div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:440px;box-shadow:var(--shadow-md)">
+            <h4 style="margin:0 0 16px">Edit Data</h4>
+            <div id="wz-edit-error" class="alert alert-danger" style="display:none"></div>
+            ${fields}
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+                <button type="button" class="btn btn-secondary" id="wz-edit-cancel">Batal</button>
+                <button type="button" class="btn btn-primary" id="wz-edit-save">Simpan</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById('wz-edit-cancel').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+    document.getElementById('wz-edit-save').addEventListener('click', async () => {
+        const saveBtn = document.getElementById('wz-edit-save');
+        const errEl   = document.getElementById('wz-edit-error');
+        errEl.style.display = 'none';
+
+        const vals = {};
+        modal.querySelectorAll('.wz-edit-field').forEach(input => {
+            vals[input.dataset.key] = input.value.trim();
+        });
+
+        const empty = cfg.editFields.filter(f => !vals[f.key]);
+        if (empty.length) {
+            errEl.textContent = `Field wajib kosong: ${empty.map(f => f.label).join(', ')}`;
+            errEl.style.display = 'block';
+            return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Menyimpan...';
+        try {
+            await cfg.save(id, vals);
+            modal.remove();
+            await refreshDataList(step);
+        } catch (err) {
+            errEl.textContent = err.message ?? 'Gagal menyimpan perubahan.';
+            errEl.style.display = 'block';
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Simpan';
+        }
     });
 }
 
