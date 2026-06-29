@@ -85,7 +85,7 @@ async function renderSetupPanel() {
         supabase.from('programs').select('*', { count: 'exact', head: true }),
         supabase.from('classes').select('*', { count: 'exact', head: true }),
         supabase.from('users').select('*', { count: 'exact', head: true }).not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")'),
-        supabase.from('students').select('*', { count: 'exact', head: true }),
+        supabase.from('students').select('*', { count: 'exact', head: true }).eq('student_status', 'AKTIF'),
         supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'ORTU'),
         supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'DUDI'),
         supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'STAKEHOLDER'),
@@ -184,13 +184,42 @@ async function renderStaffPanel() {
 }
 
 async function renderStudentsPanel() {
-    const data = await fetchAllRows('students', q => q.select('full_name, nis, student_status').order('full_name'));
+    const data = await fetchAllRows('students', q => q.select('full_name, nis, student_status, graduated_academic_year').order('full_name'));
+    const aktif = data.filter(s => s.student_status === 'AKTIF');
+    const alumni = data.filter(s => s.student_status === 'LULUS');
+
+    const alumniByYear = new Map();
+    for (const s of alumni) {
+        const year = s.graduated_academic_year ?? 'Tidak diketahui';
+        if (!alumniByYear.has(year)) alumniByYear.set(year, []);
+        alumniByYear.get(year).push(s);
+    }
+    const sortedYears = [...alumniByYear.keys()].sort().reverse();
+
+    const alumniHtml = sortedYears.map(year => {
+        const list = alumniByYear.get(year);
+        return `
+            <details style="margin-bottom:8px">
+                <summary style="cursor:pointer;font-weight:600">Lulusan ${year} (${list.length})</summary>
+                <table class="table" style="margin-top:4px">
+                    <thead><tr><th>Nama</th><th>NIS</th></tr></thead>
+                    <tbody>${list.map(s => `<tr><td>${s.full_name}</td><td>${s.nis}</td></tr>`).join('')}</tbody>
+                </table>
+            </details>`;
+    }).join('');
+
     panelContent.innerHTML = `
-        <h3>Siswa (${data.length})</h3>
+        <h3>Siswa Aktif (${aktif.length})</h3>
         <table class="table">
-            <thead><tr><th>Nama</th><th>NIS</th><th>Status</th></tr></thead>
-            <tbody>${data.map(s => `<tr><td>${s.full_name}</td><td>${s.nis}</td><td>${s.student_status}</td></tr>`).join('')}</tbody>
+            <thead><tr><th>Nama</th><th>NIS</th></tr></thead>
+            <tbody>${aktif.map(s => `<tr><td>${s.full_name}</td><td>${s.nis}</td></tr>`).join('')}</tbody>
         </table>
+        ${alumni.length > 0 ? `
+            <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
+            <h3>Alumni (${alumni.length})</h3>
+            <p class="hint" style="margin-bottom:12px">Siswa yang sudah lulus, dikelompokkan per tahun kelulusan.</p>
+            ${alumniHtml}
+        ` : ''}
     `;
 }
 

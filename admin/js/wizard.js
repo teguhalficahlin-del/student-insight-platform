@@ -1017,7 +1017,7 @@ const STEP_LIST = {
         },
     },
     6: {
-        title: 'Siswa terdaftar',
+        title: 'Siswa aktif',
         headers: ['Nama', 'NIS'],
         deleteTable: 'students',
         nestedGroup: true,
@@ -1027,22 +1027,27 @@ const STEP_LIST = {
         ],
         save: (id, vals) => updateStudent(id, vals),
         fetch: async () => {
+            const config = await getSchoolConfig();
+            const ay = config?.current_academic_year;
             const data = await fetchAllRows('students',
-                q => q.select(`student_id, full_name, nis,
+                q => q.select(`student_id, full_name, nis, student_status,
                     program:programs ( name ),
-                    enrollment:class_enrollments ( class:classes ( name ) )
-                `).order('full_name'));
+                    enrollment:class_enrollments ( class:classes ( name, academic_year ) )
+                `).eq('student_status', 'AKTIF')
+                  .order('full_name'));
             return data.map(s => {
                 const enrollments = Array.isArray(s.enrollment) ? s.enrollment : (s.enrollment ? [s.enrollment] : []);
+                const currentEnrollment = enrollments.find(e => e.class?.academic_year === ay) ?? enrollments[0];
                 return {
                     id: s.student_id,
                     cells: [s.full_name, s.nis],
                     editData: { full_name: s.full_name, nis: s.nis },
                     program: s.program?.name ?? 'Tanpa program',
-                    kelas: enrollments[0]?.class?.name ?? 'Belum ada kelas',
+                    kelas: currentEnrollment?.class?.name ?? 'Belum ada kelas',
                 };
             });
         },
+        afterRender: renderAlumniSection,
     },
     7: {
         title: 'Orang Tua terdaftar',
@@ -1175,6 +1180,61 @@ async function fetchUsersByRole(roleType, toCells, toEditData) {
     });
 }
 
+// ── Alumni Section (siswa LULUS) ─────────────────────────────
+
+async function renderAlumniSection(parentEl) {
+    const data = await fetchAllRows('students',
+        q => q.select(`student_id, full_name, nis, graduated_academic_year,
+            program:programs ( name )
+        `).eq('student_status', 'LULUS')
+          .order('full_name'));
+
+    if (data.length === 0) return;
+
+    const byYear = new Map();
+    for (const s of data) {
+        const year = s.graduated_academic_year ?? 'Tidak diketahui';
+        if (!byYear.has(year)) byYear.set(year, []);
+        byYear.get(year).push(s);
+    }
+
+    const sortedYears = [...byYear.keys()].sort().reverse();
+    const accordions = sortedYears.map(year => {
+        const students = byYear.get(year);
+        const byProgram = new Map();
+        for (const s of students) {
+            const prog = s.program?.name ?? 'Tanpa program';
+            if (!byProgram.has(prog)) byProgram.set(prog, []);
+            byProgram.get(prog).push(s);
+        }
+
+        const programSections = [...byProgram.entries()]
+            .sort(([a], [b]) => a.localeCompare(b, 'id'))
+            .map(([prog, list]) => `
+                <details class="wz-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
+                    <summary class="wz-accordion-header">${escapeHtml(prog)} (${list.length})</summary>
+                    <table class="table" style="margin-top:4px">
+                        <thead><tr><th>Nama</th><th>NIS</th></tr></thead>
+                        <tbody>${list.map(s => `<tr><td>${escapeHtml(s.full_name)}</td><td>${escapeHtml(s.nis ?? '—')}</td></tr>`).join('')}</tbody>
+                    </table>
+                </details>
+            `).join('');
+
+        return `
+            <details class="wz-accordion" style="margin-bottom:8px">
+                <summary class="wz-accordion-header">Lulusan ${escapeHtml(year)} (${students.length})</summary>
+                <div style="padding:4px 0">${programSections}</div>
+            </details>`;
+    }).join('');
+
+    parentEl.insertAdjacentHTML('beforeend', `
+        <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
+        <h4 style="margin:0 0 8px">Alumni (${data.length})</h4>
+        <p class="hint" style="margin-bottom:12px">Siswa yang sudah lulus, dikelompokkan per tahun kelulusan.</p>
+        ${accordions}
+    `);
+}
+
 /** Muat ulang & render daftar data terkini untuk langkah aktif. */
 async function refreshDataList(step) {
     const el = contentEl.querySelector('#wz-data-list');
@@ -1187,6 +1247,7 @@ async function refreshDataList(step) {
         const rows = await cfg.fetch();
         el.innerHTML = renderDataTable(cfg, rows);
         wireDataTable(step, cfg);
+        if (cfg.afterRender) await cfg.afterRender(el);
     } catch (err) {
         el.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal memuat data.')}</div>`;
     }
