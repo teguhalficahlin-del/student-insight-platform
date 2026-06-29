@@ -19,9 +19,7 @@ const PANEL_RENDERERS = {
     parents:            renderParentsPanel,
     dudi:               renderDudiPanel,
     stakeholders:       renderStakeholdersPanel,
-    'schedules-active': renderSchedulesPanel,
-    'schedule-builder': renderScheduleBuilderPanel,
-    substitutes:        renderSubstitutesPanel,
+    jadwal:             renderJadwalPanel,
     tutupsemester:      renderComingSoon,
     'academic-year':    renderComingSoon,
     export:             renderComingSoon,
@@ -79,7 +77,7 @@ async function renderSetupPanel() {
         { label: 'Orang Tua', count: ortuCount, panel: 'parents' },
         { label: 'DUDI', count: dudiCount, panel: 'dudi' },
         { label: 'Stakeholder', count: stakeholderCount, panel: 'stakeholders' },
-        { label: 'Jadwal', count: jadwalCount, panel: 'schedules-active' },
+        { label: 'Jadwal', count: jadwalCount, panel: 'jadwal' },
     ];
 
     panelContent.innerHTML = `
@@ -206,40 +204,12 @@ async function renderStakeholdersPanel() {
     `;
 }
 
-async function renderSchedulesPanel() {
-    const { data: schedules } = await supabase
-        .from('teaching_schedules')
-        .select('session_date, session_start, session_end, meeting_status')
-        .order('session_date', { ascending: false })
-        .limit(50);
+async function renderJadwalPanel() {
+    const { count } = await supabase.from('schedule_templates').select('*', { count: 'exact', head: true });
     panelContent.innerHTML = `
-        <h3>Jadwal Aktif (50 terbaru)</h3>
-        <table class="table">
-            <thead><tr><th>Tanggal</th><th>Jam</th><th>Status</th></tr></thead>
-            <tbody>${(schedules ?? []).map(s => `<tr><td>${s.session_date}</td><td>${s.session_start}–${s.session_end}</td><td>${s.meeting_status}</td></tr>`).join('')}</tbody>
-        </table>
-    `;
-}
-
-async function renderScheduleBuilderPanel() {
-    panelContent.innerHTML = `
-        <h3>Susun Jadwal</h3>
-        <p class="hint">Kembali ke <a href="wizard.html">Setup Wizard</a> langkah 10 untuk menyusun jadwal visual.</p>
-    `;
-}
-
-async function renderSubstitutesPanel() {
-    const { data: subs } = await supabase
-        .from('substitute_schedules')
-        .select('granted_at, sync_token_expires_at')
-        .order('granted_at', { ascending: false })
-        .limit(50);
-    panelContent.innerHTML = `
-        <h3>Guru Pengganti (${(subs ?? []).length})</h3>
-        <table class="table">
-            <thead><tr><th>Diberikan Pada</th><th>Berlaku Sampai</th></tr></thead>
-            <tbody>${(subs ?? []).map(s => `<tr><td>${s.granted_at}</td><td>${s.sync_token_expires_at}</td></tr>`).join('')}</tbody>
-        </table>
+        <h3>Jadwal</h3>
+        <p class="hint">Jadwal yang sudah disusun: <strong>${count ?? 0} slot</strong>.</p>
+        <p class="hint">Untuk menyusun atau mengubah jadwal, buka <a href="wizard.html">Setup Wizard</a> langkah 10.</p>
     `;
 }
 
