@@ -925,9 +925,10 @@ label {
     .wz-progress-mobile { display: flex; }
     .wz-content { padding: 16px 14px; }
     .wz-panel { padding: 18px 16px; }
-    .wz-header { padding: 12px 16px; }
-    .wz-header .wz-brand { font-size: 15px; }
+    .wz-header { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+    .wz-header .wz-brand { font-size: 14px; }
     .wz-header .wz-active-name { display: none; }
+    .wz-header-left { flex: 1 0 100%; }
     .wz-footer { padding: 12px 16px; }
     .wz-footer .btn { flex: 1; padding: 12px; }
     .wz-logout-btn { font-size: 12px; padding: 5px 10px; }
