@@ -141,8 +141,13 @@ ALTER TABLE schedule_templates      ENABLE ROW LEVEL SECURITY;
 CREATE POLICY rls_programs_read_all ON programs
     FOR SELECT USING (auth.uid() IS NOT NULL);
 
+-- ADMINISTRATIVE ditambahkan via migration
+-- 20260629130000_allow_administrative_write_programs.sql agar TU dapat
+-- menambah/menghapus program keahlian langsung dari wizard onboarding.
 CREATE POLICY rls_programs_write_admin ON programs
-    FOR ALL USING (fn_current_user_role() IN ('KEPSEK', 'KAPRODI'));
+    FOR ALL
+    USING      (fn_current_user_role() IN ('KEPSEK', 'KAPRODI', 'ADMINISTRATIVE'))
+    WITH CHECK (fn_current_user_role() IN ('KEPSEK', 'KAPRODI', 'ADMINISTRATIVE'));
 
 CREATE POLICY rls_subjects_read_all ON subjects
     FOR SELECT USING (auth.uid() IS NOT NULL);
