@@ -354,6 +354,20 @@ async function renderStakeholderStep() {
     nextBtn.disabled = false;
 }
 
+async function renderScheduleStep() {
+    contentEl.innerHTML = `
+        <div class="step-label">Langkah 10 dari ${TOTAL_STEPS}</div>
+        <h3>Jadwal</h3>
+        <p class="hint">Susun jadwal mengajar secara visual. Staf (langkah 5) dan kelas (langkah 4) harus sudah ada. Langkah ini bisa dilewati dan disusun nanti.</p>
+        <button type="button" class="btn btn-primary" id="wz-open-schedule" style="margin-bottom:16px;padding:10px 20px;font-size:14px">Susun Jadwal Visual</button>
+        <div id="wz-data-list"><p class="hint">Memuat data…</p></div>
+    `;
+
+    document.getElementById('wz-open-schedule').addEventListener('click', () => openScheduleBuilder());
+    await refreshDataList(10);
+    nextBtn.disabled = false;
+}
+
 const STEP_RENDERERS = {
     1: renderStep1,
     2: renderStep2,
@@ -364,7 +378,7 @@ const STEP_RENDERERS = {
     7: renderImportStep,
     8: renderImportStep,
     9: renderStakeholderStep,
-    10: renderImportStep,
+    10: renderScheduleStep,
     11: renderSummaryStep,
 };
 
@@ -658,26 +672,6 @@ const EXCEL_TEMPLATES = {
              ['•', '', 'DUDI login menggunakan nama usaha (bukan NIK). Sistem otomatis membuat kode login dari nama usaha.'],
              ['•', '', 'Upload ulang file yang sama akan memperbarui nama usaha dan penanggung jawab.'],
          ] },
-    10: { filename: 'template_jadwal.xlsx',
-          headers: ['nama_guru', 'nama_kelas', 'hari', 'start_time', 'end_time'],
-          exampleRows: [
-              ['Budi Santoso', 'X TKJ 1', 'Senin', '07:00', '08:30'],
-              ['Budi Santoso', 'X TKJ 1', 'Senin', '08:30', '10:00'],
-          ],
-          guide: [
-              ['PETUNJUK PENGISIAN — JADWAL MENGAJAR', '', ''],
-              ['', '', ''],
-              ['Kolom', 'Wajib?', 'Penjelasan'],
-              ['nama_guru', 'Wajib', 'Nama lengkap guru. Pastikan nama sudah ada di langkah Staf & Peran.'],
-              ['nama_kelas', 'Wajib', 'Nama kelas. Contoh: X TKJ 1. Pastikan sudah ada di langkah Kelas & Rombel.'],
-              ['hari', 'Wajib', 'Hari mengajar. Tulis salah satu: Senin, Selasa, Rabu, Kamis, Jumat, atau Sabtu.'],
-              ['start_time', 'Wajib', 'Jam mulai mengajar. Format: HH:MM. Contoh: 07:00, 08:30.'],
-              ['end_time', 'Wajib', 'Jam selesai mengajar. Format: HH:MM. Harus lebih besar dari jam mulai.'],
-              ['', '', ''],
-              ['PENTING', '', ''],
-              ['•', '', 'Satu guru tidak boleh mengajar di dua kelas berbeda pada jam yang sama. Jika bentrok, baris akan ditolak.'],
-              ['•', '', 'Selain impor file, Anda juga bisa menyusun jadwal secara visual dengan tombol "Susun Jadwal Visual" di halaman wizard.'],
-          ] },
 };
 
 /** HTML tombol unduh template untuk langkah tertentu (kosong jika tak ada config). */
@@ -745,8 +739,6 @@ const IMPORT_STEP_INFO = {
          desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
     8: { title: 'DUDI',
          desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
-    10: { title: 'Jadwal',
-          desc: 'Unduh template, isi data, lalu unggah. Atau gunakan Susun Jadwal Visual. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
 };
 
 /** Fungsi impor (edge function) untuk tiap langkah. Guru menyuntikkan
@@ -759,7 +751,6 @@ function importFnForStep(step) {
         case 6: return importStudents;
         case 7: return importParents;
         case 8: return importDudi;
-        case 10: return importSchedules;
         default: throw new Error(`Tidak ada importer untuk langkah ${step}`);
     }
 }
@@ -949,18 +940,6 @@ async function renderImportStep() {
     wireTemplateButton(step);
     wireImportBlock(step, { onDone: () => refreshDataList(step) });
     await refreshDataList(step);
-
-    // Step 10: tombol Susun Jadwal visual
-    if (step === 10) {
-        const schedBtn = document.createElement('button');
-        schedBtn.type = 'button';
-        schedBtn.className = 'btn btn-primary';
-        schedBtn.style.cssText = 'margin-bottom:16px;padding:10px 20px;font-size:14px';
-        schedBtn.textContent = '📋 Susun Jadwal Visual';
-        const dataList = contentEl.querySelector('#wz-data-list');
-        if (dataList) dataList.before(schedBtn);
-        schedBtn.addEventListener('click', () => openScheduleBuilder());
-    }
 
     // Langkah impor bersifat opsional — boleh dilanjutkan tanpa unggah.
     nextBtn.disabled = false;
