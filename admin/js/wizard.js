@@ -505,7 +505,7 @@ const EXCEL_TEMPLATES = {
 /** HTML tombol unduh template untuk langkah tertentu (kosong jika tak ada config). */
 function templateButtonHtml(step) {
     if (!EXCEL_TEMPLATES[step]) return '';
-    return `<button type="button" class="btn btn-secondary wz-template-btn" style="margin-bottom:16px">↓ Unduh Template Excel</button>`;
+    return `<button type="button" class="btn btn-primary wz-template-btn" style="margin-bottom:16px">↓ Unduh Template Excel</button>`;
 }
 
 /** Pasang handler unduh ke tombol template langkah aktif (jika ada). */
@@ -743,10 +743,10 @@ async function renderImportStep() {
         <div class="step-label">Langkah ${step} dari ${TOTAL_STEPS}</div>
         <h3>${info.title}</h3>
         <p class="hint">${info.desc}</p>
+        ${templateButtonHtml(step)}
         <div class="wz-data-list" id="wz-data-list"><p class="hint">Memuat data…</p></div>
         <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
         <h4 style="margin:0 0 8px">Impor dari file</h4>
-        ${templateButtonHtml(step)}
         ${importBlockHtml(step)}
     `;
     wireTemplateButton(step);
