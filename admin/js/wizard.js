@@ -282,7 +282,7 @@ async function renderStep3() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 3 dari ${TOTAL_STEPS}</div>
         <h3>Program Keahlian</h3>
-        <p class="hint">Impor program keahlian (jurusan) yang ada di sekolah Anda. Upload ulang file akan memperbarui nama program. Jika kode program salah ketik, hapus program tersebut terlebih dahulu lalu impor ulang.</p>
+        <p class="hint">Impor program keahlian (jurusan) yang ada di sekolah Anda. Lihat sheet PETUNJUK di template untuk panduan pengisian.</p>
         ${templateButtonHtml(3)}
         <div id="wz-data-list"></div>
 
@@ -723,17 +723,17 @@ function generateExcelTemplate(filename, headers, exampleRows, guide) {
 
 const IMPORT_STEP_INFO = {
     4: { title: 'Kelas & Rombel',
-         desc: 'Impor daftar kelas. Program keahlian (Langkah 3) dan tahun ajaran aktif harus sudah ada — tahun ajaran diambil otomatis dari konfigurasi sekolah. Upload ulang file akan memperbarui program dan tingkat kelas. Jika nama kelas salah ketik, hapus kelas tersebut terlebih dahulu lalu impor ulang.' },
+         desc: 'Impor daftar kelas. Program keahlian (langkah 3) harus sudah ada. Lihat sheet PETUNJUK di template untuk panduan pengisian.' },
     5: { title: 'Staf & Peran',
-         desc: 'Impor semua staf sekolah: guru, BK, wali kelas, kaprodi, kepsek, waka, dan stakeholder. NIP/NIK menjadi identitas login. Kolom opsional: wali_kelas (nama kelas), program_kaprodi (kode program), jabatan (BK, KEPSEK, WAKA_KURIKULUM, WAKA_KESISWAAN — bisa dikombinasi dengan koma). Upload ulang file akan memperbarui nama, kode, dan jabatan. Jika NIP salah ketik, hapus terlebih dahulu lalu impor ulang.' },
+         desc: 'Impor semua staf sekolah: guru, BK, wali kelas, kaprodi, kepsek, dan waka. NIP/NIK menjadi identitas login. Lihat sheet PETUNJUK di template untuk panduan pengisian kolom jabatan dan peran.' },
     6: { title: 'Siswa',
-         desc: 'Impor data siswa sekaligus penempatan kelas. Program & kelas harus sudah ada; tahun ajaran & semester diambil otomatis. Upload ulang file akan memperbarui nama, program, dan kelas. Jika NIS salah ketik, hapus siswa tersebut terlebih dahulu lalu impor ulang.' },
+         desc: 'Impor data siswa sekaligus penempatan kelas. Program (langkah 3) dan kelas (langkah 4) harus sudah ada. Lihat sheet PETUNJUK di template untuk panduan pengisian.' },
     7: { title: 'Orang Tua',
-         desc: 'Impor akun orang tua/wali dan tautkan ke siswanya (lewat NIS). Siswa (Langkah 6) harus sudah ada. Satu orang tua dengan beberapa anak: tulis NIK yang sama di beberapa baris dengan NIS berbeda. NIK menjadi identitas login orang tua di Portal Orang Tua — orang tua masuk dengan NIK + password untuk melihat data anak. Upload ulang file akan memperbarui nama. Jika NIK salah ketik, hapus orang tua tersebut terlebih dahulu lalu impor ulang.' },
+         desc: 'Impor akun orang tua/wali dan tautkan ke siswanya lewat NIS. Siswa (langkah 6) harus sudah ada. NIK menjadi identitas login di Portal Orang Tua. Lihat sheet PETUNJUK di template untuk panduan pengisian.' },
     8: { title: 'DUDI',
-         desc: 'Impor data DUDI (Dunia Usaha/Dunia Industri) mitra PKL. Akun DUDI login memakai nama usaha (bukan NIK). Upload ulang file akan memperbarui nama usaha dan penanggung jawab.' },
+         desc: 'Impor data DUDI (Dunia Usaha/Dunia Industri) mitra PKL. Login memakai nama usaha. Lihat sheet PETUNJUK di template untuk panduan pengisian.' },
     10: { title: 'Jadwal',
-          desc: 'Impor jadwal mengajar mingguan: nama guru + kelas + waktu (tanpa mata pelajaran). Guru & kelas harus sudah terdaftar. Satu guru tidak boleh mengajar di kelas berbeda pada waktu yang tumpang-tindih — baris yang bentrok akan ditolak & dilaporkan.' },
+          desc: 'Impor jadwal mengajar mingguan, atau gunakan Susun Jadwal Visual. Guru (langkah 5) dan kelas (langkah 4) harus sudah ada. Lihat sheet PETUNJUK di template untuk panduan pengisian.' },
 };
 
 /** Fungsi impor (edge function) untuk tiap langkah. Guru menyuntikkan
