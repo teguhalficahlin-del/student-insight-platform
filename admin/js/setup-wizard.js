@@ -471,15 +471,15 @@ function setupStep9() {
 function setupStep10() {
     const container = document.getElementById('import-dudi-mount');
     mountCsvImporter(container, {
-        columns: ['nama_usaha', 'nama_penanggung_jawab'],
+        columns: ['nama_usaha', 'nama_penanggung_jawab', 'kode_program'],
         onImport: importDudi,
         onDone: (result) => { if (result.success > 0) state.stepDone[10] = true; saveState(state); },
         template: {
             filename: 'template_dudi.csv',
-            columns: ['nama_usaha', 'nama_penanggung_jawab'],
+            columns: ['nama_usaha', 'nama_penanggung_jawab', 'kode_program'],
             exampleRows: [
-                ['PT Mitra Teknologi Nusantara', 'Hendra Setiawan'],
-                ['CV Karya Mandiri Elektronik', 'Yulia Permatasari'],
+                ['PT Mitra Teknologi Nusantara', 'Hendra Setiawan', 'TKJ'],
+                ['CV Karya Mandiri Elektronik', 'Yulia Permatasari', 'TKJ'],
             ],
         },
     });

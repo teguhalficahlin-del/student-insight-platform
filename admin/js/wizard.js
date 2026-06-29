@@ -656,10 +656,10 @@ const EXCEL_TEMPLATES = {
              ['•', '', 'Upload ulang file yang sama akan memperbarui nama. Jika NIK salah, hapus lalu impor ulang.'],
          ] },
     8: { filename: 'template_dudi.xlsx',
-         headers: ['nama_usaha', 'nama_penanggung_jawab'],
+         headers: ['nama_usaha', 'nama_penanggung_jawab', 'kode_program'],
          exampleRows: [
-             ['PT Mitra Teknologi Nusantara', 'Hendra Setiawan'],
-             ['CV Karya Mandiri Elektronik', 'Yulia Permatasari'],
+             ['PT Mitra Teknologi Nusantara', 'Hendra Setiawan', 'TKJ'],
+             ['CV Karya Mandiri Elektronik', 'Yulia Permatasari', 'TKJ'],
          ],
          guide: [
              ['PETUNJUK PENGISIAN — DUDI (Mitra PKL)', '', ''],
@@ -667,10 +667,12 @@ const EXCEL_TEMPLATES = {
              ['Kolom', 'Wajib?', 'Penjelasan'],
              ['nama_usaha', 'Wajib', 'Nama lengkap usaha atau perusahaan mitra PKL. Nama ini menjadi identitas login DUDI.'],
              ['nama_penanggung_jawab', 'Wajib', 'Nama penanggung jawab dari pihak usaha.'],
+             ['kode_program', 'Opsional', 'Kode program keahlian yang menaungi DUDI ini (mis. TKJ, AKL). Menautkan DUDI ke Kaprodi program tersebut sehingga muncul sebagai mitra di dashboard Kaprodi. Kosongkan bila DUDI lintas program.'],
              ['', '', ''],
              ['PENTING', '', ''],
              ['•', '', 'DUDI login menggunakan nama usaha (bukan NIK). Sistem otomatis membuat kode login dari nama usaha.'],
-             ['•', '', 'Upload ulang file yang sama akan memperbarui nama usaha dan penanggung jawab.'],
+             ['•', '', 'kode_program harus sudah ada di langkah Program Keahlian. Bila diisi tapi kode tidak dikenal, baris tersebut ditolak.'],
+             ['•', '', 'Upload ulang file yang sama akan memperbarui nama usaha, penanggung jawab, dan program.'],
          ] },
 };
 

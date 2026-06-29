@@ -467,6 +467,7 @@ const DEPENDENCY_LABELS = {
     substitute_schedules: 'jadwal guru pengganti',
     schedule_templates:   'template jadwal',
     pkl_placements:       'penempatan PKL',
+    pkl_attendance:       'absensi PKL',
 };
 
 // Dependency check HANYA untuk tabel yang TIDAK di-cascade otomatis.
@@ -490,6 +491,7 @@ const DEPENDENCY_MAP = {
         { table: 'observations',      column: 'student_id' },
         { table: 'cases',             column: 'student_id' },
         { table: 'pkl_placements',    column: 'student_id' },
+        { table: 'pkl_attendance',    column: 'student_id' },
     ],
     teaching_schedules: [
         { table: 'attendance',           column: 'schedule_id' },

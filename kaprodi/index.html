@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Masuk — Dashboard Kaprodi</title>
+    <link rel="stylesheet" href="css/kaprodi.css" />
+</head>
+<body>
+    <div class="login-screen">
+        <div class="login-card">
+            <div class="brand">
+                <div class="logo-dot">K</div>
+                <h2>Dashboard Kaprodi</h2>
+                <p>Masuk dengan NIP Anda</p>
+            </div>
+
+            <div id="login-error" class="alert alert-danger" style="display:none"></div>
+
+            <form id="login-form">
+                <div class="field">
+                    <label for="login-identifier">NIP</label>
+                    <input id="login-identifier" class="input" type="text" autocomplete="username" required />
+                </div>
+                <div class="field">
+                    <label for="login-password">Password</label>
+                    <input id="login-password" class="input" type="password" autocomplete="current-password" required />
+                </div>
+                <button id="login-submit" type="submit" class="btn btn-primary" style="width:100%">Masuk</button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="js/auth.js"></script>
+</body>
+</html>

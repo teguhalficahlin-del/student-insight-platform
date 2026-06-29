@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard Kaprodi</title>
+    <link rel="stylesheet" href="css/kaprodi.css" />
+</head>
+<body>
+    <div class="portal-shell">
+        <header class="topbar">
+            <div>
+                <h2 id="dash-title">Dashboard Kaprodi</h2>
+                <p>
+                    <span id="dash-user-name"></span>
+                    &middot; Program: <strong id="dash-program">—</strong>
+                </p>
+            </div>
+            <button id="logout-btn" type="button" class="btn btn-secondary">Keluar</button>
+        </header>
+
+        <div id="loading" class="loading">Memuat data...</div>
+
+        <div id="dash-body" style="display:none">
+            <!-- Ringkasan -->
+            <div class="summary-cards">
+                <div class="summary-card">
+                    <span class="count" id="stat-students">0</span>
+                    <span class="label">Siswa PKL</span>
+                </div>
+                <div class="summary-card card-hadir">
+                    <span class="count" id="stat-placed">0</span>
+                    <span class="label">Sudah Ditempatkan</span>
+                </div>
+                <div class="summary-card card-alpha">
+                    <span class="count" id="stat-unplaced">0</span>
+                    <span class="label">Belum Ditempatkan</span>
+                </div>
+            </div>
+
+            <!-- Daftar siswa PKL -->
+            <section class="section">
+                <h3>Siswa PKL</h3>
+                <div class="table-scroll">
+                    <table class="data-table" id="students-table">
+                        <thead>
+                            <tr>
+                                <th>Nama</th>
+                                <th>NIS</th>
+                                <th>DUDI / Tempat Usaha</th>
+                                <th>Periode PKL</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <p id="students-empty" class="hint" style="display:none">Belum ada siswa berstatus PKL di program ini.</p>
+            </section>
+
+            <!-- Mitra DUDI -->
+            <section class="section">
+                <h3>Mitra DUDI</h3>
+                <div class="table-scroll">
+                    <table class="data-table" id="dudi-table">
+                        <thead>
+                            <tr>
+                                <th>Nama Usaha</th>
+                                <th>Penanggung Jawab</th>
+                                <th>Kode Login</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <p id="dudi-empty" class="hint" style="display:none">Belum ada DUDI yang ditautkan ke program ini. Isi kolom <code>kode_program</code> saat impor DUDI untuk menautkannya.</p>
+            </section>
+
+            <!-- Rekap absensi -->
+            <section class="section">
+                <h3>Rekap Absensi PKL</h3>
+                <div class="filter-row">
+                    <div class="field" style="margin-bottom:0">
+                        <label for="filter-date-start">Dari</label>
+                        <input id="filter-date-start" class="input" type="date" />
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                        <label for="filter-date-end">Sampai</label>
+                        <input id="filter-date-end" class="input" type="date" />
+                    </div>
+                    <button id="btn-filter" class="btn btn-primary">Tampilkan</button>
+                </div>
+                <div class="table-scroll">
+                    <table class="data-table" id="recap-table">
+                        <thead>
+                            <tr>
+                                <th>Nama</th>
+                                <th>Hadir</th>
+                                <th>Sakit</th>
+                                <th>Izin</th>
+                                <th>Tidak Hadir</th>
+                                <th>% Hadir</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <p id="recap-empty" class="hint" style="display:none">Belum ada absensi PKL untuk periode ini.</p>
+            </section>
+
+            <!-- Observasi DUDI -->
+            <section class="section">
+                <h3>Catatan / Observasi dari DUDI</h3>
+                <div id="observations-list"></div>
+                <p id="observations-empty" class="hint" style="display:none">Belum ada observasi dari DUDI untuk siswa PKL program ini.</p>
+            </section>
+        </div>
+    </div>
+
+    <script type="module" src="js/dashboard.js"></script>
+</body>
+</html>

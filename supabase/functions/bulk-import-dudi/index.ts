@@ -9,7 +9,8 @@
  *
  * CONTRACT:
  *   POST /functions/v1/bulk-import-dudi
- *   Body: text/csv (raw CSV text), columns: nama_usaha, nama_penanggung_jawab
+ *   Body: text/csv (raw CSV text), columns: nama_usaha, nama_penanggung_jawab,
+ *         kode_program (opsional — menautkan DUDI ke program/Kaprodi).
  *   Caller must be authenticated as role_type = ADMINISTRATIVE.
  *
  * PROCESSING SEQUENCE:
@@ -54,6 +55,8 @@ interface ImportRow {
     rowNumber:              number;
     nama_usaha:             string;
     nama_penanggung_jawab:  string;
+    kode_program:           string;
+    programId?:             string | null;
     slug?:                  string;
     isNew?:                 boolean;
     userId?:                string;
@@ -103,6 +106,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             rowNumber:             i + 2,
             nama_usaha:            r.nama_usaha ?? '',
             nama_penanggung_jawab: r.nama_penanggung_jawab ?? '',
+            kode_program:          r.kode_program ?? '',
         }));
 
         // ── 6. Structural validation ────────────────────────────
@@ -117,6 +121,42 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 continue;
             }
             validRows.push(row);
+        }
+
+        // ── 6b. Resolve kode_program -> program_id (opsional) ───
+        // Menautkan DUDI ke program keahlian sehingga Kaprodi program
+        // tersebut mengenali mitra DUDI-nya secara spesifik. Kolom boleh
+        // kosong (program_id = NULL); bila diisi tapi tak dikenal -> error baris.
+        const wantedCodes = [...new Set(
+            validRows.map(r => r.kode_program.trim().toUpperCase()).filter(Boolean),
+        )];
+        const codeToProgramId = new Map<string, string>();
+        if (wantedCodes.length > 0) {
+            const { data: progRows, error: progErr } = await admin
+                .from('programs')
+                .select('program_id, code')
+                .in('code', wantedCodes);
+            if (progErr) {
+                console.error('[bulk-import-dudi] program lookup failed:', progErr);
+                return internalError(progErr);
+            }
+            for (const p of (progRows ?? []) as { program_id: string; code: string }[]) {
+                codeToProgramId.set(p.code.toUpperCase(), p.program_id);
+            }
+        }
+
+        const provisionRows: ImportRow[] = [];
+        for (const row of validRows) {
+            const code = row.kode_program.trim().toUpperCase();
+            if (!code) {
+                row.programId = null;
+            } else if (codeToProgramId.has(code)) {
+                row.programId = codeToProgramId.get(code)!;
+            } else {
+                errors.push({ row: row.rowNumber, message: `Kode program tidak dikenal: ${row.kode_program}` });
+                continue;
+            }
+            provisionRows.push(row);
         }
 
         // ── 7. Fetch existing DUDI login_identifiers (slugs) ───
@@ -136,7 +176,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const knownSlugs = new Set(slugToUserId.keys());
 
         // ── 8. Resolve slug per row (duplicate-check, then collision) ──
-        for (const row of validRows) {
+        for (const row of provisionRows) {
             const baseSlug = generateSlug(row.nama_usaha);
 
             if (knownSlugs.has(baseSlug)) {
@@ -160,7 +200,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         let updated = 0;
         const failedRowNumbers = new Set<number>();
 
-        for (const row of validRows) {
+        for (const row of provisionRows) {
             if (row.isNew) continue;
 
             const { error: updateErr } = await admin
@@ -168,6 +208,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 .update({
                     full_name:     row.nama_penanggung_jawab,
                     dudi_org_name: row.nama_usaha,
+                    program_id:    row.programId,
                 })
                 .eq('user_id', row.userId);
 
@@ -181,7 +222,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
         // ── 9b. Create accounts for new organizations ────────────
 
-        for (const row of validRows) {
+        for (const row of provisionRows) {
             if (!row.isNew) continue;
 
             const internalEmail = `${row.slug}@dudi.internal`;
@@ -209,6 +250,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     identifier_type:  'NAMA_USAHA',
                     role_type:        'DUDI',
                     dudi_org_name:    row.nama_usaha,
+                    program_id:       row.programId,
                 })
                 .select('user_id')
                 .single();
@@ -226,7 +268,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
         // ── 10. Response ─────────────────────────────────────────
         let success = 0;
-        for (const row of validRows) {
+        for (const row of provisionRows) {
             if (failedRowNumbers.has(row.rowNumber)) continue;
             if (row.isNew) success++;
         }
