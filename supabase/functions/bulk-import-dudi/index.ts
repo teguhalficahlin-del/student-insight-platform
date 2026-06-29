@@ -22,8 +22,8 @@
  *   7.  Fetch existing DUDI login_identifiers (slugs) for duplicate check
  *   8.  Per row, in order:
  *       a. base slug = generateSlug(nama_usaha)
- *       b. if base slug already exists in DB -> idempotent re-import:
- *          skip account creation, reuse existing user_id
+ *       b. if base slug already exists in DB -> re-import:
+ *          update full_name + dudi_org_name, reuse existing user_id
  *       c. else -> resolve collision against DB + slugs already
  *          assigned earlier in this same batch, get a unique slug
  *   9.  For each row needing a NEW account: create Auth user
@@ -33,8 +33,7 @@
  *
  * RESPONSE FIELD MEANING (mutually exclusive partition of `total`):
  *   success — row processed with a NEWLY created DUDI account
- *   skipped — row processed but DUDI account already existed (idempotent
- *             re-import of the same organization)
+ *   updated — row processed, existing DUDI account updated (nama/PJ)
  *   failed  — row could not be processed (validation/creation error)
  */
 
@@ -157,8 +156,30 @@ Deno.serve(async (req: Request): Promise<Response> => {
             row.isNew = true;
         }
 
-        // ── 9. Create accounts for new organizations ────────────
+        // ── 9a. Update existing organizations ────────────────────
+        let updated = 0;
         const failedRowNumbers = new Set<number>();
+
+        for (const row of validRows) {
+            if (row.isNew) continue;
+
+            const { error: updateErr } = await admin
+                .from('users')
+                .update({
+                    full_name:     row.nama_penanggung_jawab,
+                    dudi_org_name: row.nama_usaha,
+                })
+                .eq('user_id', row.userId);
+
+            if (updateErr) {
+                errors.push({ row: row.rowNumber, message: `Gagal memperbarui DUDI: ${updateErr.message}` });
+                failedRowNumbers.add(row.rowNumber);
+                continue;
+            }
+            updated++;
+        }
+
+        // ── 9b. Create accounts for new organizations ────────────
 
         for (const row of validRows) {
             if (!row.isNew) continue;
@@ -205,17 +226,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
         // ── 10. Response ─────────────────────────────────────────
         let success = 0;
-        let skipped = 0;
         for (const row of validRows) {
             if (failedRowNumbers.has(row.rowNumber)) continue;
-            if (row.isNew) success++; else skipped++;
+            if (row.isNew) success++;
         }
 
         return ok({
             total:   rows.length,
             success,
-            skipped,
-            failed:  rows.length - success - skipped,
+            updated,
+            failed:  rows.length - success - updated,
             errors,
         });
 
