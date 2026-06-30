@@ -1,0 +1,26 @@
+{
+  "name": "Admin Console — SMK Harapan Rokan",
+  "short_name": "Admin SMK HR",
+  "description": "Konsol admin untuk mengelola data sekolah, jadwal, dan pengguna.",
+  "start_url": "./dashboard.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#1a56db",
+  "background_color": "#f0f4ff",
+  "lang": "id",
+  "icons": [
+    {
+      "src": "../icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "../icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

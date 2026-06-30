@@ -1,0 +1,26 @@
+{
+  "name": "Portal Orang Tua — SMK Harapan Rokan",
+  "short_name": "Ortu SMK HR",
+  "description": "Portal orang tua untuk memantau kehadiran dan perkembangan siswa.",
+  "start_url": "./portal.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#1a56db",
+  "background_color": "#f0f4ff",
+  "lang": "id",
+  "icons": [
+    {
+      "src": "../icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "../icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <title>Tutup Tahun Ajaran — Admin Console</title>
     <link rel="stylesheet" href="css/admin.css" />
+  <link rel="manifest" href="manifest.json">
 </head>
 <body>
     <div class="wizard-shell">
@@ -105,5 +106,12 @@
     </div>
 
     <script type="module" src="js/tutup-tahun.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('../sw.js');
+    });
+  }
+</script>
 </body>
 </html>

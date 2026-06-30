@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Portal DUDI — Input Absensi & Observasi</title>
     <link rel="stylesheet" href="css/dudi.css" />
+  <link rel="manifest" href="manifest.json">
 </head>
 <body>
     <div class="portal-shell">
@@ -132,5 +133,12 @@
     </div>
 
     <script type="module" src="js/dashboard.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('../sw.js');
+    });
+  }
+</script>
 </body>
 </html>

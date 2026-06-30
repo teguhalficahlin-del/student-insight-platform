@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Portal Siswa — SMK Harapan Rokan</title>
     <link rel="stylesheet" href="css/student.css">
+  <link rel="manifest" href="manifest.json">
 </head>
 <body>
 <div class="login-page">
@@ -28,5 +29,12 @@
     </div>
 </div>
 <script type="module" src="js/auth.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('../sw.js');
+    });
+  }
+</script>
 </body>
 </html>

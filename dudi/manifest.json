@@ -1,0 +1,26 @@
+{
+  "name": "Portal DUDI — SMK Harapan Rokan",
+  "short_name": "DUDI SMK HR",
+  "description": "Portal mitra DUDI untuk memantau dan menilai siswa PKL.",
+  "start_url": "./dashboard.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#1a56db",
+  "background_color": "#f0f4ff",
+  "lang": "id",
+  "icons": [
+    {
+      "src": "../icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "../icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

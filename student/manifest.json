@@ -1,0 +1,26 @@
+{
+  "name": "Portal Siswa — SMK Harapan Rokan",
+  "short_name": "Siswa SMK HR",
+  "description": "Portal siswa untuk melihat jadwal, kehadiran, dan informasi sekolah.",
+  "start_url": "./dashboard.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#1a56db",
+  "background_color": "#f0f4ff",
+  "lang": "id",
+  "icons": [
+    {
+      "src": "../icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "../icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
