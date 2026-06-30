@@ -129,6 +129,36 @@ async function renderSetupPanel() {
 // READ-ONLY PANELS
 // ─────────────────────────────────────────────────────────────
 
+// Render daftar yang dikelompokkan per grup (mis. program keahlian) sebagai
+// accordion <details>. Pola sama dengan pengelompokan alumni per tahun di
+// panel Siswa/Orang Tua. Grup yang diawali "Tanpa" selalu ditaruh paling bawah.
+function renderGroupedTable(items, groupOf, headers, rowOf) {
+    const groups = new Map();
+    for (const it of items) {
+        const g = groupOf(it);
+        if (!groups.has(g)) groups.set(g, []);
+        groups.get(g).push(it);
+    }
+    const keys = [...groups.keys()].sort((a, b) => {
+        const na = /^Tanpa/i.test(a), nb = /^Tanpa/i.test(b);
+        if (na !== nb) return na ? 1 : -1;
+        return a.localeCompare(b, 'id');
+    });
+    if (keys.length === 0) return '<p class="hint">Belum ada data.</p>';
+    const head = headers.map(h => `<th>${h}</th>`).join('');
+    return keys.map(g => {
+        const list = groups.get(g);
+        return `
+            <details style="margin-bottom:8px">
+                <summary style="cursor:pointer;font-weight:600">${g} (${list.length})</summary>
+                <table class="table" style="margin-top:4px">
+                    <thead><tr>${head}</tr></thead>
+                    <tbody>${list.map(rowOf).join('')}</tbody>
+                </table>
+            </details>`;
+    }).join('');
+}
+
 async function renderProgramsPanel() {
     const programs = await getPrograms();
     panelContent.innerHTML = `
@@ -142,13 +172,16 @@ async function renderProgramsPanel() {
 
 async function renderClassesPanel() {
     const [classes, programs] = await Promise.all([getClasses(), getPrograms()]);
-    const pm = new Map(programs.map(p => [p.program_id, p.code]));
+    const pn = new Map(programs.map(p => [p.program_id, p.name]));
+    const grouped = renderGroupedTable(
+        classes,
+        c => pn.get(c.program_id) ?? 'Tanpa Program',
+        ['Nama Kelas', 'Tingkat'],
+        c => `<tr><td>${c.name}</td><td>${c.grade_level}</td></tr>`,
+    );
     panelContent.innerHTML = `
         <h3>Kelas & Rombel (${classes.length})</h3>
-        <table class="table">
-            <thead><tr><th>Nama Kelas</th><th>Program</th><th>Tingkat</th></tr></thead>
-            <tbody>${classes.map(c => `<tr><td>${c.name}</td><td>${pm.get(c.program_id) ?? '—'}</td><td>${c.grade_level}</td></tr>`).join('')}</tbody>
-        </table>
+        ${grouped}
     `;
 }
 
@@ -184,7 +217,7 @@ async function renderStaffPanel() {
 }
 
 async function renderStudentsPanel() {
-    const data = await fetchAllRows('students', q => q.select('full_name, nis, student_status, graduated_academic_year').order('full_name'));
+    const data = await fetchAllRows('students', q => q.select('full_name, nis, student_status, graduated_academic_year, program:programs ( name )').order('full_name'));
     const aktif = data.filter(s => s.student_status === 'AKTIF');
     const alumni = data.filter(s => s.student_status === 'LULUS');
 
@@ -208,12 +241,16 @@ async function renderStudentsPanel() {
             </details>`;
     }).join('');
 
+    const aktifHtml = renderGroupedTable(
+        aktif,
+        s => s.program?.name ?? 'Tanpa Program',
+        ['Nama', 'NIS'],
+        s => `<tr><td>${s.full_name}</td><td>${s.nis}</td></tr>`,
+    );
+
     panelContent.innerHTML = `
         <h3>Siswa Aktif (${aktif.length})</h3>
-        <table class="table">
-            <thead><tr><th>Nama</th><th>NIS</th></tr></thead>
-            <tbody>${aktif.map(s => `<tr><td>${s.full_name}</td><td>${s.nis}</td></tr>`).join('')}</tbody>
-        </table>
+        ${aktifHtml}
         ${alumni.length > 0 ? `
             <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
             <h3>Alumni (${alumni.length})</h3>
@@ -226,7 +263,7 @@ async function renderStudentsPanel() {
 async function renderParentsPanel() {
     const parents = await fetchAllRows('users', q => q.select('user_id, full_name, login_identifier').eq('role_type', 'ORTU').order('full_name'));
     const links = await fetchAllRows('student_parents',
-        q => q.select('parent_user_id, students ( full_name, student_status, graduated_academic_year )'));
+        q => q.select('parent_user_id, students ( full_name, student_status, graduated_academic_year, program:programs ( name ) )'));
 
     const childMap = new Map();
     for (const l of links) {
@@ -235,12 +272,15 @@ async function renderParentsPanel() {
     }
 
     const aktif = [];
+    const parentProgram = new Map();   // user_id -> nama program anak aktif
     const alumniByYear = new Map();
     for (const p of parents) {
         const children = childMap.get(p.user_id) ?? [];
         const hasAktif = children.some(c => c.student_status === 'AKTIF');
         if (hasAktif || children.length === 0) {
             aktif.push(p);
+            const refChild = children.find(c => c.student_status === 'AKTIF') ?? children[0];
+            parentProgram.set(p.user_id, refChild?.program?.name ?? 'Tanpa Program');
         } else {
             const year = [...children].map(c => c.graduated_academic_year).sort().reverse()[0] ?? 'Tidak diketahui';
             if (!alumniByYear.has(year)) alumniByYear.set(year, []);
@@ -261,13 +301,17 @@ async function renderParentsPanel() {
             </details>`;
     }).join('');
 
+    const aktifHtml = renderGroupedTable(
+        aktif,
+        u => parentProgram.get(u.user_id) ?? 'Tanpa Program',
+        ['Nama', 'NIK'],
+        u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td></tr>`,
+    );
+
     const alumniCount = parents.length - aktif.length;
     panelContent.innerHTML = `
         <h3>Orang Tua Siswa Aktif (${aktif.length})</h3>
-        <table class="table">
-            <thead><tr><th>Nama</th><th>NIK</th></tr></thead>
-            <tbody>${aktif.map(u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td></tr>`).join('')}</tbody>
-        </table>
+        ${aktifHtml}
         ${alumniCount > 0 ? `
             <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
             <h3>Orang Tua Alumni (${alumniCount})</h3>
@@ -278,13 +322,20 @@ async function renderParentsPanel() {
 }
 
 async function renderDudiPanel() {
-    const { data: users } = await supabase.from('users').select('full_name, dudi_org_name').eq('role_type', 'DUDI').order('dudi_org_name');
+    const [{ data: users }, programs] = await Promise.all([
+        supabase.from('users').select('full_name, dudi_org_name, program_id').eq('role_type', 'DUDI').order('dudi_org_name'),
+        getPrograms(),
+    ]);
+    const pn = new Map(programs.map(p => [p.program_id, p.name]));
+    const grouped = renderGroupedTable(
+        users ?? [],
+        u => u.program_id ? (pn.get(u.program_id) ?? '—') : 'Tanpa Program / Lintas Program',
+        ['Nama Usaha', 'Penanggung Jawab'],
+        u => `<tr><td>${u.dudi_org_name ?? '—'}</td><td>${u.full_name}</td></tr>`,
+    );
     panelContent.innerHTML = `
         <h3>DUDI (${(users ?? []).length})</h3>
-        <table class="table">
-            <thead><tr><th>Nama Usaha</th><th>Penanggung Jawab</th></tr></thead>
-            <tbody>${(users ?? []).map(u => `<tr><td>${u.dudi_org_name ?? '—'}</td><td>${u.full_name}</td></tr>`).join('')}</tbody>
-        </table>
+        ${grouped}
     `;
 }
 
