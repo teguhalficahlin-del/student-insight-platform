@@ -1116,19 +1116,25 @@ const STEP_LIST = {
         title: 'DUDI terdaftar',
         headers: ['Nama Usaha', 'Penanggung Jawab'],
         deleteTable: 'users',
+        groupBy: 'group',
         editFields: [
             { key: 'dudi_org_name', label: 'Nama Usaha' },
             { key: 'full_name', label: 'Penanggung Jawab' },
         ],
         save: (id, vals) => updateUserIdentifier(id, vals),
         fetch: async () => {
-            const data = await fetchAllRows('users',
-                q => q.select('user_id, full_name, dudi_org_name')
-                      .eq('role_type', 'DUDI')
-                      .order('dudi_org_name'));
+            const [data, programs] = await Promise.all([
+                fetchAllRows('users',
+                    q => q.select('user_id, full_name, dudi_org_name, program_id')
+                          .eq('role_type', 'DUDI')
+                          .order('dudi_org_name')),
+                getPrograms(),
+            ]);
+            const pn = new Map(programs.map(p => [p.program_id, p.name]));
             return data.map(u => ({
                 id: u.user_id,
                 cells: [u.dudi_org_name ?? '—', u.full_name],
+                group: u.program_id ? (pn.get(u.program_id) ?? '—') : 'Tanpa Program / Lintas Program',
                 editData: { dudi_org_name: u.dudi_org_name ?? '', full_name: u.full_name },
             }));
         },
