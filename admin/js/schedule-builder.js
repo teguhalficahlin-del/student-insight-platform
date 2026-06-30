@@ -426,6 +426,22 @@ async function save() {
     }
 }
 
+async function checkAllConflicts() {
+    const { data, error } = await supabase
+        .from('schedule_templates')
+        .select('day_of_week, start_time, teacher_id')
+        .eq('academic_year', state.academicYear)
+        .eq('semester', state.semester);
+    if (error) throw error;
+
+    const counts = new Map();
+    for (const t of data ?? []) {
+        const key = `${t.day_of_week}_${t.start_time}_${t.teacher_id}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return [...counts.values()].filter(n => n > 1).length;
+}
+
 async function applyTemplates() {
     if (state.dirty) {
         if (!confirm('Ada perubahan yang belum disimpan. Simpan dulu sebelum menerapkan?')) return;
@@ -436,10 +452,23 @@ async function applyTemplates() {
     const applyBtn = overlayEl.querySelector('#sched-apply');
     const statusEl = overlayEl.querySelector('#sched-status');
     applyBtn.disabled = true;
-    applyBtn.textContent = 'Menerapkan...';
+    applyBtn.textContent = 'Memeriksa bentrok...';
     statusEl.textContent = '';
 
     try {
+        const conflictCount = await checkAllConflicts();
+        if (conflictCount > 0) {
+            statusEl.textContent =
+                `✗ Tidak dapat diterapkan — ditemukan ${conflictCount} bentrok jadwal ` +
+                `(guru sama, jam sama, kelas berbeda). Perbaiki semua bentrok terlebih dahulu.`;
+            statusEl.style.color = 'var(--color-danger)';
+            applyBtn.disabled = false;
+            applyBtn.textContent = 'Terapkan Jadwal';
+            applyBtn.style.background = '';
+            return;
+        }
+
+        applyBtn.textContent = 'Menerapkan...';
         const result = await applyScheduleTemplates();
         statusEl.textContent =
             `✓ Jadwal diterapkan — ${result.templates_found} template, ` +
