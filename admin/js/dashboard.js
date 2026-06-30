@@ -17,6 +17,7 @@ const PANEL_RENDERERS = {
     classes:            renderClassesPanel,
     staff:              renderStaffPanel,
     students:           renderStudentsPanel,
+    alumni:             renderAlumniPanel,
     parents:            renderParentsPanel,
     dudi:               renderDudiPanel,
     stakeholders:       renderStakeholdersPanel,
@@ -159,6 +160,30 @@ function renderGroupedTable(items, groupOf, headers, rowOf) {
     }).join('');
 }
 
+// Render daftar alumni sebagai accordion per tahun kelulusan (terbaru di atas).
+function renderYearGrouped(items, yearOf, headers, rowOf) {
+    const byYear = new Map();
+    for (const it of items) {
+        const y = yearOf(it);
+        if (!byYear.has(y)) byYear.set(y, []);
+        byYear.get(y).push(it);
+    }
+    const years = [...byYear.keys()].sort().reverse();
+    if (years.length === 0) return '<p class="hint">Belum ada data.</p>';
+    const head = headers.map(h => `<th>${h}</th>`).join('');
+    return years.map(year => {
+        const list = byYear.get(year);
+        return `
+            <details style="margin-bottom:8px">
+                <summary style="cursor:pointer;font-weight:600">Lulusan ${year} (${list.length})</summary>
+                <table class="table" style="margin-top:4px">
+                    <thead><tr>${head}</tr></thead>
+                    <tbody>${list.map(rowOf).join('')}</tbody>
+                </table>
+            </details>`;
+    }).join('');
+}
+
 async function renderProgramsPanel() {
     const programs = await getPrograms();
     panelContent.innerHTML = `
@@ -217,29 +242,10 @@ async function renderStaffPanel() {
 }
 
 async function renderStudentsPanel() {
-    const data = await fetchAllRows('students', q => q.select('full_name, nis, student_status, graduated_academic_year, program:programs ( name )').order('full_name'));
-    const aktif = data.filter(s => s.student_status === 'AKTIF');
-    const alumni = data.filter(s => s.student_status === 'LULUS');
-
-    const alumniByYear = new Map();
-    for (const s of alumni) {
-        const year = s.graduated_academic_year ?? 'Tidak diketahui';
-        if (!alumniByYear.has(year)) alumniByYear.set(year, []);
-        alumniByYear.get(year).push(s);
-    }
-    const sortedYears = [...alumniByYear.keys()].sort().reverse();
-
-    const alumniHtml = sortedYears.map(year => {
-        const list = alumniByYear.get(year);
-        return `
-            <details style="margin-bottom:8px">
-                <summary style="cursor:pointer;font-weight:600">Lulusan ${year} (${list.length})</summary>
-                <table class="table" style="margin-top:4px">
-                    <thead><tr><th>Nama</th><th>NIS</th></tr></thead>
-                    <tbody>${list.map(s => `<tr><td>${s.full_name}</td><td>${s.nis}</td></tr>`).join('')}</tbody>
-                </table>
-            </details>`;
-    }).join('');
+    const aktif = await fetchAllRows('students',
+        q => q.select('full_name, nis, student_status, program:programs ( name )')
+              .eq('student_status', 'AKTIF')
+              .order('full_name'));
 
     const aktifHtml = renderGroupedTable(
         aktif,
@@ -250,20 +256,15 @@ async function renderStudentsPanel() {
 
     panelContent.innerHTML = `
         <h3>Siswa Aktif (${aktif.length})</h3>
+        <p class="hint" style="margin-bottom:12px">Alumni ada di menu <strong>Alumni</strong>.</p>
         ${aktifHtml}
-        ${alumni.length > 0 ? `
-            <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
-            <h3>Alumni (${alumni.length})</h3>
-            <p class="hint" style="margin-bottom:12px">Siswa yang sudah lulus, dikelompokkan per tahun kelulusan.</p>
-            ${alumniHtml}
-        ` : ''}
     `;
 }
 
 async function renderParentsPanel() {
     const parents = await fetchAllRows('users', q => q.select('user_id, full_name, login_identifier').eq('role_type', 'ORTU').order('full_name'));
     const links = await fetchAllRows('student_parents',
-        q => q.select('parent_user_id, students ( full_name, student_status, graduated_academic_year, program:programs ( name ) )'));
+        q => q.select('parent_user_id, students ( student_status, program:programs ( name ) )'));
 
     const childMap = new Map();
     for (const l of links) {
@@ -273,7 +274,6 @@ async function renderParentsPanel() {
 
     const aktif = [];
     const parentProgram = new Map();   // user_id -> nama program anak aktif
-    const alumniByYear = new Map();
     for (const p of parents) {
         const children = childMap.get(p.user_id) ?? [];
         const hasAktif = children.some(c => c.student_status === 'AKTIF');
@@ -281,25 +281,8 @@ async function renderParentsPanel() {
             aktif.push(p);
             const refChild = children.find(c => c.student_status === 'AKTIF') ?? children[0];
             parentProgram.set(p.user_id, refChild?.program?.name ?? 'Tanpa Program');
-        } else {
-            const year = [...children].map(c => c.graduated_academic_year).sort().reverse()[0] ?? 'Tidak diketahui';
-            if (!alumniByYear.has(year)) alumniByYear.set(year, []);
-            alumniByYear.get(year).push(p);
         }
     }
-
-    const sortedYears = [...alumniByYear.keys()].sort().reverse();
-    const alumniHtml = sortedYears.map(year => {
-        const list = alumniByYear.get(year);
-        return `
-            <details style="margin-bottom:8px">
-                <summary style="cursor:pointer;font-weight:600">Lulusan ${year} (${list.length})</summary>
-                <table class="table" style="margin-top:4px">
-                    <thead><tr><th>Nama</th><th>NIK</th></tr></thead>
-                    <tbody>${list.map(u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td></tr>`).join('')}</tbody>
-                </table>
-            </details>`;
-    }).join('');
 
     const aktifHtml = renderGroupedTable(
         aktif,
@@ -308,16 +291,62 @@ async function renderParentsPanel() {
         u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td></tr>`,
     );
 
-    const alumniCount = parents.length - aktif.length;
     panelContent.innerHTML = `
         <h3>Orang Tua Siswa Aktif (${aktif.length})</h3>
+        <p class="hint" style="margin-bottom:12px">Orang tua alumni ada di menu <strong>Alumni</strong>.</p>
         ${aktifHtml}
-        ${alumniCount > 0 ? `
-            <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
-            <h3>Orang Tua Alumni (${alumniCount})</h3>
-            <p class="hint" style="margin-bottom:12px">Orang tua yang semua anaknya sudah lulus, dikelompokkan per tahun kelulusan terakhir.</p>
-            ${alumniHtml}
-        ` : ''}
+    `;
+}
+
+// Menu khusus Alumni: siswa lulus + orang tua yang semua anaknya sudah lulus,
+// keduanya dikelompokkan per tahun kelulusan.
+async function renderAlumniPanel() {
+    const siswaAlumni = await fetchAllRows('students',
+        q => q.select('full_name, nis, graduated_academic_year')
+              .eq('student_status', 'LULUS')
+              .order('full_name'));
+
+    const parents = await fetchAllRows('users',
+        q => q.select('user_id, full_name, login_identifier').eq('role_type', 'ORTU').order('full_name'));
+    const links = await fetchAllRows('student_parents',
+        q => q.select('parent_user_id, students ( student_status, graduated_academic_year )'));
+
+    const childMap = new Map();
+    for (const l of links) {
+        if (!childMap.has(l.parent_user_id)) childMap.set(l.parent_user_id, []);
+        if (l.students) childMap.get(l.parent_user_id).push(l.students);
+    }
+
+    const ortuAlumni = [];
+    for (const p of parents) {
+        const children = childMap.get(p.user_id) ?? [];
+        if (children.length === 0) continue;                       // tanpa anak → bukan alumni
+        if (children.some(c => c.student_status === 'AKTIF')) continue; // masih punya anak aktif
+        const year = children.map(c => c.graduated_academic_year).filter(Boolean).sort().reverse()[0] ?? 'Tidak diketahui';
+        ortuAlumni.push({ ...p, _year: year });
+    }
+
+    const siswaHtml = renderYearGrouped(
+        siswaAlumni,
+        s => s.graduated_academic_year ?? 'Tidak diketahui',
+        ['Nama', 'NIS'],
+        s => `<tr><td>${s.full_name}</td><td>${s.nis}</td></tr>`,
+    );
+    const ortuHtml = renderYearGrouped(
+        ortuAlumni,
+        u => u._year,
+        ['Nama', 'NIK'],
+        u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td></tr>`,
+    );
+
+    panelContent.innerHTML = `
+        <h3>Siswa Alumni (${siswaAlumni.length})</h3>
+        <p class="hint" style="margin-bottom:12px">Siswa yang sudah lulus, dikelompokkan per tahun kelulusan.</p>
+        ${siswaHtml}
+        <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
+        <h3>Orang Tua Alumni (${ortuAlumni.length})</h3>
+        <p class="hint" style="margin-bottom:12px">Orang tua yang semua anaknya sudah lulus, dikelompokkan per tahun kelulusan terakhir.</p>
+        ${ortuHtml}
     `;
 }
 
