@@ -8,7 +8,7 @@ import {
     getJabatan, jabatanLabel, getSchoolConfig,
     getMyScheduleForDate, getEnrolledStudents,
     getAttendanceForSession, upsertAttendance,
-    getMyStudents, insertObservation,
+    getMyStudents, searchStudents, insertObservation,
     getWaliKelasInfo, getWaliAttendanceSummary,
     getProgram, fetchPklStudents, fetchNonPklStudents,
     fetchDudiPartners, fetchPklAttendance, fetchDudiObservations,
@@ -270,27 +270,53 @@ async function initObsForm() {
     const submitBtn  = document.getElementById('obs-submit');
     const statusEl   = document.getElementById('obs-status');
 
-    searchEl.addEventListener('input', () => {
-        const q = searchEl.value.toLowerCase();
-        if (q.length < 2) { listEl.style.display = 'none'; return; }
-        const hits = myStudents.filter(s =>
-            s.full_name.toLowerCase().includes(q) || s.nis?.includes(q)
-        ).slice(0, 10);
+    // Observer berjangkauan luas (BK/Kaprodi/Waka Kesiswaan/Kepsek) bisa
+    // mengamati siswa di luar kelas yang ia ajar — bahkan saat tak mengajar
+    // sama sekali (myStudents kosong). Untuk mereka, lengkapi daftar dengan
+    // pencarian sisi-server (cakupan dibatasi RLS).
+    const isBroadObserver = jabatan.some(j => ['bk', 'kaprodi', 'waka_kesiswaan', 'kepsek'].includes(j));
+
+    function renderHits(hits) {
         if (hits.length === 0) { listEl.style.display = 'none'; return; }
         listEl.innerHTML = hits.map(s =>
             `<div class="obs-list-item" data-id="${s.student_id}" data-name="${esc(s.full_name)}"
                 style="padding:10px 14px; cursor:pointer; font-size:13px; border-bottom:1px solid var(--color-border)">
-                ${esc(s.full_name)} <span style="color:var(--color-text-muted)">${esc(s.nis ?? '')} · ${esc(s.class_name ?? '')}</span>
+                ${esc(s.full_name)} <span style="color:var(--color-text-muted)">${esc(s.nis ?? '')}${s.class_name ? ' · ' + esc(s.class_name) : ''}</span>
             </div>`
         ).join('');
         listEl.style.display = 'block';
         listEl.querySelectorAll('.obs-list-item').forEach(item => {
             item.addEventListener('mousedown', () => {
-                hiddenEl.value      = item.dataset.id;
-                searchEl.value      = item.dataset.name;
+                hiddenEl.value       = item.dataset.id;
+                searchEl.value       = item.dataset.name;
                 listEl.style.display = 'none';
             });
         });
+    }
+
+    let searchSeq = 0;
+    searchEl.addEventListener('input', async () => {
+        const raw = searchEl.value.trim();
+        const q   = raw.toLowerCase();
+        if (q.length < 2) { listEl.style.display = 'none'; return; }
+
+        // Hasil lokal (siswa yang diajar) lebih dulu.
+        const local = myStudents.filter(s =>
+            s.full_name.toLowerCase().includes(q) || s.nis?.includes(q)
+        );
+
+        if (!isBroadObserver) { renderHits(local.slice(0, 10)); return; }
+
+        // Broad observer: gabung lokal + hasil server (dedup by student_id).
+        const seq = ++searchSeq;
+        let merged = local;
+        try {
+            const remote = await searchStudents(raw);
+            if (seq !== searchSeq) return;   // input sudah berubah, abaikan
+            const seen = new Set(local.map(s => s.student_id));
+            merged = [...local, ...remote.filter(s => !seen.has(s.student_id))];
+        } catch (_) { /* fallback ke lokal saja */ }
+        renderHits(merged.slice(0, 12));
     });
     document.addEventListener('click', (e) => {
         if (!listEl.contains(e.target) && e.target !== searchEl) listEl.style.display = 'none';

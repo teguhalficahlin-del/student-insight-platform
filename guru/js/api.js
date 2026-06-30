@@ -176,6 +176,27 @@ export async function getMyStudents(userId, academicYear, semester) {
 }
 
 /**
+ * Pencarian siswa sisi-server untuk observer berjangkauan luas
+ * (BK / Kaprodi / Waka Kesiswaan / Kepsek) yang mungkin tidak mengajar
+ * sehingga getMyStudents (berbasis teaching_assignments) kosong.
+ * Cakupan hasil dibatasi RLS sesuai peran pemanggil.
+ */
+export async function searchStudents(query) {
+    const q = (query ?? '').trim();
+    if (q.length < 2) return [];
+    const term = `%${q}%`;
+    const { data, error } = await supabase
+        .from('students')
+        .select('student_id, nis, full_name, student_status')
+        .or(`full_name.ilike.${term},nis.ilike.${term}`)
+        .in('student_status', ['AKTIF', 'PKL'])
+        .order('full_name')
+        .limit(15);
+    if (error) throw error;
+    return (data ?? []).map(s => ({ ...s, class_name: '' }));
+}
+
+/**
  * Simpan observasi baru.
  */
 export async function insertObservation({ authorId, studentId, dimension, sentiment, visibility, content }) {
