@@ -446,12 +446,15 @@ async function applyTemplates() {
             `${result.assignments_upserted} penugasan, ` +
             `${result.schedules_generated} sesi dibuat.`;
         statusEl.style.color = 'var(--color-success)';
+        applyBtn.disabled = false;
+        applyBtn.textContent = '✓ Jadwal Diterapkan';
+        applyBtn.style.background = 'var(--color-success)';
     } catch (err) {
         statusEl.textContent = `✗ Gagal: ${err.message}`;
         statusEl.style.color = 'var(--color-danger)';
-    } finally {
         applyBtn.disabled = false;
         applyBtn.textContent = 'Terapkan Jadwal';
+        applyBtn.style.background = '';
     }
 }
 
