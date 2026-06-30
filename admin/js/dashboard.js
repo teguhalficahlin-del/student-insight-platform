@@ -268,16 +268,15 @@ function buildJabatan(u) {
 }
 
 async function renderStaffPanel() {
-    const { data: users } = await supabase
-        .from('users')
-        .select('full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, wali_kelas_class_id, kaprodi_program_id')
-        .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")')
-        .order('full_name');
+    const users = await fetchAllRows('users',
+        q => q.select('full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, wali_kelas_class_id, kaprodi_program_id')
+              .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")')
+              .order('full_name'));
     panelContent.innerHTML = `
-        <h3>Staf & Peran (${(users ?? []).length})</h3>
+        <h3>Staf & Peran (${users.length})</h3>
         <table class="table">
             <thead><tr><th>Nama</th><th>NIP/NIK</th><th>Kode</th><th>Jabatan</th></tr></thead>
-            <tbody>${(users ?? []).map(u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td><td>${u.teacher_code ?? '—'}</td><td>${buildJabatan(u)}</td></tr>`).join('')}</tbody>
+            <tbody>${users.map(u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td><td>${u.teacher_code ?? '—'}</td><td>${buildJabatan(u)}</td></tr>`).join('')}</tbody>
         </table>
     `;
 }

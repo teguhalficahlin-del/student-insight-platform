@@ -480,10 +480,14 @@ async function applyTemplates() {
 
         applyBtn.textContent = 'Menerapkan...';
         const result = await applyScheduleTemplates();
+        const newSessions = result.schedules_generated ?? 0;
+        const totalSessions = result.schedules_total ?? result.schedules_generated ?? 0;
+        const sessionInfo = newSessions < totalSessions
+            ? `${newSessions} sesi baru (${totalSessions} total, ${totalSessions - newSessions} sudah ada)`
+            : `${newSessions} sesi dibuat`;
         statusEl.textContent =
             `✓ Jadwal diterapkan — ${result.templates_found} template, ` +
-            `${result.assignments_upserted} penugasan, ` +
-            `${result.schedules_generated} sesi dibuat.`;
+            `${result.assignments_upserted} penugasan, ${sessionInfo}.`;
         statusEl.style.color = 'var(--color-success)';
         applyBtn.disabled = false;
         applyBtn.textContent = '✓ Jadwal Diterapkan';

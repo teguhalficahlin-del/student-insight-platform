@@ -1552,7 +1552,7 @@ function wireDataTable(step, cfg) {
     selBtn.addEventListener('click', async () => {
         const ids = selectedIds();
         if (!ids.length) return;
-        const blockMsg = await checkDeleteOrder(step);
+        const blockMsg = await checkDeleteOrder(step, ids);
         if (blockMsg) { showError(blockMsg); return; }
         if (!confirm(`Hapus ${ids.length} data terpilih? Tindakan ini tidak dapat dibatalkan.`)) return;
         runBulkDelete(step, cfg, ids, selBtn);
@@ -1562,7 +1562,7 @@ function wireDataTable(step, cfg) {
         const allIdsEl = contentEl.querySelector('.wz-all-ids');
         const ids = allIdsEl ? JSON.parse(allIdsEl.textContent) : checks.map(c => c.value);
         if (!ids.length) return;
-        const blockMsg = await checkDeleteOrder(step);
+        const blockMsg = await checkDeleteOrder(step, ids);
         if (blockMsg) { showError(blockMsg); return; }
         if (!confirm(`Hapus SEMUA ${ids.length} data pada langkah ini? Tindakan ini tidak dapat dibatalkan.`)) return;
         runBulkDelete(step, cfg, ids, allBtn);
@@ -1655,9 +1655,9 @@ function showEditModal(step, cfg, id, editData) {
 // schedule_templates) di-cascade otomatis — tidak perlu dicek di sini.
 // Yang dicek: data transaksional/operasional yang harus dihapus manual.
 const DELETE_ORDER_CHECKS = {
-    3: [ // Program: kelas & siswa harus kosong dulu
-        { label: 'Kelas (langkah 4)',  table: 'classes',  query: q => q.select('class_id', { count: 'exact', head: true }) },
-        { label: 'Siswa (langkah 6)',  table: 'students', query: q => q.select('student_id', { count: 'exact', head: true }) },
+    3: [ // Program: kelas & siswa harus kosong dulu (filter by program_id)
+        { label: 'Kelas (langkah 4)',  table: 'classes',  query: (q, ids) => q.select('class_id', { count: 'exact', head: true }).in('program_id', ids) },
+        { label: 'Siswa (langkah 6)',  table: 'students', query: (q, ids) => q.select('student_id', { count: 'exact', head: true }).in('program_id', ids) },
     ],
     4: [ // Kelas: jadwal & siswa harus kosong
         { label: 'Jadwal (langkah 10)', table: 'teaching_schedules', query: q => q.select('schedule_id', { count: 'exact', head: true }) },
@@ -1683,12 +1683,12 @@ const DELETE_ORDER_CHECKS = {
     ],
 };
 
-async function checkDeleteOrder(step) {
+async function checkDeleteOrder(step, ids = []) {
     const checks = DELETE_ORDER_CHECKS[step];
     if (!checks) return null;
 
     const results = await Promise.all(
-        checks.map(c => c.query(supabase.from(c.table)))
+        checks.map(c => c.query(supabase.from(c.table), ids))
     );
 
     const blockers = [];
@@ -1774,7 +1774,6 @@ function showPasswordModal(isFirstTime) {
         try {
             await changePassword(newPass);
             modal.style.display = 'none';
-            submitBtn.removeEventListener('click', handler);
             if (isFirstTime) await goToStep(1);
         } catch (err) {
             modalErrEl.textContent = err.message ?? 'Gagal menyimpan password. Coba lagi.';
@@ -1784,7 +1783,8 @@ function showPasswordModal(isFirstTime) {
         }
     };
 
-    submitBtn.addEventListener('click', handler);
+    // Assign (not add) so re-opening the modal replaces the old handler instead of stacking
+    submitBtn.onclick = handler;
 }
 
 // Guard: peringatan saat TU menutup/refresh halaman di tengah wizard

@@ -173,27 +173,38 @@ Deno.serve(async (req: Request): Promise<Response> => {
             }
         }
 
-        let schedulesGenerated = 0;
+        // Count existing schedules before upsert so we can report truly new ones
+        const { count: existingCount } = await admin
+            .from('teaching_schedules')
+            .select('schedule_id', { count: 'exact', head: true })
+            .eq('academic_year', academicYear)
+            .eq('semester', semester);
+
         if (scheduleRows.length > 0) {
             const CHUNK = 500;
             for (let i = 0; i < scheduleRows.length; i += CHUNK) {
-                const { data: inserted, error: genErr } = await admin
+                const { error: genErr } = await admin
                     .from('teaching_schedules')
                     .upsert(scheduleRows.slice(i, i + CHUNK), {
                         onConflict:       'class_id,scheduled_teacher_id,session_date,session_start',
                         ignoreDuplicates: true,
-                    })
-                    .select('schedule_id');
+                    });
 
                 if (genErr) return internalError(genErr);
-                schedulesGenerated += inserted?.length ?? 0;
             }
         }
+
+        const { count: finalCount } = await admin
+            .from('teaching_schedules')
+            .select('schedule_id', { count: 'exact', head: true })
+            .eq('academic_year', academicYear)
+            .eq('semester', semester);
 
         return ok({
             templates_found:      templates.length,
             assignments_upserted: upsertedAssignments?.length ?? 0,
-            schedules_generated:  schedulesGenerated,
+            schedules_total:      scheduleRows.length,
+            schedules_generated:  (finalCount ?? 0) - (existingCount ?? 0),
         });
 
     } catch (err) {
