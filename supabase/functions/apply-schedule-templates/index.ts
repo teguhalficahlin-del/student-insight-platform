@@ -121,14 +121,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const defaultSubjectId = await getOrCreateDefaultSubject(admin);
 
         // ── 6. Upsert teaching_assignments ────────────────────
-        const assignmentRows = templates.map((t: { teacher_id: string; class_id: string }) => ({
-            user_id:       t.teacher_id,
-            class_id:      t.class_id,
-            subject_id:    defaultSubjectId,
-            academic_year: academicYear,
-            semester,
-            is_active:     true,
-        }));
+        // DEDUPE: satu guru×kelas cukup satu assignment (subject KBM konstan).
+        // 1330 template hanya menghasilkan ~369 pasangan (guru,kelas) unik; tanpa
+        // dedup, payload berisi banyak baris dengan kunci-konflik sama sehingga
+        // ON CONFLICT DO UPDATE gagal: "cannot affect row a second time" → 500.
+        const assignmentByKey = new Map<string, Record<string, unknown>>();
+        for (const t of templates as Array<{ teacher_id: string; class_id: string }>) {
+            const key = `${t.teacher_id}|${t.class_id}`;
+            if (assignmentByKey.has(key)) continue;
+            assignmentByKey.set(key, {
+                user_id:       t.teacher_id,
+                class_id:      t.class_id,
+                subject_id:    defaultSubjectId,
+                academic_year: academicYear,
+                semester,
+                is_active:     true,
+            });
+        }
+        const assignmentRows = [...assignmentByKey.values()];
 
         const { data: upsertedAssignments, error: assignErr } = await admin
             .from('teaching_assignments')
