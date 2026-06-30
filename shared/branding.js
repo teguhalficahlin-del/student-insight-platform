@@ -55,18 +55,48 @@ export async function applyBranding(slug = null) {
         return null;
     }
 
-    const root = document.documentElement;
+    return _applyToDom(branding);
+}
 
+/**
+ * Kembalikan school_id dari slug URL (tanpa apply DOM).
+ * Berguna untuk portal yang perlu filter data setelah login.
+ */
+export function getSchoolSlug() {
+    return getSlugFromURL();
+}
+
+/**
+ * Apply branding menggunakan school_id (untuk halaman dashboard setelah login).
+ * Memerlukan supabase client yang sudah ter-autentikasi.
+ * @param {string} schoolId - UUID school_id dari currentUser
+ * @param {object} supabaseClient - instance supabase-js yang sudah login
+ */
+export async function applyBrandingById(schoolId, supabaseClient) {
+    if (!schoolId || !supabaseClient) return null;
+    try {
+        const { data } = await supabaseClient
+            .from('schools')
+            .select('school_id, name, logo_url, primary_color, secondary_color')
+            .eq('school_id', schoolId)
+            .single();
+        if (!data) return null;
+        return _applyToDom(data);
+    } catch {
+        return null;
+    }
+}
+
+function _applyToDom(branding) {
+    const root = document.documentElement;
     if (branding.primary_color) {
         root.style.setProperty('--color-primary', branding.primary_color);
         const dark = branding.secondary_color || adjustColor(branding.primary_color, -30);
         root.style.setProperty('--color-primary-dark', dark);
     }
-
     document.querySelectorAll('[data-brand="school-name"]').forEach(el => {
         el.textContent = branding.name;
     });
-
     if (branding.logo_url) {
         document.querySelectorAll('[data-brand="logo"]').forEach(el => {
             const img = document.createElement('img');
@@ -76,21 +106,11 @@ export async function applyBranding(slug = null) {
             el.replaceWith(img);
         });
     }
-
     const titleParts = document.title.split('—');
     if (titleParts.length >= 2) {
         document.title = `${titleParts[0].trim()} — ${branding.name}`;
     } else {
         document.title = `${document.title} — ${branding.name}`;
     }
-
     return branding;
-}
-
-/**
- * Kembalikan school_id dari slug URL (tanpa apply DOM).
- * Berguna untuk portal yang perlu filter data setelah login.
- */
-export function getSchoolSlug() {
-    return getSlugFromURL();
 }

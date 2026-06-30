@@ -3,6 +3,7 @@
  * Dashboard Portal Siswa — jadwal, kehadiran diri, observasi, status PKL.
  */
 
+import { applyBrandingById } from '../../shared/branding.js';
 import {
     supabase, logout, getCurrentUserRow, STUDENT_ROLES,
     getMyStudent, getSchoolConfig, getMyClass,
@@ -45,6 +46,7 @@ async function init() {
         return;
     }
 
+    applyBrandingById(currentUser.school_id, supabase);
     config  = await getSchoolConfig();
     student = await getMyStudent(currentUser.user_id);
 

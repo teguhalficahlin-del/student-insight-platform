@@ -3,6 +3,7 @@
  * Dashboard utama Portal Guru — 1 login, tab Guru + tab Jabatan.
  */
 
+import { applyBrandingById } from '../../shared/branding.js';
 import {
     supabase, logout, getCurrentUserRow, GURU_ROLES,
     getJabatan, jabatanLabel, getSchoolConfig,
@@ -49,6 +50,7 @@ async function init() {
         return;
     }
 
+    applyBrandingById(currentUser.school_id, supabase);
     config  = await getSchoolConfig();
     jabatan = getJabatan(currentUser);
 

@@ -5,6 +5,7 @@
  * Loads children, lets parent pick one, shows attendance + observations.
  */
 
+import { applyBrandingById } from '../../shared/branding.js';
 import {
     supabase,
     getCurrentUserRow,
@@ -80,6 +81,7 @@ async function init() {
         return;
     }
 
+    applyBrandingById(currentUser.school_id, supabase);
     portalUserName.textContent = currentUser.full_name;
 
     try {

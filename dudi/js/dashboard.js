@@ -3,6 +3,7 @@
  * Dashboard DUDI: input absensi harian PKL + tulis observasi siswa.
  */
 
+import { applyBrandingById } from '../../shared/branding.js';
 import {
     supabase,
     getCurrentUserRow,
@@ -79,6 +80,7 @@ async function init() {
     if (!isDudi(userRow)) { window.location.href = 'index.html'; return; }
 
     currentUser = userRow;
+    applyBrandingById(userRow.school_id, supabase);
     orgNameEl.textContent  = userRow.dudi_org_name ?? userRow.full_name;
     userNameEl.textContent = 'PJ: ' + userRow.full_name;
 

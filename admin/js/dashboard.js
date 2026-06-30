@@ -5,6 +5,7 @@
  * Tidak ada edit, insert, delete. Untuk mengubah data, kembali ke wizard.
  */
 
+import { applyBrandingById } from '../../shared/branding.js';
 import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
@@ -507,6 +508,7 @@ async function renderJadwalPanel() {
     const userRow = await getCurrentUserRow();
     if (!requireAdministrativeOrRedirect(userRow)) return;
 
+    applyBrandingById(userRow.school_id, supabase);
     const config = await getSchoolConfig();
     document.getElementById('dashboard-school-name').textContent = config?.school_name ?? 'Sekolah';
     document.getElementById('dashboard-user-name').textContent = `Masuk sebagai ${userRow.full_name}`;

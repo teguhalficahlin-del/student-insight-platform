@@ -3,6 +3,7 @@
  * Dashboard Portal Stakeholder — ringkasan agregat sekolah (view-only).
  */
 
+import { applyBrandingById } from '../../shared/branding.js';
 import {
     supabase, logout, getCurrentUserRow, STAKEHOLDER_ROLES,
     getStakeholderSummary,
@@ -26,6 +27,7 @@ async function init() {
         return;
     }
 
+    applyBrandingById(user.school_id, supabase);
     document.getElementById('hdr-name').textContent = user.full_name;
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display     = 'block';
