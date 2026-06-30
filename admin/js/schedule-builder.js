@@ -12,6 +12,7 @@ import {
     getSchoolConfig, getClasses, getTeacherList,
     getTimeSlots, saveTimeSlots,
     getScheduleTemplates, saveScheduleTemplates,
+    applyScheduleTemplates,
 } from './api.js';
 
 const DAYS = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
@@ -72,6 +73,7 @@ function createOverlay() {
                 <button type="button" class="btn btn-secondary" id="sched-add-break" style="padding:6px 12px">+ Istirahat/Kegiatan</button>
                 <span class="sched-conflict-count" id="sched-conflict-count"></span>
                 <button type="button" class="btn btn-primary" id="sched-save" style="padding:6px 16px;margin-left:auto">Simpan</button>
+                <button type="button" class="btn btn-success" id="sched-apply" style="padding:6px 16px" title="Generate jadwal harian dari template yang sudah disimpan">Terapkan Jadwal</button>
             </div>
 
             <div class="sched-body">
@@ -96,6 +98,7 @@ function createOverlay() {
     overlayEl.querySelector('#sched-add-slot').addEventListener('click', () => addRow(false));
     overlayEl.querySelector('#sched-add-break').addEventListener('click', () => addRow(true));
     overlayEl.querySelector('#sched-save').addEventListener('click', save);
+    overlayEl.querySelector('#sched-apply').addEventListener('click', applyTemplates);
 
     overlayEl.querySelector('#sched-day-tabs').addEventListener('click', async (e) => {
         const day = e.target.dataset?.day;
@@ -420,6 +423,35 @@ async function save() {
     } finally {
         saveBtn.disabled = false;
         saveBtn.textContent = 'Simpan';
+    }
+}
+
+async function applyTemplates() {
+    if (state.dirty) {
+        if (!confirm('Ada perubahan yang belum disimpan. Simpan dulu sebelum menerapkan?')) return;
+        await save();
+        if (state.dirty) return; // save gagal
+    }
+
+    const applyBtn = overlayEl.querySelector('#sched-apply');
+    const statusEl = overlayEl.querySelector('#sched-status');
+    applyBtn.disabled = true;
+    applyBtn.textContent = 'Menerapkan...';
+    statusEl.textContent = '';
+
+    try {
+        const result = await applyScheduleTemplates();
+        statusEl.textContent =
+            `✓ Jadwal diterapkan — ${result.templates_found} template, ` +
+            `${result.assignments_upserted} penugasan, ` +
+            `${result.schedules_generated} sesi dibuat.`;
+        statusEl.style.color = 'var(--color-success)';
+    } catch (err) {
+        statusEl.textContent = `✗ Gagal: ${err.message}`;
+        statusEl.style.color = 'var(--color-danger)';
+    } finally {
+        applyBtn.disabled = false;
+        applyBtn.textContent = 'Terapkan Jadwal';
     }
 }
 

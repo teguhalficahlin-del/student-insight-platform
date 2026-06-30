@@ -406,6 +406,28 @@ export function importSchedules(csvText) { return callBulkImport('bulk-import-sc
 export function importParents(csvText)   { return callBulkImport('bulk-import-parents', csvText); }
 export function importDudi(csvText)      { return callBulkImport('bulk-import-dudi', csvText); }
 
+/**
+ * Terapkan template jadwal yang sudah tersimpan menjadi teaching_schedules
+ * untuk seluruh rentang academic_periods aktif.
+ */
+export async function applyScheduleTemplates() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) throw new Error('Sesi login tidak ditemukan. Silakan login ulang.');
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/apply-schedule-templates`, {
+        method:  'POST',
+        headers: {
+            'Authorization':    `Bearer ${token}`,
+            'x-schema-version': '1.0.0',
+        },
+    });
+
+    const body = await res.json();
+    if (!res.ok) throw new Error(body?.error?.message ?? 'Gagal menerapkan jadwal');
+    return body.data;
+}
+
 // ─────────────────────────────────────────────────────────────
 // EDGE FUNCTIONS — delete-user
 // ─────────────────────────────────────────────────────────────
