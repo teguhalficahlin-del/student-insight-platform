@@ -90,7 +90,7 @@ export async function fetchSchedule(classId, date) {
         .select(`
             schedule_id, session_date, session_start, session_end,
             subject:subjects ( name ),
-            teacher:users!teaching_schedules_scheduled_teacher_id_fkey ( full_name )
+            teacher:users ( full_name )
         `)
         .eq('class_id', classId)
         .eq('session_date', date)
@@ -116,7 +116,7 @@ export async function fetchAttendance(studentId, dateStart, dateEnd) {
             session_start,
             session_end,
             subject:subjects ( name ),
-            teacher:users!teaching_schedules_scheduled_teacher_id_fkey ( full_name ),
+            teacher:users ( full_name ),
             attendance!inner (
                 attendance_id,
                 status,

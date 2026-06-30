@@ -110,12 +110,16 @@ async function loadTabContent(key) {
 
 // ─── TAB GURU ────────────────────────────────────────────────
 
+let _guruTabInit = false;
 async function initGuruTab() {
     const dateEl = document.getElementById('sched-date');
     if (!dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
 
-    document.getElementById('sched-refresh').onclick = () => loadSchedule();
-    dateEl.addEventListener('change', loadSchedule);
+    if (!_guruTabInit) {
+        _guruTabInit = true;
+        document.getElementById('sched-refresh').onclick = () => loadSchedule();
+        dateEl.addEventListener('change', loadSchedule);
+    }
 
     await loadSchedule();
     await initObsForm();

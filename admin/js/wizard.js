@@ -1171,7 +1171,7 @@ const STEP_LIST = {
                 q => q.select(`
                     schedule_id, session_date, session_start, session_end,
                     class:classes ( name ),
-                    teacher:users!teaching_schedules_scheduled_teacher_id_fkey ( full_name )
+                    teacher:users ( full_name )
                 `).order('session_date', { ascending: false }));
             return data.map(s => ({
                 id: s.schedule_id,

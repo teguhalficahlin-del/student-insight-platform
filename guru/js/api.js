@@ -386,7 +386,7 @@ export async function getAbsentTeachersToday() {
     const today = new Date().toISOString().slice(0, 10);
     const { data, error } = await supabase
         .from('teaching_schedules')
-        .select('schedule_id, session_start, session_end, scheduled_teacher_id, class:classes(name), teacher:users!teaching_schedules_scheduled_teacher_id_fkey(full_name)')
+        .select('schedule_id, session_start, session_end, scheduled_teacher_id, class:classes(name), teacher:users(full_name)')
         .eq('session_date', today)
         .eq('meeting_status', 'GURU_TIDAK_HADIR');
     if (error) throw error;

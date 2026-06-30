@@ -93,7 +93,7 @@ export async function getScheduleForDate(classId, date) {
         .select(`
             schedule_id, session_date, session_start, session_end,
             subject:subjects ( name ),
-            teacher:users!teaching_schedules_scheduled_teacher_id_fkey ( full_name ),
+            teacher:users ( full_name ),
             class:classes ( name )
         `)
         .eq('class_id', classId)
