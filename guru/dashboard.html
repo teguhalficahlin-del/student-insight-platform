@@ -49,13 +49,13 @@
             <div class="section-card">
                 <h3>Tulis Observasi Siswa</h3>
                 <form id="obs-form">
-                    <div class="field">
+                    <div class="field" style="position:relative">
                         <label for="obs-student">Siswa</label>
                         <input type="text" id="obs-student-search" class="input" placeholder="Cari nama siswa…" autocomplete="off">
                         <input type="hidden" id="obs-student-id">
-                        <div id="obs-student-list" style="display:none; border:1px solid var(--color-border); border-radius:var(--radius); background:var(--color-surface); max-height:180px; overflow-y:auto; position:absolute; z-index:100; width:calc(100% - 32px)"></div>
+                        <div id="obs-student-list" style="display:none; border:1px solid var(--color-border); border-radius:var(--radius); background:var(--color-surface); max-height:180px; overflow-y:auto; position:absolute; z-index:100; left:0; right:0; top:100%"></div>
                     </div>
-                    <div style="display:flex; gap:12px; flex-wrap:wrap">
+                    <div class="obs-fields-row" style="display:flex; gap:12px; flex-wrap:wrap">
                         <div class="field" style="flex:1; min-width:140px">
                             <label for="obs-dimension">Dimensi</label>
                             <select id="obs-dimension" class="input">

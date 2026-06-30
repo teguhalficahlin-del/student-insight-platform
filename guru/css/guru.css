@@ -202,9 +202,48 @@ details[open] .att-accordion-summary::before { transform: rotate(90deg); }
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 640px) {
-    .login-card { padding: 24px 20px; }
-    .page-body  { padding: 16px 12px; }
-    .section-card { padding: 16px; }
+    .login-card  { padding: 24px 16px; }
+    .page-body   { padding: 12px 10px; }
+    .section-card { padding: 14px 12px; margin-bottom: 12px; }
+
+    /* Header — nama lebih kecil agar tidak tumpang tindih */
+    .app-header  { padding: 10px 14px; gap: 8px; }
+    .app-header h2 { font-size: 14px; }
+    .header-name { font-size: 13px; }
+
+    /* Tab — tap target lebih besar */
+    .tab-btn { padding: 12px 14px; font-size: 13px; }
+
+    /* Date row — date input mengisi ruang tersisa */
+    .date-row { flex-wrap: nowrap; }
+    .date-row input[type="date"] { flex: 1; min-width: 0; }
+
+    /* Tabel jadwal — jam + kelas lebih rapat */
+    .table th, .table td { padding: 8px 8px; font-size: 13px; }
+
+    /* Obs form — tiga select stack 2-per-row di mobile */
+    .obs-fields-row { flex-direction: column; }
+    .obs-fields-row .field { min-width: 0 !important; }
+
+    /* Tombol utama full-width di mobile */
+    #obs-submit,
+    .att-save { width: 100%; }
+
+    /* Radio kehadiran — touch target lebih besar */
+    .att-radio-label {
+        padding: 6px 10px;
+        font-size: 12px;
+        min-height: 36px;
+    }
     .att-radio-group { gap: 4px; }
-    .att-radio-label { padding: 3px 8px; font-size: 11px; }
+
+    /* Nama siswa di panel kehadiran */
+    .att-name { font-size: 13px; min-width: 120px; }
+
+    /* Notes input full width */
+    .att-notes-input { max-width: 100%; }
+
+    /* Safe area untuk notch/home bar */
+    .app-header { padding-top: max(10px, env(safe-area-inset-top)); }
+    body > #app > :last-child { padding-bottom: env(safe-area-inset-bottom); }
 }
