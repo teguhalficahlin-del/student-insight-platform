@@ -54,8 +54,12 @@ async function init() {
 
     // Header
     document.getElementById('hdr-name').textContent = currentUser.full_name;
+    const NON_GURU_ROLES = new Set(['KEPSEK', 'WAKA_KESISWAAN', 'WAKA_KURIKULUM']);
+    const isGuruBiasa = !NON_GURU_ROLES.has(currentUser.role_type);
     const roleLabel = jabatan.length
-        ? `Guru · ${jabatan.map(jabatanLabel).join(' · ')}`
+        ? (isGuruBiasa ? 'Guru' : '') +
+          (isGuruBiasa && jabatan.length ? ' · ' : '') +
+          jabatan.map(jabatanLabel).join(' · ')
         : 'Guru';
     document.getElementById('hdr-role').textContent = roleLabel;
 
@@ -607,7 +611,7 @@ async function initKpPlacementForm(programId) {
     });
 
     document.getElementById('kp-dl-template').addEventListener('click', () => {
-        const csv = 'nis,login_dudi,tanggal_mulai,tanggal_selesai\n12345,cv-maju-bersama,2026-07-01,2026-09-30\n';
+        const csv = 'nis,login_dudi,tanggal_mulai,tanggal_selesai\n12345,cv-maju-bersama,2027-07-01,2027-09-30\n';
         const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv], { type:'text/csv' })), download:'template_penempatan_pkl.csv' });
         a.click();
     });

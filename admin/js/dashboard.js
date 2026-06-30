@@ -484,10 +484,14 @@ async function renderStakeholdersPanel() {
 }
 
 async function renderJadwalPanel() {
-    const { count } = await supabase.from('schedule_templates').select('*', { count: 'exact', head: true });
+    const [{ count: tmplCount }, { count: schedCount }] = await Promise.all([
+        supabase.from('schedule_templates').select('*', { count: 'exact', head: true }),
+        supabase.from('teaching_schedules').select('*', { count: 'exact', head: true }),
+    ]);
     panelContent.innerHTML = `
         <h3>Jadwal</h3>
-        <p class="hint">Jadwal yang sudah disusun: <strong>${count ?? 0} slot</strong>.</p>
+        <p class="hint">Template slot tersusun: <strong>${tmplCount ?? 0} slot</strong>.</p>
+        <p class="hint">Sesi jadwal ter-generate (teaching_schedules): <strong>${(schedCount ?? 0).toLocaleString('id-ID')} sesi</strong>.</p>
         <p class="hint">Untuk menyusun atau mengubah jadwal, buka <a href="wizard.html">Setup Wizard</a> langkah 10.</p>
     `;
 }
