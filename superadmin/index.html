@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Superadmin — Platform Sekolah</title>
+    <link rel="stylesheet" href="css/superadmin.css">
+</head>
+<body>
+<div class="login-page">
+    <div class="login-card">
+        <div class="login-logo">
+            <h1>⚙️ Platform Sekolah</h1>
+            <p>Panel Superadmin — Khusus Vendor</p>
+        </div>
+        <div class="login-error" id="login-error"></div>
+        <form id="login-form">
+            <div class="field">
+                <label for="sa-key">Superadmin Key</label>
+                <input type="password" id="sa-key" class="input" placeholder="Masukkan superadmin key" required autocomplete="off">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%" id="login-btn">Masuk</button>
+        </form>
+    </div>
+</div>
+<script type="module" src="js/auth.js"></script>
+</body>
+</html>

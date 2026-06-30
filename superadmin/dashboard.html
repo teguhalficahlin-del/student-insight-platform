@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Superadmin — Platform Sekolah</title>
+    <link rel="stylesheet" href="css/superadmin.css">
+</head>
+<body>
+
+<header class="app-header">
+    <h2>⚙️ Platform Sekolah — Superadmin</h2>
+    <button class="btn btn-danger btn-sm" id="logout-btn">Keluar</button>
+</header>
+
+<div class="page-body">
+
+    <!-- Form daftar sekolah baru -->
+    <div class="section-card">
+        <h3>Daftarkan Sekolah Baru</h3>
+        <form id="provision-form" class="form-grid">
+            <div class="field field-full">
+                <label>Nama Sekolah *</label>
+                <input type="text" id="f-school-name" class="input" placeholder="SMK Contoh Sejahtera" required>
+            </div>
+            <div class="field">
+                <label>NPSN</label>
+                <input type="text" id="f-npsn" class="input" placeholder="12345678">
+            </div>
+            <div class="field">
+                <label>Telepon</label>
+                <input type="text" id="f-phone" class="input" placeholder="0812xxxxxxxx">
+            </div>
+            <div class="field field-full">
+                <label>Alamat</label>
+                <input type="text" id="f-address" class="input" placeholder="Jl. Pendidikan No. 1, Kota...">
+            </div>
+            <div class="field">
+                <label>Nama Admin IT *</label>
+                <input type="text" id="f-admin-name" class="input" placeholder="Budi Santoso" required>
+            </div>
+            <div class="field">
+                <label>NIP / NIK Admin IT *</label>
+                <input type="text" id="f-admin-id" class="input" placeholder="197801012005011001" required>
+            </div>
+            <div class="field field-full" style="margin-top:4px">
+                <button type="submit" class="btn btn-primary" id="provision-btn">Daftarkan Sekolah</button>
+            </div>
+        </form>
+
+        <!-- Hasil kredensial -->
+        <div id="provision-result" class="alert" style="display:none"></div>
+        <div id="cred-box" class="cred-box" style="display:none">
+            <span class="cred-label">Nama Sekolah</span>
+            <span class="cred-value" id="cred-school"></span>
+            <br><br>
+            <span class="cred-label">Login Admin (NIP/NIK)</span>
+            <span class="cred-value" id="cred-identifier"></span>
+            <br><br>
+            <span class="cred-label">Password Sementara</span>
+            <span class="cred-value" id="cred-password"></span>
+            <br><br>
+            <small style="color:var(--color-text-muted)">⚠️ Simpan password ini sekarang — tidak bisa dilihat lagi setelah halaman ditutup.</small>
+        </div>
+    </div>
+
+    <!-- Daftar sekolah terdaftar -->
+    <div class="section-card">
+        <h3>Sekolah Terdaftar</h3>
+        <p id="schools-hint" class="hint" style="font-size:13px;color:var(--color-text-muted)">Memuat…</p>
+        <table class="table" id="schools-table" style="display:none">
+            <thead>
+                <tr>
+                    <th>Nama Sekolah</th>
+                    <th>NPSN</th>
+                    <th>Telepon</th>
+                    <th>Status</th>
+                    <th>Terdaftar</th>
+                </tr>
+            </thead>
+            <tbody id="schools-body"></tbody>
+        </table>
+    </div>
+
+</div>
+
+<script type="module" src="js/dashboard.js"></script>
+</body>
+</html>
