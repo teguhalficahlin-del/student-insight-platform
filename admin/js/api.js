@@ -192,14 +192,11 @@ export async function saveTimeSlots(academicYear, semester, dayOfWeek, slots) {
 }
 
 export async function getScheduleTemplates(academicYear, semester, dayOfWeek) {
-    const { data, error } = await supabase
-        .from('schedule_templates')
-        .select('template_id, start_time, end_time, class_id, teacher_id, subject_label')
-        .eq('academic_year', academicYear)
-        .eq('semester', semester)
-        .eq('day_of_week', dayOfWeek);
-    if (error) throw error;
-    return data ?? [];
+    return fetchAllRows('schedule_templates',
+        q => q.select('template_id, start_time, end_time, class_id, teacher_id, subject_label')
+              .eq('academic_year', academicYear)
+              .eq('semester', semester)
+              .eq('day_of_week', dayOfWeek));
 }
 
 export async function saveScheduleTemplates(academicYear, semester, dayOfWeek, templates) {

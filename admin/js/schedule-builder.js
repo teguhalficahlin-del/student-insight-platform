@@ -8,7 +8,7 @@
  */
 
 import {
-    supabase,
+    supabase, fetchAllRows,
     getSchoolConfig, getClasses, getTeacherList,
     getTimeSlots, saveTimeSlots,
     getScheduleTemplates, saveScheduleTemplates,
@@ -175,12 +175,16 @@ async function loadGrade(seq) {
     renderGrid();
 }
 
+function clampTime(h, m) {
+    const totalMin = Math.min(h * 60 + m, 23 * 60 + 59);
+    return `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`;
+}
+
 function addRow(isBreak) {
     const lastSlot = state.slots[state.slots.length - 1];
     const defaultStart = lastSlot?.end_time ?? '07:00';
     const [h, m] = defaultStart.split(':').map(Number);
-    const endMin = m + 40;
-    const defaultEnd = `${String(h + Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
+    const defaultEnd = clampTime(h, m + 40);
 
     state.slots.push({
         start_time: defaultStart,
@@ -437,15 +441,15 @@ async function save() {
 }
 
 async function checkAllConflicts() {
-    const { data, error } = await supabase
-        .from('schedule_templates')
-        .select('day_of_week, start_time, teacher_id')
-        .eq('academic_year', state.academicYear)
-        .eq('semester', state.semester);
-    if (error) throw error;
+    // fetchAllRows menembus batas 1000 baris PostgREST default
+    // (36 kelas × 10 slot × 6 hari = ~2160 template)
+    const data = await fetchAllRows('schedule_templates',
+        q => q.select('day_of_week, start_time, teacher_id')
+              .eq('academic_year', state.academicYear)
+              .eq('semester', state.semester));
 
     const counts = new Map();
-    for (const t of data ?? []) {
+    for (const t of data) {
         const key = `${t.day_of_week}_${t.start_time}_${t.teacher_id}`;
         counts.set(key, (counts.get(key) || 0) + 1);
     }
