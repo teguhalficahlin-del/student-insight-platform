@@ -160,26 +160,67 @@ function renderGroupedTable(items, groupOf, headers, rowOf) {
     }).join('');
 }
 
-// Render daftar alumni sebagai accordion per tahun kelulusan (terbaru di atas).
-function renderYearGrouped(items, yearOf, headers, rowOf) {
+// Nama kelas terakhir alumni: enrolment di tahun kelulusannya, atau enrolment
+// terbaru bila tidak ketemu.
+function alumniClassName(enrollment, gradYear) {
+    const enrolls = Array.isArray(enrollment) ? enrollment : (enrollment ? [enrollment] : []);
+    if (enrolls.length === 0) return 'Tanpa Kelas';
+    const match = enrolls.find(e => e.academic_year === gradYear);
+    const pick = match ?? [...enrolls].sort((a, b) => (a.academic_year ?? '').localeCompare(b.academic_year ?? '')).pop();
+    return pick?.class?.name ?? 'Tanpa Kelas';
+}
+
+// Render alumni sebagai accordion bersarang 3 level: Tahun Lulus (terbaru di
+// atas) → Program Keahlian → Kelas → tabel. rows: { year, program, kelas, item }.
+function renderNestedYearProgramClass(rows, headers, rowOf) {
     const byYear = new Map();
-    for (const it of items) {
-        const y = yearOf(it);
-        if (!byYear.has(y)) byYear.set(y, []);
-        byYear.get(y).push(it);
+    for (const r of rows) {
+        if (!byYear.has(r.year)) byYear.set(r.year, new Map());
+        const byProg = byYear.get(r.year);
+        if (!byProg.has(r.program)) byProg.set(r.program, new Map());
+        const byClass = byProg.get(r.program);
+        if (!byClass.has(r.kelas)) byClass.set(r.kelas, []);
+        byClass.get(r.kelas).push(r.item);
     }
-    const years = [...byYear.keys()].sort().reverse();
-    if (years.length === 0) return '<p class="hint">Belum ada data.</p>';
+    if (byYear.size === 0) return '<p class="hint">Belum ada data.</p>';
+
     const head = headers.map(h => `<th>${h}</th>`).join('');
+    const progSort = (a, b) => {
+        const na = /^Tanpa/i.test(a), nb = /^Tanpa/i.test(b);
+        if (na !== nb) return na ? 1 : -1;
+        return a.localeCompare(b, 'id');
+    };
+    const totalOf = (byClass) => { let t = 0; byClass.forEach(arr => t += arr.length); return t; };
+
+    const years = [...byYear.keys()].sort().reverse();
     return years.map(year => {
-        const list = byYear.get(year);
+        const byProg = byYear.get(year);
+        let yearTotal = 0; byProg.forEach(bc => yearTotal += totalOf(bc));
+
+        const progHtml = [...byProg.keys()].sort(progSort).map(prog => {
+            const byClass = byProg.get(prog);
+            const classHtml = [...byClass.keys()].sort((a, b) => a.localeCompare(b, 'id')).map(kls => {
+                const list = byClass.get(kls);
+                return `
+                    <details style="margin:4px 0 4px 32px">
+                        <summary style="cursor:pointer;font-weight:600">${kls} (${list.length})</summary>
+                        <table class="table" style="margin-top:4px">
+                            <thead><tr>${head}</tr></thead>
+                            <tbody>${list.map(rowOf).join('')}</tbody>
+                        </table>
+                    </details>`;
+            }).join('');
+            return `
+                <details style="margin:4px 0 4px 16px">
+                    <summary style="cursor:pointer;font-weight:600">${prog} (${totalOf(byClass)})</summary>
+                    <div style="padding:2px 0">${classHtml}</div>
+                </details>`;
+        }).join('');
+
         return `
             <details style="margin-bottom:8px">
-                <summary style="cursor:pointer;font-weight:600">Lulusan ${year} (${list.length})</summary>
-                <table class="table" style="margin-top:4px">
-                    <thead><tr>${head}</tr></thead>
-                    <tbody>${list.map(rowOf).join('')}</tbody>
-                </table>
+                <summary style="cursor:pointer;font-weight:600">Lulusan ${year} (${yearTotal})</summary>
+                <div style="padding:2px 0">${progHtml}</div>
             </details>`;
     }).join('');
 }
@@ -298,18 +339,31 @@ async function renderParentsPanel() {
     `;
 }
 
-// Menu khusus Alumni: siswa lulus + orang tua yang semua anaknya sudah lulus,
-// keduanya dikelompokkan per tahun kelulusan.
+// Menu khusus Alumni: siswa lulus + orang tua yang semua anaknya sudah lulus.
+// Keduanya disusun accordion bersarang: Tahun Lulus → Program → Kelas.
 async function renderAlumniPanel() {
-    const siswaAlumni = await fetchAllRows('students',
-        q => q.select('full_name, nis, graduated_academic_year')
-              .eq('student_status', 'LULUS')
-              .order('full_name'));
+    // ── Siswa alumni ──
+    const siswaRaw = await fetchAllRows('students',
+        q => q.select(`full_name, nis, graduated_academic_year,
+            program:programs ( name ),
+            enrollment:class_enrollments ( academic_year, class:classes ( name ) )
+        `).eq('student_status', 'LULUS').order('full_name'));
 
+    const siswaRows = siswaRaw.map(s => ({
+        year:    s.graduated_academic_year ?? 'Tidak diketahui',
+        program: s.program?.name ?? 'Tanpa Program',
+        kelas:   alumniClassName(s.enrollment, s.graduated_academic_year),
+        item:    s,
+    }));
+
+    // ── Orang tua alumni (semua anak sudah lulus) ──
     const parents = await fetchAllRows('users',
         q => q.select('user_id, full_name, login_identifier').eq('role_type', 'ORTU').order('full_name'));
     const links = await fetchAllRows('student_parents',
-        q => q.select('parent_user_id, students ( student_status, graduated_academic_year )'));
+        q => q.select(`parent_user_id, students ( student_status, graduated_academic_year,
+            program:programs ( name ),
+            enrollment:class_enrollments ( academic_year, class:classes ( name ) )
+        )`));
 
     const childMap = new Map();
     for (const l of links) {
@@ -317,35 +371,33 @@ async function renderAlumniPanel() {
         if (l.students) childMap.get(l.parent_user_id).push(l.students);
     }
 
-    const ortuAlumni = [];
+    const ortuRows = [];
     for (const p of parents) {
         const children = childMap.get(p.user_id) ?? [];
         if (children.length === 0) continue;                       // tanpa anak → bukan alumni
         if (children.some(c => c.student_status === 'AKTIF')) continue; // masih punya anak aktif
-        const year = children.map(c => c.graduated_academic_year).filter(Boolean).sort().reverse()[0] ?? 'Tidak diketahui';
-        ortuAlumni.push({ ...p, _year: year });
+        // anak alumni acuan = yang tahun lulusnya paling baru
+        const ref = [...children].sort((a, b) => (a.graduated_academic_year ?? '').localeCompare(b.graduated_academic_year ?? '')).pop();
+        ortuRows.push({
+            year:    ref?.graduated_academic_year ?? 'Tidak diketahui',
+            program: ref?.program?.name ?? 'Tanpa Program',
+            kelas:   alumniClassName(ref?.enrollment, ref?.graduated_academic_year),
+            item:    p,
+        });
     }
 
-    const siswaHtml = renderYearGrouped(
-        siswaAlumni,
-        s => s.graduated_academic_year ?? 'Tidak diketahui',
-        ['Nama', 'NIS'],
-        s => `<tr><td>${s.full_name}</td><td>${s.nis}</td></tr>`,
-    );
-    const ortuHtml = renderYearGrouped(
-        ortuAlumni,
-        u => u._year,
-        ['Nama', 'NIK'],
-        u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td></tr>`,
-    );
+    const siswaHtml = renderNestedYearProgramClass(siswaRows, ['Nama', 'NIS'],
+        s => `<tr><td>${s.full_name}</td><td>${s.nis}</td></tr>`);
+    const ortuHtml = renderNestedYearProgramClass(ortuRows, ['Nama', 'NIK'],
+        u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td></tr>`);
 
     panelContent.innerHTML = `
-        <h3>Siswa Alumni (${siswaAlumni.length})</h3>
-        <p class="hint" style="margin-bottom:12px">Siswa yang sudah lulus, dikelompokkan per tahun kelulusan.</p>
+        <h3>Siswa Alumni (${siswaRows.length})</h3>
+        <p class="hint" style="margin-bottom:12px">Dikelompokkan per tahun lulus → program keahlian → kelas.</p>
         ${siswaHtml}
         <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
-        <h3>Orang Tua Alumni (${ortuAlumni.length})</h3>
-        <p class="hint" style="margin-bottom:12px">Orang tua yang semua anaknya sudah lulus, dikelompokkan per tahun kelulusan terakhir.</p>
+        <h3>Orang Tua Alumni (${ortuRows.length})</h3>
+        <p class="hint" style="margin-bottom:12px">Mengikuti tahun lulus, program, dan kelas anak alumninya.</p>
         ${ortuHtml}
     `;
 }
