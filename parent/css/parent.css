@@ -343,4 +343,37 @@ label {
     .filter-row .field {
         min-width: unset;
     }
+
+    /* Safe area notch */
+    .topbar { padding-top: max(16px, env(safe-area-inset-top)); }
+    body { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+@media (max-width: 480px) {
+    /* Login card */
+    .login-card { padding: 24px 16px; }
+
+    /* Filter row stack vertical */
+    .filter-row { flex-direction: column; align-items: stretch; }
+    .filter-row .field { min-width: 100%; margin-bottom: 0; }
+    .filter-row label { margin-bottom: 4px; }
+
+    /* Child selector stack vertical */
+    .child-selector { flex-direction: column; align-items: flex-start; }
+    .child-selector select.input { width: 100%; }
+
+    /* Table: hide Waktu (col 2) dan Guru (col 4) di 375px */
+    .data-table td:nth-child(2),
+    .data-table th:nth-child(2),
+    .data-table td:nth-child(4),
+    .data-table th:nth-child(4) { display: none; }
+
+    /* Summary card 2-per-row */
+    .summary-card { min-width: calc(50% - 5px); }
+
+    /* Date input fill space */
+    .date-row input[type="date"] { flex: 1; min-width: 0; }
+
+    /* Section compact */
+    .section-card { padding: 12px 10px; }
 }

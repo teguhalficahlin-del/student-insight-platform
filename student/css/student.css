@@ -163,4 +163,29 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
     .section-card { padding: 16px; }
     .stat-card { min-width: 72px; padding: 12px; }
     .stat-value { font-size: 22px; }
+
+    /* Safe area notch */
+    .app-header { padding-top: max(10px, env(safe-area-inset-top)); }
+    body { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+@media (max-width: 480px) {
+    /* Stats card 5 item → 2-per-row */
+    .stat-card { min-width: calc(50% - 6px); padding: 12px; }
+    .stat-value { font-size: 22px; }
+    .stat-label { font-size: 10px; }
+
+    /* Table attendance: hide kolom Mata Pelajaran */
+    .table td:nth-child(2),
+    .table th:nth-child(2) { display: none; }
+
+    /* Table font lebih kecil */
+    .table { font-size: 12px; }
+    .table th, .table td { padding: 6px 6px; }
+
+    /* Date input fill available space */
+    .date-row input[type="date"] { flex: 1; min-width: 0; }
+
+    /* Section card lebih compact */
+    .section-card { padding: 12px 10px; }
 }

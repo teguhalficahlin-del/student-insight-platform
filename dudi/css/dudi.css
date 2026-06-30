@@ -444,4 +444,34 @@ textarea.input { resize: vertical; min-height: 80px; }
 
     .filter-row { flex-direction: column; }
     .filter-row .field { min-width: unset; }
+
+    /* Safe area notch */
+    .topbar { padding-top: max(16px, env(safe-area-inset-top)); }
+    body { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+@media (max-width: 480px) {
+    /* Attendance row stack vertical */
+    .attendance-row { flex-direction: column; align-items: flex-start; gap: 6px; }
+    .student-name { min-width: unset; width: 100%; margin-bottom: 4px; font-size: 13px; }
+    .status-radios { width: 100%; flex-wrap: wrap; gap: 4px; }
+
+    /* Date nav stack vertical */
+    .date-nav { flex-direction: column; width: 100%; gap: 6px; }
+    .date-nav .btn { width: 100%; }
+    .date-nav input[type="date"] { width: 100%; }
+
+    /* History table: hapus min-width paksa, hide kolom Catatan */
+    .data-table { min-width: auto; }
+    .data-table td:nth-child(4),
+    .data-table th:nth-child(4) { display: none; }
+
+    /* Summary card 2-per-row */
+    .summary-card { min-width: calc(50% - 5px); padding: 12px; }
+
+    /* Section compact */
+    .section-card { padding: 12px 10px; }
+
+    /* Login card */
+    .login-card { padding: 24px 16px; }
 }
