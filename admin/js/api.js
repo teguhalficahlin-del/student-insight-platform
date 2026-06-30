@@ -404,6 +404,43 @@ export function importParents(csvText)   { return callBulkImport('bulk-import-pa
 export function importDudi(csvText)      { return callBulkImport('bulk-import-dudi', csvText); }
 
 /**
+ * Jumlah siswa yang belum punya akun login (students.user_id IS NULL).
+ */
+export async function countStudentsWithoutAccount() {
+    const { count, error } = await supabase
+        .from('students')
+        .select('student_id', { count: 'exact', head: true })
+        .is('user_id', null);
+    if (error) throw error;
+    return count ?? 0;
+}
+
+/**
+ * Buatkan akun login SISWA untuk satu batch siswa yang belum tertaut.
+ * Dipanggil berulang oleh UI sampai remaining = 0.
+ * Returns { total_unlinked, processed, created, linked_existing, failed, remaining, errors[] }.
+ */
+export async function provisionStudentAccounts(limit = 150) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) throw new Error('Sesi login tidak ditemukan. Silakan login ulang.');
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/provision-student-accounts`, {
+        method:  'POST',
+        headers: {
+            'Content-Type':     'application/json',
+            'Authorization':    `Bearer ${token}`,
+            'x-schema-version': '1.0.0',
+        },
+        body: JSON.stringify({ limit }),
+    });
+
+    const body = await res.json();
+    if (!res.ok) throw new Error(body?.error?.message ?? 'Gagal membuat akun siswa');
+    return body.data;
+}
+
+/**
  * Terapkan template jadwal yang sudah tersimpan menjadi teaching_schedules
  * untuk seluruh rentang academic_periods aktif.
  */

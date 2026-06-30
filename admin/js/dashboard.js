@@ -5,7 +5,7 @@
  * Tidak ada edit, insert, delete. Untuk mengubah data, kembali ke wizard.
  */
 
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -282,10 +282,13 @@ async function renderStaffPanel() {
 }
 
 async function renderStudentsPanel() {
-    const aktif = await fetchAllRows('students',
-        q => q.select('full_name, nis, student_status, program:programs ( name )')
-              .eq('student_status', 'AKTIF')
-              .order('full_name'));
+    const [aktif, noAccount] = await Promise.all([
+        fetchAllRows('students',
+            q => q.select('full_name, nis, student_status, program:programs ( name )')
+                  .eq('student_status', 'AKTIF')
+                  .order('full_name')),
+        countStudentsWithoutAccount().catch(() => 0),
+    ]);
 
     const aktifHtml = renderGroupedTable(
         aktif,
@@ -294,11 +297,61 @@ async function renderStudentsPanel() {
         s => `<tr><td>${s.full_name}</td><td>${s.nis}</td></tr>`,
     );
 
+    const provisionHtml = `
+        <div class="card" style="border:1px solid var(--color-border, #dde3e9); border-radius:12px; padding:16px; margin-bottom:16px">
+            <strong>Akun Login Siswa</strong>
+            <p class="hint" style="margin:6px 0">
+                ${noAccount > 0
+                    ? `<strong>${noAccount}</strong> siswa belum punya akun login. Siswa masuk ke Portal Siswa pakai <strong>NIS</strong>, password awal <code>{NIS}!SMK</code>.`
+                    : '✓ Semua siswa sudah punya akun login.'}
+            </p>
+            ${noAccount > 0
+                ? `<button class="btn btn-primary btn-sm" id="provision-students-btn">Buatkan Akun Siswa</button>`
+                : ''}
+            <div id="provision-status" class="hint" style="margin-top:8px"></div>
+        </div>`;
+
     panelContent.innerHTML = `
+        ${provisionHtml}
         <h3>Siswa Aktif (${aktif.length})</h3>
         <p class="hint" style="margin-bottom:12px">Alumni ada di menu <strong>Alumni</strong>.</p>
         ${aktifHtml}
     `;
+
+    document.getElementById('provision-students-btn')?.addEventListener('click', runProvisionStudents);
+}
+
+async function runProvisionStudents() {
+    const btn      = document.getElementById('provision-students-btn');
+    const statusEl = document.getElementById('provision-status');
+    btn.disabled = true;
+    btn.textContent = 'Memproses…';
+
+    let created = 0, linked = 0, failed = 0, guard = 0;
+    const firstErrors = [];
+    try {
+        while (guard++ < 200) {
+            const r = await provisionStudentAccounts(150);
+            created += r.created;
+            linked  += r.linked_existing;
+            failed  += r.failed;
+            for (const e of (r.errors ?? [])) if (firstErrors.length < 5) firstErrors.push(`NIS ${e.nis}: ${e.message}`);
+            statusEl.textContent = `Memproses… dibuat ${created}, sisa ${r.remaining}${failed ? `, gagal ${failed}` : ''}`;
+            // Berhenti jika sudah habis ATAU batch ini tak memproses apa pun (mencegah loop tak berujung)
+            if (r.remaining <= 0 || r.processed === 0) break;
+        }
+        statusEl.innerHTML = `✓ Selesai — <strong>${created}</strong> akun dibuat`
+            + (linked ? `, ${linked} ditautkan` : '')
+            + (failed ? `, <span style="color:var(--color-danger,#dc2626)">${failed} gagal</span>` : '')
+            + (firstErrors.length ? `<br><span class="hint">${firstErrors.join('<br>')}</span>` : '');
+    } catch (err) {
+        statusEl.innerHTML = `<span style="color:var(--color-danger,#dc2626)">✗ ${err.message}</span>`;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Buatkan Akun Siswa';
+        // Segarkan panel untuk perbarui hitungan setelah jeda singkat
+        setTimeout(() => { if (document.getElementById('provision-status')) renderStudentsPanel(); }, 2000);
+    }
 }
 
 async function renderParentsPanel() {
