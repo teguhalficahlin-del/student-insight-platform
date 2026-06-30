@@ -194,26 +194,57 @@ async function toggleAttPanel(btn) {
             return;
         }
 
-        const statuses = ['HADIR','IZIN','SAKIT','TIDAK_HADIR','EKSKUL'];
-        panel.innerHTML = `
-            <h4>Kehadiran — ${esc(className)}</h4>
-            ${students.map(s => {
-                const cur = existing.get(s.student_id)?.status ?? 'HADIR';
-                return `
+        const statuses = ['HADIR','IZIN','SAKIT','TIDAK_HADIR'];
+        const statusLabel = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Alpha' };
+
+        function renderStudentRow(s) {
+            const cur      = existing.get(s.student_id)?.status ?? 'HADIR';
+            const curNotes = existing.get(s.student_id)?.notes  ?? '';
+            const radios   = statuses.map(st => `
+                <label class="att-radio-label">
+                    <input type="radio" name="att_${scheduleId}_${s.student_id}"
+                           value="${st}" ${cur === st ? 'checked' : ''}
+                           onchange="document.getElementById('notes_${scheduleId}_${s.student_id}').style.display=this.value==='IZIN'?'block':'none'">
+                    ${statusLabel[st]}
+                </label>`).join('');
+            return `
                 <div class="att-row">
                     <div class="att-name">
                         ${esc(s.full_name)}
                         <span class="att-nis">${esc(s.nis)}</span>
                     </div>
-                    <div class="att-radio-group">
-                        ${statuses.map(st => `
-                        <label class="att-radio-label">
-                            <input type="radio" name="att_${scheduleId}_${s.student_id}" value="${st}" ${cur === st ? 'checked' : ''}>
-                            ${st === 'TIDAK_HADIR' ? 'Alpha' : st.charAt(0) + st.slice(1).toLowerCase()}
-                        </label>`).join('')}
-                    </div>
+                    <div class="att-radio-group">${radios}</div>
+                    <input type="text" id="notes_${scheduleId}_${s.student_id}"
+                           class="input att-notes-input"
+                           placeholder="Alasan izin (opsional)…"
+                           value="${esc(curNotes)}"
+                           style="display:${cur === 'IZIN' ? 'block' : 'none'}; margin-top:4px; width:100%; font-size:0.85em">
                 </div>`;
-            }).join('')}
+        }
+
+        // Kelompokkan per 5 siswa dalam accordion
+        const CHUNK = 5;
+        const chunks = [];
+        for (let i = 0; i < students.length; i += CHUNK)
+            chunks.push(students.slice(i, i + CHUNK));
+
+        const accordionHtml = chunks.map((group, idx) => {
+            const first = group[0].full_name;
+            const last  = group[group.length - 1].full_name;
+            const label = group.length === 1 ? first : `${first} … ${last}`;
+            return `
+                <details ${idx === 0 ? 'open' : ''} class="att-accordion">
+                    <summary class="att-accordion-summary">
+                        Siswa ${idx * CHUNK + 1}–${idx * CHUNK + group.length}
+                        <span class="att-acc-names">${esc(label)}</span>
+                    </summary>
+                    ${group.map(renderStudentRow).join('')}
+                </details>`;
+        }).join('');
+
+        panel.innerHTML = `
+            <h4>Kehadiran — ${esc(className)}</h4>
+            ${accordionHtml}
             <div class="att-save-btn">
                 <button class="btn btn-success btn-sm att-save" data-schedule="${scheduleId}" data-count="${students.length}">
                     Simpan Kehadiran (${students.length} siswa)
@@ -239,8 +270,11 @@ async function saveAttendance(scheduleId, students) {
 
     try {
         const rows = students.map(s => {
-            const checked = document.querySelector(`input[name="att_${scheduleId}_${s.student_id}"]:checked`);
-            return { student_id: s.student_id, status: checked?.value ?? 'HADIR' };
+            const checked   = document.querySelector(`input[name="att_${scheduleId}_${s.student_id}"]:checked`);
+            const status    = checked?.value ?? 'HADIR';
+            const notesEl   = document.getElementById(`notes_${scheduleId}_${s.student_id}`);
+            const notes     = status === 'IZIN' ? (notesEl?.value.trim() || null) : null;
+            return { student_id: s.student_id, status, notes };
         });
         await upsertAttendance(scheduleId, rows);
         statusEl.textContent = `✓ Tersimpan — ${rows.length} siswa`;

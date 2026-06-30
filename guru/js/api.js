@@ -115,12 +115,12 @@ export async function getEnrolledStudents(classId, academicYear) {
 
 /**
  * Kehadiran yang sudah ada untuk satu sesi jadwal.
- * Returns Map: student_id → { attendance_id, status }
+ * Returns Map: student_id → { attendance_id, status, notes }
  */
 export async function getAttendanceForSession(scheduleId) {
     const { data, error } = await supabase
         .from('attendance')
-        .select('attendance_id, student_id, status')
+        .select('attendance_id, student_id, status, notes')
         .eq('schedule_id', scheduleId);
     if (error) throw error;
     const map = new Map();
@@ -129,7 +129,7 @@ export async function getAttendanceForSession(scheduleId) {
 }
 
 /**
- * Simpan kehadiran satu sesi. rows = [{ student_id, status }].
+ * Simpan kehadiran satu sesi. rows = [{ student_id, status, notes? }].
  * Upsert on (schedule_id, student_id).
  */
 export async function upsertAttendance(scheduleId, rows) {
@@ -138,6 +138,7 @@ export async function upsertAttendance(scheduleId, rows) {
         student_id:  r.student_id,
         status:      r.status,
         source:      'MANUAL',
+        notes:       r.notes ?? null,
     }));
     const { error } = await supabase
         .from('attendance')
