@@ -18,6 +18,9 @@ import {
     fetchPklAttendance,
     fetchDudiObservations,
     fetchDudiPartners,
+    fetchNonPklStudents,
+    createPlacement,
+    bulkImportPkl,
 } from './api.js';
 
 const titleEl      = document.getElementById('dash-title');
@@ -48,6 +51,7 @@ const obsEmpty     = document.getElementById('observations-empty');
 
 let students = [];
 let currentProgramId = null;
+let dudiPartners = [];
 
 const STATUS_LABELS = {
     HADIR:       'Hadir',
@@ -120,7 +124,7 @@ async function init() {
     loadingEl.style.display = 'none';
     dashBody.style.display = 'block';
 
-    await Promise.all([loadDudiPartners(), loadRecap(), loadObservations()]);
+    await Promise.all([loadDudiPartners(), loadRecap(), loadObservations(), initPlacementForm()]);
 }
 
 async function loadDudiPartners() {
@@ -129,6 +133,7 @@ async function loadDudiPartners() {
 
     try {
         const rows = await fetchDudiPartners(currentProgramId);
+        dudiPartners = rows;
         if (rows.length === 0) {
             dudiTbody.innerHTML = '';
             dudiEmpty.style.display = 'block';
@@ -278,5 +283,144 @@ logoutBtn.addEventListener('click', async () => {
     await logout();
     window.location.href = 'index.html';
 });
+
+// ── Penempatan PKL ────────────────────────────────────────────
+
+async function initPlacementForm() {
+    const plStudentEl  = document.getElementById('pl-student');
+    const plDudiEl     = document.getElementById('pl-dudi');
+    const plStartEl    = document.getElementById('pl-start');
+    const plEndEl      = document.getElementById('pl-end');
+    const plSubmitBtn  = document.getElementById('pl-submit');
+    const plSuccessEl  = document.getElementById('placement-success');
+    const plErrorEl    = document.getElementById('placement-error');
+    const placementForm = document.getElementById('placement-form');
+
+    if (!placementForm) return;
+
+    // Isi dropdown siswa (belum PKL)
+    async function reloadStudentSelect() {
+        plStudentEl.innerHTML = '<option value="">-- Pilih siswa --</option>';
+        try {
+            const nonPkl = await fetchNonPklStudents(currentProgramId);
+            nonPkl.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.student_id;
+                opt.textContent = `${s.full_name} (${s.nis})`;
+                plStudentEl.appendChild(opt);
+            });
+        } catch (_) { /* silent */ }
+    }
+
+    // Isi dropdown DUDI (mitra program ini)
+    function populateDudiSelect() {
+        plDudiEl.innerHTML = '<option value="">-- Pilih DUDI --</option>';
+        dudiPartners.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.user_id;
+            opt.textContent = d.org_name;
+            plDudiEl.appendChild(opt);
+        });
+    }
+
+    await reloadStudentSelect();
+    populateDudiSelect();
+
+    placementForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        plSuccessEl.style.display = 'none';
+        plErrorEl.style.display   = 'none';
+        plSubmitBtn.disabled      = true;
+        plSubmitBtn.textContent   = 'Menyimpan...';
+
+        try {
+            await createPlacement({
+                studentId:  plStudentEl.value,
+                dudiUserId: plDudiEl.value,
+                startDate:  plStartEl.value,
+                endDate:    plEndEl.value,
+            });
+
+            plSuccessEl.textContent   = 'Penempatan berhasil disimpan. Siswa sekarang berstatus PKL.';
+            plSuccessEl.style.display = 'block';
+            placementForm.reset();
+
+            // Refresh daftar siswa PKL & dropdown
+            students = await fetchPklStudents(currentProgramId);
+            renderSummary();
+            renderStudents();
+            await reloadStudentSelect();
+        } catch (err) {
+            plErrorEl.textContent   = 'Gagal menyimpan: ' + err.message;
+            plErrorEl.style.display = 'block';
+        } finally {
+            plSubmitBtn.disabled    = false;
+            plSubmitBtn.textContent = 'Simpan Penempatan';
+        }
+    });
+
+    // ── Import Excel ──────────────────────────────────────────
+    const btnDownloadTemplate = document.getElementById('btn-download-pkl-template');
+    const btnImportPkl        = document.getElementById('btn-import-pkl');
+    const pklFileInput        = document.getElementById('pkl-file-input');
+    const importResultEl      = document.getElementById('import-pkl-result');
+
+    btnDownloadTemplate.addEventListener('click', () => {
+        const csvContent = 'nis,login_dudi,tanggal_mulai,tanggal_selesai\n12345,cv-maju-bersama,2026-07-01,2026-09-30\n';
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = 'template_penempatan_pkl.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    btnImportPkl.addEventListener('click', () => pklFileInput.click());
+
+    pklFileInput.addEventListener('change', async () => {
+        const file = pklFileInput.files[0];
+        if (!file) return;
+
+        importResultEl.innerHTML = '<p class="hint">Mengimpor...</p>';
+        btnImportPkl.disabled = true;
+
+        try {
+            let csvText;
+            if (file.name.endsWith('.csv')) {
+                csvText = await file.text();
+            } else {
+                importResultEl.innerHTML = '<p style="color:var(--color-danger)">Format tidak didukung. Gunakan CSV. Untuk Excel, simpan dulu sebagai CSV dari Excel.</p>';
+                return;
+            }
+
+            const result = await bulkImportPkl(csvText);
+            const lines = [
+                `<strong>Selesai.</strong> Total: ${result.total} baris`,
+                `Berhasil: ${result.success}`,
+                `Dilewati (sudah ada): ${result.skipped}`,
+                `Gagal: ${result.failed}`,
+            ];
+            if (result.errors?.length) {
+                lines.push('<ul style="margin:8px 0 0;padding-left:20px">'
+                    + result.errors.map(e => `<li>Baris ${e.row}: ${esc(e.message)}</li>`).join('')
+                    + '</ul>');
+            }
+            const color = result.failed > 0 ? 'var(--color-warning)' : 'var(--color-success)';
+            importResultEl.innerHTML = `<div class="alert" style="background:var(--color-bg);border:1px solid ${color};color:var(--color-text)">${lines.join(' · ')}</div>`;
+
+            // Refresh student list
+            students = await fetchPklStudents(currentProgramId);
+            renderSummary();
+            renderStudents();
+            await reloadStudentSelect();
+        } catch (err) {
+            importResultEl.innerHTML = `<p style="color:var(--color-danger)">Gagal impor: ${esc(err.message)}</p>`;
+        } finally {
+            btnImportPkl.disabled = false;
+            pklFileInput.value    = '';
+        }
+    });
+}
 
 init();

@@ -1,0 +1,447 @@
+/* ============================================================
+   dudi/css/dudi.css
+   Portal DUDI (Dunia Usaha & Dunia Industri) — input absensi PKL & observasi.
+   Desain token sama dengan kaprodi/parent; accent amber/orange.
+   ============================================================ */
+
+:root {
+    --color-bg:          #f4f6f8;
+    --color-surface:     #ffffff;
+    --color-border:      #dde3e9;
+    --color-text:        #1f2937;
+    --color-text-muted:  #6b7280;
+    --color-primary:     #b45309;
+    --color-primary-dark:#92400e;
+    --color-primary-bg:  #fffbeb;
+    --color-success:     #16a34a;
+    --color-success-bg:  #ecfdf3;
+    --color-danger:      #dc2626;
+    --color-danger-bg:   #fef2f2;
+    --color-warning:     #d97706;
+    --color-warning-bg:  #fffbeb;
+
+    --radius:    8px;
+    --radius-lg: 12px;
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+    --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
+
+    --font-sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    font-family: var(--font-sans);
+    color: var(--color-text);
+    background: var(--color-bg);
+}
+
+h1, h2, h3, h4 { margin: 0 0 8px; font-weight: 600; }
+p { margin: 0 0 8px; color: var(--color-text-muted); }
+
+/* ── Buttons ─────────────────────────────────────────────── */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.btn-primary  { background: var(--color-primary); color: #fff; }
+.btn-primary:hover { background: var(--color-primary-dark); }
+.btn-primary:disabled { background: #d4a96a; cursor: not-allowed; }
+
+.btn-secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
+.btn-secondary:hover { background: var(--color-bg); }
+
+.btn-sm { padding: 6px 12px; font-size: 13px; }
+
+/* ── Form elements ───────────────────────────────────────── */
+
+label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--color-text);
+}
+
+.field { margin-bottom: 18px; }
+
+.input, select.input, textarea.input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+}
+
+.input:focus, select.input:focus, textarea.input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+
+textarea.input { resize: vertical; min-height: 80px; }
+
+.hint { font-size: 12px; color: var(--color-text-muted); margin-top: 4px; }
+
+/* ── Alerts ──────────────────────────────────────────────── */
+
+.alert {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    margin-bottom: 16px;
+    border: 1px solid transparent;
+}
+.alert-danger  { background: var(--color-danger-bg);  color: var(--color-danger);  border-color: #fecaca; }
+.alert-success { background: var(--color-success-bg); color: var(--color-success); border-color: #bbf7d0; }
+
+/* ── Login page ──────────────────────────────────────────── */
+
+.login-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 400px;
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 36px 32px;
+}
+
+.login-card .brand {
+    text-align: center;
+    margin-bottom: 24px;
+}
+.login-card .brand .logo-dot {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: var(--color-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+/* ── Portal shell ────────────────────────────────────────── */
+
+.portal-shell {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 16px;
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 16px 20px;
+    margin-bottom: 20px;
+}
+
+.topbar-info h2 { font-size: 18px; }
+.topbar-info p { font-size: 13px; margin: 0; }
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--color-text-muted);
+}
+
+/* ── Sections ────────────────────────────────────────────── */
+
+.section {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.section h3 {
+    margin-bottom: 16px;
+    font-size: 16px;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.section-header h3 { margin-bottom: 0; }
+
+/* ── Date navigation ─────────────────────────────────────── */
+
+.date-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.date-nav .date-label {
+    font-weight: 600;
+    font-size: 15px;
+    flex: 1;
+}
+
+/* ── Absensi grid ────────────────────────────────────────── */
+
+.student-attendance-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.attendance-row {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.attendance-row .student-name {
+    font-weight: 600;
+    font-size: 14px;
+    min-width: 160px;
+    flex: 1;
+}
+
+.attendance-row .student-nis {
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+.status-radios {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.status-radio {
+    position: relative;
+}
+
+.status-radio input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.status-radio label {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1.5px solid var(--color-border);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    background: var(--color-surface);
+    transition: all 0.12s;
+    margin: 0;
+}
+
+.status-radio input:checked + label {
+    border-color: currentColor;
+}
+
+.radio-hadir input:checked + label        { background: var(--color-success-bg); color: var(--color-success); border-color: var(--color-success); }
+.radio-izin input:checked + label         { background: #eff6ff; color: #1d4ed8; border-color: #1d4ed8; }
+.radio-sakit input:checked + label        { background: var(--color-warning-bg); color: var(--color-warning); border-color: var(--color-warning); }
+.radio-tidak_hadir input:checked + label  { background: var(--color-danger-bg); color: var(--color-danger); border-color: var(--color-danger); }
+
+.attendance-save-btn {
+    white-space: nowrap;
+}
+
+.save-status {
+    font-size: 11px;
+    margin-left: 4px;
+    color: var(--color-success);
+}
+
+/* ── Observation form ────────────────────────────────────── */
+
+.obs-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.obs-form .field-full { grid-column: 1 / -1; }
+
+.obs-form .field { margin-bottom: 0; }
+
+/* ── Observation cards ───────────────────────────────────── */
+
+.obs-card {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+}
+
+.obs-card .obs-meta {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin-bottom: 6px;
+}
+
+.obs-card .obs-content {
+    font-size: 14px;
+    color: var(--color-text);
+    margin: 0;
+}
+
+.obs-card.obs-positif { border-left: 3px solid var(--color-success); }
+.obs-card.obs-negatif { border-left: 3px solid var(--color-warning); }
+
+/* ── Summary cards ───────────────────────────────────────── */
+
+.summary-cards {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.summary-card {
+    flex: 1;
+    min-width: 100px;
+    text-align: center;
+    padding: 16px 8px;
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+}
+
+.summary-card .count {
+    font-size: 28px;
+    font-weight: 700;
+    display: block;
+}
+
+.summary-card .label {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ── Data table ──────────────────────────────────────────── */
+
+.table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 400px;
+}
+
+.data-table th,
+.data-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+}
+
+.data-table th {
+    font-weight: 600;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.data-table tbody tr:hover { background: var(--color-bg); }
+
+/* ── Status badges ───────────────────────────────────────── */
+
+.badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.badge-hadir        { background: var(--color-success-bg); color: var(--color-success); }
+.badge-izin         { background: #eff6ff; color: #1d4ed8; }
+.badge-sakit        { background: var(--color-warning-bg); color: var(--color-warning); }
+.badge-tidak_hadir  { background: var(--color-danger-bg);  color: var(--color-danger); }
+
+/* ── Filter row ──────────────────────────────────────────── */
+
+.filter-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.filter-row .field {
+    flex: 1;
+    min-width: 120px;
+    margin-bottom: 0;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+    .topbar {
+        flex-direction: column;
+        gap: 10px;
+        align-items: flex-start;
+    }
+
+    .obs-form { grid-template-columns: 1fr; }
+    .obs-form .field-full { grid-column: 1; }
+
+    .attendance-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .filter-row { flex-direction: column; }
+    .filter-row .field { min-width: unset; }
+}

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Portal DUDI — Input Absensi & Observasi</title>
+    <link rel="stylesheet" href="css/dudi.css" />
+</head>
+<body>
+    <div class="portal-shell">
+        <header class="topbar">
+            <div class="topbar-info">
+                <h2 id="dash-org-name">Portal DUDI</h2>
+                <p id="dash-user-name"></p>
+            </div>
+            <button id="logout-btn" type="button" class="btn btn-secondary">Keluar</button>
+        </header>
+
+        <div id="loading" class="loading">Memuat data siswa PKL...</div>
+
+        <div id="dash-body" style="display:none">
+
+            <!-- Ringkasan -->
+            <div class="summary-cards">
+                <div class="summary-card">
+                    <span class="count" id="stat-total">0</span>
+                    <span class="label">Siswa PKL</span>
+                </div>
+                <div class="summary-card" style="background:var(--color-success-bg);color:var(--color-success)">
+                    <span class="count" id="stat-hadir-today">0</span>
+                    <span class="label">Hadir Hari Ini</span>
+                </div>
+                <div class="summary-card" style="background:var(--color-danger-bg);color:var(--color-danger)">
+                    <span class="count" id="stat-absent-today">0</span>
+                    <span class="label">Belum Dicatat</span>
+                </div>
+            </div>
+
+            <!-- Absensi harian -->
+            <section class="section">
+                <div class="section-header">
+                    <h3>Absensi Harian</h3>
+                    <div class="date-nav">
+                        <button id="btn-prev-day" class="btn btn-secondary btn-sm">&lsaquo;</button>
+                        <input id="attendance-date" type="date" class="input" style="width:auto" />
+                        <button id="btn-next-day" class="btn btn-secondary btn-sm">&rsaquo;</button>
+                    </div>
+                </div>
+
+                <div id="attendance-list" class="student-attendance-list">
+                    <p class="hint">Memuat...</p>
+                </div>
+                <p id="attendance-empty" class="hint" style="display:none">
+                    Belum ada siswa PKL yang ditugaskan ke tempat usaha ini.
+                </p>
+            </section>
+
+            <!-- Tambah Observasi -->
+            <section class="section">
+                <h3>Tambah Catatan / Observasi</h3>
+                <div id="obs-success" class="alert alert-success" style="display:none"></div>
+                <div id="obs-error"   class="alert alert-danger"  style="display:none"></div>
+
+                <form id="obs-form" class="obs-form">
+                    <div class="field">
+                        <label for="obs-student">Siswa</label>
+                        <select id="obs-student" class="input" required>
+                            <option value="">-- Pilih siswa --</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="obs-sentiment">Penilaian</label>
+                        <select id="obs-sentiment" class="input" required>
+                            <option value="">-- Pilih --</option>
+                            <option value="POSITIF">Positif</option>
+                            <option value="NEGATIF">Perlu Perhatian</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="obs-dimension">Aspek</label>
+                        <select id="obs-dimension" class="input" required>
+                            <option value="">-- Pilih aspek --</option>
+                            <option value="AKADEMIK">Akademik / Kompetensi</option>
+                            <option value="KEHADIRAN">Kehadiran</option>
+                            <option value="PERILAKU">Perilaku / Disiplin</option>
+                            <option value="SOSIAL">Sosial / Komunikasi</option>
+                            <option value="AFEKTIF">Sikap / Motivasi</option>
+                            <option value="BAKAT_MINAT">Bakat &amp; Minat</option>
+                            <option value="FISIK">Fisik / Keselamatan</option>
+                            <option value="LAINNYA">Lainnya</option>
+                        </select>
+                    </div>
+                    <div class="field field-full">
+                        <label for="obs-content">Catatan <span class="hint" style="display:inline">(10–1000 karakter)</span></label>
+                        <textarea id="obs-content" class="input" rows="4"
+                                  placeholder="Tulis catatan perkembangan atau observasi siswa di tempat PKL..." required></textarea>
+                        <p class="hint"><span id="obs-char-count">0</span>/1000 karakter</p>
+                    </div>
+                    <div class="field-full">
+                        <button id="obs-submit" type="submit" class="btn btn-primary">Simpan Catatan</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Riwayat Observasi -->
+            <section class="section">
+                <h3>Riwayat Catatan</h3>
+                <div id="obs-history-list"></div>
+                <p id="obs-history-empty" class="hint" style="display:none">Belum ada catatan observasi.</p>
+            </section>
+
+            <!-- Riwayat Absensi -->
+            <section class="section">
+                <h3>Riwayat Absensi (14 Hari Terakhir)</h3>
+                <div class="table-scroll">
+                    <table class="data-table" id="history-table">
+                        <thead>
+                            <tr>
+                                <th>Tanggal</th>
+                                <th>Nama Siswa</th>
+                                <th>Status</th>
+                                <th>Catatan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody"></tbody>
+                    </table>
+                </div>
+                <p id="history-empty" class="hint" style="display:none">Belum ada riwayat absensi 14 hari terakhir.</p>
+            </section>
+
+        </div>
+    </div>
+
+    <script type="module" src="js/dashboard.js"></script>
+</body>
+</html>

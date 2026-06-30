@@ -75,6 +75,63 @@
                 <p id="dudi-empty" class="hint" style="display:none">Belum ada DUDI yang ditautkan ke program ini. Isi kolom <code>kode_program</code> saat impor DUDI untuk menautkannya.</p>
             </section>
 
+            <!-- Penempatan PKL -->
+            <section class="section">
+                <h3>Penempatan PKL</h3>
+
+                <!-- Form tambah satu penempatan -->
+                <details id="form-penempatan-toggle" style="margin-bottom:16px">
+                    <summary style="cursor:pointer;font-weight:600;font-size:14px;color:var(--color-primary)">
+                        ＋ Tambah Penempatan Manual
+                    </summary>
+                    <div style="margin-top:12px">
+                        <div id="placement-success" class="alert alert-success" style="display:none"></div>
+                        <div id="placement-error"   class="alert alert-danger"  style="display:none"></div>
+                        <form id="placement-form" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                            <div class="field">
+                                <label for="pl-student">Siswa (belum PKL)</label>
+                                <select id="pl-student" class="input" required>
+                                    <option value="">-- Pilih siswa --</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="pl-dudi">Mitra DUDI</label>
+                                <select id="pl-dudi" class="input" required>
+                                    <option value="">-- Pilih DUDI --</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="pl-start">Tanggal Mulai</label>
+                                <input id="pl-start" class="input" type="date" required />
+                            </div>
+                            <div class="field">
+                                <label for="pl-end">Tanggal Selesai</label>
+                                <input id="pl-end" class="input" type="date" required />
+                            </div>
+                            <div style="grid-column:1/-1">
+                                <button id="pl-submit" type="submit" class="btn btn-primary">Simpan Penempatan</button>
+                            </div>
+                        </form>
+                    </div>
+                </details>
+
+                <!-- Import Excel -->
+                <details id="form-import-toggle" style="margin-bottom:16px">
+                    <summary style="cursor:pointer;font-weight:600;font-size:14px;color:var(--color-primary)">
+                        ↑ Impor Excel (massal)
+                    </summary>
+                    <div style="margin-top:12px">
+                        <p class="hint">Kolom: <code>nis</code>, <code>login_dudi</code>, <code>tanggal_mulai</code>, <code>tanggal_selesai</code> (format YYYY-MM-DD).</p>
+                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                            <button id="btn-download-pkl-template" class="btn btn-secondary btn-sm" type="button">Unduh Template</button>
+                            <input id="pkl-file-input" type="file" accept=".xlsx,.csv" style="display:none" />
+                            <button id="btn-import-pkl" class="btn btn-primary btn-sm" type="button">Pilih File &amp; Impor</button>
+                        </div>
+                        <div id="import-pkl-result" style="margin-top:10px"></div>
+                    </div>
+                </details>
+            </section>
+
             <!-- Rekap absensi -->
             <section class="section">
                 <h3>Rekap Absensi PKL</h3>

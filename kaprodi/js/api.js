@@ -104,6 +104,73 @@ export async function logout() {
 }
 
 /**
+ * Siswa di program ini yang BELUM berstatus PKL (kandidat penempatan baru).
+ */
+export async function fetchNonPklStudents(programId) {
+    const { data, error } = await supabase
+        .from('students')
+        .select('student_id, nis, full_name, student_status')
+        .eq('program_id', programId)
+        .neq('student_status', 'PKL')
+        .in('student_status', ['ACTIVE'])
+        .order('full_name', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+}
+
+/**
+ * Tambah satu penempatan PKL:
+ *   1. INSERT pkl_placements
+ *   2. UPDATE students.student_status = 'PKL'
+ * Keduanya pakai session Kaprodi (RLS izinkan KAPRODI tulis keduanya).
+ */
+export async function createPlacement({ studentId, dudiUserId, startDate, endDate }) {
+    const { error: plErr } = await supabase
+        .from('pkl_placements')
+        .insert({
+            student_id:   studentId,
+            dudi_user_id: dudiUserId,
+            start_date:   startDate,
+            end_date:     endDate,
+            is_active:    true,
+        });
+    if (plErr) throw plErr;
+
+    const { error: stuErr } = await supabase
+        .from('students')
+        .update({ student_status: 'PKL' })
+        .eq('student_id', studentId);
+    if (stuErr) throw stuErr;
+}
+
+/**
+ * Impor penempatan PKL massal via edge function bulk-import-pkl.
+ * csvText: isi file CSV (string).
+ */
+export async function bulkImportPkl(csvText) {
+    const { data: authData } = await supabase.auth.getSession();
+    const token = authData?.session?.access_token;
+    if (!token) throw new Error('Sesi tidak valid. Silakan login ulang.');
+
+    const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/bulk-import-pkl`,
+        {
+            method:  'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type':  'text/csv',
+            },
+            body: csvText,
+        }
+    );
+
+    const json = await res.json();
+    if (!res.ok) throw new Error(json?.error?.message ?? `HTTP ${res.status}`);
+    return json.data;
+}
+
+/**
  * Siswa berstatus PKL pada program Kaprodi, beserta penempatan aktif
  * (DUDI / tempat usaha + periode). Disaring per program di sini.
  */
