@@ -81,46 +81,65 @@ export async function fetchChildren(parentUserId) {
 }
 
 export async function fetchAttendance(studentId, dateStart, dateEnd) {
+    // PostgREST silently ignores filters on embedded (non-!inner) relations.
+    // Flip the query: start from teaching_schedules (date filter works directly),
+    // then !inner-join attendance filtered by student_id + is_void.
     let query = supabase
-        .from('attendance')
+        .from('teaching_schedules')
         .select(`
-            attendance_id,
-            status,
-            is_void,
-            notes,
-            schedule:teaching_schedules (
-                session_date,
-                session_start,
-                session_end,
-                subject:subjects ( name ),
-                teacher:users!teaching_schedules_scheduled_teacher_id_fkey ( full_name )
+            session_date,
+            session_start,
+            session_end,
+            subject:subjects ( name ),
+            teacher:users!teaching_schedules_scheduled_teacher_id_fkey ( full_name ),
+            attendance!inner (
+                attendance_id,
+                status,
+                is_void,
+                notes
             )
         `)
-        .eq('student_id', studentId)
-        .eq('is_void', false)
-        .order('created_at', { ascending: false });
+        .eq('attendance.student_id', studentId)
+        .eq('attendance.is_void', false)
+        .order('session_date', { ascending: false });
 
     if (dateStart) {
-        query = query.gte('schedule.session_date', dateStart);
+        query = query.gte('session_date', dateStart);
     }
     if (dateEnd) {
-        query = query.lte('schedule.session_date', dateEnd);
+        query = query.lte('session_date', dateEnd);
     }
 
     const { data, error } = await query;
     if (error) throw error;
 
-    return (data || [])
-        .filter(r => r.schedule !== null)
-        .map(r => ({
-            date:    r.schedule.session_date,
-            start:   r.schedule.session_start,
-            end:     r.schedule.session_end,
-            subject: r.schedule.subject?.name ?? 'KBM',
-            teacher: r.schedule.teacher?.full_name ?? '-',
-            status:  r.status,
-            notes:   r.notes,
-        }));
+    // Reshape to match the original shape callers expect:
+    // { attendance_id, status, is_void, notes, schedule: { session_date, ... } }
+    const reshaped = (data ?? []).flatMap(sched =>
+        (sched.attendance ?? []).map(att => ({
+            attendance_id: att.attendance_id,
+            status: att.status,
+            is_void: att.is_void,
+            notes: att.notes,
+            schedule: {
+                session_date: sched.session_date,
+                session_start: sched.session_start,
+                session_end: sched.session_end,
+                subject: sched.subject,
+                teacher: sched.teacher,
+            },
+        }))
+    );
+
+    return reshaped.map(r => ({
+        date:    r.schedule.session_date,
+        start:   r.schedule.session_start,
+        end:     r.schedule.session_end,
+        subject: r.schedule.subject?.name ?? 'KBM',
+        teacher: r.schedule.teacher?.full_name ?? '-',
+        status:  r.status,
+        notes:   r.notes,
+    }));
 }
 
 export async function fetchObservations(studentId) {

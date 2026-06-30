@@ -21,6 +21,7 @@ const GRADES = [10, 11, 12];
 const GRADE_LABELS = { 10: 'Kelas X', 11: 'Kelas XI', 12: 'Kelas XII' };
 
 let overlayEl = null;
+let loadSeq = 0; // monotonic counter to cancel stale async loads
 let state = {
     academicYear: null,
     semester: null,
@@ -125,6 +126,7 @@ function closeOverlay() {
 }
 
 async function loadDay() {
+    const seq = ++loadSeq;
     state.slots = [];
     state.cells = new Map();
 
@@ -132,6 +134,8 @@ async function loadDay() {
         getTimeSlots(state.academicYear, state.semester, state.day),
         getScheduleTemplates(state.academicYear, state.semester, state.day),
     ]);
+
+    if (seq !== loadSeq) return; // a newer load was triggered, discard this result
 
     state.slots = timeSlots.map(s => ({
         start_time: s.start_time?.slice(0, 5),
@@ -154,11 +158,17 @@ async function loadDay() {
     }
 
     state.dirty = false;
-    await loadGrade();
+    await loadGrade(seq);
 }
 
-async function loadGrade() {
+async function loadGrade(seq) {
+    // When called from a grade-tab click (not from loadDay), take a new sequence slot
+    if (seq === undefined) seq = ++loadSeq;
+
     const classes = await getClasses(state.academicYear);
+
+    if (seq !== loadSeq) return; // stale
+
     state.classes = classes
         .filter(c => c.grade_level === state.grade)
         .sort((a, b) => a.name.localeCompare(b.name, 'id'));
