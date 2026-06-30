@@ -157,6 +157,7 @@ async function loadDay() {
         }
     }
 
+    sortSlots();   // tampilkan baris urut waktu (istirahat di posisi yang benar)
     state.dirty = false;
     await loadGrade(seq);
 }
@@ -193,6 +194,7 @@ function addRow(isBreak) {
         break_label: isBreak ? 'ISTIRAHAT' : null,
     });
     state.dirty = true;
+    sortSlots();
     renderGrid();
 }
 
@@ -210,6 +212,30 @@ function removeRow(idx) {
     state.cells = newCells;
     state.dirty = true;
     renderGrid();
+}
+
+// Jaga agar state.slots selalu urut berdasarkan waktu mulai, lalu re-key
+// state.cells (yang memakai index slot) agar tetap menunjuk slot yang benar.
+// Tanpa ini, baris ISTIRAHAT/kegiatan yang ditambah belakangan menumpuk di
+// bawah meski waktunya di tengah hari.
+function sortSlots() {
+    const indexed = state.slots.map((slot, oldIdx) => ({ slot, oldIdx }));
+    indexed.sort((a, b) => {
+        const s = (a.slot.start_time ?? '').localeCompare(b.slot.start_time ?? '');
+        return s !== 0 ? s : (a.slot.end_time ?? '').localeCompare(b.slot.end_time ?? '');
+    });
+    const oldToNew = new Map();
+    indexed.forEach((e, newIdx) => oldToNew.set(e.oldIdx, newIdx));
+    state.slots = indexed.map(e => e.slot);
+
+    const newCells = new Map();
+    for (const [key, val] of state.cells) {
+        const [si, cid] = key.split('_');
+        const newIdx = oldToNew.get(Number(si));
+        if (newIdx === undefined) continue;
+        newCells.set(`${newIdx}_${cid}`, val);
+    }
+    state.cells = newCells;
 }
 
 function renderGrid() {
@@ -296,14 +322,17 @@ function wireGridEvents() {
             state.slots[idx][field] = input.value;
             state.dirty = true;
 
+            // Sinkronisasi waktu antar baris bersebelahan (array selalu urut waktu).
             if (field === 'end_time' && idx + 1 < state.slots.length) {
                 state.slots[idx + 1].start_time = input.value;
-                renderGrid();
             }
             if (field === 'start_time' && idx > 0) {
                 state.slots[idx - 1].end_time = input.value;
-                renderGrid();
             }
+            // Urutkan ulang agar baris (mis. istirahat yang waktunya diubah)
+            // langsung pindah ke posisi kronologis yang benar.
+            sortSlots();
+            renderGrid();
         });
     });
 
