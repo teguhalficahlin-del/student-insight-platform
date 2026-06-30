@@ -112,7 +112,7 @@ export async function fetchNonPklStudents(programId) {
         .select('student_id, nis, full_name, student_status')
         .eq('program_id', programId)
         .neq('student_status', 'PKL')
-        .in('student_status', ['ACTIVE'])
+        .in('student_status', ['AKTIF'])
         .order('full_name', { ascending: true });
 
     if (error) throw error;
@@ -137,11 +137,17 @@ export async function createPlacement({ studentId, dudiUserId, startDate, endDat
         });
     if (plErr) throw plErr;
 
-    const { error: stuErr } = await supabase
-        .from('students')
-        .update({ student_status: 'PKL' })
-        .eq('student_id', studentId);
-    if (stuErr) throw stuErr;
+    // Trigger fn_pkl_status_consistency: hanya izinkan status PKL jika
+    // placement sudah mulai (start_date <= today). Penempatan masa depan
+    // tetap tersimpan — status siswa akan diupdate saat PKL berjalan.
+    const today = new Date().toISOString().slice(0, 10);
+    if (startDate <= today) {
+        const { error: stuErr } = await supabase
+            .from('students')
+            .update({ student_status: 'PKL' })
+            .eq('student_id', studentId);
+        if (stuErr) throw stuErr;
+    }
 }
 
 /**
