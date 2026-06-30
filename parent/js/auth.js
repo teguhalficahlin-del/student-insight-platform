@@ -6,6 +6,8 @@
  */
 
 import { loginWithIdentifier, getCurrentUserRow } from './api.js';
+import { applyBranding } from '../../shared/branding.js';
+applyBranding();
 
 const form         = document.getElementById('login-form');
 const identifierEl = document.getElementById('login-identifier');

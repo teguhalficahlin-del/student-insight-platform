@@ -4,6 +4,19 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const saKey = sessionStorage.getItem('sa_key');
 if (!saKey) window.location.href = 'index.html';
 
+// ── Sinkron color picker ↔ hex input ─────────────────────────
+function syncColor(pickerId, hexId) {
+    const picker = document.getElementById(pickerId);
+    const hex    = document.getElementById(hexId);
+    if (!picker || !hex) return;
+    picker.addEventListener('input', () => { hex.value = picker.value; });
+    hex.addEventListener('input', () => {
+        if (/^#[0-9a-fA-F]{6}$/.test(hex.value)) picker.value = hex.value;
+    });
+}
+syncColor('f-primary-color', 'f-primary-color-hex');
+syncColor('f-secondary-color', 'f-secondary-color-hex');
+
 function esc(s) {
     const el = document.createElement('span');
     el.textContent = s ?? '—';
@@ -27,7 +40,7 @@ async function loadSchools() {
     const tbody   = document.getElementById('schools-body');
 
     try {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/schools?select=school_id,name,npsn,phone,is_active,created_at&order=created_at.desc`, {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/schools?select=school_id,name,npsn,slug,phone,primary_color,is_active,created_at&order=created_at.desc`, {
             headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
         });
         const data = await res.json();
@@ -42,6 +55,8 @@ async function loadSchools() {
         tbody.innerHTML = data.map(s => `<tr>
             <td>${esc(s.name)}</td>
             <td>${esc(s.npsn)}</td>
+            <td>${s.slug ? `<code style="font-size:12px;color:var(--color-warning)">?school=${esc(s.slug)}</code>` : '—'}</td>
+            <td>${s.primary_color ? `<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:3px;background:${esc(s.primary_color)};display:inline-block"></span>${esc(s.primary_color)}</span>` : '—'}</td>
             <td>${esc(s.phone)}</td>
             <td><span class="badge ${s.is_active ? 'badge-active' : 'badge-inactive'}">${s.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
             <td>${fmt(s.created_at)}</td>
@@ -69,6 +84,10 @@ document.getElementById('provision-form').addEventListener('submit', async (e) =
         address:          document.getElementById('f-address').value.trim(),
         admin_name:       document.getElementById('f-admin-name').value.trim(),
         admin_identifier: document.getElementById('f-admin-id').value.trim(),
+        slug:             document.getElementById('f-slug').value.trim() || null,
+        logo_url:         document.getElementById('f-logo-url').value.trim() || null,
+        primary_color:    document.getElementById('f-primary-color-hex').value.trim() || null,
+        secondary_color:  document.getElementById('f-secondary-color-hex').value.trim() || null,
     };
 
     try {

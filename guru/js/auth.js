@@ -1,4 +1,6 @@
 import { supabase, loginWithIdentifier, getCurrentUserRow, GURU_ROLES } from './api.js';
+import { applyBranding } from '../../shared/branding.js';
+applyBranding();
 
 const form       = document.getElementById('login-form');
 const identEl    = document.getElementById('identifier');

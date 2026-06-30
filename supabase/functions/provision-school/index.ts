@@ -58,7 +58,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     try {
         const body = await req.json();
-        const { school_name, npsn, address, phone, admin_name, admin_identifier } = body;
+        const { school_name, npsn, address, phone, admin_name, admin_identifier,
+                slug, logo_url, primary_color, secondary_color } = body;
 
         if (!school_name || !admin_name || !admin_identifier) {
             return json({ error: 'school_name, admin_name, dan admin_identifier wajib diisi' }, 400);
@@ -82,7 +83,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
         // ── 2. Buat record schools ────────────────────────────
         const { data: school, error: schoolErr } = await admin
             .from('schools')
-            .insert({ name: school_name, npsn: npsn || null, address: address || null, phone: phone || null })
+            .insert({
+                name:            school_name,
+                npsn:            npsn            || null,
+                address:         address         || null,
+                phone:           phone           || null,
+                slug:            slug            || null,
+                logo_url:        logo_url        || null,
+                primary_color:   primary_color   || '#1a56db',
+                secondary_color: secondary_color || '#1e40af',
+            })
             .select('school_id')
             .single();
 

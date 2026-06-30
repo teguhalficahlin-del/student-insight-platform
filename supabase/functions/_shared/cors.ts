@@ -19,6 +19,7 @@ export const corsHeaders: Record<string, string> = {
         'apikey',
         'content-type',
         'x-schema-version',
+        'x-superadmin-key',
     ].join(', '),
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
 };
