@@ -86,7 +86,7 @@ export async function getMyScheduleForDate(userId, date) {
         .from('teaching_schedules')
         .select(`
             schedule_id, session_date, session_start, session_end,
-            class:classes ( class_id, name, grade_level )
+            class:classes ( class_id, name )
         `)
         .eq('session_date', date)
         .eq('scheduled_teacher_id', userId)
