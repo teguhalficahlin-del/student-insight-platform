@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Siswa — SMK Harapan Rokan</title>
+    <link rel="stylesheet" href="css/student.css">
+</head>
+<body>
+
+<div id="loading">Memuat data akun…</div>
+
+<div id="app" style="display:none">
+
+    <!-- Header -->
+    <header class="app-header">
+        <h2>SMK Harapan Rokan</h2>
+        <div class="header-info">
+            <span class="header-name" id="hdr-name">—</span>
+            <span class="header-role" id="hdr-meta">—</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="logout-btn" style="margin-left:8px">Keluar</button>
+    </header>
+
+    <!-- Tab navigation -->
+    <nav class="tab-nav" id="tab-nav"></nav>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: JADWAL HARI INI
+    ════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-jadwal">
+        <div class="page-body">
+            <div class="section-card">
+                <h3>Jadwal Pelajaran</h3>
+                <div class="date-row">
+                    <label for="sched-date">Tanggal:</label>
+                    <input type="date" id="sched-date" class="input" style="width:auto">
+                    <button class="btn btn-secondary btn-sm" id="sched-refresh">Muat</button>
+                </div>
+                <div id="sched-content">
+                    <p class="hint">Pilih tanggal lalu klik Muat.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: KEHADIRAN
+    ════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-kehadiran">
+        <div class="page-body">
+            <div class="stats-row" id="att-stats">
+                <div class="stat-card"><span class="stat-value" id="att-hadir">—</span><div class="stat-label">Hadir</div></div>
+                <div class="stat-card"><span class="stat-value" id="att-izin">—</span><div class="stat-label">Izin</div></div>
+                <div class="stat-card"><span class="stat-value" id="att-sakit">—</span><div class="stat-label">Sakit</div></div>
+                <div class="stat-card"><span class="stat-value" id="att-alpha">—</span><div class="stat-label">Alpha</div></div>
+                <div class="stat-card"><span class="stat-value" id="att-pct">—</span><div class="stat-label">% Hadir</div></div>
+            </div>
+            <div class="section-card">
+                <h3>Rekap Kehadiran</h3>
+                <div class="date-row" style="margin-bottom:12px">
+                    <label>Dari:</label>
+                    <input type="date" id="att-date-start" class="input" style="width:auto">
+                    <label>s/d:</label>
+                    <input type="date" id="att-date-end" class="input" style="width:auto">
+                    <button class="btn btn-secondary btn-sm" id="att-filter-btn">Filter</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="table" id="att-table">
+                        <thead><tr><th>Tanggal</th><th>Mata Pelajaran</th><th>Status</th></tr></thead>
+                        <tbody id="att-body"></tbody>
+                    </table>
+                </div>
+                <p class="hint" id="att-empty" style="display:none">Belum ada data kehadiran pada rentang ini.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: OBSERVASI
+    ════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-observasi">
+        <div class="page-body">
+            <div class="section-card">
+                <h3>Observasi Tentang Saya</h3>
+                <p class="hint" id="obs-hint">Memuat…</p>
+                <div id="obs-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: PKL (hanya muncul jika status PKL)
+    ════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-pkl">
+        <div class="page-body">
+            <div class="section-card">
+                <h3>Status PKL</h3>
+                <div id="pkl-info"><p class="hint">Memuat…</p></div>
+            </div>
+            <div class="stats-row" id="pkl-stats" style="display:none">
+                <div class="stat-card"><span class="stat-value" id="pkl-hadir">—</span><div class="stat-label">Hadir</div></div>
+                <div class="stat-card"><span class="stat-value" id="pkl-izin">—</span><div class="stat-label">Izin</div></div>
+                <div class="stat-card"><span class="stat-value" id="pkl-sakit">—</span><div class="stat-label">Sakit</div></div>
+                <div class="stat-card"><span class="stat-value" id="pkl-alpha">—</span><div class="stat-label">Alpha</div></div>
+                <div class="stat-card"><span class="stat-value" id="pkl-pct">—</span><div class="stat-label">% Hadir</div></div>
+            </div>
+            <div class="section-card" id="pkl-recap-card" style="display:none">
+                <h3>Riwayat Absensi PKL</h3>
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead><tr><th>Tanggal</th><th>Status</th></tr></thead>
+                        <tbody id="pkl-recap-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div><!-- #app -->
+
+<script type="module" src="js/dashboard.js"></script>
+</body>
+</html>

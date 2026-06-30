@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Siswa — SMK Harapan Rokan</title>
+    <link rel="stylesheet" href="css/student.css">
+</head>
+<body>
+<div class="login-page">
+    <div class="login-card">
+        <div class="login-logo">
+            <h1>Portal Siswa</h1>
+            <p>SMK Harapan Rokan</p>
+        </div>
+        <div class="login-error" id="login-error"></div>
+        <form id="login-form">
+            <div class="field">
+                <label for="identifier">NIS</label>
+                <input type="text" id="identifier" class="input" placeholder="Masukkan NIS" autocomplete="username" required>
+            </div>
+            <div class="field">
+                <label for="password">Password</label>
+                <input type="password" id="password" class="input" placeholder="Password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%" id="login-btn">Masuk</button>
+        </form>
+    </div>
+</div>
+<script type="module" src="js/auth.js"></script>
+</body>
+</html>
