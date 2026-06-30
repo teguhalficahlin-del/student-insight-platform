@@ -10,6 +10,7 @@ import {
     getCurrentUserRow,
     logout,
     fetchChildren,
+    fetchSchedule,
     fetchAttendance,
     fetchObservations,
 } from './api.js';
@@ -20,6 +21,11 @@ const logoutBtn      = document.getElementById('logout-btn');
 const loadingEl      = document.getElementById('loading');
 const childSelector  = document.getElementById('child-selector');
 const selectChild    = document.getElementById('select-child');
+const sectionSched   = document.getElementById('section-schedule');
+const schedTbody     = document.querySelector('#schedule-table tbody');
+const schedEmpty     = document.getElementById('schedule-empty');
+const schedDate      = document.getElementById('schedule-date');
+const btnSchedule    = document.getElementById('btn-schedule');
 const sectionAtt     = document.getElementById('section-attendance');
 const sectionObs     = document.getElementById('section-observations');
 const attSummary     = document.getElementById('attendance-summary');
@@ -101,8 +107,10 @@ async function init() {
     monthAgo.setDate(monthAgo.getDate() - 30);
     filterStart.value = monthAgo.toISOString().slice(0, 10);
     filterEnd.value   = today.toISOString().slice(0, 10);
+    schedDate.value   = today.toISOString().slice(0, 10);
 
     loadingEl.style.display = 'none';
+    sectionSched.style.display = 'block';
     sectionAtt.style.display = 'block';
     sectionObs.style.display = 'block';
 
@@ -114,9 +122,41 @@ async function loadChildData(index) {
     portalTitle.textContent = `Portal Orang Tua — ${child.full_name}`;
 
     await Promise.all([
+        loadSchedule(child.class_id),
         loadAttendance(child.student_id),
         loadObservations(child.student_id),
     ]);
+}
+
+async function loadSchedule(classId) {
+    schedTbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--color-text-muted)">Memuat...</td></tr>';
+    schedEmpty.style.display = 'none';
+
+    if (!classId) {
+        schedTbody.innerHTML = '';
+        schedEmpty.textContent = 'Anak belum terdaftar di kelas pada tahun ajaran ini.';
+        schedEmpty.style.display = 'block';
+        return;
+    }
+
+    try {
+        const rows = await fetchSchedule(classId, schedDate.value);
+        if (rows.length === 0) {
+            schedTbody.innerHTML = '';
+            schedEmpty.textContent = 'Tidak ada jadwal pelajaran pada tanggal ini.';
+            schedEmpty.style.display = 'block';
+            return;
+        }
+        schedTbody.innerHTML = rows.map(r => `
+            <tr>
+                <td>${r.start?.slice(0, 5)} – ${r.end?.slice(0, 5)}</td>
+                <td>${esc(r.subject)}</td>
+                <td>${esc(r.teacher)}</td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        schedTbody.innerHTML = `<tr><td colspan="3" class="hint">Gagal memuat: ${esc(err.message)}</td></tr>`;
+    }
 }
 
 async function loadAttendance(studentId) {
@@ -216,6 +256,11 @@ selectChild.addEventListener('change', () => loadChildData(Number(selectChild.va
 btnFilter.addEventListener('click', () => {
     const idx = Number(selectChild.value);
     loadAttendance(children[idx].student_id);
+});
+
+btnSchedule.addEventListener('click', () => {
+    const idx = Number(selectChild.value);
+    loadSchedule(children[idx].class_id);
 });
 
 logoutBtn.addEventListener('click', async () => {

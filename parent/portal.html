@@ -23,6 +23,28 @@
 
         <div id="loading" class="loading">Memuat data...</div>
 
+        <section id="section-schedule" class="section" style="display:none">
+            <h3>Jadwal Pelajaran</h3>
+            <div class="filter-row">
+                <div class="field" style="margin-bottom:0">
+                    <label for="schedule-date">Tanggal</label>
+                    <input id="schedule-date" class="input" type="date" />
+                </div>
+                <button id="btn-schedule" class="btn btn-primary">Tampilkan</button>
+            </div>
+            <table class="data-table" id="schedule-table">
+                <thead>
+                    <tr>
+                        <th>Jam</th>
+                        <th>Mata Pelajaran</th>
+                        <th>Guru</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <p id="schedule-empty" class="hint" style="display:none">Tidak ada jadwal pelajaran pada tanggal ini.</p>
+        </section>
+
         <section id="section-attendance" class="section" style="display:none">
             <h3>Kehadiran</h3>
             <div class="filter-row">

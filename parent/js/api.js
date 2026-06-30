@@ -60,7 +60,7 @@ export async function fetchChildren(parentUserId) {
                 full_name,
                 student_status,
                 program:programs ( name ),
-                enrollment:class_enrollments ( class:classes ( name ), academic_year, semester )
+                enrollment:class_enrollments ( class_id, withdrawn_at, class:classes ( name ), academic_year, semester )
             )
         `)
         .eq('parent_user_id', parentUserId);
@@ -68,16 +68,41 @@ export async function fetchChildren(parentUserId) {
     if (error) throw error;
     return (data || []).map(r => {
         const s = r.students;
-        const latest = Array.isArray(s.enrollment) ? s.enrollment[0] : s.enrollment;
+        const enrolls = Array.isArray(s.enrollment) ? s.enrollment : (s.enrollment ? [s.enrollment] : []);
+        // Pilih enrollment aktif (belum withdrawn); fallback ke yang pertama.
+        const active = enrolls.find(e => !e.withdrawn_at) ?? enrolls[0] ?? null;
         return {
             student_id: s.student_id,
             nis:        s.nis,
             full_name:  s.full_name,
             status:     s.student_status,
             program:    s.program?.name ?? '-',
-            class_name: latest?.class?.name ?? '-',
+            class_id:   active?.class_id ?? null,
+            class_name: active?.class?.name ?? '-',
         };
     });
+}
+
+export async function fetchSchedule(classId, date) {
+    if (!classId) return [];
+    const { data, error } = await supabase
+        .from('teaching_schedules')
+        .select(`
+            schedule_id, session_date, session_start, session_end,
+            subject:subjects ( name ),
+            teacher:users!teaching_schedules_scheduled_teacher_id_fkey ( full_name )
+        `)
+        .eq('class_id', classId)
+        .eq('session_date', date)
+        .order('session_start');
+
+    if (error) throw error;
+    return (data ?? []).map(r => ({
+        start:   r.session_start,
+        end:     r.session_end,
+        subject: r.subject?.name ?? 'KBM',
+        teacher: r.teacher?.full_name ?? '-',
+    }));
 }
 
 export async function fetchAttendance(studentId, dateStart, dateEnd) {
