@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Stakeholder — SMK Harapan Rokan</title>
+    <link rel="stylesheet" href="css/stakeholder.css">
+</head>
+<body>
+
+<div id="loading">Memuat ringkasan…</div>
+
+<div id="app" style="display:none">
+
+    <!-- Header -->
+    <header class="app-header">
+        <h2>SMK Harapan Rokan</h2>
+        <div class="header-info">
+            <span class="header-name" id="hdr-name">—</span>
+            <span class="header-role">Stakeholder · Ringkasan</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="logout-btn" style="margin-left:8px">Keluar</button>
+    </header>
+
+    <div class="page-body">
+
+        <div class="section-head">
+            <h3>Ringkasan Sekolah</h3>
+            <div class="head-actions">
+                <span class="hint" id="updated-at">—</span>
+                <button class="btn btn-secondary btn-sm" id="refresh-btn">Muat Ulang</button>
+            </div>
+        </div>
+
+        <!-- Kartu ringkasan -->
+        <div class="stats-row">
+            <div class="stat-card"><span class="stat-value" id="st-siswa">—</span><div class="stat-label">Siswa Aktif</div></div>
+            <div class="stat-card"><span class="stat-value" id="st-pkl">—</span><div class="stat-label">Siswa PKL</div></div>
+            <div class="stat-card"><span class="stat-value" id="st-staf">—</span><div class="stat-label">Staf &amp; Guru</div></div>
+            <div class="stat-card"><span class="stat-value" id="st-program">—</span><div class="stat-label">Program Keahlian</div></div>
+            <div class="stat-card"><span class="stat-value" id="st-kelas">—</span><div class="stat-label">Kelas</div></div>
+        </div>
+
+        <div class="stats-row">
+            <div class="stat-card stat-accent"><span class="stat-value" id="st-kehadiran-bulan">—</span><div class="stat-label">% Kehadiran Bulan Ini</div></div>
+            <div class="stat-card"><span class="stat-value" id="st-sesi">—</span><div class="stat-label">Sesi Hari Ini</div></div>
+            <div class="stat-card"><span class="stat-value" id="st-hadir-hari">—</span><div class="stat-label">Kehadiran Tercatat Hari Ini</div></div>
+        </div>
+
+        <div class="section-card">
+            <p class="hint">Dashboard ini hanya menampilkan ringkasan agregat sekolah (view-only). Data individu siswa dan staf tidak ditampilkan.</p>
+        </div>
+
+        <div id="error-box" class="login-error" style="display:none"></div>
+
+    </div>
+
+</div><!-- #app -->
+
+<script type="module" src="js/dashboard.js"></script>
+</body>
+</html>

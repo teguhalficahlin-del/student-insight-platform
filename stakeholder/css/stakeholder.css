@@ -1,0 +1,114 @@
+/* ============================================================
+   stakeholder/css/stakeholder.css — Portal Stakeholder (view-only)
+   Accent: violet (#7c3aed). Pola token sama dengan portal lain.
+   ============================================================ */
+
+:root {
+    --color-bg:           #f4f6f8;
+    --color-surface:      #ffffff;
+    --color-border:       #dde3e9;
+    --color-text:         #1f2937;
+    --color-text-muted:   #6b7280;
+    --color-primary:      #7c3aed;
+    --color-primary-dark: #6d28d9;
+    --color-primary-bg:   #f5f3ff;
+    --color-success:      #16a34a;
+    --color-success-bg:   #ecfdf3;
+    --color-danger:       #dc2626;
+    --color-danger-bg:    #fef2f2;
+    --color-warning:      #d97706;
+    --color-warning-bg:   #fffbeb;
+
+    --radius:    8px;
+    --radius-lg: 12px;
+    --shadow-sm: 0 1px 2px rgba(16,24,40,.06);
+    --shadow-md: 0 4px 12px rgba(16,24,40,.08);
+    --font-sans: -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; font-family: var(--font-sans); color: var(--color-text); background: var(--color-bg); }
+h1,h2,h3,h4 { margin: 0 0 8px; font-weight: 600; }
+p { margin: 0 0 8px; color: var(--color-text-muted); }
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px 18px; border-radius: var(--radius); border: 1px solid transparent;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background-color .15s, border-color .15s;
+}
+.btn-primary  { background: var(--color-primary); color: #fff; }
+.btn-primary:hover { background: var(--color-primary-dark); }
+.btn-primary:disabled { background: #b79df0; cursor: not-allowed; }
+.btn-secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
+.btn-secondary:hover { background: var(--color-bg); }
+.btn-sm { padding: 6px 12px; font-size: 13px; }
+
+/* ── Form ────────────────────────────────────────────────── */
+label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.field { margin-bottom: 18px; }
+.input {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--color-border);
+    border-radius: var(--radius); font-size: 14px; font-family: inherit;
+    background: var(--color-surface); color: var(--color-text); outline: none;
+    transition: border-color .15s;
+}
+.input:focus { border-color: var(--color-primary); }
+.hint { font-size: 13px; color: var(--color-text-muted); margin: 4px 0 0; }
+
+/* ── Login page ──────────────────────────────────────────── */
+.login-page {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+}
+.login-card {
+    background: var(--color-surface); border-radius: var(--radius-lg); padding: 40px;
+    width: 100%; max-width: 400px; box-shadow: var(--shadow-md);
+}
+.login-logo { text-align: center; margin-bottom: 24px; }
+.login-logo h1 { font-size: 22px; color: var(--color-primary); margin: 8px 0 4px; }
+.login-logo p  { font-size: 13px; }
+.login-error { background: var(--color-danger-bg); color: var(--color-danger); border-radius: var(--radius); padding: 10px 14px; font-size: 13px; margin-bottom: 16px; display: none; }
+
+/* ── App layout ──────────────────────────────────────────── */
+.app-header {
+    background: var(--color-primary); color: #fff;
+    padding: 12px 20px; display: flex; align-items: center; gap: 12px;
+    flex-wrap: wrap;
+}
+.app-header h2 { color: #fff; margin: 0; font-size: 16px; flex: 1; }
+.header-info { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.header-name { font-size: 14px; font-weight: 600; }
+.header-role { font-size: 12px; opacity: .85; }
+
+/* ── Page body ───────────────────────────────────────────── */
+.page-body { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.section-head h3 { margin: 0; font-size: 16px; color: var(--color-primary); }
+.head-actions { display: flex; align-items: center; gap: 12px; }
+.head-actions .hint { margin: 0; }
+
+.section-card {
+    background: var(--color-surface); border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border); padding: 20px; margin-bottom: 20px;
+}
+
+/* ── Stats row ───────────────────────────────────────────── */
+.stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.stat-card { background: var(--color-surface); border-radius: var(--radius); border: 1px solid var(--color-border); padding: 18px 20px; flex: 1; min-width: 130px; text-align: center; }
+.stat-card.stat-accent { background: var(--color-primary-bg); border-color: var(--color-primary); }
+.stat-value { font-size: 30px; font-weight: 700; color: var(--color-primary); display: block; }
+.stat-label { font-size: 12px; color: var(--color-text-muted); margin-top: 4px; }
+
+/* ── Loading ─────────────────────────────────────────────── */
+#loading { padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 14px; }
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .login-card { padding: 24px 20px; }
+    .page-body  { padding: 16px 12px; }
+    .stat-card  { min-width: 100px; padding: 14px; }
+    .stat-value { font-size: 24px; }
+}
