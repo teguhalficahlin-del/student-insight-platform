@@ -62,23 +62,26 @@ async function init() {
     document.getElementById('hdr-meta').textContent =
         `NIS ${student.nis} · ${myClass?.class?.name ?? student.program?.name ?? 'Siswa'}`;
 
-    buildTabs();
+    const tabs = buildTabs();
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display     = 'block';
 
-    activateTab('jadwal');
-    await initJadwalTab();
+    // Default ke tab pertama yang tersedia (Jadwal disembunyikan saat PKL).
+    const firstTab = tabs[0]?.key ?? 'kehadiran';
+    activateTab(firstTab);
+    await initTab(firstTab);
 }
 
 // ─── Tab navigation ──────────────────────────────────────────
 function buildTabs() {
-    const nav  = document.getElementById('tab-nav');
-    const tabs = [
-        { key: 'jadwal',    label: 'Jadwal' },
-        { key: 'kehadiran', label: 'Kehadiran' },
-        { key: 'observasi', label: 'Observasi' },
-    ];
-    if (student.student_status === 'PKL') tabs.push({ key: 'pkl', label: 'PKL' });
+    const nav    = document.getElementById('tab-nav');
+    const isPkl  = student.student_status === 'PKL';
+    const tabs   = [];
+    // Saat siswa PKL ia berada di DUDI, bukan di kelas → tab Jadwal disembunyikan.
+    if (!isPkl) tabs.push({ key: 'jadwal', label: 'Jadwal' });
+    tabs.push({ key: 'kehadiran', label: 'Kehadiran' });
+    tabs.push({ key: 'observasi', label: 'Observasi' });
+    if (isPkl)  tabs.push({ key: 'pkl', label: 'PKL' });
 
     nav.innerHTML = tabs.map(t =>
         `<button class="tab-btn" data-tab="${t.key}">${esc(t.label)}</button>`
@@ -90,6 +93,8 @@ function buildTabs() {
         activateTab(key);
         await loadTabContent(key);
     });
+
+    return tabs;
 }
 
 function activateTab(key) {
@@ -106,6 +111,12 @@ async function loadTabContent(key) {
         case 'observasi': if (!obsLoaded) await loadObservations(); break;
         case 'pkl':       if (!pklLoaded) await loadPkl(); break;
     }
+}
+
+// Inisialisasi tab default saat boot (jadwal perlu wiring listener tanggal dulu).
+async function initTab(key) {
+    if (key === 'jadwal') return initJadwalTab();
+    return loadTabContent(key);
 }
 
 // ─── TAB JADWAL ──────────────────────────────────────────────
