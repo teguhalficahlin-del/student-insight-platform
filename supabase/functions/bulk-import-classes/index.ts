@@ -197,12 +197,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (validRows.length > 0) {
             const { error: upsertErr } = await admin.from('classes').upsert(
                 validRows.map(r => ({
+                    school_id:     user.school_id,
                     name:          r.nama_kelas,
                     program_id:    r.program_id,
                     academic_year: academicYear,
                     grade_level:   r.grade_level,
                 })),
-                { onConflict: 'name,academic_year' },
+                { onConflict: 'school_id,name,academic_year' },
             );
 
             if (upsertErr) {

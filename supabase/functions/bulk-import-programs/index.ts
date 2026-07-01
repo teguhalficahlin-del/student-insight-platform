@@ -124,7 +124,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 .from('programs')
                 .upsert(
                     validRows.map(r => ({ code: r.kode, name: r.nama, school_id: user.school_id })),
-                    { onConflict: 'code' },
+                    { onConflict: 'school_id,code' },
                 );
 
             if (upsertErr) {
