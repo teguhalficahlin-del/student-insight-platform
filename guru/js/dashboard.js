@@ -437,7 +437,7 @@ async function initObsForm() {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Menyimpan…';
         try {
-            await insertObservation({
+            const r = await insertObservation({
                 authorId:   currentUser.user_id,
                 studentId:  hiddenEl.value,
                 dimension:  document.getElementById('obs-dimension').value,
@@ -445,9 +445,12 @@ async function initObsForm() {
                 visibility: document.getElementById('obs-visibility').value,
                 content:    document.getElementById('obs-content').value,
             });
-            statusEl.textContent    = '✓ Observasi berhasil disimpan.';
-            statusEl.className      = 'status-msg status-ok';
-            statusEl.style.display  = 'block';
+            if (r.status === 'error') throw new Error(r.error);
+            statusEl.textContent   = r.status === 'queued'
+                ? '⏳ Observasi disimpan lokal — akan dikirim saat online.'
+                : '✓ Observasi berhasil disimpan.';
+            statusEl.className     = 'status-msg status-ok';
+            statusEl.style.display = 'block';
             form.reset();
             hiddenEl.value = '';
         } catch (err) {
@@ -924,11 +927,14 @@ async function initJurnalTab() {
         msgEl.style.display = 'none';
 
         try {
-            await insertJournalEntry(currentUser.user_id, date, content);
+            const r = await insertJournalEntry(currentUser.user_id, date, content);
+            if (r.status === 'error') throw new Error(r.error);
             document.getElementById('journal-content').value = '';
-            msgEl.textContent = 'Catatan berhasil disimpan.';
+            msgEl.textContent = r.status === 'queued'
+                ? '⏳ Catatan disimpan lokal — akan dikirim saat online.'
+                : 'Catatan berhasil disimpan.';
             msgEl.style.display = 'block';
-            await loadJurnalList();
+            if (r.status === 'synced') await loadJurnalList();
         } catch (err) {
             msgEl.textContent = 'Gagal menyimpan: ' + err.message;
             msgEl.style.display = 'block';

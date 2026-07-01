@@ -180,6 +180,7 @@ export const ATTENDANCE_BATCH_SCHEMA: FieldDef[] = [
 
 export const OBSERVATION_SCHEMA: FieldDef[] = [
     ['idempotency_key', V.uuid,                              true],
+    ['observation_id',  V.uuid,                              true],
     ['student_id',      V.uuid,                              true],
     ['author_user_id',  V.uuid,                              true],
     ['sentiment',       V.enum(OBSERVATION_SENTIMENT),       true],
@@ -199,6 +200,7 @@ export const OBSERVATION_SCHEMA: FieldDef[] = [
 
 export const JOURNAL_SCHEMA: FieldDef[] = [
     ['idempotency_key', V.uuid,        true],
+    ['journal_id',      V.uuid,        true],
     ['owner_user_id',   V.uuid,        true],
     ['content',         V.str(1, 10000), true],
     ['entry_date',      V.isoDate,     true],

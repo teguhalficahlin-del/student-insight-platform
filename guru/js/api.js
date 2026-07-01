@@ -4,6 +4,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { saveObservation, saveJournalEntry } from './offline.js';
 
 const SUPABASE_URL      = 'https://xovvuuwexoweoqyltepq.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvdnZ1dXdleG93ZW9xeWx0ZXBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDk0NzUsImV4cCI6MjA5Nzc4NTQ3NX0.mFwmVfSqYM7ITURtLC143BsurK6Yr31WFViJe5PFGN8';
@@ -198,19 +199,22 @@ export async function searchStudents(query) {
 }
 
 /**
- * Simpan observasi baru.
+ * Simpan observasi baru. Offline-capable: antre ke IndexedDB bila jaringan mati.
+ * @returns {{status:'synced'|'queued'|'error', error?:string}}
  */
 export async function insertObservation({ authorId, studentId, dimension, sentiment, visibility, content }) {
-    const { error } = await supabase.from('observations').insert({
-        author_user_id: authorId,
-        student_id:     studentId,
+    const payload = {
+        idempotency_key: crypto.randomUUID(),
+        observation_id:  crypto.randomUUID(),
+        author_user_id:  authorId,
+        student_id:      studentId,
         dimension,
         sentiment,
         visibility,
         content,
-        observed_at:    new Date().toISOString(),
-    });
-    if (error) throw error;
+        observed_at:     new Date().toISOString().slice(0, 10),
+    };
+    return saveObservation(payload);
 }
 
 // ─── WALI KELAS ──────────────────────────────────────────────
@@ -448,11 +452,19 @@ export async function getJournalEntries(userId) {
     return data ?? [];
 }
 
+/**
+ * Simpan entri jurnal baru. Offline-capable: antre ke IndexedDB bila jaringan mati.
+ * @returns {{status:'synced'|'queued'|'error', error?:string}}
+ */
 export async function insertJournalEntry(userId, entryDate, content) {
-    const { error } = await supabase
-        .from('teacher_journals')
-        .insert({ owner_user_id: userId, entry_date: entryDate, content });
-    if (error) throw error;
+    const payload = {
+        idempotency_key: crypto.randomUUID(),
+        journal_id:      crypto.randomUUID(),
+        owner_user_id:   userId,
+        entry_date:      entryDate,
+        content,
+    };
+    return saveJournalEntry(payload);
 }
 
 export async function deleteJournalEntry(journalId) {
