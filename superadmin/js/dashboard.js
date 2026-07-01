@@ -64,7 +64,20 @@ async function loadSchools() {
             <td>${esc(s.phone)}</td>
             <td><span class="badge ${s.is_active ? 'badge-active' : 'badge-inactive'}">${s.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
             <td>${fmt(s.created_at)}</td>
+            <td><button class="btn btn-sm btn-secondary reset-pw-btn"
+                    data-school-id="${esc(s.school_id)}"
+                    data-school-name="${esc(s.name)}"
+                    ${!s.admin_identifier ? 'disabled title="Tidak ada akun admin"' : ''}>
+                Reset Password
+            </button></td>
         </tr>`).join('');
+
+        // Event delegation untuk tombol reset password
+        tbody.addEventListener('click', e => {
+            const btn = e.target.closest('.reset-pw-btn');
+            if (!btn || btn.disabled) return;
+            openResetModal(btn.dataset.schoolId, btn.dataset.schoolName);
+        });
     } catch (err) {
         hintEl.textContent = `Gagal memuat: ${err.message}`;
     }
@@ -122,6 +135,59 @@ document.getElementById('provision-form').addEventListener('submit', async (e) =
         resultEl.style.display = 'block';
     } finally {
         btn.disabled = false; btn.textContent = 'Daftarkan Sekolah';
+    }
+});
+
+// ── Modal reset password admin sekolah ───────────────────────
+const resetModal       = document.getElementById('reset-modal');
+const resetModalSchool = document.getElementById('reset-modal-school');
+const resetConfirmView = document.getElementById('reset-confirm-view');
+const resetResultView  = document.getElementById('reset-result-view');
+const resetError       = document.getElementById('reset-error');
+
+let _resetSchoolId = null;
+
+function openResetModal(schoolId, schoolName) {
+    _resetSchoolId = schoolId;
+    resetModalSchool.textContent = schoolName;
+    resetConfirmView.style.display = '';
+    resetResultView.style.display  = 'none';
+    resetError.style.display       = 'none';
+    resetModal.style.display       = 'flex';
+}
+
+function closeResetModal() {
+    resetModal.style.display = 'none';
+    _resetSchoolId = null;
+}
+
+document.getElementById('reset-cancel-btn').addEventListener('click', closeResetModal);
+document.getElementById('reset-close-btn').addEventListener('click', closeResetModal);
+resetModal.addEventListener('click', e => { if (e.target === resetModal) closeResetModal(); });
+
+document.getElementById('reset-confirm-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('reset-confirm-btn');
+    resetError.style.display = 'none';
+    btn.disabled = true; btn.textContent = 'Mereset…';
+
+    try {
+        const res  = await fetch(`${SUPABASE_URL}/functions/v1/reset-admin-password`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', 'x-superadmin-key': saKey },
+            body:    JSON.stringify({ school_id: _resetSchoolId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`);
+
+        document.getElementById('reset-cred-identifier').textContent = data.admin_identifier;
+        document.getElementById('reset-cred-password').textContent   = data.admin_password;
+        resetConfirmView.style.display = 'none';
+        resetResultView.style.display  = '';
+    } catch (err) {
+        resetError.textContent   = `✗ ${err.message}`;
+        resetError.style.display = 'block';
+    } finally {
+        btn.disabled = false; btn.textContent = 'Ya, Reset Sekarang';
     }
 });
 

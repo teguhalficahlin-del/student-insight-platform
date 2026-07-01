@@ -35,12 +35,30 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     try {
         const admin = getAdminClient();
-        const { data, error } = await admin
+        const { data: schools, error } = await admin
             .from('schools')
             .select('school_id, name, npsn, slug, phone, primary_color, is_active, created_at')
             .order('created_at', { ascending: false });
         if (error) throw error;
-        return json(data ?? []);
+
+        // Sertakan data admin per sekolah (untuk fitur reset password)
+        const { data: admins } = await admin
+            .from('users')
+            .select('school_id, login_identifier, full_name')
+            .eq('role_type', 'ADMINISTRATIVE')
+            .eq('is_active', true);
+
+        const adminBySchool = Object.fromEntries(
+            (admins ?? []).map(a => [a.school_id, { login_identifier: a.login_identifier, full_name: a.full_name }])
+        );
+
+        const result = (schools ?? []).map(s => ({
+            ...s,
+            admin_identifier: adminBySchool[s.school_id]?.login_identifier ?? null,
+            admin_name:       adminBySchool[s.school_id]?.full_name ?? null,
+        }));
+
+        return json(result);
     } catch (err) {
         return json({ error: err instanceof Error ? err.message : String(err) }, 500);
     }

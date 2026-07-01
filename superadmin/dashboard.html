@@ -105,6 +105,7 @@
                     <th>Telepon</th>
                     <th>Status</th>
                     <th>Terdaftar</th>
+                    <th>Aksi</th>
                 </tr>
             </thead>
             <tbody id="schools-body"></tbody>
@@ -112,6 +113,37 @@
         </div>
     </div>
 
+</div>
+
+<!-- Modal reset password admin sekolah -->
+<div id="reset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:var(--color-card);border-radius:var(--radius-lg);padding:28px 32px;width:100%;max-width:440px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+        <h3 style="margin:0 0 4px">Reset Password Admin</h3>
+        <p id="reset-modal-school" style="margin:0 0 20px;font-size:13px;color:var(--color-text-muted)"></p>
+
+        <div id="reset-confirm-view">
+            <p style="margin:0 0 20px;font-size:14px">Password lama akan diganti dengan password acak baru. Admin wajib mengganti password saat login berikutnya.</p>
+            <div style="display:flex;gap:10px">
+                <button class="btn btn-danger" id="reset-confirm-btn">Ya, Reset Sekarang</button>
+                <button class="btn btn-secondary" id="reset-cancel-btn">Batal</button>
+            </div>
+        </div>
+
+        <div id="reset-result-view" style="display:none">
+            <div class="cred-box">
+                <span class="cred-label">Admin (NIP/NIK)</span>
+                <span class="cred-value" id="reset-cred-identifier"></span>
+                <br><br>
+                <span class="cred-label">Password Baru</span>
+                <span class="cred-value" id="reset-cred-password"></span>
+                <br><br>
+                <small style="color:var(--color-text-muted)">⚠️ Simpan password ini sekarang — tidak bisa dilihat lagi setelah ditutup.</small>
+            </div>
+            <button class="btn btn-primary" id="reset-close-btn" style="margin-top:16px;width:100%">Tutup</button>
+        </div>
+
+        <p id="reset-error" style="display:none;color:var(--color-danger);margin-top:12px;font-size:13px"></p>
+    </div>
 </div>
 
 <script type="module" src="js/dashboard.js"></script>
