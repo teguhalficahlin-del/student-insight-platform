@@ -27,7 +27,7 @@ Dokumen ini menggabungkan beberapa lintasan audit yang sebelumnya terpisah, kini
 | **H3** | Flag jabatan multi-role (`is_bk`, `is_kepsek`, `is_waka_*`) tak pernah dibaca RLS (baca) | D | 🟠 HIGH → ✅ **FIXED** (baca; 1 Juli) |
 | **J2** | Superadmin tidak bisa melihat daftar sekolah (regresi RLS tenant-isolation) — terkonfirmasi runtime | B, D | 🟠 HIGH → ✅ **FIXED** (1 Juli) |
 | **J3** | Rekap kehadiran dihitung pada sumbu tanggal yang salah (`created_at`), tidak konsisten antar portal | C, F2 | 🟠 HIGH → ✅ **FIXED** (1 Juli) |
-| **M1** | Policy INSERT terlalu longgar (achievements/cases/case_events/student_updates) tanpa cek peran | D | 🟡 MEDIUM |
+| **M1** | Policy INSERT terlalu longgar (achievements/cases/case_events/student_updates) tanpa cek peran | D | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
 | **M2** | Daftar jadwal guru (by `scheduled_teacher_id`) vs RLS absensi (by `teaching_assignment`) bisa mismatch | C, D | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
 | **M2b** | (Ditemukan saat verifikasi M2) Jalur simpan absensi guru punya 2 bug laten (belum kena krn attendance=0): `recorded_by_user_id` NOT NULL tak terisi; portal kirim `source='MANUAL'` (enum tak valid) | C | 🟠 HIGH → ✅ DB fixed; ⏳ frontend belum deploy |
 | **J4** | Tab "Waka Kesiswaan" placeholder mati ditampilkan ke pengguna nyata | A, F2 | 🟡 MEDIUM |
@@ -162,16 +162,23 @@ Ini adalah **kambuhnya pola root-cause** yang sudah dicatat di audit RLS 30 Juni
 
 ---
 
-## 🟡 M1 — Policy INSERT terlalu longgar (tanpa cek peran)
+## ✅ M1 — FIXED (1 Juli 2026, LIVE + terverifikasi via login RLS)
 
-Di `20260701130000_rls_add_school_filter.sql`, policy berikut hanya `WITH CHECK (school_id = fn_current_school_id())` **tanpa cek peran**:
+Migrasi `20260701330000_rls_tighten_insert_policies`. Sebelumnya di `20260701130000_rls_add_school_filter.sql`, 4 policy INSERT hanya `WITH CHECK (school_id = fn_current_school_id())` **tanpa cek peran** — SISWA/ORTU/DUDI bisa insert bebas.
 
-- `rls_achievements_write` (:500)
-- `rls_cases_insert` (:424)
-- `rls_case_events_insert_handler` (:468)
-- `rls_student_updates_insert` (:687)
+**Perbaikan (selaras `contracts/10_permission_engine.js`):**
+- `rls_achievements_write` → `fn_is_kepsek() OR fn_kaprodi_of_student(student_id) OR fn_wali_of_student(student_id)` + `recorded_by_user_id = fn_current_user_id()`. Helper baru `fn_is_kepsek()` (role_type='KEPSEK' OR flag `is_kepsek`).
+- `rls_cases_insert` → `role_type IN (GURU,KEPSEK,DUDI)` (checkCaseCreate) + DUDI discope ke siswa PKL yang dibimbingnya (`fn_dudi_supervises_student`) + `created_by_user_id`/`initiated_by_role` dikunci ke identitas aktor.
+- `rls_case_events_insert_handler` → hanya bila `cases.current_handler_role = fn_current_user_role()` dan kasus belum `CLOSED` + `author_user_id`/`author_role_at_time` dikunci ke identitas aktor. (`rls_case_events_insert_kepsek` tidak disentuh — sudah scoped KEPSEK sebelumnya.)
+- `rls_student_updates_insert` → sama, hanya current handler kasus yang belum `CLOSED`.
 
-**Akibat:** setiap user terautentikasi (termasuk SISWA/ORTU/DUDI) dapat meng-INSERT baris ini untuk sekolahnya — mis. siswa menambahkan prestasi (`achievements`) untuk dirinya sendiri atau orang lain. Mungkin sebagian disengaja untuk jalur sinkronisasi, tetapi di level RLS saat ini terbuka dan perlu dikonfirmasi/diperketat.
+**Catatan lingkup:** `current_handler_role`/`initiated_by_role`/cek KEPSEK di atas masih literal `role_type` (bukan flag `is_bk`/`is_waka_*`) — pemetaan flag→peran-tulis di jalur kasus adalah **RESIDUAL-1 (H3 sisi-tulis)**, sengaja di luar cakupan M1 (lihat `project-residual-fixes`).
+
+**Bukti verifikasi (login RLS asli, bukan service-role):**
+- Siswa (NIS 20248962) → INSERT achievements/cases/case_events/student_updates **ditolak 403** (`42501 new row violates row-level security policy`).
+- Kepsek (NIP 196907071993051002) → INSERT achievements **berhasil (201)**.
+- Guru biasa (NIP 197806062012011008) → INSERT cases **berhasil (201)**; sebagai current handler kasus uji → INSERT case_events & student_updates **berhasil (201)**.
+- Seluruh data uji dihapus setelah verifikasi (0 baris tersisa di keempat tabel).
 
 ---
 
