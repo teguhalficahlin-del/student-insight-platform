@@ -111,14 +111,15 @@ export async function markSetupCompleted() {
     return upsertSchoolConfig({ setup_completed: true });
 }
 
-export async function updateSchoolBranding({ name, npsn, address, phone, logo_url, primary_color }) {
+export async function updateSchoolBranding({ name, npsn, address, phone, logo_url, primary_color, secondary_color }) {
     const { error } = await supabase.rpc('fn_update_school_branding', {
-        p_name:          name          ?? '',
-        p_npsn:          npsn          ?? '',
-        p_address:       address       ?? '',
-        p_phone:         phone         ?? '',
-        p_logo_url:      logo_url      ?? '',
-        p_primary_color: primary_color ?? '',
+        p_name:            name            ?? '',
+        p_npsn:            npsn            ?? '',
+        p_address:         address         ?? '',
+        p_phone:           phone           ?? '',
+        p_logo_url:        logo_url        ?? '',
+        p_primary_color:   primary_color   ?? '',
+        p_secondary_color: secondary_color ?? '',
     });
     if (error) throw error;
 }
@@ -126,7 +127,7 @@ export async function updateSchoolBranding({ name, npsn, address, phone, logo_ur
 export async function getSchoolBranding() {
     const { data, error } = await supabase
         .from('schools')
-        .select('name, npsn, address, phone, logo_url, primary_color')
+        .select('name, npsn, address, phone, logo_url, primary_color, secondary_color')
         .single();
     if (error) throw error;
     return data;

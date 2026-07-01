@@ -159,13 +159,24 @@ async function renderBrandingPanel() {
 
             <div style="margin-bottom:14px">
                 <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px">Warna Utama</label>
-                <p class="hint" style="font-size:12px; margin:0 0 4px">Format hex #RRGGBB — diterapkan ke tombol dan aksen semua portal.</p>
+                <p class="hint" style="font-size:12px; margin:0 0 4px">Format hex #RRGGBB — tombol dan aksen semua portal.</p>
                 <div style="display:flex; align-items:center; gap:10px">
                     <input class="input" id="br-color" type="text" value="${esc(current.primary_color ?? '#1a56db')}"
                            style="max-width:160px" maxlength="7" />
                     <input type="color" id="br-color-picker" value="${esc(current.primary_color ?? '#1a56db')}"
                            style="width:40px; height:38px; border:1px solid var(--color-border,#dde3e9); border-radius:6px; cursor:pointer; padding:2px" />
                     <span id="br-color-preview" style="display:inline-block; width:24px; height:24px; border-radius:4px; background:${esc(current.primary_color ?? '#1a56db')}"></span>
+                </div>
+            </div>
+            <div style="margin-bottom:14px">
+                <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px">Warna Sekunder</label>
+                <p class="hint" style="font-size:12px; margin:0 0 4px">Format hex #RRGGBB — hover dan elemen pendukung. Kosongkan untuk auto-gelap dari warna utama.</p>
+                <div style="display:flex; align-items:center; gap:10px">
+                    <input class="input" id="br-color2" type="text" value="${esc(current.secondary_color ?? '')}"
+                           style="max-width:160px" maxlength="7" placeholder="(opsional)" />
+                    <input type="color" id="br-color2-picker" value="${esc(current.secondary_color ?? current.primary_color ?? '#1a56db')}"
+                           style="width:40px; height:38px; border:1px solid var(--color-border,#dde3e9); border-radius:6px; cursor:pointer; padding:2px" />
+                    <span id="br-color2-preview" style="display:inline-block; width:24px; height:24px; border-radius:4px; background:${esc(current.secondary_color ?? 'transparent')}; border:1px solid var(--color-border,#dde3e9)"></span>
                 </div>
             </div>
 
@@ -175,21 +186,25 @@ async function renderBrandingPanel() {
         </div>
     `;
 
-    // Sync color picker ↔ text input ↔ preview
-    const colorInput  = document.getElementById('br-color');
-    const colorPicker = document.getElementById('br-color-picker');
-    const colorPreview = document.getElementById('br-color-preview');
-    colorPicker.addEventListener('input', () => {
-        colorInput.value = colorPicker.value;
-        colorPreview.style.background = colorPicker.value;
-    });
-    colorInput.addEventListener('input', () => {
-        const v = colorInput.value.trim();
-        if (/^#[0-9A-Fa-f]{6}$/.test(v)) {
-            colorPicker.value = v;
-            colorPreview.style.background = v;
-        }
-    });
+    // Sync color picker ↔ text input ↔ preview (helper)
+    function wireColorPair(inputId, pickerId, previewId) {
+        const inp  = document.getElementById(inputId);
+        const pick = document.getElementById(pickerId);
+        const prev = document.getElementById(previewId);
+        pick.addEventListener('input', () => {
+            inp.value = pick.value;
+            prev.style.background = pick.value;
+        });
+        inp.addEventListener('input', () => {
+            const v = inp.value.trim();
+            if (/^#[0-9A-Fa-f]{6}$/.test(v)) {
+                pick.value = v;
+                prev.style.background = v;
+            }
+        });
+    }
+    wireColorPair('br-color',  'br-color-picker',  'br-color-preview');
+    wireColorPair('br-color2', 'br-color2-picker', 'br-color2-preview');
 
     document.getElementById('br-save-btn').addEventListener('click', async () => {
         const btn   = document.getElementById('br-save-btn');
@@ -200,12 +215,13 @@ async function renderBrandingPanel() {
 
         try {
             await updateSchoolBranding({
-                name:          document.getElementById('br-name').value.trim(),
-                npsn:          document.getElementById('br-npsn').value.trim(),
-                address:       document.getElementById('br-address').value.trim(),
-                phone:         document.getElementById('br-phone').value.trim(),
-                logo_url:      document.getElementById('br-logo').value.trim(),
-                primary_color: document.getElementById('br-color').value.trim(),
+                name:            document.getElementById('br-name').value.trim(),
+                npsn:            document.getElementById('br-npsn').value.trim(),
+                address:         document.getElementById('br-address').value.trim(),
+                phone:           document.getElementById('br-phone').value.trim(),
+                logo_url:        document.getElementById('br-logo').value.trim(),
+                primary_color:   document.getElementById('br-color').value.trim(),
+                secondary_color: document.getElementById('br-color2').value.trim(),
             });
             msgEl.style.color   = 'var(--color-success,#16a34a)';
             msgEl.textContent   = '✓ Perubahan berhasil disimpan. Refresh halaman untuk melihat efek branding.';
