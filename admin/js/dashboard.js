@@ -26,7 +26,7 @@ const PANEL_RENDERERS = {
     tutupsemester:      () => mountSemesterPanel(panelContent),
     'academic-year':    () => { window.location.href = 'tutup-tahun.html'; },
     export:             renderExportPanel,
-    'activity-log':     renderComingSoon,
+    'activity-log':     renderActivityLogPanel,
 };
 
 document.querySelectorAll('.nav-link').forEach(link => {
@@ -494,6 +494,107 @@ async function renderJadwalPanel() {
         <p class="hint">Template slot tersusun: <strong>${tmplCount ?? 0} slot</strong>.</p>
         <p class="hint">Sesi jadwal ter-generate (teaching_schedules): <strong>${(schedCount ?? 0).toLocaleString('id-ID')} sesi</strong>.</p>
         <p class="hint">Untuk menyusun atau mengubah jadwal, buka <a href="wizard.html">Setup Wizard</a> langkah 10.</p>
+    `;
+}
+
+// ─────────────────────────────────────────────────────────────
+// LOG AKTIVITAS
+// ─────────────────────────────────────────────────────────────
+
+const EVENT_LABELS = {
+    CASE_CREATE:        'Buat Kasus',
+    COMMENT_ADDED:      'Tambah Komentar',
+    DECISION_ESCALATE:  'Eskalasi',
+    STATUS_CHANGED:     'Ubah Status',
+    DECISION_CLOSE:     'Tutup Kasus',
+};
+
+const DIMENSION_LABELS_ADMIN = {
+    AKADEMIK:    'Akademik',
+    KEHADIRAN:   'Kehadiran',
+    PERILAKU:    'Perilaku',
+    SOSIAL:      'Sosial',
+    AFEKTIF:     'Sikap',
+    BAKAT_MINAT: 'Bakat & Minat',
+    FISIK:       'Fisik',
+    LAINNYA:     'Lainnya',
+};
+
+function fmtTs(ts) {
+    if (!ts) return '—';
+    return new Date(ts).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+async function renderActivityLogPanel() {
+    panelContent.innerHTML = '<p class="hint">Memuat log aktivitas…</p>';
+
+    const [evRes, obsRes] = await Promise.allSettled([
+        supabase
+            .from('case_events')
+            .select(`event_type, created_at, author_role_at_time,
+                case:cases ( title, student:students ( full_name ) ),
+                author:users!case_events_author_user_id_fkey ( full_name )`)
+            .order('created_at', { ascending: false })
+            .limit(50),
+        supabase
+            .from('observations')
+            .select(`dimension, sentiment, created_at,
+                author:users!observations_author_user_id_fkey ( full_name, role_type ),
+                student:students ( full_name )`)
+            .order('created_at', { ascending: false })
+            .limit(50),
+    ]);
+
+    const caseEvents = evRes.status  === 'fulfilled' ? (evRes.value.data  ?? []) : [];
+    const obsRows    = obsRes.status === 'fulfilled' ? (obsRes.value.data ?? []) : [];
+
+    const caseHtml = caseEvents.length === 0
+        ? '<p class="hint">Belum ada aktivitas kasus.</p>'
+        : `<table class="table" style="font-size:13px">
+            <thead><tr><th>Waktu</th><th>Aktivitas</th><th>Kasus</th><th>Siswa</th><th>Oleh</th></tr></thead>
+            <tbody>${caseEvents.map(e => `
+                <tr>
+                    <td style="white-space:nowrap">${fmtTs(e.created_at)}</td>
+                    <td>${EVENT_LABELS[e.event_type] ?? e.event_type}</td>
+                    <td>${e.case?.title ?? '—'}</td>
+                    <td>${e.case?.student?.full_name ?? '—'}</td>
+                    <td>${e.author?.full_name ?? '—'}<br><span class="hint" style="font-size:11px">${e.author_role_at_time ?? ''}</span></td>
+                </tr>`).join('')}
+            </tbody>
+           </table>`;
+
+    const obsHtml = obsRows.length === 0
+        ? '<p class="hint">Belum ada observasi.</p>'
+        : `<table class="table" style="font-size:13px">
+            <thead><tr><th>Waktu</th><th>Dimensi</th><th>Sentimen</th><th>Siswa</th><th>Oleh</th></tr></thead>
+            <tbody>${obsRows.map(o => `
+                <tr>
+                    <td style="white-space:nowrap">${fmtTs(o.created_at)}</td>
+                    <td>${DIMENSION_LABELS_ADMIN[o.dimension] ?? o.dimension}</td>
+                    <td>${o.sentiment === 'POSITIF' ? '✅ Positif' : '⚠ Perhatian'}</td>
+                    <td>${o.student?.full_name ?? '—'}</td>
+                    <td>${o.author?.full_name ?? '—'}</td>
+                </tr>`).join('')}
+            </tbody>
+           </table>`;
+
+    panelContent.innerHTML = `
+        <h3>Log Aktivitas</h3>
+        <p class="hint" style="margin-bottom:20px">50 entri terbaru per kategori, urut terbaru di atas.</p>
+
+        <details open style="margin-bottom:16px">
+            <summary style="cursor:pointer; font-weight:600; margin-bottom:8px">
+                Aktivitas Kasus (${caseEvents.length})
+            </summary>
+            <div style="overflow-x:auto">${caseHtml}</div>
+        </details>
+
+        <details open>
+            <summary style="cursor:pointer; font-weight:600; margin-bottom:8px">
+                Observasi Siswa (${obsRows.length})
+            </summary>
+            <div style="overflow-x:auto">${obsHtml}</div>
+        </details>
     `;
 }
 
