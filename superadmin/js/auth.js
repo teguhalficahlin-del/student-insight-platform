@@ -8,17 +8,15 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     errEl.style.display = 'none';
     btn.disabled = true; btn.textContent = 'Memverifikasi…';
 
-    // Verifikasi key dengan memanggil provision-school dengan body kosong
-    // — jika key salah dapat 401, jika benar dapat 400 (body tidak lengkap)
+    // Verifikasi key via list-schools — endpoint yang memang dirancang
+    // untuk superadmin (bukan efek samping). 200 = valid, 401 = salah.
     try {
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/provision-school`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-superadmin-key': key },
-            body: JSON.stringify({}),
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/list-schools`, {
+            headers: { 'x-superadmin-key': key },
         });
         if (res.status === 401) throw new Error('Key salah. Coba lagi.');
+        if (!res.ok) throw new Error('Gagal menghubungi server. Coba lagi.');
 
-        // Status 400 = key benar tapi body tidak lengkap — itu yang kita harapkan
         sessionStorage.setItem('sa_key', key);
         window.location.href = 'dashboard.html';
     } catch (err) {
