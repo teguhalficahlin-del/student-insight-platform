@@ -108,22 +108,36 @@ export async function getScheduleForDate(classId, date) {
  * RLS rls_attendance_read_student membatasi otomatis ke student_id ini (non-void).
  */
 export async function getMyAttendance(studentId, dateStart, dateEnd) {
+    // Filter berdasarkan TANGGAL SESI KELAS (session_date), bukan created_at
+    // (waktu input). PostgREST tak bisa memfilter kolom relasi embedded non-inner,
+    // jadi mulai dari teaching_schedules lalu !inner ke attendance milik siswa ini.
     let q = supabase
-        .from('attendance')
+        .from('teaching_schedules')
         .select(`
-            attendance_id, status, created_at,
-            schedule:teaching_schedules (
-                session_date, session_start, session_end,
-                subject:subjects ( name )
-            )
+            session_date, session_start, session_end,
+            subject:subjects ( name ),
+            attendance!inner ( attendance_id, status, is_void )
         `)
-        .eq('student_id', studentId)
-        .order('created_at', { ascending: false });
-    if (dateStart) q = q.gte('created_at', dateStart + 'T00:00:00');
-    if (dateEnd)   q = q.lte('created_at', dateEnd + 'T23:59:59');
+        .eq('attendance.student_id', studentId)
+        .eq('attendance.is_void', false)
+        .order('session_date', { ascending: false });
+    if (dateStart) q = q.gte('session_date', dateStart);
+    if (dateEnd)   q = q.lte('session_date', dateEnd);
     const { data, error } = await q;
     if (error) throw error;
-    return data ?? [];
+    // Reshape ke bentuk lama { status, schedule:{ session_date, subject } }.
+    return (data ?? []).flatMap(sched =>
+        (sched.attendance ?? []).map(att => ({
+            attendance_id: att.attendance_id,
+            status:        att.status,
+            schedule: {
+                session_date:  sched.session_date,
+                session_start: sched.session_start,
+                session_end:   sched.session_end,
+                subject:       sched.subject,
+            },
+        }))
+    );
 }
 
 /**

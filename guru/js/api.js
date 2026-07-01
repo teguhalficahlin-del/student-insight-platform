@@ -235,23 +235,27 @@ export async function getWaliAttendanceSummary(classId, academicYear, dateStart,
     if (students.length === 0) return [];
     const ids = students.map(s => s.student_id);
 
-    // 2. Ambil kehadiran dalam rentang
+    // 2. Ambil kehadiran dalam rentang berdasarkan TANGGAL SESI (session_date),
+    //    bukan created_at (waktu input). Mulai dari teaching_schedules lalu
+    //    !inner ke attendance (PostgREST tak bisa filter kolom embedded non-inner).
     let q = supabase
-        .from('attendance')
-        .select('student_id, status')
-        .in('student_id', ids)
-        .eq('is_void', false);
-    if (dateStart) q = q.gte('created_at', dateStart);
-    if (dateEnd)   q = q.lte('created_at', dateEnd + 'T23:59:59');
+        .from('teaching_schedules')
+        .select('session_date, attendance!inner ( student_id, status, is_void )')
+        .in('attendance.student_id', ids)
+        .eq('attendance.is_void', false);
+    if (dateStart) q = q.gte('session_date', dateStart);
+    if (dateEnd)   q = q.lte('session_date', dateEnd);
     const { data, error } = await q;
     if (error) throw error;
 
     const map = new Map(students.map(s => [s.student_id, { ...s, HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0, EKSKUL: 0, total: 0 }]));
-    for (const r of data ?? []) {
-        const agg = map.get(r.student_id);
-        if (!agg) continue;
-        if (agg[r.status] !== undefined) agg[r.status]++;
-        agg.total++;
+    for (const sched of data ?? []) {
+        for (const r of sched.attendance ?? []) {
+            const agg = map.get(r.student_id);
+            if (!agg) continue;
+            if (agg[r.status] !== undefined) agg[r.status]++;
+            agg.total++;
+        }
     }
     return [...map.values()];
 }

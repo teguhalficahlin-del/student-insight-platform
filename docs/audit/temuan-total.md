@@ -26,7 +26,7 @@ Dokumen ini menggabungkan beberapa lintasan audit yang sebelumnya terpisah, kini
 | **H2** | `fn_kaprodi_program_id()` membaca kolom salah (`program_id` vs `kaprodi_program_id`) | D | 🟠 HIGH → ✅ **FIXED** (1 Juli) |
 | **H3** | Flag jabatan multi-role (`is_bk`, `is_kepsek`, `is_waka_*`) tak pernah dibaca RLS (baca) | D | 🟠 HIGH → ✅ **FIXED** (baca; 1 Juli) |
 | **J2** | Superadmin tidak bisa melihat daftar sekolah (regresi RLS tenant-isolation) — terkonfirmasi runtime | B, D | 🟠 HIGH |
-| **J3** | Rekap kehadiran dihitung pada sumbu tanggal yang salah (`created_at`), tidak konsisten antar portal | C, F2 | 🟠 HIGH |
+| **J3** | Rekap kehadiran dihitung pada sumbu tanggal yang salah (`created_at`), tidak konsisten antar portal | C, F2 | 🟠 HIGH → ✅ **FIXED** (1 Juli) |
 | **M1** | Policy INSERT terlalu longgar (achievements/cases/case_events/student_updates) tanpa cek peran | D | 🟡 MEDIUM |
 | **M2** | Daftar jadwal guru (by `scheduled_teacher_id`) vs RLS absensi (by `teaching_assignment`) bisa mismatch | C, D | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
 | **M2b** | (Ditemukan saat verifikasi M2) Jalur simpan absensi guru punya 2 bug laten (belum kena krn attendance=0): `recorded_by_user_id` NOT NULL tak terisi; portal kirim `source='MANUAL'` (enum tak valid) | C | 🟠 HIGH → ✅ DB fixed; ⏳ frontend belum deploy |
@@ -232,6 +232,8 @@ GET /rest/v1/school_config?select=...                       (header anon)  →  
 **Dampak.** Panel "Daftar Sekolah" selalu menampilkan "Belum ada sekolah terdaftar." walau sekolah ada. Vendor bisa **mendaftarkan** sekolah baru (lewat edge fn `provision-school` service-role) tapi **tidak bisa memverifikasi/mengaudit** tenant yang sudah ada. Regresi langsung dari kerja isolasi tenant. Arah perbaikan: sediakan endpoint baca daftar sekolah via edge function `x-superadmin-key` (service-role), bukan anon REST.
 
 ---
+
+> ✅ **STATUS: FIXED (1 Juli 2026, terverifikasi runtime).** `student/js/api.js getMyAttendance` & `guru/js/api.js getWaliAttendanceSummary` kini memfilter **`session_date`** (mulai dari `teaching_schedules`, `!inner` ke attendance) — sama seperti portal Ortu. *Bukti (login siswa, absensi uji tanggal-sesi 2027-07-05 vs tanggal-input 2026-07-01):* rentang tanggal-sesi → 1 baris (benar); rentang tanggal-input → 0 baris (dulu terbalik). Data uji dihapus. Frontend perlu deploy (`git push`).
 
 ## 🟠 J3 — Rekap kehadiran dihitung pada sumbu tanggal yang salah, tidak konsisten antar portal
 
