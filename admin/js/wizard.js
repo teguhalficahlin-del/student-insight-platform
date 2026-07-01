@@ -340,10 +340,11 @@ async function renderStakeholderStep() {
         try {
             const csv = `nama,nip_atau_nik,role_type\n${name},${code},STAKEHOLDER`;
             await importUsers(csv);
+            const savedCode = code;
             nameEl.value = '';
             codeEl.value = '';
             await refreshDataList(9);
-            showSuccess(`Stakeholder "${name}" berhasil ditambahkan.`);
+            showSuccess(`Stakeholder "${name}" berhasil ditambahkan. Kode login: ${savedCode} — Password awal: ${savedCode}`);
         } catch (err) {
             console.error('[wizard] tambah stakeholder error:', err);
             const listEl = document.getElementById('wz-data-list');

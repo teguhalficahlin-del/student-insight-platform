@@ -454,7 +454,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
                         identifierType,
                     )
             );
-            const tempPassword = generateTempPassword();
+            // STAKEHOLDER: kode login = password awal, agar admin bisa langsung
+            // membagikan kode kepada stakeholder tanpa langkah tambahan.
+            const tempPassword = row.role_type === 'STAKEHOLDER'
+                ? row.nip_atau_nik.trim().toUpperCase()
+                : generateTempPassword();
 
             const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                 email:         internalEmail,
