@@ -474,3 +474,130 @@ export async function deleteJournalEntry(journalId) {
         .eq('journal_id', journalId);
     if (error) throw error;
 }
+
+// ─── KASUS ───────────────────────────────────────────────────
+
+export async function getCases() {
+    const { data, error } = await supabase
+        .from('cases')
+        .select(`
+            case_id, title, status, track, current_handler_role, is_locked,
+            created_at, created_by_user_id,
+            student:students(student_id, full_name, nis),
+            created_by:users!cases_created_by_user_id_fkey(full_name)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(200);
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function getCase(caseId) {
+    const { data, error } = await supabase
+        .from('cases')
+        .select(`
+            case_id, title, description, status, track, current_handler_role, is_locked,
+            created_at, initiated_by_role,
+            student:students(student_id, full_name, nis),
+            created_by:users!cases_created_by_user_id_fkey(full_name)
+        `)
+        .eq('case_id', caseId)
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function getCaseEvents(caseId) {
+    const { data, error } = await supabase
+        .from('case_events')
+        .select(`
+            event_id, event_type, privacy_level,
+            previous_handler_role, new_handler_role,
+            previous_status, new_status, payload, created_at,
+            author:users!case_events_author_user_id_fkey(full_name),
+            author_role_at_time
+        `)
+        .eq('case_id', caseId)
+        .order('created_at', { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function createCase({ studentId, title, description, track, authorUserId, authorRole }) {
+    const { data: caseRow, error } = await supabase
+        .from('cases')
+        .insert({
+            student_id:           studentId,
+            created_by_user_id:   authorUserId,
+            initiated_by_role:    authorRole,
+            current_handler_role: authorRole,
+            track,
+            title,
+            description,
+        })
+        .select('case_id')
+        .single();
+    if (error) throw error;
+    return caseRow;
+}
+
+export async function addCaseComment({ caseId, text, authorUserId, authorRole, privacyLevel = 'INTERNAL_SCHOOL' }) {
+    const { error } = await supabase
+        .from('case_events')
+        .insert({
+            case_id:            caseId,
+            event_type:         'COMMENT_ADDED',
+            author_user_id:     authorUserId,
+            author_role_at_time: authorRole,
+            privacy_level:      privacyLevel,
+            payload:            { text },
+        });
+    if (error) throw error;
+}
+
+export async function escalateCase({ caseId, previousHandlerRole, newHandlerRole, note, authorUserId, authorRole, newStatus = 'UNDER_REVIEW' }) {
+    const { error } = await supabase
+        .from('case_events')
+        .insert({
+            case_id:              caseId,
+            event_type:           'DECISION_ESCALATE',
+            author_user_id:       authorUserId,
+            author_role_at_time:  authorRole,
+            previous_handler_role: previousHandlerRole,
+            new_handler_role:     newHandlerRole,
+            previous_status:      'OPEN',
+            new_status:           newStatus,
+            payload:              note ? { text: note } : {},
+        });
+    if (error) throw error;
+}
+
+export async function changeCaseStatus({ caseId, previousStatus, newStatus, note, authorUserId, authorRole }) {
+    const { error } = await supabase
+        .from('case_events')
+        .insert({
+            case_id:             caseId,
+            event_type:          'STATUS_CHANGED',
+            author_user_id:      authorUserId,
+            author_role_at_time: authorRole,
+            previous_status:     previousStatus,
+            new_status:          newStatus,
+            payload:             note ? { text: note } : {},
+        });
+    if (error) throw error;
+}
+
+export async function closeCase({ caseId, note, authorUserId, authorRole }) {
+    const { error } = await supabase
+        .from('case_events')
+        .insert({
+            case_id:             caseId,
+            event_type:          'DECISION_CLOSE',
+            author_user_id:      authorUserId,
+            author_role_at_time: authorRole,
+            previous_status:     null,
+            new_status:          'CLOSED',
+            payload:             note ? { text: note } : {},
+        });
+    if (error) throw error;
+}

@@ -333,6 +333,127 @@
         </div>
     </div>
 
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: KASUS
+    ════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-kasus">
+        <div class="page-body">
+
+            <!-- List view -->
+            <div id="kasus-list-view">
+                <div class="section-card">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:8px">
+                        <h3 style="margin:0">Daftar Kasus</h3>
+                        <button class="btn btn-primary btn-sm" id="kasus-new-btn">+ Buat Kasus</button>
+                    </div>
+                    <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap">
+                        <select class="input" id="kasus-filter-status" style="width:auto; font-size:13px">
+                            <option value="">Semua Status</option>
+                            <option value="OPEN">Buka</option>
+                            <option value="UNDER_REVIEW">Ditinjau</option>
+                            <option value="INTERVENTION">Intervensi</option>
+                            <option value="MONITORING">Monitoring</option>
+                            <option value="CLOSED">Tutup</option>
+                        </select>
+                        <select class="input" id="kasus-filter-track" style="width:auto; font-size:13px">
+                            <option value="">Semua Track</option>
+                            <option value="SEKOLAH">Sekolah</option>
+                            <option value="PKL">PKL</option>
+                        </select>
+                    </div>
+                    <div id="kasus-list-content"><p class="hint">Memuat kasus…</p></div>
+                </div>
+            </div>
+
+            <!-- Detail view (hidden by default) -->
+            <div id="kasus-detail-view" style="display:none">
+                <div class="section-card" style="margin-bottom:12px">
+                    <button class="btn btn-secondary btn-sm" id="kasus-back-btn">← Kembali ke Daftar</button>
+                </div>
+
+                <!-- Case header -->
+                <div class="section-card" id="kasus-detail-header">
+                    <p class="hint">Memuat…</p>
+                </div>
+
+                <!-- Timeline / events -->
+                <div class="section-card">
+                    <h3>Timeline Kasus</h3>
+                    <div id="kasus-events-list"><p class="hint">Memuat…</p></div>
+                </div>
+
+                <!-- Actions -->
+                <div class="section-card" id="kasus-actions" style="display:none">
+                    <h3>Tindakan</h3>
+                    <!-- Comment form -->
+                    <div id="kasus-comment-block" style="margin-bottom:16px">
+                        <label for="kasus-comment-text">Tambah Komentar</label>
+                        <textarea id="kasus-comment-text" class="input" rows="3" placeholder="Tulis komentar…" style="margin-bottom:8px"></textarea>
+                        <button class="btn btn-secondary btn-sm" id="kasus-comment-submit-btn">Kirim Komentar</button>
+                        <span id="kasus-comment-msg" style="font-size:13px; margin-left:8px"></span>
+                    </div>
+                    <!-- Escalate -->
+                    <div id="kasus-escalate-block" style="margin-bottom:16px; display:none">
+                        <label for="kasus-escalate-to">Eskalasi ke</label>
+                        <select id="kasus-escalate-to" class="input" style="margin-bottom:8px; width:auto"></select>
+                        <textarea id="kasus-escalate-note" class="input" rows="2" placeholder="Catatan eskalasi (opsional)…" style="margin-bottom:8px"></textarea>
+                        <button class="btn btn-primary btn-sm" id="kasus-escalate-btn">Eskalasi</button>
+                        <span id="kasus-escalate-msg" style="font-size:13px; margin-left:8px"></span>
+                    </div>
+                    <!-- Status change / close -->
+                    <div id="kasus-status-block" style="display:none">
+                        <label for="kasus-new-status">Ubah Status</label>
+                        <select id="kasus-new-status" class="input" style="width:auto; margin-bottom:8px"></select>
+                        <textarea id="kasus-status-note" class="input" rows="2" placeholder="Catatan perubahan status (opsional)…" style="margin-bottom:8px"></textarea>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap">
+                            <button class="btn btn-secondary btn-sm" id="kasus-status-btn">Ubah Status</button>
+                            <button class="btn btn-danger btn-sm" id="kasus-close-btn" style="display:none">Tutup Kasus</button>
+                        </div>
+                        <span id="kasus-status-msg" style="font-size:13px; display:block; margin-top:6px"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create modal -->
+            <div id="kasus-create-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:200; align-items:center; justify-content:center; padding:16px">
+                <div style="background:var(--color-surface); border-radius:var(--radius-lg); padding:24px; width:100%; max-width:520px; max-height:90vh; overflow-y:auto">
+                    <h3 style="margin-bottom:16px">Buat Kasus Baru</h3>
+                    <form id="kasus-create-form">
+                        <div class="field">
+                            <label for="kasus-c-student-search">Siswa</label>
+                            <div style="position:relative">
+                                <input type="text" id="kasus-c-student-search" class="input" placeholder="Cari nama siswa…" autocomplete="off">
+                                <input type="hidden" id="kasus-c-student-id">
+                                <div id="kasus-c-student-list" style="display:none; border:1px solid var(--color-border); border-radius:var(--radius); background:var(--color-surface); max-height:150px; overflow-y:auto; position:absolute; z-index:100; left:0; right:0; top:100%"></div>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label for="kasus-c-track">Track</label>
+                            <select id="kasus-c-track" class="input">
+                                <option value="SEKOLAH">Sekolah</option>
+                                <option value="PKL">PKL</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="kasus-c-title">Judul Kasus</label>
+                            <input type="text" id="kasus-c-title" class="input" placeholder="Ringkasan singkat masalah…" maxlength="200">
+                        </div>
+                        <div class="field">
+                            <label for="kasus-c-desc">Deskripsi <span style="font-weight:400;color:var(--color-text-muted)">(min. 20 karakter)</span></label>
+                            <textarea id="kasus-c-desc" class="input" rows="4" placeholder="Jelaskan situasi secara lengkap…"></textarea>
+                        </div>
+                        <div id="kasus-create-msg" style="display:none; margin-bottom:12px" class="hint"></div>
+                        <div style="display:flex; gap:8px; justify-content:flex-end">
+                            <button type="button" class="btn btn-secondary btn-sm" id="kasus-create-cancel-btn">Batal</button>
+                            <button type="submit" class="btn btn-primary btn-sm" id="kasus-create-submit-btn">Simpan</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
 </div><!-- #app -->
 
 <script type="module" src="js/dashboard.js"></script>

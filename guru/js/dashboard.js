@@ -17,6 +17,8 @@ import {
     getSchoolStats, getAbsentTeachersToday,
     getAttendanceRecapPerClass, getOpenCases,
     getJournalEntries, insertJournalEntry, deleteJournalEntry,
+    getCases, getCase, getCaseEvents, createCase,
+    addCaseComment, escalateCase, changeCaseStatus, closeCase,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount } from './offline.js';
 
@@ -98,6 +100,7 @@ function buildTabs() {
     const nav = document.getElementById('tab-nav');
     const tabs = [{ key: 'guru', label: 'Dashboard Guru' }];
     jabatan.forEach(j => tabs.push({ key: j, label: jabatanLabel(j) }));
+    tabs.push({ key: 'kasus', label: 'Kasus' });
     tabs.push({ key: 'jurnal', label: 'Jurnal Mengajar' });
 
     nav.innerHTML = tabs.map(t =>
@@ -128,6 +131,7 @@ async function loadTabContent(key) {
         case 'waka_kesiswaan': await initWakaKesiswaanTab(); break;
         case 'waka_kurikulum': await initWakaKurTab(); break;
         case 'kepsek':      await initKepsekTab(); break;
+        case 'kasus':       await initKasusTab(); break;
         case 'jurnal':      await initJurnalTab(); break;
     }
 }
@@ -902,6 +906,418 @@ async function initKepsekTab() {
         document.getElementById('ks-hadir').textContent  = stats.kehadiran_hari_ini;
     } catch (err) {
         console.error('[kepsek]', err);
+    }
+}
+
+// ─── TAB KASUS ───────────────────────────────────────────────
+
+const CASE_STATUS_LABEL = {
+    OPEN:         'Buka',
+    UNDER_REVIEW: 'Ditinjau',
+    INTERVENTION: 'Intervensi',
+    MONITORING:   'Monitoring',
+    CLOSED:       'Tutup',
+};
+const CASE_STATUS_BADGE = {
+    OPEN:         'badge-open',
+    UNDER_REVIEW: 'badge-review',
+    INTERVENTION: 'badge-intervention',
+    MONITORING:   'badge-monitoring',
+    CLOSED:       'badge-closed',
+};
+const CASE_TRACK_LABEL = { SEKOLAH: 'Sekolah', PKL: 'PKL' };
+const ROLE_LABEL = {
+    GURU: 'Guru', BK: 'BK', WALI_KELAS: 'Wali Kelas',
+    KAPRODI: 'Ka. Prodi', KEPSEK: 'Kepala Sekolah',
+    DUDI: 'DUDI', WAKA_KESISWAAN: 'Waka Kesiswaan', WAKA_KURIKULUM: 'Waka Kurikulum',
+};
+const ESCALATION_CHAIN = {
+    SEKOLAH: ['GURU','BK','WALI_KELAS','KAPRODI','KEPSEK'],
+    PKL:     ['DUDI','KAPRODI','KEPSEK'],
+};
+const STATUS_AFTER_CURRENT = {
+    OPEN:         ['UNDER_REVIEW','INTERVENTION','MONITORING'],
+    UNDER_REVIEW: ['INTERVENTION','MONITORING'],
+    INTERVENTION: ['MONITORING'],
+    MONITORING:   [],
+};
+const EVENT_TYPE_LABEL = {
+    COMMENT_ADDED:          'Komentar',
+    STATUS_CHANGED:         'Status Berubah',
+    DECISION_ESCALATE:      'Eskalasi',
+    DECISION_CLOSE:         'Kasus Ditutup',
+    FINAL_DECISION_MADE:    'Keputusan Final',
+    STUDENT_UPDATE_ADDED:   'Update Siswa',
+    PARENT_MESSAGE_RECEIVED:'Pesan Orang Tua',
+    PARENT_MESSAGE_LINKED:  'Pesan Terhubung',
+    PARENT_REPLY_SENT:      'Balasan Terkirim',
+    CASE_LOCKED:            'Kasus Dikunci',
+    CASE_UNLOCKED:          'Kasus Dibuka Kunci',
+};
+
+let _kasusTabInit   = false;
+let _kasusAllCases  = [];
+let _kasusCurrentId = null;
+
+async function initKasusTab() {
+    if (_kasusTabInit) { renderKasusList(); return; }
+    _kasusTabInit = true;
+
+    // Filters
+    document.getElementById('kasus-filter-status').addEventListener('change', renderKasusList);
+    document.getElementById('kasus-filter-track').addEventListener('change',  renderKasusList);
+
+    // New case button
+    document.getElementById('kasus-new-btn').addEventListener('click', openKasusModal);
+    document.getElementById('kasus-create-cancel-btn').addEventListener('click', closeKasusModal);
+    document.getElementById('kasus-back-btn').addEventListener('click', showKasusList);
+
+    // Create form
+    const createForm = document.getElementById('kasus-create-form');
+    const searchEl   = document.getElementById('kasus-c-student-search');
+    const studentIdEl = document.getElementById('kasus-c-student-id');
+    const listEl     = document.getElementById('kasus-c-student-list');
+
+    searchEl.addEventListener('input', async () => {
+        const q = searchEl.value.trim();
+        if (q.length < 2) { listEl.style.display = 'none'; return; }
+        try {
+            const rows = await searchStudents(q);
+            if (!rows.length) { listEl.style.display = 'none'; return; }
+            listEl.innerHTML = rows.map(r =>
+                `<div style="padding:8px 12px; cursor:pointer; font-size:13px" data-id="${r.student_id}" data-name="${esc(r.full_name)}">${esc(r.full_name)} — ${esc(r.nis ?? '')}</div>`
+            ).join('');
+            listEl.style.display = 'block';
+            listEl.querySelectorAll('div').forEach(el => {
+                el.addEventListener('click', () => {
+                    searchEl.value = el.dataset.name;
+                    studentIdEl.value = el.dataset.id;
+                    listEl.style.display = 'none';
+                });
+                el.addEventListener('mouseenter', () => { el.style.background = 'var(--color-bg)'; });
+                el.addEventListener('mouseleave', () => { el.style.background = ''; });
+            });
+        } catch { listEl.style.display = 'none'; }
+    });
+
+    createForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msgEl  = document.getElementById('kasus-create-msg');
+        const btnEl  = document.getElementById('kasus-create-submit-btn');
+        const sId    = studentIdEl.value;
+        const title  = document.getElementById('kasus-c-title').value.trim();
+        const desc   = document.getElementById('kasus-c-desc').value.trim();
+        const track  = document.getElementById('kasus-c-track').value;
+
+        msgEl.style.display = 'none';
+        if (!sId)          { showCreateMsg('Pilih siswa dari daftar.', true); return; }
+        if (!title)        { showCreateMsg('Judul tidak boleh kosong.', true); return; }
+        if (desc.length < 20) { showCreateMsg('Deskripsi minimal 20 karakter.', true); return; }
+
+        btnEl.disabled = true; btnEl.textContent = 'Menyimpan…';
+        try {
+            await createCase({
+                studentId:   sId,
+                title,
+                description: desc,
+                track,
+                authorUserId: currentUser.user_id,
+                authorRole:   currentUser.role_type,
+            });
+            closeKasusModal();
+            _kasusAllCases = [];
+            _kasusTabInit = false;
+            await initKasusTab();
+        } catch (err) {
+            showCreateMsg(fe(err, 's'), true);
+        } finally {
+            btnEl.disabled = false; btnEl.textContent = 'Simpan';
+        }
+    });
+
+    await loadKasusList();
+}
+
+function showCreateMsg(msg, isErr = false) {
+    const el = document.getElementById('kasus-create-msg');
+    el.style.display = 'block';
+    el.style.color   = isErr ? 'var(--color-danger)' : 'var(--color-success)';
+    el.textContent   = msg;
+}
+
+function openKasusModal() {
+    const modal = document.getElementById('kasus-create-modal');
+    document.getElementById('kasus-create-form').reset();
+    document.getElementById('kasus-c-student-id').value = '';
+    document.getElementById('kasus-create-msg').style.display = 'none';
+    document.getElementById('kasus-c-student-list').style.display = 'none';
+    modal.style.display = 'flex';
+}
+function closeKasusModal() {
+    document.getElementById('kasus-create-modal').style.display = 'none';
+}
+
+async function loadKasusList() {
+    const contentEl = document.getElementById('kasus-list-content');
+    contentEl.innerHTML = '<p class="hint">Memuat kasus…</p>';
+    try {
+        _kasusAllCases = await getCases();
+        renderKasusList();
+    } catch (err) {
+        contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">${esc(fe(err))}</p>`;
+    }
+}
+
+function renderKasusList() {
+    const contentEl   = document.getElementById('kasus-list-content');
+    const statusFilter = document.getElementById('kasus-filter-status').value;
+    const trackFilter  = document.getElementById('kasus-filter-track').value;
+
+    let rows = _kasusAllCases;
+    if (statusFilter) rows = rows.filter(r => r.status === statusFilter);
+    if (trackFilter)  rows = rows.filter(r => r.track  === trackFilter);
+
+    if (!rows.length) {
+        contentEl.innerHTML = '<p class="hint">Tidak ada kasus yang sesuai filter.</p>';
+        return;
+    }
+
+    contentEl.innerHTML = rows.map(r => `
+        <div class="kasus-row" data-id="${r.case_id}" style="border:1px solid var(--color-border); border-radius:var(--radius); padding:14px 16px; margin-bottom:10px; cursor:pointer; transition:background .12s">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px; flex-wrap:wrap">
+                <strong style="font-size:14px; flex:1">${esc(r.title)}</strong>
+                <span class="badge kasus-badge-${(r.status||'').toLowerCase()}">${esc(CASE_STATUS_LABEL[r.status] ?? r.status)}</span>
+            </div>
+            <div style="font-size:12px; color:var(--color-text-muted); margin-top:4px">
+                ${esc(r.student?.full_name ?? '—')} (${esc(r.student?.nis ?? '—')})
+                &middot; ${esc(CASE_TRACK_LABEL[r.track] ?? r.track)}
+                &middot; Handler: ${esc(ROLE_LABEL[r.current_handler_role] ?? r.current_handler_role ?? '—')}
+                &middot; ${fmt(r.created_at)}
+            </div>
+        </div>
+    `).join('');
+
+    contentEl.querySelectorAll('.kasus-row').forEach(el => {
+        el.addEventListener('mouseenter', () => { el.style.background = 'var(--color-bg)'; });
+        el.addEventListener('mouseleave', () => { el.style.background = ''; });
+        el.addEventListener('click', () => openKasusDetail(el.dataset.id));
+    });
+}
+
+function showKasusList() {
+    document.getElementById('kasus-list-view').style.display = 'block';
+    document.getElementById('kasus-detail-view').style.display = 'none';
+    _kasusCurrentId = null;
+}
+
+async function openKasusDetail(caseId) {
+    _kasusCurrentId = caseId;
+    document.getElementById('kasus-list-view').style.display = 'none';
+    document.getElementById('kasus-detail-view').style.display = 'block';
+    document.getElementById('kasus-detail-header').innerHTML = '<p class="hint">Memuat…</p>';
+    document.getElementById('kasus-events-list').innerHTML   = '<p class="hint">Memuat…</p>';
+    document.getElementById('kasus-actions').style.display  = 'none';
+
+    try {
+        const [kasus, events] = await Promise.all([getCase(caseId), getCaseEvents(caseId)]);
+        renderKasusDetail(kasus);
+        renderKasusEvents(events);
+        renderKasusActions(kasus);
+    } catch (err) {
+        document.getElementById('kasus-detail-header').innerHTML =
+            `<p class="hint" style="color:var(--color-danger)">${esc(fe(err))}</p>`;
+    }
+}
+
+function renderKasusDetail(k) {
+    const el = document.getElementById('kasus-detail-header');
+    el.innerHTML = `
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:12px">
+            <h3 style="margin:0; flex:1">${esc(k.title)}</h3>
+            <span class="badge kasus-badge-${(k.status||'').toLowerCase()}">${esc(CASE_STATUS_LABEL[k.status] ?? k.status)}</span>
+        </div>
+        <div style="font-size:13px; color:var(--color-text-muted); margin-bottom:12px">
+            Siswa: <strong>${esc(k.student?.full_name ?? '—')}</strong> (${esc(k.student?.nis ?? '—')})
+            &middot; Track: <strong>${esc(CASE_TRACK_LABEL[k.track] ?? k.track)}</strong>
+            &middot; Dibuka oleh: ${esc(ROLE_LABEL[k.initiated_by_role] ?? k.initiated_by_role)}
+            &middot; Handler saat ini: <strong>${esc(ROLE_LABEL[k.current_handler_role] ?? k.current_handler_role ?? '—')}</strong>
+            ${k.is_locked ? '&middot; <span style="color:var(--color-warning)">🔒 Terkunci</span>' : ''}
+        </div>
+        <p style="font-size:14px; color:var(--color-text); margin:0">${esc(k.description)}</p>
+    `;
+}
+
+function renderKasusEvents(events) {
+    const el = document.getElementById('kasus-events-list');
+    if (!events.length) {
+        el.innerHTML = '<p class="hint">Belum ada event.</p>';
+        return;
+    }
+    el.innerHTML = events.map(ev => {
+        const label = EVENT_TYPE_LABEL[ev.event_type] ?? ev.event_type;
+        const text  = ev.payload?.text ?? '';
+        let detail  = '';
+        if (ev.event_type === 'DECISION_ESCALATE')
+            detail = `→ ${esc(ROLE_LABEL[ev.new_handler_role] ?? ev.new_handler_role)}`;
+        if (ev.event_type === 'STATUS_CHANGED' || ev.event_type === 'DECISION_CLOSE' || ev.event_type === 'FINAL_DECISION_MADE')
+            detail = `${esc(CASE_STATUS_LABEL[ev.previous_status] ?? ev.previous_status ?? '?')} → ${esc(CASE_STATUS_LABEL[ev.new_status] ?? ev.new_status ?? '?')}`;
+        return `
+            <div style="border-left:3px solid var(--color-border); padding:10px 14px; margin-bottom:10px">
+                <div style="font-size:12px; color:var(--color-text-muted); margin-bottom:4px">
+                    <strong>${esc(label)}</strong>
+                    ${detail ? `<span style="margin-left:6px">${detail}</span>` : ''}
+                    &middot; ${esc(ev.author?.full_name ?? '—')} (${esc(ROLE_LABEL[ev.author_role_at_time] ?? ev.author_role_at_time)})
+                    &middot; ${fmt(ev.created_at)}
+                </div>
+                ${text ? `<p style="font-size:13px; margin:0; color:var(--color-text)">${esc(text)}</p>` : ''}
+            </div>`;
+    }).join('');
+}
+
+function renderKasusActions(kasus) {
+    const actionsEl   = document.getElementById('kasus-actions');
+    const escalateBlock = document.getElementById('kasus-escalate-block');
+    const statusBlock   = document.getElementById('kasus-status-block');
+    const closeBtn      = document.getElementById('kasus-close-btn');
+    const escalateTo    = document.getElementById('kasus-escalate-to');
+    const statusSel     = document.getElementById('kasus-new-status');
+
+    if (kasus.status === 'CLOSED') {
+        actionsEl.style.display = 'none';
+        return;
+    }
+
+    actionsEl.style.display = 'block';
+
+    // Escalate: show if there's a next role in chain AND user is current handler or senior
+    const chain = ESCALATION_CHAIN[kasus.track] ?? [];
+    const handlerIdx = chain.indexOf(kasus.current_handler_role);
+    const nextRoles  = chain.slice(handlerIdx + 1);
+    const isHandler  = kasus.current_handler_role === currentUser.role_type;
+
+    if (nextRoles.length && isHandler) {
+        escalateTo.innerHTML = nextRoles.map(r =>
+            `<option value="${r}">${esc(ROLE_LABEL[r] ?? r)}</option>`
+        ).join('');
+        escalateBlock.style.display = 'block';
+    } else {
+        escalateBlock.style.display = 'none';
+    }
+
+    // Status change
+    const nextStatuses = STATUS_AFTER_CURRENT[kasus.status] ?? [];
+    const canChangeStatus = isHandler || ['KEPSEK','BK','WAKA_KESISWAAN'].includes(currentUser.role_type);
+
+    if (canChangeStatus && nextStatuses.length) {
+        statusSel.innerHTML = nextStatuses.map(s =>
+            `<option value="${s}">${esc(CASE_STATUS_LABEL[s])}</option>`
+        ).join('');
+        statusBlock.style.display = 'block';
+    } else {
+        statusBlock.style.display = 'none';
+    }
+
+    // Close: Kepsek/BK/handler di akhir chain
+    const canClose = currentUser.role_type === 'KEPSEK' || isHandler;
+    closeBtn.style.display = canClose ? 'inline-flex' : 'none';
+
+    // Wire action buttons (replace old listeners by cloning)
+    const newCommentBtn = replaceEl('kasus-comment-submit-btn');
+    const newEscBtn     = replaceEl('kasus-escalate-btn');
+    const newStatusBtn  = replaceEl('kasus-status-btn');
+    const newCloseBtn   = replaceEl('kasus-close-btn');
+
+    newCommentBtn.addEventListener('click', async () => {
+        const text = document.getElementById('kasus-comment-text').value.trim();
+        const msgEl = document.getElementById('kasus-comment-msg');
+        if (!text) { msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = 'Komentar tidak boleh kosong.'; return; }
+        newCommentBtn.disabled = true; newCommentBtn.textContent = 'Mengirim…';
+        try {
+            await addCaseComment({ caseId: kasus.case_id, text, authorUserId: currentUser.user_id, authorRole: currentUser.role_type });
+            document.getElementById('kasus-comment-text').value = '';
+            msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Komentar dikirim.';
+            await refreshKasusDetail();
+        } catch (err) {
+            msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
+        } finally {
+            newCommentBtn.disabled = false; newCommentBtn.textContent = 'Kirim Komentar';
+        }
+    });
+
+    newEscBtn.addEventListener('click', async () => {
+        const to   = document.getElementById('kasus-escalate-to').value;
+        const note = document.getElementById('kasus-escalate-note').value.trim();
+        const msgEl = document.getElementById('kasus-escalate-msg');
+        newEscBtn.disabled = true; newEscBtn.textContent = 'Mengeskalasi…';
+        try {
+            await escalateCase({
+                caseId: kasus.case_id,
+                previousHandlerRole: kasus.current_handler_role,
+                newHandlerRole: to,
+                note,
+                authorUserId: currentUser.user_id,
+                authorRole:   currentUser.role_type,
+            });
+            msgEl.style.color = 'var(--color-success)'; msgEl.textContent = `Dieskalasi ke ${ROLE_LABEL[to] ?? to}.`;
+            await refreshKasusDetail();
+        } catch (err) {
+            msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
+        } finally {
+            newEscBtn.disabled = false; newEscBtn.textContent = 'Eskalasi';
+        }
+    });
+
+    newStatusBtn.addEventListener('click', async () => {
+        const newSt = document.getElementById('kasus-new-status').value;
+        const note  = document.getElementById('kasus-status-note').value.trim();
+        const msgEl = document.getElementById('kasus-status-msg');
+        newStatusBtn.disabled = true; newStatusBtn.textContent = 'Menyimpan…';
+        try {
+            await changeCaseStatus({ caseId: kasus.case_id, previousStatus: kasus.status, newStatus: newSt, note, authorUserId: currentUser.user_id, authorRole: currentUser.role_type });
+            msgEl.style.color = 'var(--color-success)'; msgEl.textContent = `Status diubah ke ${CASE_STATUS_LABEL[newSt]}.`;
+            await refreshKasusDetail();
+        } catch (err) {
+            msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
+        } finally {
+            newStatusBtn.disabled = false; newStatusBtn.textContent = 'Ubah Status';
+        }
+    });
+
+    newCloseBtn.addEventListener('click', async () => {
+        const note  = document.getElementById('kasus-status-note').value.trim();
+        const msgEl = document.getElementById('kasus-status-msg');
+        if (!confirm('Tutup kasus ini? Kasus yang ditutup tidak bisa dibuka kembali.')) return;
+        newCloseBtn.disabled = true; newCloseBtn.textContent = 'Menutup…';
+        try {
+            await closeCase({ caseId: kasus.case_id, note, authorUserId: currentUser.user_id, authorRole: currentUser.role_type });
+            msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Kasus berhasil ditutup.';
+            await refreshKasusDetail();
+        } catch (err) {
+            msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
+        } finally {
+            newCloseBtn.disabled = false; newCloseBtn.textContent = 'Tutup Kasus';
+        }
+    });
+}
+
+function replaceEl(id) {
+    const old = document.getElementById(id);
+    const neu = old.cloneNode(true);
+    old.parentNode.replaceChild(neu, old);
+    return neu;
+}
+
+async function refreshKasusDetail() {
+    if (!_kasusCurrentId) return;
+    try {
+        const [kasus, events] = await Promise.all([getCase(_kasusCurrentId), getCaseEvents(_kasusCurrentId)]);
+        renderKasusDetail(kasus);
+        renderKasusEvents(events);
+        renderKasusActions(kasus);
+        // Update list cache
+        _kasusAllCases = await getCases();
+    } catch (err) {
+        console.error('[kasus] refresh error', err);
     }
 }
 
