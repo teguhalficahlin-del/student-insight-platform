@@ -293,7 +293,7 @@ async function renderStep3() {
     `;
 
     wireTemplateButton(3);
-    wireImportBlock(3, { onDone: () => refreshDataList(3) });
+    wireImportBlock(3, { onDone: async () => { await refreshDataList(3); nextBtn.disabled = (await getPrograms()).length < 1; } });
     await refreshDataList(3);
 
     nextBtn.disabled = programs.length < 1;
