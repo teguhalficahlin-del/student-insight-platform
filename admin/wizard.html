@@ -14,6 +14,7 @@
         <!-- Header: brand + nama langkah aktif -->
         <header class="wz-header">
             <div class="wz-header-left">
+                <button id="wizard-menu-btn" class="wz-menu-btn" type="button" aria-label="Menu langkah">&#9776;</button>
                 <span class="wz-brand">Student Insight Platform</span>
                 <span class="wz-active-name" id="wizard-active-step-name">Profil Sekolah</span>
             </div>
@@ -22,6 +23,9 @@
                 <button id="wizard-logout-btn" class="wz-logout-btn" type="button">Keluar</button>
             </div>
         </header>
+
+        <!-- Backdrop sidebar mobile -->
+        <div id="wizard-sidebar-backdrop" class="wz-sidebar-backdrop" style="display:none"></div>
 
         <!-- Progress horizontal — hanya tampil di mobile -->
         <div class="wz-progress-mobile" id="wizard-progress-mobile" aria-hidden="true">

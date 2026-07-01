@@ -922,9 +922,42 @@ label {
     flex-shrink: 0;
 }
 
-/* Responsif: sidebar disembunyikan di mobile */
+/* Hamburger button (mobile only) */
+.wz-menu-btn {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 20px;
+    padding: 0 8px 0 0;
+    cursor: pointer;
+    color: var(--color-text);
+    line-height: 1;
+}
+
+/* Backdrop sidebar mobile */
+.wz-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 199;
+}
+
+/* Responsif: sidebar jadi drawer di mobile */
 @media (max-width: 768px) {
-    .wz-sidebar { display: none; }
+    .wz-menu-btn { display: inline-flex; align-items: center; }
+    .wz-sidebar {
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 0; left: 0; bottom: 0;
+        z-index: 200;
+        width: 280px;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        box-shadow: var(--shadow-md);
+        padding-top: 16px;
+    }
+    .wz-sidebar.open { transform: translateX(0); }
     .wz-progress-mobile { display: flex; }
     .wz-content { padding: 16px 14px; }
     .wz-panel { padding: 18px 16px; }

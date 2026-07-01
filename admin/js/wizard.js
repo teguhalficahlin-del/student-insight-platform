@@ -1829,6 +1829,17 @@ window.addEventListener('beforeunload', (e) => {
         changePwBtn.addEventListener('click', () => showPasswordModal(false));
     }
 
+    // Hamburger: buka/tutup sidebar drawer di mobile
+    const menuBtn      = document.getElementById('wizard-menu-btn');
+    const sidebar      = document.querySelector('.wz-sidebar');
+    const backdrop     = document.getElementById('wizard-sidebar-backdrop');
+    function openSidebar()  { sidebar.classList.add('open'); backdrop.style.display = 'block'; }
+    function closeSidebar() { sidebar.classList.remove('open'); backdrop.style.display = 'none'; }
+    if (menuBtn)  menuBtn.addEventListener('click', openSidebar);
+    if (backdrop) backdrop.addEventListener('click', closeSidebar);
+    // Tutup drawer saat klik item langkah di sidebar
+    document.getElementById('wizard-steps')?.addEventListener('click', () => closeSidebar());
+
     // Cek apakah password default sudah diganti
     let config = null;
     try { config = await getSchoolConfig(); } catch (_) { config = null; }
