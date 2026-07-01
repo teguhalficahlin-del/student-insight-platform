@@ -443,9 +443,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
             const identifierType: IdentifierType = row.role_type === 'DUDI' ? 'NAMA_USAHA'
                 : row.role_type === 'STAKEHOLDER' ? 'KODE_KHUSUS' : 'NIP';
-            const internalEmail  = row.email ?? toInternalEmail(
-                identifierType === 'NAMA_USAHA' ? row.nama : row.nip_atau_nik,
-                identifierType,
+            // STAKEHOLDER: namespace email dengan school_id prefix agar unik
+            // antar-sekolah (Auth bersifat global, kode khusus tidak unik global).
+            const schoolPrefix  = user.school_id.replace(/-/g, '').substring(0, 8);
+            const internalEmail  = row.email ?? (
+                row.role_type === 'STAKEHOLDER'
+                    ? `${row.nip_atau_nik.trim().toLowerCase()}@${schoolPrefix}.stakeholder`
+                    : toInternalEmail(
+                        identifierType === 'NAMA_USAHA' ? row.nama : row.nip_atau_nik,
+                        identifierType,
+                    )
             );
             const tempPassword = generateTempPassword();
 

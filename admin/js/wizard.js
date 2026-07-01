@@ -343,7 +343,16 @@ async function renderStakeholderStep() {
             nameEl.value = '';
             codeEl.value = '';
             await refreshDataList(9);
+            showSuccess(`Stakeholder "${name}" berhasil ditambahkan.`);
         } catch (err) {
+            console.error('[wizard] tambah stakeholder error:', err);
+            const listEl = document.getElementById('wz-data-list');
+            if (listEl) {
+                const errDiv = document.createElement('div');
+                errDiv.className = 'alert alert-danger';
+                errDiv.textContent = err.message ?? 'Gagal menambah stakeholder.';
+                listEl.prepend(errDiv);
+            }
             showError(err.message ?? 'Gagal menambah stakeholder.');
         } finally {
             addBtn.disabled = false;
