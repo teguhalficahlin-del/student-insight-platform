@@ -32,7 +32,8 @@ form.addEventListener('submit', async (e) => {
         }
         window.location.href = 'dashboard.html';
     } catch (err) {
-        errEl.textContent    = err.message;
+        const isOurMsg = err.message?.startsWith('Akun ini');
+        errEl.textContent    = isOurMsg ? err.message : 'Login gagal. Periksa kode akses Anda.';
         errEl.style.display  = 'block';
         loginBtn.disabled    = false;
         loginBtn.textContent = 'Masuk';

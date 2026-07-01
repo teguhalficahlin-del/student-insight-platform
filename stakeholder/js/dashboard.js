@@ -55,7 +55,7 @@ async function loadSummary() {
         document.getElementById('st-hadir-hari').textContent     = fmtNum(s.hadir_hari_ini);
         document.getElementById('updated-at').textContent        = fmtTime(s.updated_at);
     } catch (err) {
-        errBox.textContent   = `Gagal memuat ringkasan: ${err.message}`;
+        errBox.textContent   = 'Gagal memuat ringkasan. Periksa koneksi lalu coba lagi.';
         errBox.style.display = 'block';
     } finally {
         btn.disabled    = false;

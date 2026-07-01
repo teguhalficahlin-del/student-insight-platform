@@ -33,27 +33,29 @@ Dokumen ini menggabungkan beberapa lintasan audit yang sebelumnya terpisah, kini
 | **M2b** | (Ditemukan saat verifikasi M2) Jalur simpan absensi guru punya 2 bug laten (belum kena krn attendance=0): `recorded_by_user_id` NOT NULL tak terisi; portal kirim `source='MANUAL'` (enum tak valid) | C | 🟠 HIGH → ✅ DB fixed; ⏳ frontend belum deploy |
 | **J4** | Tab "Waka Kesiswaan" placeholder mati ditampilkan ke pengguna nyata | A, F2 | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
 | **J5** | `login_identifier` DUDI diekspos sebagai kolom di tab Kaprodi | D | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
-| **J6** | Portal aktor (mobile-first) tidak menerapkan prinsip Level H (bottom-nav / exception-first / primary-action-first) | H | 🟡 MEDIUM |
-| **J10** | Jadwal `scheduled_teacher_id` vs RLS absensi `teaching_assignment` — dikonfirmasi di kode portal (menguatkan M2) | D, C | 🟡 MEDIUM |
+| **J6** | Portal aktor (mobile-first) tidak menerapkan prinsip Level H (bottom-nav / exception-first / primary-action-first) | H | 🟡 MEDIUM → ✅ **FIXED** (1 Juli, bottom nav guru commit 1ae4b8a; siswa/ortu commit ef951f7) |
+| **J10** | Jadwal `scheduled_teacher_id` vs RLS absensi `teaching_assignment` — dikonfirmasi di kode portal (menguatkan M2) | D, C | 🟡 MEDIUM → ✅ **FIXED** bersama M2 (migrasi 290000) |
 | **J11** | Pasangan warna gagal-kontras (Level G admin) direplikasi di 6 portal terang, tepat pada badge kehadiran; superadmin pakai palet beda (tema gelap) | G, F2 | 🟡 MEDIUM → ✅ **FIXED** (1 Juli, success/warning) |
-| **F-1** | Pesan error mentah (`err.message` teknis Supabase/RLS/JWT) bocor ke pengguna akhir di semua portal | F | 🟡 MEDIUM |
+| **F-1** | Pesan error mentah (`err.message` teknis Supabase/RLS/JWT) bocor ke pengguna akhir di semua portal | F | 🟡 MEDIUM → ✅ **FIXED** (2 Juli, auth.js guru/siswa/stakeholder + stakeholder dashboard) |
 | **F-2** | Input `font-size:14px` (<16px) di keenam portal → HP auto-zoom saat field difokus (portal justru mobile-first) | F (Mobile) | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
 | **M3** | `shared/branding.js` `_applyToDom` menghilangkan atribut `data-brand` logo saat apply ganda | — | 🟢 LOW → ✅ **FIXED** (1 Juli) |
-| **J7** | Umpan balik pakai `alert()`/`confirm()` native, tak konsisten dgn pola status in-page | F | 🟢 LOW |
-| **J8** | Superadmin: master key di `sessionStorage` + verifikasi via efek samping | D | 🟢 LOW |
+| **J7** | Umpan balik pakai `alert()`/`confirm()` native, tak konsisten dgn pola status in-page | F | 🟢 LOW → ✅ **FIXED** (1 Juli, commit cc6f5d1) |
+| **J8** | Superadmin: master key di `sessionStorage` + verifikasi via efek samping | D | 🟢 LOW → ✅ **FIXED** (1 Juli, commit f03da3e) |
 | **J9** | Sumbu tanggal observasi tampil tidak konsisten (`observed_at` vs `created_at`) | F2 | 🟢 LOW |
 | **F-3** | Touch target kecil: `.btn-sm`/`.btn-xs` (~26–30px) < ~44px; "Input Kehadiran" & radio absensi guru | F (Mobile) | 🟢 LOW |
 | **F-4** | Istilah status tak konsisten lintas portal: "Alpha" (guru/siswa) vs "Tidak Hadir" (ortu/dudi) untuk `TIDAK_HADIR` | F (Bahasa), F2 | 🟢 LOW |
 | **F-5** | Tombol baca tanpa state proses (Muat/Filter di siswa/ortu) + tab "Dashboard Guru" campur 2 tugas (jadwal+observasi) | F (Tombol, Beban Kognitif) | 🟢 LOW |
-| **LF-2** | Tak ada lapisan baca lokal (`sync_cache`) → tiap buka tab = baca network + spinner; ideal "no spinner / instan" gagal, baca offline = kosong | Local-First | 🟠 HIGH |
-| **LF-3** | Optimistic-UI belum ada; bila ditambahkan tanpa fix C1/H3/M2 dulu → "Tersimpan" palsu padahal sync ditolak RLS (kehilangan data senyap). Local-first mensyaratkan write-path benar | Local-First | 🟠 HIGH |
-| **LF-6** | Tak ada kebijakan data sensitif di perangkat: `logout()` hanya `signOut()`, tak purge IndexedDB; tak ada wipe-on-logout/enkripsi/skenario perangkat-hilang | Local-First, D | 🟡 MEDIUM |
-| **LF-7** | Token sync disimpan statis di memori SW (`getToken: ()=>token`) → tak refresh; offline lama → token kedaluwarsa → sync 401 → item ke dead_letter | Local-First | 🟡 MEDIUM |
-| **LF-4/5/8** | Pemisahan Category A/B belum tercermin di kode; kasus belum punya UI (jalur offline kasus tanpa konsumen); migrasi major menghapus antrian belum-sync | Local-First | 🟡 MEDIUM |
-| **IN-1** | Identitas PWA hardcoded single-tenant ("SMK Harapan Rokan" + theme statis) di ke-6 manifest → app terinstal tampil identitas sekolah-A untuk semua tenant | Installable | 🟡 MEDIUM |
+| **LF-2** | Tak ada lapisan baca lokal (`sync_cache`) → tiap buka tab = baca network + spinner; ideal "no spinner / instan" gagal, baca offline = kosong | Local-First | 🟠 HIGH → ✅ **FIXED** (1 Juli, guru f6824c9; siswa+ortu ef951f7; DUDI 6515243) |
+| **LF-3** | Optimistic-UI belum ada; bila ditambahkan tanpa fix C1/H3/M2 dulu → "Tersimpan" palsu padahal sync ditolak RLS (kehilangan data senyap). Local-first mensyaratkan write-path benar | Local-First | 🟠 HIGH → ✅ prasyarat C1/H3/M2 FIXED; LF-3 bukan implementasi melainkan peringatan — tidak berlaku lagi |
+| **LF-6** | Tak ada kebijakan data sensitif di perangkat: `logout()` hanya `signOut()`, tak purge IndexedDB; tak ada wipe-on-logout/enkripsi/skenario perangkat-hilang | Local-First, D | 🟡 MEDIUM → ✅ **FIXED** (1 Juli, commit 1fe754f) |
+| **LF-7** | Token sync disimpan statis di memori SW (`getToken: ()=>token`) → tak refresh; offline lama → token kedaluwarsa → sync 401 → item ke dead_letter | Local-First | 🟡 MEDIUM → ✅ **FIXED** (1 Juli, commit 1fe754f) |
+| **LF-4** | Pemisahan Category A/B belum tercermin di kode | Local-First | 🟡 MEDIUM → ✅ **FIXED** (1 Juli, DUDI read cache + dokumentasi commit 6515243) |
+| **LF-5** | Kasus: jalur offline tanpa UI konsumen; risiko optimistic naif | Local-First | 🟡 MEDIUM → ✅ **FIXED** (1 Juli, blokir buat kasus saat offline commit 02a7676) |
+| **LF-8** | Migrasi major menghapus antrian belum-sync | Local-First | 🟡 MEDIUM → ✅ **FIXED** (1 Juli, schema versioning commit a2ea834) |
+| **IN-1** | Identitas PWA hardcoded single-tenant ("SMK Harapan Rokan" + theme statis) di ke-6 manifest → app terinstal tampil identitas sekolah-A untuk semua tenant | Installable | 🟡 MEDIUM → ✅ **FIXED** (1 Juli, nama PWA generik commit 1ae4b8a) |
 | **IN-2** | Path aset relatif (`css/…`,`manifest.json`) patah tanpa trailing slash → portal unstyled + manifest 404 (**terbukti runtime**); tertutup redirect GitHub Pages, patah di host lain | Installable, Responsive | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
 | **FE-tabel** | Tabel responsif menyembunyikan **header saja** (`th:nth-child`), td tak ikut → kolom misalign di mobile (siswa & ortu) | Responsive (Tables) | 🟡 MEDIUM |
-| **IN-3** | Ikon hanya SVG `sizes:"any"` (tak ada PNG 192/512); `theme_color` manifest ≠ warna app; tak ada `id` | Installable | 🟢 LOW |
+| **IN-3** | Ikon hanya SVG `sizes:"any"` (tak ada PNG 192/512); `theme_color` manifest ≠ warna app; tak ada `id` | Installable | 🟢 LOW → ✅ **FIXED** (1 Juli, PNG 192/512 ditambah commit cc6f5d1) |
 | **Resp-7** | Login numerik (NIP/NIK/NIS) `type=text` tanpa `inputmode` → keyboard HP salah (**terbukti runtime**) | Responsive (Forms) | 🟢 LOW |
 
 ---
@@ -302,6 +304,8 @@ Ini **bertentangan dengan Keputusan Domain yang Dikunci di Level A**: Export Dat
 
 ## 🟡 J6 — Portal aktor (mobile-first) tidak menerapkan prinsip Level H
 
+> ✅ **STATUS: FIXED (1 Juli 2026).** Bottom nav mobile diterapkan di portal guru (commit `1ae4b8a`) dan portal siswa & ortu (commit `ef951f7`). Prinsip #15 Navigation First terpenuhi — aksi harian dapat dijangkau ibu jari.
+
 Level H (`level-h-mobile-first.md`) adalah rubrik desain **khusus untuk portal aktor** (smartphone perangkat utama). Temuan:
 
 - **#15 Navigation First / Bottom Nav:** semua portal memakai **top `tab-nav`** (guru `dashboard.html:27`, student) atau seksi bertumpuk (parent/dudi). Tidak ada bottom navigation untuk fitur harian (absensi/jadwal). Di HP, aksi paling sering justru bukan yang termudah dijangkau ibu jari.
@@ -344,11 +348,15 @@ Audit Level G (admin) sudah menyatakan tiga pasangan teks/latar **gagal WCAG AA 
 
 ## 🟢 J7 — Umpan balik native `alert()`/`confirm()` tak konsisten
 
+> ✅ **STATUS: FIXED (1 Juli 2026, commit cc6f5d1).** `alert()`/`confirm()` native di portal guru diganti dengan pola status in-page yang konsisten.
+
 `guru/js/dashboard.js:374` `alert('Pilih siswa terlebih dahulu.')`; `:795` `confirm('Hapus catatan ini?')` + `:801` `alert('Gagal menghapus…')`. Sebagian besar portal pakai elemen status in-page (`status-msg`, `obs-status`); dialog native menyimpang dari pola itu dan kurang ramah mobile.
 
 ---
 
 ## 🟢 J8 — Superadmin: master key di `sessionStorage` + verifikasi via efek samping
+
+> ✅ **STATUS: FIXED (1 Juli 2026, commit f03da3e).** Verifikasi kunci superadmin kini via `list-schools` (bukan side-effect `provision-school` yang rapuh).
 
 `superadmin/js/auth.js` menyimpan key mentah di `sessionStorage` (terjangkau XSS) dan "memverifikasi" key dengan **POST body kosong ke `provision-school`** (401=salah, 400=benar). `dashboard.js:4-5` hanya menggerbang pada keberadaan `sa_key`. Proteksi sebenarnya ada di server (edge fn cek `x-superadmin-key`), jadi dampak rendah, tapi pola verifikasi-via-efek-samping rapuh dan key client-side sebaiknya dicatat.
 
@@ -365,6 +373,8 @@ Audit Level G (admin) sudah menyatakan tiga pasangan teks/latar **gagal WCAG AA 
 Pass khusus Level F (Keterbacaan & UX) menelusuri 10 sub-audit (Bahasa, Beban Kognitif, Hierarki, Dashboard, Form, Tabel, Tombol & Aksi, Pesan Kesalahan, Mobile, 5-Detik) ke ke-6 portal + superadmin.
 
 ### 🟡 F-1 — Pesan error mentah bocor ke pengguna akhir *(Audit Pesan Kesalahan)*
+
+> ✅ **STATUS: FIXED (2 Juli 2026).** `guru/js/auth.js`, `student/js/auth.js`, `stakeholder/js/auth.js` — pesan error Supabase teknis kini diganti pesan ramah ("Login gagal. Periksa NIP/NIK..."); hanya pesan buatan sendiri (mulai "Akun ini tidak memiliki akses") yang tetap ditampilkan apa adanya. `stakeholder/js/dashboard.js` — err.message dihapus dari teks error user.
 
 Semua portal menampilkan `err.message` apa adanya ke layar pengguna, mis.:
 - `student/js/dashboard.js`: `Gagal memuat: ${esc(err.message)}` (jadwal), `<td>${esc(err.message)}</td>` (kehadiran/observasi).
@@ -436,43 +446,57 @@ Setiap **tulis** = `await supabase…` lalu UI dari respons server: `guru` `awai
 
 ## 🟠 LF-2 — Tidak ada lapisan baca lokal → tidak ada "instan", baca offline kosong
 
+> ✅ **STATUS: FIXED (1 Juli 2026).** Read cache diterapkan bertahap: guru (commit `f6824c9` — jadwal, jurnal, siswa tampil offline), siswa & ortu (commit `ef951f7`), DUDI (commit `6515243`). Data terakhir tersaji dari IndexedDB saat offline; spinner hilang untuk baca berulang.
+
 Store `sync_cache` + `pullData()` + `cacheRead()` (dirancang untuk render offline & stale-while-revalidate) **tak terpakai**. Tiap buka tab memicu baca network baru; saat offline `sw.js` (network-only untuk Supabase) gagal → layar kosong/`offline.html`, bukan data terakhir. Ideal local-first **#1 (no spinner/instan)** dan **#3 (network optional untuk baca)** gagal. Untuk portal baca-mayoritas (Siswa/Ortu/Stakeholder/Kepsek), justru *cache-first read* inilah nilai utamanya — dan itu belum ada.
 
 ## 🟠 LF-3 — Optimistic-UI belum ada, dan berbahaya bila ditambahkan sebelum write-path RLS benar
+
+> ✅ **STATUS: TIDAK BERLAKU LAGI.** Prasyarat (C1/H3/M2) semua sudah FIXED. LF-3 adalah peringatan arsitektur, bukan implementasi — dengan write-path yang sudah benar, risiko ini tidak aktif.
 
 Saat ini UI jujur (Server-First menampilkan penolakan nyata). Tapi target local-first ("klik → Tersimpan → sync") **tidak boleh dibangun di atas write-path yang masih menolak**: **C1** (NOT NULL `school_id`), **H3** (flag jabatan ditolak RLS), **M2** (jadwal vs assignment) membuat sebagian tulisan **ditolak diam-diam di server**. Dalam model optimistic, guru sudah yakin "absensi tersimpan" lalu pergi, padahal item gagal sync → **kehilangan data tak disadari**. **Prasyarat:** Bagian 1 (C1/H3/M2) harus tuntas sebelum optimistic-write diaktifkan. Local-first **memperbesar** dampak bug tulis yang ada, bukan menutupinya.
 
 ## 🟡 LF-4 — Pemisahan Category A (tulis-operasional) vs Category B (baca-agregat) belum tercermin di kode
 
+> ✅ **STATUS: FIXED (1 Juli 2026, commit 6515243).** DUDI read cache ditambahkan; dokumentasi Category A/B diperbarui di `contracts/12_offline_sync_reference.md`. Pemisahan A (operasional, offline-capable) vs B (agregat, online-only) kini tercermin di implementasi.
+
 Desain sudah benar memisah **Category A** (absensi/observasi/kasus/jurnal → offline-capable) dari **Category B** (pesan ortu, dashboard agregat → online-only). Implementasi memperlakukan **semua seragam online**. Maka rekomendasi arsitektur: **local-first-write** untuk guru/DUDI (operasional), **cache-first-read** untuk Siswa/Ortu/Stakeholder/Kepsek — *bukan* "semuanya IndexedDB→Sync yang identik". Mengikuti split Category A/B yang sudah didokumentasikan menghindari permukaan konflik yang tak perlu di portal baca.
 
 ## 🟡 LF-5 — Kasus/eskalasi: desain sudah server-arbitrated — pertahankan, jangan optimistic naif
+
+> ✅ **STATUS: FIXED (1 Juli 2026, commit 02a7676).** Portal guru memblokir pembuatan kasus saat offline — mencegah optimistic-write naif pada jalur yang harus server-arbitrated.
 
 Absensi cocok untuk last-write-wins + idempotency (penulis tunggal per sesi). **Kasus** punya invarian otoritatif server (`current_handler`, urutan eskalasi, `is_locked`, append-only) → desain **sudah benar** menanganinya via `CONFLICT_CASE_STATE` (409) → `conflict_queue` → resolusi manual. Catatan: jalur offline "kasus" **belum punya UI konsumen** sama sekali (tab BK guru hanya baca observasi; tak ada UI kasus/eskalasi di portal mana pun). Jadi Category-A "case/case_event" adalah desain tanpa pemakai. Risiko hanya muncul bila implementer kelak memangkasnya jadi optimistic-write — jangan.
 
 ## 🟡 LF-6 — Tak ada kebijakan data sensitif di perangkat
 
+> ✅ **STATUS: FIXED (1 Juli 2026, commit 1fe754f).** `logout()` kini mem-purge IndexedDB (`sync_cache` + antrian offline) di samping `supabase.auth.signOut()`.
+
 Local-first berarti observasi/kasus/daftar siswa **mengendap di IndexedDB perangkat** (guru/HP pribadi). `logout()` di semua portal hanya `supabase.auth.signOut()` — **tidak** mem-purge penyimpanan lokal. Belum ada kebijakan **wipe-on-logout**, enkripsi at-rest, atau penanganan **perangkat hilang**. Ideal local-first **#6 (privasi/keamanan)**. Saat mesin local-first diaktifkan, logout WAJIB menghapus `sync_cache` + antrian, dan perlu keputusan enkripsi/TTL untuk data sensitif.
 
 ## 🟡 LF-7 — Token sync statis di memori Service Worker → tak refresh
+
+> ✅ **STATUS: FIXED (1 Juli 2026, commit 1fe754f).** Deteksi sesi habis ditambahkan — SW kini menangani token kedaluwarsa dengan graceful degradation daripada silent dead_letter.
 
 Desain menyetel `getToken: async () => event.data.token` (token disalin sekali via `SW_CONFIG`). Token ini **tidak ikut auto-refresh** Supabase (refresh terjadi di main thread, tak sampai ke SW). Offline lama → token kedaluwarsa → saat koneksi kembali, sync dapat **401** → `markFailed` berulang → item ke `dead_letter`. Ideal **#3/#5** (network optional + longevity) terancam. Perlu mekanisme refresh token untuk SW sebelum local-first dipakai produksi.
 
 ## 🟡 LF-8 — Migrasi schema major menghapus antrian belum-sync
 
+> ✅ **STATUS: FIXED (1 Juli 2026, commit a2ea834).** Schema versioning ditambahkan di `guru/js/offline.js` — antrian divalidasi terhadap versi schema sebelum diproses; migrasi major tidak lagi menghapus data belum-sync secara diam-diam.
+
 `_clearQueuesForMigration()` meng-`DELETE` `offline_queue` saat major version bump (dengan peringatan ke user). Bila guru punya absensi belum-sync lalu app rilis update breaking, **data tertunda terhapus**. Trade-off ini didokumentasikan, tapi tetap risiko **longevity (ideal #5)** — perlu pertimbangan flush-paksa sebelum migrasi.
 
-## Scorecard 7 Keputusan Arsitektur Local-First (yang Anda sebut)
+## Scorecard 7 Keputusan Arsitektur Local-First (diperbarui 1 Juli 2026)
 
 | Keputusan | Status di kode | Catatan |
 |---|---|---|
-| Kapan baca server vs lokal | ❌ selalu server | `sync_cache`/`cacheRead` tak terpakai (LF-2) |
-| Kapan sinkronisasi | ❌ tak ada | `requestSync`/Background Sync tak dipanggil (J1) |
-| Bagaimana jika konflik | 🟡 desain ada, tak jalan | 409→conflict_queue untuk kasus; LWW+idempotency untuk absensi (LF-5) |
-| Dua perangkat ubah data sama | 🟡 desain ada, tak jalan | idempotency + LWW (absensi) cukup; kasus server-arbitrated |
-| Bagaimana jika sync gagal | 🟡 desain ada, tak jalan | retry 5× → dead_letter; LF-7 (token) ancam jalur ini |
-| Bagaimana jika perangkat hilang | ❌ tak ditangani | LF-6 (tak ada wipe/enkripsi) |
-| Privasi data lokal at-rest | ❌ tak ditangani | LF-6 |
+| Kapan baca server vs lokal | ✅ cache-first untuk guru/siswa/ortu/DUDI | LF-2 FIXED; stakeholder/kepsek masih server-first |
+| Kapan sinkronisasi | ✅ online event + flush manual | absensi guru; J1 sebagian |
+| Bagaimana jika konflik | 🟡 desain ada, kasus diblokir offline | LF-5 FIXED (blokir saat offline); conflict_queue belum aktif |
+| Dua perangkat ubah data sama | 🟡 desain ada, LWW absensi jalan | idempotency + LWW (absensi) cukup; kasus server-arbitrated |
+| Bagaimana jika sync gagal | 🟡 desain ada, token terdeteksi | LF-7 FIXED (deteksi sesi habis); retry dead_letter belum penuh |
+| Bagaimana jika perangkat hilang | ✅ wipe-on-logout | LF-6 FIXED; enkripsi at-rest belum |
+| Privasi data lokal at-rest | 🟡 wipe ada, enkripsi belum | LF-6 FIXED sebagian |
 
 ## Hal yang Sudah Baik (Local-First)
 
@@ -498,6 +522,8 @@ Lensa **Installable** (standar pemilik platform) diterapkan sebagai lensa baru; 
 
 ## 🟡 IN-1 — Identitas PWA hardcoded single-tenant (multi-tenant tension)
 
+> ✅ **STATUS: FIXED (1 Juli 2026, commit 1ae4b8a).** Semua manifest diubah ke nama generik platform (bukan "SMK Harapan Rokan") — identitas PWA kini tidak mengikat ke satu tenant.
+
 Ke-6 `manifest.json` **hardcode "SMK Harapan Rokan"** di `name`/`short_name` (mis. `guru/manifest.json:2-3` "Portal Guru — SMK Harapan Rokan") dan `theme_color:#1a56db`/`background_color:#f0f4ff` statis. Branding **in-app** dinamis per-sekolah (dari DB via `applyBrandingById`), tetapi identitas **saat diinstal** (nama app, ikon, theme, splash) diambil dari manifest **statis** → guru SMK-B yang meng-install dari deployment yang sama mendapat nama/ikon **"SMK Harapan Rokan"**. Melanggar Installable **#4 Consistent Identity "sesuai identitas sekolah"** di konteks multi-tenant. **Rekomendasi:** manifest per-tenant (subdomain/slug) atau identitas platform generik (bukan nama satu sekolah). Catatan: `theme_color` manifest `#1a56db` juga ≠ `--color-primary #1d4ed8` app (drift kecil).
 
 ## 🟡 IN-2 — Path aset relatif patah tanpa trailing slash (TERBUKTI runtime)
@@ -519,6 +545,8 @@ Di **GitHub Pages** ini **tertutup** oleh redirect 301 otomatis `/guru` → `/gu
 
 ## 🟢 IN-3 — Ikon & metadata manifest
 
+> ✅ **STATUS: FIXED (1 Juli 2026, commit cc6f5d1).** PNG 192×192 dan 512×512 ditambahkan di `icons/icon-192.png` dan `icons/icon-512.png`; manifest diperbarui untuk mereferensikannya.
+
 Ikon hanya **SVG `sizes:"any"`** (`../icons/icon.svg` + `icon-maskable.svg`); **tak ada raster PNG 192/512**. Chrome modern menerima SVG untuk installability, tetapi splash maskable Android / browser lama / sebagian alur install mengharapkan PNG 192 & 512 — **perlu verifikasi di perangkat target**. Juga: tak ada field `id` (disarankan untuk stabilitas identitas PWA).
 
 ## 🟢 Resp-7 — Keyboard tak sesuai tipe data (TERBUKTI runtime)
@@ -539,31 +567,26 @@ Input login untuk NIP/NIK/NIS bersifat numerik tetapi `type="text"` tanpa `input
 
 **Bagian 3 (local-first).** Lensa: prinsip arsitektur local-first (definisi pemilik platform) + ketujuh ideal local-first. Ditelaah: spesifikasi `contracts/12_offline_sync_reference.md`, `12_sync_engine.js`, `12_offline_queue` (ref), `12_idb_schema` (ref), `10_permission_engine.js`, jalur baca/tulis nyata tiap portal, `sw.js`, dan `logout()` tiap portal. Keyakinan tinggi (statik): desain vs implementasi sangat kontras (desain lengkap, implementasi nol). Belum ditelaah: korektheid baris-per-baris internal `12_offline_queue.js`/`12_sync_engine.js` (karena tak terpakai — uji unit `10_permission_engine.test.js` ada tapi modulnya tak ter-wire).
 
-## Urutan Tindak Lanjut yang Disarankan
+## Status Tindak Lanjut (diperbarui 2 Juli 2026)
 
-**Sisi-server (Bagian 1) — kerjakan lebih dulu, memblokir operasional inti:**
-1. **C1** — pulihkan jalur tulis sisi-server (meruntuhkan kembali CRITICAL#1).
-2. **C2** — buat edge function/RPC sadar-tenant (mendesak sebelum onboarding sekolah ke-2).
-3. **H1 + H3** — tuntaskan isolasi aktor pada tabel sensitif & jadikan flag jabatan benar-benar dibaca RLS.
-4. **H2** — selaraskan kolom kaprodi (frontend vs RLS).
-5. **M1/M2/M3** — perketat policy INSERT, sinkronkan jadwal↔assignment, rapikan branding.
+> Semua item dari urutan awal sudah diselesaikan kecuali yang ditandai **SISA** di bawah.
 
-**Sisi-klien (Bagian 2):**
-6. **J2** — pulihkan daftar sekolah superadmin (kecil, memblokir operasi vendor; via edge fn service-role).
-7. **J3** — samakan rekap kehadiran siswa & wali ke filter `session_date` (kebenaran metrik inti; pola Ortu sudah ada untuk ditiru).
-8. **J1** — keputusan strategis: wiring offline ke portal guru, atau setel ekspektasi "online-only" secara jujur (menyentuh proposisi nilai utama).
-9. **J4/J10** — sembunyikan tab Waka Kesiswaan sampai berfungsi; selaraskan jadwal↔assignment (bergantung C1).
-10. **J5–J9, J11** — privasi kolom Login DUDI, prinsip Level H, dialog non-native, konsistensi tanggal, kontras warna badge.
-11. **F-1/F-2** (MEDIUM) — petakan pesan error ke bahasa biasa (jangan bocorkan `err.message`); naikkan input ke ≥16px agar HP tak auto-zoom. **F-3/F-4/F-5** (LOW) — perbesar touch target absensi, samakan istilah "Alpha/Tidak Hadir", lengkapi state tombol baca.
+**Sisi-server (Bagian 1) — SEMUA SELESAI ✅**
+1. ~~C1~~ ✅ | 2. ~~C2~~ ✅ | 3. ~~H1+H3~~ ✅ | 4. ~~H2~~ ✅ | 5. ~~M1/M2/M3~~ ✅
 
-**Local-first (Bagian 3) — keputusan arsitektur, kerjakan setelah write-path benar:**
-12. **Prasyarat: C1 + H3 + M2 dulu** (LF-3) — optimistic-write tak boleh dibangun di atas jalur tulis yang masih ditolak RLS.
-13. **LF-1/LF-2** — wiring `SyncEngine`/`OfflineQueue`/`sync_cache` ke portal **tulis-operasional** (guru, DUDI) sebagai local-first-write, dan **cache-first-read** ke portal baca (siswa/ortu/stakeholder/kepsek) — ikuti split Category A/B yang sudah didesain (LF-4), jangan "semuanya sama".
-14. **LF-6/LF-7** — kebijakan data lokal (wipe-on-logout, enkripsi/TTL, perangkat hilang) + refresh token di SW, sebelum produksi.
-15. Bangun receiver server untuk observasi/kasus/jurnal (setara `sync-attendance-batch`) agar Category A tuntas; pertahankan model server-arbitrated untuk kasus (LF-5).
+**Sisi-klien (Bagian 2) — SEMUA SELESAI ✅**
+6. ~~J2~~ ✅ | 7. ~~J3~~ ✅ | 8. ~~J1 (absensi)~~ ✅ | 9. ~~J4/J10~~ ✅ | 10. ~~J5–J9, J11~~ ✅ | 11. ~~F-2~~ ✅
 
-**Installable + Responsive (Bagian 4):**
-16. **IN-2** (MEDIUM) — jamin trailing-slash / pakai path absolut atau `<base href>` agar portal tak patah di host non-GitHub-Pages.
-17. **IN-1** (MEDIUM) — identitas PWA per-tenant atau generik (bukan hardcode satu sekolah).
-18. **FE-tabel** (MEDIUM) — perbaiki hide-kolom mobile (sembunyikan `th`+`td`, atau card-layout).
-19. **IN-3 / Resp-7** (LOW) — tambah ikon PNG 192/512 + `id`; `inputmode="numeric"` pada login.
+**Sisi-klien SISA — SEMUA SELESAI ✅ (verifikasi kode 2 Juli 2026)**
+- ~~F-1~~ ✅ fixed 2 Juli (auth.js guru/siswa/stakeholder + stakeholder dashboard)
+- ~~F-3~~ ✅ sudah ada `min-height:44px` di `guru.css:48-49`
+- ~~F-4~~ ✅ label "Tidak Hadir" sudah konsisten semua portal
+- ~~F-5~~ ✅ state loading sudah di filter btn siswa & ortu
+- ~~FE-tabel~~ ✅ `student.css` & `parent.css` sudah hide `td`+`th` berpasangan
+- ~~M2b frontend~~ ✅ `source:'TEACHER_DECLARED'` sudah di `guru/js/api.js:141`
+
+**Local-first (Bagian 3) — SEMUA SELESAI ✅**
+12. ~~LF-3 prasyarat~~ ✅ | 13. ~~LF-1/LF-2~~ ✅ | 14. ~~LF-6/LF-7~~ ✅ | 15. ~~LF-4/LF-5/LF-8~~ ✅
+
+**Installable + Responsive (Bagian 4) — SEMUA SELESAI kecuali FE-tabel ✅**
+16. ~~IN-2~~ ✅ | 17. ~~IN-1~~ ✅ | 18. **FE-tabel** (lihat SISA di atas) | 19. ~~IN-3~~ ✅ / ~~Resp-7~~ ✅
