@@ -40,13 +40,17 @@ async function loadSchools() {
     const tbody   = document.getElementById('schools-body');
 
     try {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/schools?select=school_id,name,npsn,slug,phone,primary_color,is_active,created_at&order=created_at.desc`, {
-            headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+        // Superadmin key-based (bukan Supabase auth) → baca daftar sekolah
+        // lewat edge function service-role yang digerbang X-Superadmin-Key,
+        // karena RLS schools kini butuh auth.uid() (tak ada untuk anon).
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/list-schools`, {
+            headers: { 'x-superadmin-key': saKey },
         });
         const data = await res.json();
 
+        if (res.status === 401) { hintEl.textContent = 'Sesi superadmin tidak valid. Masuk ulang.'; return; }
         if (!Array.isArray(data) || data.length === 0) {
-            hintEl.textContent = 'Belum ada sekolah terdaftar.';
+            hintEl.textContent = data?.error ? `Gagal memuat: ${data.error}` : 'Belum ada sekolah terdaftar.';
             return;
         }
 

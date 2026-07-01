@@ -25,7 +25,7 @@ Dokumen ini menggabungkan beberapa lintasan audit yang sebelumnya terpisah, kini
 | **H1** | Isolasi WALI_KELAS & KAPRODI belum tuntas — observasi/kasus/absensi/prestasi/enrolmen masih sekolah-wide | D | 🟠 HIGH → ✅ **FIXED** (1 Juli) |
 | **H2** | `fn_kaprodi_program_id()` membaca kolom salah (`program_id` vs `kaprodi_program_id`) | D | 🟠 HIGH → ✅ **FIXED** (1 Juli) |
 | **H3** | Flag jabatan multi-role (`is_bk`, `is_kepsek`, `is_waka_*`) tak pernah dibaca RLS (baca) | D | 🟠 HIGH → ✅ **FIXED** (baca; 1 Juli) |
-| **J2** | Superadmin tidak bisa melihat daftar sekolah (regresi RLS tenant-isolation) — terkonfirmasi runtime | B, D | 🟠 HIGH |
+| **J2** | Superadmin tidak bisa melihat daftar sekolah (regresi RLS tenant-isolation) — terkonfirmasi runtime | B, D | 🟠 HIGH → ✅ **FIXED** (1 Juli) |
 | **J3** | Rekap kehadiran dihitung pada sumbu tanggal yang salah (`created_at`), tidak konsisten antar portal | C, F2 | 🟠 HIGH → ✅ **FIXED** (1 Juli) |
 | **M1** | Policy INSERT terlalu longgar (achievements/cases/case_events/student_updates) tanpa cek peran | D | 🟡 MEDIUM |
 | **M2** | Daftar jadwal guru (by `scheduled_teacher_id`) vs RLS absensi (by `teaching_assignment`) bisa mismatch | C, D | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
@@ -216,6 +216,8 @@ Bukti jalur nyata:
 **Catatan.** Ini bukan korupsi data, melainkan absennya fitur + risiko kehilangan data senyap. Sebelum platform dijual ke sekolah dengan koneksi tidak stabil (proposisi nilai utamanya), klaim "bisa dipakai tanpa internet" tidak boleh dibuat. Arah perbaikan (untuk diskusi): wiring `SyncEngine`/`OfflineQueue` ke portal guru + bangun receiver server untuk observasi/kasus/jurnal (saat ini hanya absensi siswa yang punya `sync-attendance-batch`).
 
 ---
+
+> ✅ **STATUS: FIXED (1 Juli 2026, gerbang terverifikasi runtime).** Edge function baru `list-schools` (digerbang `X-Superadmin-Key`, baca `schools` via service-role → tembus RLS dengan aman) menggantikan baca anon-REST. `superadmin/js/dashboard.js loadSchools()` kini memanggilnya dengan header kunci. *Bukti:* tanpa-kunci & kunci-salah → 401; baca `schools` via service-role mengembalikan sekolah (terbukti berulang sesi ini). Konfirmasi visual UI ada pada vendor pemegang `SUPERADMIN_KEY`. Frontend perlu deploy (`git push`).
 
 ## 🟠 J2 — Superadmin tidak bisa melihat daftar sekolah (regresi RLS) — TERKONFIRMASI runtime
 
