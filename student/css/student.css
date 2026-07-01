@@ -157,6 +157,9 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .pkl-label { font-size: 12px; color: var(--color-text-muted); text-transform: uppercase; font-weight: 600; }
 
 /* ── Responsive ──────────────────────────────────────────── */
+/* ── Bottom nav (mobile only) ──────────────────────────────── */
+.bottom-nav { display: none; }
+
 @media (max-width: 640px) {
     .login-card { padding: 24px 20px; }
     .page-body  { padding: 16px 12px; }
@@ -166,7 +169,30 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 
     /* Safe area notch */
     .app-header { padding-top: max(10px, env(safe-area-inset-top)); }
-    body { padding-bottom: env(safe-area-inset-bottom); }
+
+    /* Sembunyikan top nav, tampilkan bottom nav */
+    .tab-nav { display: none; }
+    .bottom-nav {
+        display: flex;
+        position: fixed; bottom: 0; left: 0; right: 0;
+        background: var(--color-surface);
+        border-top: 1px solid var(--color-border);
+        z-index: 200;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    .bottom-nav .tab-btn {
+        flex: 1 0 auto;
+        min-width: 56px;
+        padding: 10px 8px;
+        font-size: 11px;
+        border-radius: 0;
+        border-bottom: none;
+        border-top: 2px solid transparent;
+    }
+    .bottom-nav .tab-btn.active { border-top-color: var(--color-primary); }
+    .page-body { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0)); }
 }
 
 @media (max-width: 480px) {

@@ -39,6 +39,21 @@ const filterEnd      = document.getElementById('filter-date-end');
 const btnFilter      = document.getElementById('btn-filter');
 
 let currentUser = null;
+
+// ─── Read cache (LF-2) ───────────────────────────────────────
+const LC = {
+    set(key, data) {
+        try { localStorage.setItem(`smkhr:${key}`, JSON.stringify({ ts: Date.now(), data })); } catch {}
+    },
+    get(key) {
+        try { const r = JSON.parse(localStorage.getItem(`smkhr:${key}`)); return r?.data ?? null; }
+        catch { return null; }
+    },
+    clear() {
+        try { Object.keys(localStorage).filter(k => k.startsWith('smkhr:')).forEach(k => localStorage.removeItem(k)); }
+        catch {}
+    },
+};
 let children    = [];
 
 const STATUS_LABELS = {
@@ -214,30 +229,39 @@ async function loadAttendance(studentId) {
     }
 }
 
-async function loadObservations(studentId) {
-    obsListEl.innerHTML = '<p class="hint">Memuat...</p>';
+function renderObsRows(rows) {
+    if (rows.length === 0) {
+        obsListEl.innerHTML = '';
+        obsEmpty.style.display = 'block';
+        return;
+    }
     obsEmpty.style.display = 'none';
+    obsListEl.innerHTML = rows.map(r => `
+        <div class="obs-card obs-${r.sentiment.toLowerCase()}">
+            <div class="obs-meta">
+                ${esc(r.author)} &middot; ${DIMENSION_LABELS[r.dimension] || r.dimension} &middot; ${formatDate(r.date)}
+            </div>
+            <p class="obs-content">${esc(r.content)}</p>
+        </div>
+    `).join('');
+}
+
+async function loadObservations(studentId) {
+    const cacheKey = `ortu-obs-${studentId}`;
+    const cached   = LC.get(cacheKey);
+    if (cached) {
+        renderObsRows(cached);
+    } else {
+        obsListEl.innerHTML = '<p class="hint">Memuat...</p>';
+        obsEmpty.style.display = 'none';
+    }
 
     try {
         const rows = await fetchObservations(studentId);
-
-        if (rows.length === 0) {
-            obsListEl.innerHTML = '';
-            obsEmpty.style.display = 'block';
-            return;
-        }
-
-        obsListEl.innerHTML = rows.map(r => `
-            <div class="obs-card obs-${r.sentiment.toLowerCase()}">
-                <div class="obs-meta">
-                    ${esc(r.author)} &middot; ${DIMENSION_LABELS[r.dimension] || r.dimension} &middot; ${formatDate(r.date)}
-                </div>
-                <p class="obs-content">${esc(r.content)}</p>
-            </div>
-        `).join('');
-
+        LC.set(cacheKey, rows);
+        renderObsRows(rows);
     } catch (err) {
-        obsListEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
+        if (!cached) obsListEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
     }
 }
 
@@ -289,6 +313,7 @@ btnSchedule.addEventListener('click', async () => {
 });
 
 logoutBtn.addEventListener('click', async () => {
+    LC.clear();
     await logout();
     window.location.href = 'index.html';
 });

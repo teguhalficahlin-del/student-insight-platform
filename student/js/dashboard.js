@@ -23,6 +23,21 @@ const DIMENSION_LABELS = { AKADEMIK:'Akademik', KEHADIRAN:'Kehadiran', PERILAKU:
 const STATUS_LABELS    = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Tidak Hadir', EKSKUL:'Ekskul' };
 const STATUS_BADGE     = { HADIR:'badge-hadir', IZIN:'badge-izin', SAKIT:'badge-sakit', TIDAK_HADIR:'badge-tidak-hadir', EKSKUL:'badge-ekskul' };
 
+// ─── Read cache (LF-2) ───────────────────────────────────────
+const LC = {
+    set(key, data) {
+        try { localStorage.setItem(`smkhr:${key}`, JSON.stringify({ ts: Date.now(), data })); } catch {}
+    },
+    get(key) {
+        try { const r = JSON.parse(localStorage.getItem(`smkhr:${key}`)); return r?.data ?? null; }
+        catch { return null; }
+    },
+    clear() {
+        try { Object.keys(localStorage).filter(k => k.startsWith('smkhr:')).forEach(k => localStorage.removeItem(k)); }
+        catch {}
+    },
+};
+
 function esc(s) {
     const el = document.createElement('span');
     el.textContent = s ?? '';
@@ -82,11 +97,13 @@ async function init() {
 }
 
 // ─── Tab navigation ──────────────────────────────────────────
+const TAB_SHORT = { jadwal: 'Jadwal', kehadiran: 'Hadir', observasi: 'Observasi', pkl: 'PKL' };
+
 function buildTabs() {
     const nav    = document.getElementById('tab-nav');
+    const botNav = document.getElementById('bottom-nav');
     const isPkl  = student.student_status === 'PKL';
     const tabs   = [];
-    // Saat siswa PKL ia berada di DUDI, bukan di kelas → tab Jadwal disembunyikan.
     if (!isPkl) tabs.push({ key: 'jadwal', label: 'Jadwal' });
     tabs.push({ key: 'kehadiran', label: 'Kehadiran' });
     tabs.push({ key: 'observasi', label: 'Observasi' });
@@ -95,13 +112,18 @@ function buildTabs() {
     nav.innerHTML = tabs.map(t =>
         `<button class="tab-btn" data-tab="${t.key}">${esc(t.label)}</button>`
     ).join('');
+    botNav.innerHTML = tabs.map(t =>
+        `<button class="tab-btn" data-tab="${t.key}">${esc(TAB_SHORT[t.key] ?? t.label)}</button>`
+    ).join('');
 
-    nav.addEventListener('click', async (e) => {
+    const handler = async (e) => {
         const key = e.target.dataset?.tab;
         if (!key) return;
         activateTab(key);
         await loadTabContent(key);
-    });
+    };
+    nav.addEventListener('click', handler);
+    botNav.addEventListener('click', handler);
 
     return tabs;
 }
@@ -138,6 +160,28 @@ async function initJadwalTab() {
     await loadSchedule();
 }
 
+function renderScheduleRows(rows, contentEl) {
+    if (rows.length === 0) {
+        contentEl.innerHTML = '<p class="hint">Tidak ada jadwal pelajaran pada tanggal ini.</p>';
+        return;
+    }
+    contentEl.innerHTML = `
+        <div class="table-wrapper">
+        <table class="table">
+            <thead><tr><th>Jam</th><th>Mata Pelajaran</th><th>Guru</th></tr></thead>
+            <tbody>
+            ${rows.map(r => `
+                <tr>
+                    <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
+                    <td>${esc(r.subject?.name ?? '—')}</td>
+                    <td>${esc(r.teacher?.full_name ?? '—')}</td>
+                </tr>
+            `).join('')}
+            </tbody>
+        </table>
+        </div>`;
+}
+
 async function loadSchedule() {
     const date      = document.getElementById('sched-date').value;
     const contentEl = document.getElementById('sched-content');
@@ -147,30 +191,22 @@ async function loadSchedule() {
         return;
     }
 
-    contentEl.innerHTML = '<p class="hint">Memuat jadwal…</p>';
+    const cacheKey = `stu-sched-${student.student_id}-${date}`;
+    const cached   = LC.get(cacheKey);
+    if (cached) {
+        renderScheduleRows(cached, contentEl);
+    } else {
+        contentEl.innerHTML = '<p class="hint">Memuat jadwal…</p>';
+    }
+
     try {
         const rows = await getScheduleForDate(myClass.class_id, date);
-        if (rows.length === 0) {
-            contentEl.innerHTML = '<p class="hint">Tidak ada jadwal pelajaran pada tanggal ini.</p>';
-            return;
-        }
-        contentEl.innerHTML = `
-            <div class="table-wrapper">
-            <table class="table">
-                <thead><tr><th>Jam</th><th>Mata Pelajaran</th><th>Guru</th></tr></thead>
-                <tbody>
-                ${rows.map(r => `
-                    <tr>
-                        <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
-                        <td>${esc(r.subject?.name ?? '—')}</td>
-                        <td>${esc(r.teacher?.full_name ?? '—')}</td>
-                    </tr>
-                `).join('')}
-                </tbody>
-            </table>
-            </div>`;
+        LC.set(cacheKey, rows);
+        renderScheduleRows(rows, contentEl);
     } catch (err) {
-        contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
+        if (!cached) {
+            contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
+        }
     }
 }
 
@@ -234,32 +270,46 @@ async function loadAttendance() {
 
 // ─── TAB OBSERVASI ───────────────────────────────────────────
 
+function renderObservations(rows, hintEl, listEl) {
+    if (rows.length === 0) {
+        hintEl.style.display = 'block';
+        hintEl.textContent   = 'Belum ada observasi yang dibagikan untukmu.';
+        listEl.innerHTML     = '';
+        return;
+    }
+    hintEl.style.display = 'none';
+    listEl.innerHTML = rows.map(r => `
+        <div class="obs-card obs-${(r.sentiment ?? '').toLowerCase()}">
+            <div class="obs-meta">
+                ${esc(DIMENSION_LABELS[r.dimension] ?? r.dimension)}
+                &middot; oleh ${esc(r.author?.full_name ?? '—')}
+                &middot; ${fmt(r.observed_at ?? r.created_at)}
+            </div>
+            <p class="obs-content">${esc(r.content)}</p>
+        </div>`).join('');
+}
+
 async function loadObservations() {
-    const hintEl = document.getElementById('obs-hint');
-    const listEl = document.getElementById('obs-list');
-    hintEl.style.display = 'block';
-    hintEl.textContent   = 'Memuat observasi…';
-    listEl.innerHTML     = '';
+    const hintEl   = document.getElementById('obs-hint');
+    const listEl   = document.getElementById('obs-list');
+    const cacheKey = `stu-obs-${student.student_id}`;
+
+    const cached = LC.get(cacheKey);
+    if (cached) {
+        renderObservations(cached, hintEl, listEl);
+    } else {
+        hintEl.style.display = 'block';
+        hintEl.textContent   = 'Memuat observasi…';
+        listEl.innerHTML     = '';
+    }
 
     try {
         const rows = await getMyObservations(student.student_id);
         obsLoaded = true;
-        if (rows.length === 0) {
-            hintEl.textContent = 'Belum ada observasi yang dibagikan untukmu.';
-            return;
-        }
-        hintEl.style.display = 'none';
-        listEl.innerHTML = rows.map(r => `
-            <div class="obs-card obs-${(r.sentiment ?? '').toLowerCase()}">
-                <div class="obs-meta">
-                    ${esc(DIMENSION_LABELS[r.dimension] ?? r.dimension)}
-                    &middot; oleh ${esc(r.author?.full_name ?? '—')}
-                    &middot; ${fmt(r.observed_at ?? r.created_at)}
-                </div>
-                <p class="obs-content">${esc(r.content)}</p>
-            </div>`).join('');
+        LC.set(cacheKey, rows);
+        renderObservations(rows, hintEl, listEl);
     } catch (err) {
-        hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
+        if (!cached) hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
     }
 }
 
@@ -320,6 +370,7 @@ async function loadPkl() {
 // ─── Logout ──────────────────────────────────────────────────
 
 document.getElementById('logout-btn')?.addEventListener('click', async () => {
+    LC.clear();
     await logout();
     window.location.href = 'index.html';
 });
