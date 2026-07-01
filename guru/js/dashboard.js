@@ -96,8 +96,15 @@ async function init() {
 }
 
 // ─── Tab navigation ──────────────────────────────────────────
+const TAB_SHORT = {
+    guru: 'Beranda', wali_kelas: 'Wali', bk: 'BK', kaprodi: 'Prodi',
+    waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', kepsek: 'Kepsek',
+    kasus: 'Kasus', jurnal: 'Jurnal',
+};
+
 function buildTabs() {
-    const nav = document.getElementById('tab-nav');
+    const nav    = document.getElementById('tab-nav');
+    const botNav = document.getElementById('bottom-nav');
     const tabs = [{ key: 'guru', label: 'Dashboard Guru' }];
     jabatan.forEach(j => tabs.push({ key: j, label: jabatanLabel(j) }));
     tabs.push({ key: 'kasus', label: 'Kasus' });
@@ -107,12 +114,18 @@ function buildTabs() {
         `<button class="tab-btn" data-tab="${t.key}">${esc(t.label)}</button>`
     ).join('');
 
-    nav.addEventListener('click', async (e) => {
+    botNav.innerHTML = tabs.map(t =>
+        `<button class="tab-btn" data-tab="${t.key}">${esc(TAB_SHORT[t.key] ?? t.label)}</button>`
+    ).join('');
+
+    const handler = async (e) => {
         const key = e.target.dataset?.tab;
         if (!key) return;
         activateTab(key);
         await loadTabContent(key);
-    });
+    };
+    nav.addEventListener('click', handler);
+    botNav.addEventListener('click', handler);
 }
 
 function activateTab(key) {

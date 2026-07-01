@@ -1,6 +1,6 @@
 {
-  "name": "Portal Orang Tua — SMK Harapan Rokan",
-  "short_name": "Ortu SMK HR",
+  "name": "Portal Orang Tua",
+  "short_name": "Portal Ortu",
   "description": "Portal orang tua untuk memantau kehadiran dan perkembangan siswa.",
   "start_url": "./portal.html",
   "scope": "./",

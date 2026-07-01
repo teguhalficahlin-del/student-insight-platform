@@ -202,6 +202,9 @@ details[open] .att-accordion-summary::before { transform: rotate(90deg); }
 .stat-label { font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
 
 /* ── Responsive ──────────────────────────────────────────── */
+/* ── Bottom nav (mobile only) ──────────────────────────────── */
+.bottom-nav { display: none; }
+
 @media (max-width: 640px) {
     .login-card  { padding: 24px 16px; }
     .page-body   { padding: 12px 10px; }
@@ -211,6 +214,33 @@ details[open] .att-accordion-summary::before { transform: rotate(90deg); }
     .app-header  { padding: 10px 14px; gap: 8px; }
     .app-header h2 { font-size: 14px; }
     .header-name { font-size: 13px; }
+
+    /* Sembunyikan top nav, tampilkan bottom nav */
+    .tab-nav { display: none; }
+    .bottom-nav {
+        display: flex;
+        position: fixed; bottom: 0; left: 0; right: 0;
+        background: var(--color-surface);
+        border-top: 1px solid var(--color-border);
+        z-index: 200;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    .bottom-nav .tab-btn {
+        flex: 1 0 auto;
+        min-width: 56px;
+        padding: 10px 8px;
+        font-size: 11px;
+        border-radius: 0;
+        border-bottom: none;
+        border-top: 2px solid transparent;
+    }
+    .bottom-nav .tab-btn.active {
+        border-top-color: var(--color-primary);
+    }
+    /* Tambah padding bawah agar konten tidak tertutup bottom nav */
+    .page-body { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0)); }
 
     /* Tab — tap target lebih besar */
     .tab-btn { padding: 12px 14px; font-size: 13px; }

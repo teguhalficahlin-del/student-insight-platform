@@ -1,6 +1,6 @@
 {
-  "name": "Portal DUDI — SMK Harapan Rokan",
-  "short_name": "DUDI SMK HR",
+  "name": "Portal DUDI",
+  "short_name": "Portal DUDI",
   "description": "Portal mitra DUDI untuk memantau dan menilai siswa PKL.",
   "start_url": "./dashboard.html",
   "scope": "./",

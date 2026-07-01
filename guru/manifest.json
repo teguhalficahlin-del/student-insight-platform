@@ -1,6 +1,6 @@
 {
-  "name": "Portal Guru — SMK Harapan Rokan",
-  "short_name": "Guru SMK HR",
+  "name": "Portal Guru",
+  "short_name": "Portal Guru",
   "description": "Portal guru untuk absensi, jadwal mengajar, dan observasi siswa.",
   "start_url": "./dashboard.html",
   "scope": "./",

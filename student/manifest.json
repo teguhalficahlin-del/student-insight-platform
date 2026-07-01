@@ -1,6 +1,6 @@
 {
-  "name": "Portal Siswa — SMK Harapan Rokan",
-  "short_name": "Siswa SMK HR",
+  "name": "Portal Siswa",
+  "short_name": "Portal Siswa",
   "description": "Portal siswa untuk melihat jadwal, kehadiran, dan informasi sekolah.",
   "start_url": "./dashboard.html",
   "scope": "./",
