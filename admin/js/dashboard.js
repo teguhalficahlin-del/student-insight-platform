@@ -6,7 +6,7 @@
  */
 
 import { applyBrandingById } from '../../shared/branding.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -14,6 +14,7 @@ const panelContent = document.getElementById('panel-content');
 
 const PANEL_RENDERERS = {
     setup:              renderSetupPanel,
+    branding:           renderBrandingPanel,
     programs:           renderProgramsPanel,
     classes:            renderClassesPanel,
     staff:              renderStaffPanel,
@@ -124,6 +125,100 @@ async function renderSetupPanel() {
             const navLink = document.querySelector(`.nav-link[data-panel="${row.dataset.panel}"]`);
             if (navLink) navLink.click();
         });
+    });
+}
+
+// ─────────────────────────────────────────────────────────────
+// BRANDING PANEL
+// ─────────────────────────────────────────────────────────────
+
+async function renderBrandingPanel() {
+    panelContent.innerHTML = '<p class="hint">Memuat data sekolah…</p>';
+
+    let current = {};
+    try { current = await getSchoolBranding(); } catch { /* biarkan kosong */ }
+
+    const field = (id, label, value, type = 'text', hint = '') => `
+        <div style="margin-bottom:14px">
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px">${label}</label>
+            ${hint ? `<p class="hint" style="font-size:12px; margin:0 0 4px">${hint}</p>` : ''}
+            <input class="input" id="br-${id}" type="${type}" value="${esc(value ?? '')}"
+                   style="max-width:480px; width:100%" />
+        </div>`;
+
+    panelContent.innerHTML = `
+        <h3>Profil &amp; Branding Sekolah</h3>
+        <p class="hint" style="margin-bottom:20px">Perubahan langsung diterapkan ke semua portal saat halaman di-refresh.</p>
+
+        <div style="max-width:560px">
+            ${field('name',  'Nama Sekolah',   current.name,          'text')}
+            ${field('npsn',  'NPSN',           current.npsn,          'text', 'Nomor Pokok Sekolah Nasional (8 digit)')}
+            ${field('address','Alamat',        current.address,       'text')}
+            ${field('phone', 'Telepon',        current.phone,         'tel')}
+            ${field('logo',  'URL Logo',       current.logo_url,      'url',  'URL gambar publik (PNG/JPG, rekomendasi 200×200px)')}
+
+            <div style="margin-bottom:14px">
+                <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px">Warna Utama</label>
+                <p class="hint" style="font-size:12px; margin:0 0 4px">Format hex #RRGGBB — diterapkan ke tombol dan aksen semua portal.</p>
+                <div style="display:flex; align-items:center; gap:10px">
+                    <input class="input" id="br-color" type="text" value="${esc(current.primary_color ?? '#1a56db')}"
+                           style="max-width:160px" maxlength="7" />
+                    <input type="color" id="br-color-picker" value="${esc(current.primary_color ?? '#1a56db')}"
+                           style="width:40px; height:38px; border:1px solid var(--color-border,#dde3e9); border-radius:6px; cursor:pointer; padding:2px" />
+                    <span id="br-color-preview" style="display:inline-block; width:24px; height:24px; border-radius:4px; background:${esc(current.primary_color ?? '#1a56db')}"></span>
+                </div>
+            </div>
+
+            <div id="br-msg" style="display:none; margin-bottom:12px; font-size:13px"></div>
+
+            <button class="btn btn-primary" id="br-save-btn">Simpan Perubahan</button>
+        </div>
+    `;
+
+    // Sync color picker ↔ text input ↔ preview
+    const colorInput  = document.getElementById('br-color');
+    const colorPicker = document.getElementById('br-color-picker');
+    const colorPreview = document.getElementById('br-color-preview');
+    colorPicker.addEventListener('input', () => {
+        colorInput.value = colorPicker.value;
+        colorPreview.style.background = colorPicker.value;
+    });
+    colorInput.addEventListener('input', () => {
+        const v = colorInput.value.trim();
+        if (/^#[0-9A-Fa-f]{6}$/.test(v)) {
+            colorPicker.value = v;
+            colorPreview.style.background = v;
+        }
+    });
+
+    document.getElementById('br-save-btn').addEventListener('click', async () => {
+        const btn   = document.getElementById('br-save-btn');
+        const msgEl = document.getElementById('br-msg');
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan…';
+        msgEl.style.display = 'none';
+
+        try {
+            await updateSchoolBranding({
+                name:          document.getElementById('br-name').value.trim(),
+                npsn:          document.getElementById('br-npsn').value.trim(),
+                address:       document.getElementById('br-address').value.trim(),
+                phone:         document.getElementById('br-phone').value.trim(),
+                logo_url:      document.getElementById('br-logo').value.trim(),
+                primary_color: document.getElementById('br-color').value.trim(),
+            });
+            msgEl.style.color   = 'var(--color-success,#16a34a)';
+            msgEl.textContent   = '✓ Perubahan berhasil disimpan. Refresh halaman untuk melihat efek branding.';
+            msgEl.style.display = 'block';
+        } catch (err) {
+            console.error('[branding]', err);
+            msgEl.style.color   = 'var(--color-danger,#dc2626)';
+            msgEl.textContent   = '✗ ' + (err.message ?? 'Gagal menyimpan.');
+            msgEl.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Simpan Perubahan';
+        }
     });
 }
 
