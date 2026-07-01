@@ -99,9 +99,15 @@ function _applyToDom(branding) {
     });
     if (branding.logo_url) {
         document.querySelectorAll('[data-brand="logo"]').forEach(el => {
+            if (el.tagName === 'IMG') {
+                el.src = branding.logo_url;
+                el.alt = branding.name;
+                return;
+            }
             const img = document.createElement('img');
             img.src = branding.logo_url;
             img.alt = branding.name;
+            img.setAttribute('data-brand', 'logo');
             img.style.cssText = 'width:52px;height:52px;object-fit:contain;border-radius:10px;margin-bottom:4px';
             el.replaceWith(img);
         });

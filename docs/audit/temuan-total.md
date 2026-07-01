@@ -38,7 +38,7 @@ Dokumen ini menggabungkan beberapa lintasan audit yang sebelumnya terpisah, kini
 | **J11** | Pasangan warna gagal-kontras (Level G admin) direplikasi di 6 portal terang, tepat pada badge kehadiran; superadmin pakai palet beda (tema gelap) | G, F2 | 🟡 MEDIUM → ✅ **FIXED** (1 Juli, success/warning) |
 | **F-1** | Pesan error mentah (`err.message` teknis Supabase/RLS/JWT) bocor ke pengguna akhir di semua portal | F | 🟡 MEDIUM |
 | **F-2** | Input `font-size:14px` (<16px) di keenam portal → HP auto-zoom saat field difokus (portal justru mobile-first) | F (Mobile) | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
-| **M3** | `shared/branding.js` `_applyToDom` menghilangkan atribut `data-brand` logo saat apply ganda | — | 🟢 LOW |
+| **M3** | `shared/branding.js` `_applyToDom` menghilangkan atribut `data-brand` logo saat apply ganda | — | 🟢 LOW → ✅ **FIXED** (1 Juli) |
 | **J7** | Umpan balik pakai `alert()`/`confirm()` native, tak konsisten dgn pola status in-page | F | 🟢 LOW |
 | **J8** | Superadmin: master key di `sessionStorage` + verifikasi via efek samping | D | 🟢 LOW |
 | **J9** | Sumbu tanggal observasi tampil tidak konsisten (`observed_at` vs `created_at`) | F2 | 🟢 LOW |
@@ -214,6 +214,8 @@ Migrasi `20260701330000_rls_tighten_insert_policies`. Sebelumnya di `20260701130
 ## 🟢 M3 — `shared/branding.js` apply ganda menghilangkan node logo
 
 `_applyToDom` (`shared/branding.js:100-108`) memanggil `el.replaceWith(img)` pada `[data-brand="logo"]`, sehingga atribut `data-brand` hilang. Saat `applyBranding()` (pra-login) lalu `applyBrandingById()` (pasca-login) dipanggil berurutan di halaman yang sama, apply tahap kedua tak menemukan node logo → logo tak ter-refresh. Kosmetik, prioritas rendah.
+
+> ✅ **STATUS: FIXED (1 Juli 2026).** `_applyToDom` kini idempoten: jika elemen `[data-brand="logo"]` sudah berupa `<img>` (hasil apply sebelumnya), `src`/`alt` diperbarui in-place tanpa replace; elemen img baru juga diberi `data-brand="logo"` agar tetap ditemukan panggilan berikutnya. Diverifikasi: 2× panggil `applyBrandingById()` berurutan pada DOM yang sama → node logo sama (bukan diganti), src ter-update. (Catatan: sekolah live saat ini `logo_url=NULL`, jadi bug ini belum pernah termanifestasi di produksi — fix ini preventif.)
 
 ---
 ---
