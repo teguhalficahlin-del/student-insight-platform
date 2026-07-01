@@ -137,6 +137,12 @@ async function flushStore(storeName, submitFn) {
     for (const item of pending) {
         const r = await submitFn(item);
         if (r.ok) { await idbDeleteFrom(storeName, item.idempotency_key); synced++; }
+        else if (r.status === 401) {
+            // Token habis — antrian dipertahankan, hentikan flush, minta login ulang
+            console.warn('[offline] sesi habis, antrian ditahan sampai login ulang');
+            const remaining = (await idbGetAllFrom(storeName)).length;
+            return { synced, remaining, sessionExpired: true };
+        }
         else if (!r.networkError) {
             console.warn(`[offline][${storeName}] ditolak server, dibuang:`, item.idempotency_key, r.error);
             await idbDeleteFrom(storeName, item.idempotency_key); synced++;
@@ -203,9 +209,25 @@ export async function flushPending() {
         flushStore(STORE_JRN, submitJournal),
     ]);
     return {
-        synced:    att.synced    + obs.synced    + jrn.synced,
-        remaining: att.remaining + obs.remaining + jrn.remaining,
+        synced:         att.synced    + obs.synced    + jrn.synced,
+        remaining:      att.remaining + obs.remaining + jrn.remaining,
+        sessionExpired: !!(att.sessionExpired || obs.sessionExpired || jrn.sessionExpired),
     };
+}
+
+/**
+ * Hapus semua antrian offline (absensi + observasi + jurnal).
+ * Dipanggil saat logout agar data sensitif tidak tertinggal di perangkat.
+ */
+export async function clearOfflineQueue() {
+    const db = await openDB();
+    await Promise.all([STORE_ATT, STORE_OBS, STORE_JRN].map(store =>
+        new Promise((res, rej) => {
+            const t = txStore(db, store, 'readwrite').clear();
+            t.onsuccess = () => res(); t.onerror = () => rej(t.error);
+        })
+    ));
+    console.log('[offline] antrian dibersihkan saat logout');
 }
 
 export async function pendingCount() {

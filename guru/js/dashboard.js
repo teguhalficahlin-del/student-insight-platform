@@ -20,7 +20,7 @@ import {
     getCases, getCase, getCaseEvents, createCase,
     addCaseComment, escalateCase, changeCaseStatus, closeCase,
 } from './api.js';
-import { saveAttendanceBatch, flushPending, pendingCount } from './offline.js';
+import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 
 // ─── State ───────────────────────────────────────────────────
 let currentUser  = null;
@@ -358,18 +358,29 @@ async function updateSyncBanner() {
     try { n = await pendingCount(); } catch (_) { n = 0; }
     if (n > 0) {
         el.textContent = navigator.onLine
-            ? `⏳ ${n} absensi menunggu sinkron — menyinkronkan…`
-            : `⏳ ${n} absensi tersimpan di perangkat — akan terkirim saat online`;
+            ? `⏳ ${n} item menunggu sinkron — menyinkronkan…`
+            : `⏳ ${n} item tersimpan di perangkat — akan terkirim saat online`;
         el.style.display = 'block';
     } else {
         el.style.display = 'none';
     }
 }
 
+function showSessionExpiredBanner() {
+    let el = document.getElementById('sync-banner');
+    if (!el) return;
+    el.style.background  = 'var(--color-danger-bg,#fef2f2)';
+    el.style.color       = 'var(--color-danger,#dc2626)';
+    el.style.borderColor = 'var(--color-danger,#dc2626)';
+    el.textContent       = '⚠️ Sesi habis — antrian offline ditahan. Login ulang untuk melanjutkan sinkronisasi.';
+    el.style.display     = 'block';
+}
+
 async function runFlush() {
     try {
-        const { synced, remaining } = await flushPending();
-        if (synced > 0) console.log(`[offline] ${synced} absensi tersinkron`);
+        const { synced, remaining, sessionExpired } = await flushPending();
+        if (synced > 0) console.log(`[offline] ${synced} item tersinkron`);
+        if (sessionExpired) { showSessionExpiredBanner(); return remaining; }
         await updateSyncBanner();
         return remaining;
     } catch (e) { console.warn('[offline] flush gagal:', e); }
@@ -1452,6 +1463,20 @@ async function loadJurnalList() {
 // ─── Logout ──────────────────────────────────────────────────
 
 document.getElementById('logout-btn')?.addEventListener('click', async () => {
+    // Cek antrian tertunda — peringatkan jika ada yang belum tersinkron
+    const n = await pendingCount().catch(() => 0);
+    if (n > 0) {
+        const el = document.getElementById('sync-banner');
+        if (el) {
+            el.style.background  = 'var(--color-danger-bg,#fef2f2)';
+            el.style.color       = 'var(--color-danger,#dc2626)';
+            el.style.borderColor = 'var(--color-danger,#dc2626)';
+            el.textContent       = `⚠️ ${n} item belum tersinkron akan dihapus saat logout. Pastikan online dulu sebelum keluar.`;
+            el.style.display     = 'block';
+            await new Promise(r => setTimeout(r, 3000));
+        }
+    }
+    await clearOfflineQueue();
     await logout();
     window.location.href = 'index.html';
 });
