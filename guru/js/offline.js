@@ -29,6 +29,11 @@ const STORE_ATT  = 'att_queue';
 const STORE_OBS  = 'obs_queue';
 const STORE_JRN  = 'jrn_queue';
 
+// Versi schema antrian. Naikkan saat format payload berubah secara breaking.
+// Item lama dengan versi berbeda akan di-discard (bukan dikirim) saat flush.
+// Item tanpa tag (dari sebelum LF-8) dianggap kompatibel dengan versi saat ini.
+const OFFLINE_SCHEMA_VER = 'v2';
+
 // Alias lama untuk kompatibilitas mundur dengan kode yang sudah ada
 const STORE = STORE_ATT;
 
@@ -135,6 +140,13 @@ async function flushStore(storeName, submitFn) {
 
     let synced = 0;
     for (const item of pending) {
+        // Item dengan versi schema eksplisit yang berbeda → discard, jangan kirim
+        if (item._schema_ver && item._schema_ver !== OFFLINE_SCHEMA_VER) {
+            console.warn('[offline] discard item schema lama:', item.idempotency_key, item._schema_ver);
+            await idbDeleteFrom(storeName, item.idempotency_key);
+            synced++;
+            continue;
+        }
         const r = await submitFn(item);
         if (r.ok) { await idbDeleteFrom(storeName, item.idempotency_key); synced++; }
         else if (r.status === 401) {
@@ -164,7 +176,7 @@ export async function saveAttendanceBatch(batch) {
         if (r.ok) return { status: 'synced' };
         if (!r.networkError) return { status: 'error', error: r.error };
     }
-    await idbPut(batch);
+    await idbPut({ ...batch, _schema_ver: OFFLINE_SCHEMA_VER });
     return { status: 'queued' };
 }
 
@@ -179,7 +191,7 @@ export async function saveObservation(obs) {
         if (r.ok) return { status: 'synced' };
         if (!r.networkError) return { status: 'error', error: r.error };
     }
-    await idbPutTo(STORE_OBS, obs);
+    await idbPutTo(STORE_OBS, { ...obs, _schema_ver: OFFLINE_SCHEMA_VER });
     return { status: 'queued' };
 }
 
@@ -194,7 +206,7 @@ export async function saveJournalEntry(jrn) {
         if (r.ok) return { status: 'synced' };
         if (!r.networkError) return { status: 'error', error: r.error };
     }
-    await idbPutTo(STORE_JRN, jrn);
+    await idbPutTo(STORE_JRN, { ...jrn, _schema_ver: OFFLINE_SCHEMA_VER });
     return { status: 'queued' };
 }
 
