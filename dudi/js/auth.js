@@ -6,7 +6,8 @@
 
 import { loginWithIdentifier, getCurrentUserRow, isDudi } from './api.js';
 import { applyBranding } from '../../shared/branding.js';
-applyBranding();
+let _schoolId = null;
+applyBranding().then(b => { _schoolId = b?.school_id ?? null; });
 
 const form         = document.getElementById('login-form');
 const identifierEl = document.getElementById('login-identifier');
@@ -28,7 +29,7 @@ form.addEventListener('submit', async (e) => {
     submitBtn.textContent = 'Masuk...';
 
     try {
-        await loginWithIdentifier(identifierEl.value.trim(), passwordEl.value);
+        await loginWithIdentifier(identifierEl.value.trim(), passwordEl.value, _schoolId);
 
         const userRow = await getCurrentUserRow();
         if (!isDudi(userRow)) {

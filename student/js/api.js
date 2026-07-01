@@ -20,9 +20,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // Role yang boleh masuk portal ini
 export const STUDENT_ROLES = ['SISWA'];
 
-export async function loginWithIdentifier(identifier, password) {
+export async function loginWithIdentifier(identifier, password, schoolId = null) {
     const { data: email, error: resolveErr } = await supabase
-        .rpc('fn_resolve_login_email', { p_identifier: identifier });
+        .rpc('fn_resolve_login_email', { p_identifier: identifier, p_school_id: schoolId });
     if (resolveErr || !email) throw new Error('NIS atau password salah');
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error('NIS atau password salah');

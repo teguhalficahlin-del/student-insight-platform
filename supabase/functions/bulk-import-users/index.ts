@@ -352,7 +352,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (validRows.length > 0) {
             const { data: existing, error: dupErr } = await admin.rpc(
                 'fn_check_identifiers_exist',
-                { p_identifiers: validRows.map(r => r.nip_atau_nik) },
+                { p_identifiers: validRows.map(r => r.nip_atau_nik), p_school_id: user.school_id },
             );
 
             if (dupErr) {
@@ -428,7 +428,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 const { error: updateErr } = await admin
                     .from('users')
                     .update(updatePatch)
-                    .eq('login_identifier', row.nip_atau_nik);
+                    .eq('login_identifier', row.nip_atau_nik)
+                    .eq('school_id', user.school_id);
 
                 if (updateErr) {
                     errors.push({

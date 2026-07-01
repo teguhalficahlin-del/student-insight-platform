@@ -69,11 +69,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return forbidden('Tidak dapat menghapus akun Anda sendiri');
         }
 
-        // 1. Ambil auth_user_id dari tabel users
+        // 1. Ambil auth_user_id dari tabel users — filter school_id agar tidak bisa
+        //    hapus user dari sekolah lain (admin client bypass RLS)
         const { data: targetUser, error: fetchErr } = await admin
             .from('users')
-            .select('auth_user_id, role_type, full_name')
+            .select('auth_user_id, role_type, full_name, school_id')
             .eq('user_id', user_id)
+            .eq('school_id', user.school_id)
             .maybeSingle();
 
         if (fetchErr) {
@@ -81,7 +83,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return internalError(fetchErr);
         }
         if (!targetUser) {
-            return badRequest(`Pengguna dengan user_id "${user_id}" tidak ditemukan`);
+            return badRequest(`Pengguna dengan user_id "${user_id}" tidak ditemukan di sekolah ini`);
         }
 
         // Jangan izinkan hapus ADMINISTRATIVE

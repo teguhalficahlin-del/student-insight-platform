@@ -16,9 +16,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // Semua role_type yang boleh masuk portal ini
 export const GURU_ROLES = ['GURU','WALI_KELAS','BK','KAPRODI','KEPSEK','WAKA_KURIKULUM','WAKA_KESISWAAN'];
 
-export async function loginWithIdentifier(identifier, password) {
+export async function loginWithIdentifier(identifier, password, schoolId = null) {
     const { data: email, error: resolveErr } = await supabase
-        .rpc('fn_resolve_login_email', { p_identifier: identifier });
+        .rpc('fn_resolve_login_email', { p_identifier: identifier, p_school_id: schoolId });
     if (resolveErr || !email) throw new Error('NIP/NIK atau password salah');
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error('NIP/NIK atau password salah');

@@ -51,15 +51,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const { user_id, login_identifier, full_name, teacher_code, dudi_org_name } = body;
         if (!user_id) return badRequest('Field user_id wajib diisi');
 
-        // Ambil user saat ini
+        // Ambil user saat ini — filter school_id agar tidak bisa edit user sekolah lain
         const { data: targetUser, error: fetchErr } = await admin
             .from('users')
-            .select('auth_user_id, login_identifier, identifier_type, role_type, email')
+            .select('auth_user_id, login_identifier, identifier_type, role_type, email, school_id')
             .eq('user_id', user_id)
+            .eq('school_id', user.school_id)
             .maybeSingle();
 
         if (fetchErr) return internalError(fetchErr);
-        if (!targetUser) return badRequest('User tidak ditemukan');
+        if (!targetUser) return badRequest('User tidak ditemukan di sekolah ini');
 
         // Build update patch
         const patch: Record<string, string> = {};

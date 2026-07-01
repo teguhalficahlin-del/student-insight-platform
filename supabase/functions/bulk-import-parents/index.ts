@@ -171,7 +171,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const niks = [...new Set(validRows.map(r => r.nik))];
             const { data: existingNiks, error: dupErr } = await admin.rpc(
                 'fn_check_niks_exist',
-                { p_niks: niks },
+                { p_niks: niks, p_school_id: user.school_id },
             );
 
             if (dupErr) {
@@ -185,7 +185,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 const { data: existingUsers, error: userErr } = await admin
                     .from('users')
                     .select('user_id, login_identifier')
-                    .in('login_identifier', [...existingNikSet]);
+                    .in('login_identifier', [...existingNikSet])
+                    .eq('school_id', user.school_id);
 
                 if (userErr) {
                     console.error('[bulk-import-parents] existing user lookup failed:', userErr);
@@ -257,7 +258,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { error: updateErr } = await admin
                 .from('users')
                 .update({ full_name: namaOrtu })
-                .eq('login_identifier', nik);
+                .eq('login_identifier', nik)
+                .eq('school_id', user.school_id);
 
             if (updateErr) {
                 console.error('[bulk-import-parents] full_name update failed for NIK', nik, updateErr);

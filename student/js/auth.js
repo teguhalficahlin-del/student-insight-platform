@@ -1,6 +1,7 @@
 import { supabase, loginWithIdentifier, getCurrentUserRow, STUDENT_ROLES } from './api.js';
 import { applyBranding } from '../../shared/branding.js';
-applyBranding();
+let _schoolId = null;
+applyBranding().then(b => { _schoolId = b?.school_id ?? null; });
 
 const form     = document.getElementById('login-form');
 const identEl  = document.getElementById('identifier');
@@ -24,7 +25,7 @@ form.addEventListener('submit', async (e) => {
     loginBtn.textContent = 'Memuat...';
 
     try {
-        await loginWithIdentifier(identEl.value.trim(), passEl.value);
+        await loginWithIdentifier(identEl.value.trim(), passEl.value, _schoolId);
         const row = await getCurrentUserRow();
         if (!row || !STUDENT_ROLES.includes(row.role_type)) {
             await supabase.auth.signOut();
