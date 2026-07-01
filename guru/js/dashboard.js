@@ -1032,6 +1032,18 @@ async function initKasusTab() {
     document.getElementById('kasus-filter-status').addEventListener('change', renderKasusList);
     document.getElementById('kasus-filter-track').addEventListener('change',  renderKasusList);
 
+    // Offline guard — disable tombol + banner saat tidak ada koneksi
+    function syncKasusOnlineState() {
+        const online = navigator.onLine;
+        const btn    = document.getElementById('kasus-new-btn');
+        const banner = document.getElementById('kasus-offline-banner');
+        btn.disabled          = !online;
+        banner.style.display  = online ? 'none' : 'block';
+    }
+    syncKasusOnlineState();
+    window.addEventListener('online',  syncKasusOnlineState);
+    window.addEventListener('offline', syncKasusOnlineState);
+
     // New case button
     document.getElementById('kasus-new-btn').addEventListener('click', openKasusModal);
     document.getElementById('kasus-create-cancel-btn').addEventListener('click', closeKasusModal);
@@ -1111,6 +1123,7 @@ function showCreateMsg(msg, isErr = false) {
 }
 
 function openKasusModal() {
+    if (!navigator.onLine) return;
     const modal = document.getElementById('kasus-create-modal');
     document.getElementById('kasus-create-form').reset();
     document.getElementById('kasus-c-student-id').value = '';
