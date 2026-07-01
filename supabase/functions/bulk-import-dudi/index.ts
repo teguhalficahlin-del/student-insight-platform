@@ -227,7 +227,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         for (const row of provisionRows) {
             if (!row.isNew) continue;
 
-            const internalEmail = `${row.slug}@dudi.internal`;
+            // Sertakan school_id prefix agar email unik antar-sekolah (Auth bersifat global)
+            const schoolPrefix  = user.school_id.replace(/-/g, '').substring(0, 8);
+            const internalEmail = `${row.slug}@${schoolPrefix}.dudi`;
             const password      = `${row.slug}!SMK`;
 
             const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
