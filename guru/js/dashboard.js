@@ -32,6 +32,23 @@ let kpDudiList   = [];
 
 const DIMENSION_LABELS = { AKADEMIK:'Akademik', KEHADIRAN:'Kehadiran', PERILAKU:'Perilaku', SOSIAL:'Sosial', AFEKTIF:'Afektif', BAKAT_MINAT:'Bakat & Minat', FISIK:'Fisik', LAINNYA:'Lainnya' };
 
+// ─── Read cache (LF-2) ───────────────────────────────────────
+// Simpan snapshot data server ke localStorage → tampilkan saat halaman
+// dibuka (sebelum server merespons), termasuk saat offline.
+const LC = {
+    set(key, data) {
+        try { localStorage.setItem(`smkhr:${key}`, JSON.stringify({ ts: Date.now(), data })); } catch {}
+    },
+    get(key) {
+        try { const r = JSON.parse(localStorage.getItem(`smkhr:${key}`)); return r?.data ?? null; }
+        catch { return null; }
+    },
+    clear(prefix) {
+        try { Object.keys(localStorage).filter(k => k.startsWith(`smkhr:${prefix}`)).forEach(k => localStorage.removeItem(k)); }
+        catch {}
+    },
+};
+
 function esc(s) {
     const el = document.createElement('span');
     el.textContent = s ?? '';
@@ -166,47 +183,61 @@ async function initGuruTab() {
     await initObsForm();
 }
 
+function renderScheduleRows(rows, contentEl) {
+    if (rows.length === 0) {
+        contentEl.innerHTML = '<p class="hint">Tidak ada jadwal mengajar pada tanggal ini.</p>';
+        return;
+    }
+    contentEl.innerHTML = `
+        <div class="table-wrapper">
+        <table class="table">
+            <thead><tr><th>Jam</th><th>Kelas</th><th>Kehadiran</th></tr></thead>
+            <tbody>
+            ${rows.map(r => `
+                <tr>
+                    <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
+                    <td>${esc(r.class?.name ?? '—')}</td>
+                    <td>
+                        <button class="btn btn-primary btn-xs att-open-btn"
+                            data-schedule="${r.schedule_id}"
+                            data-class="${r.class?.class_id}"
+                            data-classname="${esc(r.class?.name ?? '')}">
+                            Input Kehadiran
+                        </button>
+                        <div class="att-panel" id="att-${r.schedule_id}" style="display:none"></div>
+                    </td>
+                </tr>
+            `).join('')}
+            </tbody>
+        </table>
+        </div>`;
+    contentEl.querySelectorAll('.att-open-btn').forEach(btn => {
+        btn.addEventListener('click', () => toggleAttPanel(btn));
+    });
+}
+
 async function loadSchedule() {
-    const date       = document.getElementById('sched-date').value;
-    const contentEl  = document.getElementById('sched-content');
-    contentEl.innerHTML = '<p class="hint">Memuat jadwal…</p>';
+    const date      = document.getElementById('sched-date').value;
+    const contentEl = document.getElementById('sched-content');
+    const cacheKey  = `sched-${currentUser.user_id}-${date}`;
+
+    // Tampilkan cache dulu — halaman langsung berisi data walau offline
+    const cached = LC.get(cacheKey);
+    if (cached) {
+        renderScheduleRows(cached, contentEl);
+    } else {
+        contentEl.innerHTML = '<p class="hint">Memuat jadwal…</p>';
+    }
 
     try {
         const rows = await getMyScheduleForDate(currentUser.user_id, date);
-        if (rows.length === 0) {
-            contentEl.innerHTML = '<p class="hint">Tidak ada jadwal mengajar pada tanggal ini.</p>';
-            return;
-        }
-
-        contentEl.innerHTML = `
-            <div class="table-wrapper">
-            <table class="table">
-                <thead><tr><th>Jam</th><th>Kelas</th><th>Kehadiran</th></tr></thead>
-                <tbody>
-                ${rows.map(r => `
-                    <tr>
-                        <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
-                        <td>${esc(r.class?.name ?? '—')}</td>
-                        <td>
-                            <button class="btn btn-primary btn-xs att-open-btn"
-                                data-schedule="${r.schedule_id}"
-                                data-class="${r.class?.class_id}"
-                                data-classname="${esc(r.class?.name ?? '')}">
-                                Input Kehadiran
-                            </button>
-                            <div class="att-panel" id="att-${r.schedule_id}" style="display:none"></div>
-                        </td>
-                    </tr>
-                `).join('')}
-                </tbody>
-            </table>
-            </div>`;
-
-        contentEl.querySelectorAll('.att-open-btn').forEach(btn => {
-            btn.addEventListener('click', () => toggleAttPanel(btn));
-        });
+        LC.set(cacheKey, rows);
+        renderScheduleRows(rows, contentEl);
     } catch (err) {
-        contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
+        if (!cached) {
+            contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
+        }
+        // Jika ada cache, biarkan data lama tetap tampil — jangan overwrite dengan error
     }
 }
 
@@ -402,13 +433,18 @@ async function runFlush() {
 // ── Observasi ─────────────────────────────────────────────────
 
 async function initObsForm() {
+    // Load students dari cache dulu agar dropdown siap pakai walau offline
+    const stuCacheKey = `mystudents-${currentUser.user_id}`;
+    myStudents = LC.get(stuCacheKey) ?? [];
     try {
-        myStudents = await getMyStudents(
+        const fresh = await getMyStudents(
             currentUser.user_id,
             config.current_academic_year,
             config.current_semester
         );
-    } catch (_) { myStudents = []; }
+        myStudents = fresh;
+        LC.set(stuCacheKey, fresh);
+    } catch (_) { /* pakai cache yang sudah di-load di atas */ }
 
     const searchEl   = document.getElementById('obs-student-search');
     const hiddenEl   = document.getElementById('obs-student-id');
@@ -1416,37 +1452,33 @@ async function initJurnalTab() {
     });
 }
 
-async function loadJurnalList() {
-    const listEl = document.getElementById('journal-list');
-    listEl.innerHTML = '<p class="hint">Memuat…</p>';
-    try {
-        const entries = await getJournalEntries(currentUser.user_id);
-        if (!entries.length) {
-            listEl.innerHTML = '<p class="hint">Belum ada catatan.</p>';
-            return;
-        }
-        listEl.innerHTML = entries.map(e => `
-            <div class="section-card" style="margin-bottom:8px" data-entry-id="${esc(e.journal_id)}">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
-                    <strong>${fmt(e.entry_date)}</strong>
-                    <div class="jrn-del-confirm" style="display:none;align-items:center;gap:8px">
-                        <span style="font-size:13px;color:var(--color-text-muted)">Hapus catatan ini?</span>
-                        <button class="btn btn-danger btn-sm jrn-del-yes">Ya, Hapus</button>
-                        <button class="btn btn-secondary btn-sm jrn-del-no">Batal</button>
-                    </div>
-                    <button class="btn btn-secondary btn-sm jrn-del-ask" data-delete="${esc(e.journal_id)}">Hapus</button>
+function renderJurnalEntries(entries, listEl) {
+    if (!entries.length) {
+        listEl.innerHTML = '<p class="hint">Belum ada catatan.</p>';
+        return;
+    }
+    listEl.innerHTML = entries.map(e => `
+        <div class="section-card" style="margin-bottom:8px" data-entry-id="${esc(e.journal_id)}">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+                <strong>${fmt(e.entry_date)}</strong>
+                <div class="jrn-del-confirm" style="display:none;align-items:center;gap:8px">
+                    <span style="font-size:13px;color:var(--color-text-muted)">Hapus catatan ini?</span>
+                    <button class="btn btn-danger btn-sm jrn-del-yes">Ya, Hapus</button>
+                    <button class="btn btn-secondary btn-sm jrn-del-no">Batal</button>
                 </div>
-                <p style="white-space:pre-wrap;margin:0">${esc(e.content)}</p>
-                <p class="jrn-del-err" style="display:none;font-size:13px;color:var(--color-danger);margin:4px 0 0"></p>
+                <button class="btn btn-secondary btn-sm jrn-del-ask" data-delete="${esc(e.journal_id)}">Hapus</button>
             </div>
-        `).join('');
+            <p style="white-space:pre-wrap;margin:0">${esc(e.content)}</p>
+            <p class="jrn-del-err" style="display:none;font-size:13px;color:var(--color-danger);margin:4px 0 0"></p>
+        </div>
+    `).join('');
 
-        listEl.querySelectorAll('[data-entry-id]').forEach(card => {
-            const askBtn    = card.querySelector('.jrn-del-ask');
-            const confirmEl = card.querySelector('.jrn-del-confirm');
-            const yesBtn    = card.querySelector('.jrn-del-yes');
-            const noBtn     = card.querySelector('.jrn-del-no');
-            const errEl     = card.querySelector('.jrn-del-err');
+    listEl.querySelectorAll('[data-entry-id]').forEach(card => {
+        const askBtn    = card.querySelector('.jrn-del-ask');
+        const confirmEl = card.querySelector('.jrn-del-confirm');
+        const yesBtn    = card.querySelector('.jrn-del-yes');
+        const noBtn     = card.querySelector('.jrn-del-no');
+        const errEl     = card.querySelector('.jrn-del-err');
 
             askBtn.addEventListener('click', () => {
                 confirmEl.style.display = 'flex';
@@ -1468,8 +1500,28 @@ async function loadJurnalList() {
                 }
             });
         });
+}
+
+async function loadJurnalList() {
+    const listEl   = document.getElementById('journal-list');
+    const cacheKey = `jurnal-${currentUser.user_id}`;
+
+    // Tampilkan cache dulu
+    const cached = LC.get(cacheKey);
+    if (cached) {
+        renderJurnalEntries(cached, listEl);
+    } else {
+        listEl.innerHTML = '<p class="hint">Memuat…</p>';
+    }
+
+    try {
+        const entries = await getJournalEntries(currentUser.user_id);
+        LC.set(cacheKey, entries);
+        renderJurnalEntries(entries, listEl);
     } catch (err) {
-        listEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
+        if (!cached) {
+            listEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
+        }
     }
 }
 
@@ -1490,6 +1542,7 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
         }
     }
     await clearOfflineQueue();
+    LC.clear('');   // hapus semua cache smkhr:* dari localStorage
     await logout();
     window.location.href = 'index.html';
 });
