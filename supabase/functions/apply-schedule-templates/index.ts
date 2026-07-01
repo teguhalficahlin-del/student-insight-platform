@@ -47,7 +47,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const { data: config, error: configErr } = await admin
             .from('school_config')
             .select('current_academic_year, current_semester')
-            .single();
+            .eq('school_id', user.school_id)
+            .maybeSingle();
 
         if (configErr || !config) {
             return internalError(configErr ?? new Error('school_config tidak ditemukan'));
@@ -55,10 +56,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
         const { current_academic_year: academicYear, current_semester: semester } = config;
 
-        // Generasi set-based di DB.
+        // Generasi set-based di DB (discope ke sekolah pemanggil).
         const { data: result, error: rpcErr } = await admin.rpc('fn_apply_schedule_templates', {
             p_academic_year: academicYear,
             p_semester:      semester,
+            p_school_id:     user.school_id,
         });
 
         if (rpcErr) return internalError(rpcErr);

@@ -137,7 +137,7 @@ export async function upsertAttendance(scheduleId, rows) {
         schedule_id: scheduleId,
         student_id:  r.student_id,
         status:      r.status,
-        source:      'MANUAL',
+        source:      'TEACHER_DECLARED',
         notes:       r.notes ?? null,
     }));
     const { error } = await supabase
@@ -391,4 +391,32 @@ export async function getAbsentTeachersToday() {
         .eq('meeting_status', 'GURU_TIDAK_HADIR');
     if (error) throw error;
     return data ?? [];
+}
+
+// ─── JURNAL MENGAJAR ─────────────────────────────────────────
+
+export async function getJournalEntries(userId) {
+    const { data, error } = await supabase
+        .from('teacher_journals')
+        .select('journal_id, entry_date, content, created_at')
+        .eq('owner_user_id', userId)
+        .order('entry_date', { ascending: false })
+        .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function insertJournalEntry(userId, entryDate, content) {
+    const { error } = await supabase
+        .from('teacher_journals')
+        .insert({ owner_user_id: userId, entry_date: entryDate, content });
+    if (error) throw error;
+}
+
+export async function deleteJournalEntry(journalId) {
+    const { error } = await supabase
+        .from('teacher_journals')
+        .delete()
+        .eq('journal_id', journalId);
+    if (error) throw error;
 }

@@ -135,6 +135,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { data: progRows, error: progErr } = await admin
                 .from('programs')
                 .select('program_id, code')
+                .eq('school_id', user.school_id)
                 .in('code', wantedCodes);
             if (progErr) {
                 console.error('[bulk-import-dudi] program lookup failed:', progErr);
@@ -163,6 +164,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const { data: existingDudi, error: dudiErr } = await admin
             .from('users')
             .select('user_id, login_identifier')
+            .eq('school_id', user.school_id)
             .eq('role_type', 'DUDI');
 
         if (dudiErr) {
@@ -251,6 +253,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     role_type:        'DUDI',
                     dudi_org_name:    row.nama_usaha,
                     program_id:       row.programId,
+                    school_id:        user.school_id,
                 })
                 .select('user_id')
                 .single();

@@ -85,6 +85,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const { count: totalUnlinked, error: countErr } = await admin
             .from('students')
             .select('student_id', { count: 'exact', head: true })
+            .eq('school_id', user.school_id)
             .is('user_id', null);
         if (countErr) return internalError(countErr);
 
@@ -92,6 +93,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const { data: students, error: stuErr } = await admin
             .from('students')
             .select('student_id, nis, full_name')
+            .eq('school_id', user.school_id)
             .is('user_id', null)
             .order('nis')
             .limit(limit);
@@ -154,6 +156,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                             login_identifier: s.nis,
                             identifier_type:  'NIS',
                             role_type:        'SISWA',
+                            school_id:        user.school_id,
                         })
                         .select('user_id')
                         .single();

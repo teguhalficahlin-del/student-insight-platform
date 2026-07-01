@@ -97,7 +97,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const { data: schoolConfig, error: configErr } = await admin
             .from('school_config')
             .select('current_academic_year')
-            .single();
+            .eq('school_id', user.school_id)
+            .maybeSingle();
 
         if (configErr) {
             console.error('[bulk-import-classes] school_config lookup failed:', configErr);
@@ -165,6 +166,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { data: programs, error: programErr } = await admin
                 .from('programs')
                 .select('program_id, code')
+                .eq('school_id', user.school_id)
                 .in('code', codes);
 
             if (programErr) {

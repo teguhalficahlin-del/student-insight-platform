@@ -225,6 +225,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 const { data: programs, error: programErr } = await admin
                     .from('programs')
                     .select('program_id, code')
+                    .eq('school_id', user.school_id)
                     .in('code', codes);
 
                 if (programErr) {
@@ -259,7 +260,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
             )];
             if (kaprodiCodes.length > 0) {
                 const { data: kpPrograms } = await admin
-                    .from('programs').select('program_id, code').in('code', kaprodiCodes);
+                    .from('programs').select('program_id, code')
+                    .eq('school_id', user.school_id).in('code', kaprodiCodes);
                 const kpMap = new Map(
                     (kpPrograms ?? []).map((p: { program_id: string; code: string }) => [p.code, p.program_id]),
                 );
@@ -293,7 +295,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 const { data: schoolConfig, error: configErr } = await admin
                     .from('school_config')
                     .select('current_academic_year')
-                    .single();
+                    .eq('school_id', user.school_id)
+                    .maybeSingle();
 
                 if (configErr) {
                     console.error('[bulk-import-users] school_config lookup failed:', configErr);
@@ -310,6 +313,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 const { data: classes, error: classErr } = await admin
                     .from('classes')
                     .select('class_id, name')
+                    .eq('school_id', user.school_id)
                     .eq('academic_year', schoolConfig.current_academic_year);
 
                 if (classErr) {
@@ -466,6 +470,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 login_identifier:    row.nip_atau_nik,
                 identifier_type:     identifierType,
                 role_type:           row.role_type,
+                school_id:           user.school_id,
                 program_id:          row.program_id ?? null,
                 wali_kelas_class_id: row.wali_kelas_class_id ?? null,
                 dudi_org_name:       row.role_type === 'DUDI' ? row.nama : null,

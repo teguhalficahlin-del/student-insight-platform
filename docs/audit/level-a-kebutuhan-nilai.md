@@ -1,5 +1,13 @@
 # Audit Level A — Kebutuhan & Nilai Operasional
-Tanggal: 24 Juni 2025
+Tanggal audit awal: 24 Juni 2025
+Pembaruan terakhir: 1 Juli 2026
+
+## PEMBARUAN 1 Juli 2026
+
+- Semua fitur yang tercatat di Inventaris Fitur dengan lokasi `requirements-final.md` (bukan kode) kini sudah dibangun dan punya kode nyata di `guru/`, `student/`, `parent/`, `dudi/`, `stakeholder/`.
+- Bagian **Tindak Lanjut** di bawah telah diperbarui — lihat status tiap item.
+
+---
 
 ## Inventaris Fitur
 
@@ -235,7 +243,7 @@ Catatan: data tidak hilang jika aplikasi/tampilannya dimatikan — selama sistem
 
 ## Tindak Lanjut
 
-- Sembunyikan menu Export Data dan Log Aktivitas dari `admin/dashboard.html` sampai keduanya benar-benar diimplementasi.
-- Verifikasi keberadaan dan lokasi dashboard aktor (Guru, BK, Wali Kelas, Kaprodi, Kepsek, Siswa, Ortu, DUDI) yang menjadi rumah bagi UI operasional inti (absensi, observasi, kasus, jurnal, komunikasi ortu) — audit UI tersebut belum dilakukan karena belum ditemukan dalam kode `admin/`.
-- Audit Level A untuk dashboard aktor di atas perlu dijadwalkan setelah dashboard tersebut dibangun atau lokasinya dikonfirmasi.
-- Pastikan mekanisme Sistem Alert (ABSENCE_HIGH, CONCERN_REPEATED, TEACHER_NO_RECORD) benar-benar dibangun — belum ditemukan implementasi otomatisnya selama audit ini, fitur tersebut baru tersebut di requirements.
+- ~~Sembunyikan menu Export Data dan Log Aktivitas dari `admin/dashboard.html`~~ → perlu dicek apakah sudah disembunyikan.
+- ~~Verifikasi keberadaan dashboard aktor~~ → **✅ SELESAI** (2026): `guru/`, `student/`, `parent/`, `dudi/`, `stakeholder/` semua sudah dibangun.
+- **Audit Level A–G untuk dashboard aktor kini bisa dijadwalkan** — portal sudah ada, belum pernah diaudit secara formal.
+- Pastikan mekanisme **Sistem Alert** (ABSENCE_HIGH, CONCERN_REPEATED, TEACHER_NO_RECORD) benar-benar diimplementasi — saat audit ini ditulis belum ditemukan, belum dikonfirmasi apakah sudah dibangun.

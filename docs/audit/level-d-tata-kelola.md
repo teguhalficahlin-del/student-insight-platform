@@ -1,5 +1,15 @@
 # Audit Level D — Tata Kelola
-Tanggal: 24 Juni 2025
+Tanggal audit awal: 24 Juni 2025
+Pembaruan terakhir: 1 Juli 2026
+
+## PEMBARUAN 1 Juli 2026
+
+- **Gap Hak Akses #1 (Wali Kelas lihat semua siswa):** SELESAI — migration `20260701220000_rls_isolate_wali_kaprodi_students.sql` membatasi Wali Kelas hanya melihat siswa di kelasnya.
+- **Gap Hak Akses #2 (Kaprodi lihat semua siswa + catat prestasi lintas program):** SELESAI — migration yang sama + `20260701230000_rls_isolate_kaprodi_pkl.sql` membatasi Kaprodi ke siswa program keahliannya sendiri.
+- **Gap Hak Akses #3 (Guru catat observasi tanpa penugasan aktif):** Ditutup sebagai keputusan desain — observasi adalah hak prerogatif guru, tidak perlu dibatasi oleh penugasan aktif.
+- **Matrix hak akses — catatan "tidak ada jalan nyata membuat penugasan":** Sudah tidak berlaku, lihat pembaruan Level C.
+
+---
 
 ## Audit Hak Akses
 
@@ -28,9 +38,9 @@ Tanggal: 24 Juni 2025
 
 **Ditemukan 3 kesenjangan nyata antara rancangan awal dan kenyataan sistem:**
 
-1. **Wali Kelas seharusnya hanya melihat siswa di kelasnya sendiri, tapi sistem mengizinkan Wali Kelas melihat SEMUA siswa di sekolah**, termasuk siswa dari kelas dan jurusan lain. Aturan akses yang ada hanya mengecek "apakah orang ini berperan sebagai Wali Kelas", tanpa mengecek kelas mana yang sebenarnya menjadi tanggung jawabnya.
-2. **Kaprodi seharusnya hanya melihat siswa di program keahliannya sendiri, tapi sistem mengizinkan Kaprodi melihat SEMUA siswa di sekolah**, lintas program keahlian. Hal yang sama juga berlaku saat Kaprodi mencatat prestasi siswa — seharusnya hanya untuk siswa di program keahliannya, tapi sistem tidak membatasi ini sama sekali, sehingga Kaprodi program A bisa mencatat prestasi untuk siswa program B.
-3. **Guru seharusnya hanya bisa mencatat observasi siswa saat penugasan mengajarnya masih aktif, tapi sistem mengizinkan Guru mencatat observasi kapan saja** tanpa mengecek apakah penugasan mengajarnya untuk siswa itu masih berlaku. Ini berbeda dengan absensi, yang sudah benar-benar mengecek penugasan aktif sebelum mengizinkan guru mencatat.
+1. ~~**Wali Kelas seharusnya hanya melihat siswa di kelasnya sendiri, tapi sistem mengizinkan Wali Kelas melihat SEMUA siswa di sekolah**~~ → **✅ SELESAI** (1 Juli 2026): migration `20260701220000_rls_isolate_wali_kaprodi_students.sql` membatasi Wali Kelas hanya melihat siswa di kelasnya.
+2. ~~**Kaprodi seharusnya hanya melihat siswa di program keahliannya sendiri, tapi sistem mengizinkan Kaprodi melihat SEMUA siswa di sekolah**~~ → **✅ SELESAI** (1 Juli 2026): migration yang sama + `20260701230000_rls_isolate_kaprodi_pkl.sql` membatasi Kaprodi ke program keahliannya, termasuk pencatatan prestasi.
+3. ~~**Guru seharusnya hanya bisa mencatat observasi siswa saat penugasan mengajarnya masih aktif**~~ → **Ditutup sebagai keputusan desain** (1 Juli 2026): Observasi adalah hak prerogatif guru — berbeda dari absensi yang terikat sesi jadwal, observasi adalah penilaian profesional yang bisa muncul dari interaksi kapan saja, termasuk di luar kelas. Tidak membatasi observasi berdasarkan penugasan aktif adalah keputusan yang disengaja, bukan celah.
 
 ### Excess (ada di implementasi, tidak di requirements)
 CLEAR — tidak ditemukan hak akses dalam sistem yang melebihi apa yang dimaksudkan dalam rancangan awal selain tiga kesenjangan di atas (yang sifatnya "kurang ketat", bukan "kelebihan akses yang baru/aneh"). Tidak ditemukan peran yang diberi akses ke data yang sama sekali tidak disebutkan kaitannya di rancangan awal.

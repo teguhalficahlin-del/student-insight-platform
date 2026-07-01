@@ -1,14 +1,38 @@
 # Master Audit Summary
 Platform Monitoring Perkembangan Siswa SMK
-Tanggal: 24 Juni 2025
+Tanggal audit awal: 24 Juni 2025
+Pembaruan terakhir: 1 Juli 2026
 Total level diaudit: 7 (A sampai G)
 Total sub-audit: 32
 
+---
+
+## PEMBARUAN 1 Juli 2026
+
+Ketiga temuan CRITICAL yang memblokir launch telah diselesaikan sejak audit awal:
+
+| Temuan | Status | Bukti |
+|---|---|---|
+| CRITICAL #1 — Guru tidak bisa mencatat absensi (teaching_assignments tidak pernah terisi) | ✅ SELESAI | Migration `20250625000000_rc1_teaching_assignment_pipeline.sql` + `20260630230000_fix_apply_schedule.sql`: RPC `fn_apply_schedule_templates()` kini otomatis upsert teaching_assignments saat admin menerapkan jadwal |
+| CRITICAL #2 — Wali Kelas & Kaprodi bisa lihat data semua siswa | ✅ SELESAI | Migration `20260701220000_rls_isolate_wali_kaprodi_students.sql` + `20260701230000_rls_isolate_kaprodi_pkl.sql` |
+| CRITICAL #3 — Tidak ada aplikasi operasional sama sekali | ✅ SELESAI | Portal `guru/`, `student/`, `parent/`, `dudi/`, `stakeholder/` semua sudah dibangun dan aktif |
+
+Temuan HIGH — Kaprodi bisa catat prestasi siswa lintas program: kemungkinan besar tercakup dalam migration RLS isolasi kaprodi, perlu konfirmasi audit ulang.
+
+**Status launch setelah pembaruan: seluruh blocker CRITICAL sudah terangkat. Temuan HIGH dan MEDIUM di bawah tetap relevan untuk ditindaklanjuti.**
+
+---
+
 ## Status Kesiapan Launch
 
+> **Catatan (1 Juli 2026):** Paragraf ini mencerminkan kondisi saat audit awal (Juni 2025). Ketiga masalah CRITICAL yang disebut di bawah telah diselesaikan — lihat tabel Pembaruan di atas.
+
+*(Teks asli Juni 2025:)*
 **Belum siap launch ke sekolah dengan data siswa sungguhan.** Yang sudah benar-benar jadi dan layak dipakai hanyalah console Admin untuk setup awal, impor data massal, tutup semester, dan tutup tahun ajaran — bagian ini sudah matang dan teruji lewat audit. Tapi di luar console Admin, hampir seluruh fungsi inti sekolah (guru mencatat absensi dan observasi siswa, BK dan wali kelas menangani kasus, siswa dan orang tua melihat data mereka) **tidak punya aplikasi sama sekali** — baru berupa rancangan tertulis. Lebih parah lagi, satu-satunya jalur yang ada untuk membuat jadwal mengajar (impor CSV) secara struktural memutus kemampuan guru mencatat absensi begitu fitur itu dipakai, karena data "penugasan mengajar" yang disyaratkan sistem tidak pernah dibuat oleh proses apa pun yang ada. Ditambah lagi, Wali Kelas dan Kaprodi saat ini bisa melihat data SEMUA siswa di sekolah, bukan hanya yang menjadi tanggung jawab mereka — begitu data siswa sungguhan dimasukkan, ini langsung jadi pelanggaran privasi yang nyata, bukan risiko teoretis. Syarat minimum sebelum launch: ketiga masalah CRITICAL di bawah ini harus selesai dulu. Console Admin sendiri sudah cukup matang untuk dipakai sekarang oleh Admin sekolah untuk menyiapkan data, tapi sekolah tidak akan bisa menjalankan operasional harian (absensi, BK, kasus siswa) sampai aplikasi-aplikasi yang hilang itu dibangun.
 
 ## Temuan CRITICAL (blokir launch)
+
+> **Catatan (1 Juli 2026): Semua temuan CRITICAL di bawah telah diselesaikan — lihat tabel Pembaruan di atas.**
 
 **1. Guru berisiko tidak bisa mencatat absensi siswa sama sekali**
 Sistem mensyaratkan setiap jadwal mengajar terhubung ke data "penugasan mengajar resmi" sebelum guru diizinkan mencatat absensi di kelas itu. Tapi satu-satunya cara membuat jadwal yang ada sekarang (impor CSV jadwal oleh Admin) sengaja tidak pernah membuat data penugasan ini, dan setelah ditelusuri ke seluruh sistem, tidak ditemukan satu pun cara lain untuk membuatnya.
@@ -28,6 +52,7 @@ Sumber: Level A — Tindak Lanjut; Level B — Audit Aktor; Level E — Audit 12
 ## Temuan HIGH (sangat disarankan fix sebelum launch)
 
 **Kaprodi bisa mencatat prestasi untuk siswa dari program keahlian mana pun**
+> *(1 Juli 2026: Kemungkinan sudah diselesaikan oleh migration RLS isolasi kaprodi — perlu dikonfirmasi lewat audit ulang.)*
 Seharusnya hanya untuk siswa di program keahliannya sendiri, sama seperti Wali Kelas yang sudah benar dibatasi untuk kelasnya. Dampak: catatan prestasi siswa bisa dibuat oleh Kaprodi yang tidak punya hubungan tanggung jawab dengan siswa itu.
 Sumber: Level D — Audit 9 (Gap Hak Akses)
 
@@ -73,8 +98,8 @@ Sumber: Audit 32 — Konsistensi Sistem (Konsistensi Pola Tombol)
 
 ## Temuan MEDIUM (bisa fix setelah launch)
 
-**Guru bisa mencatat observasi siswa tanpa syarat penugasan mengajar aktif**
-Berbeda dengan absensi yang sudah benar mensyaratkan penugasan aktif. Dampak: guru yang sudah tidak mengajar kelas tertentu masih bisa menambahkan catatan tentang siswa di kelas itu.
+~~**Guru bisa mencatat observasi siswa tanpa syarat penugasan mengajar aktif**~~
+→ **Ditutup sebagai keputusan desain** (1 Juli 2026): Observasi adalah hak prerogatif guru — penilaian profesional yang tidak perlu dibatasi oleh penugasan jadwal aktif.
 Sumber: Level D — Audit 9 (Gap Hak Akses)
 
 **Tidak ada catatan permanen untuk setiap proses impor data massal**
@@ -272,7 +297,9 @@ Sumber: Audit 32 — Konsistensi Sistem (Konsistensi Layout)
 
 ## Area yang Belum Diaudit
 
-- **Seluruh dashboard aktor (Guru, BK, Wali Kelas, Kaprodi, Kepala Sekolah, Siswa, Orang Tua, DUDI)** belum diaudit pada ketujuh level di atas karena belum dibangun. Audit Level A sampai G perlu diulang khusus untuk aplikasi-aplikasi ini setelah dibangun — termasuk audit hak akses, privasi, UX, dan visual yang sama sekali belum bisa dilakukan tanpa kode nyata untuk diperiksa.
+> **Pembaruan 1 Juli 2026:** Dashboard aktor sudah dibangun (`guru/`, `student/`, `parent/`, `dudi/`, `stakeholder/`). Item pertama di bawah sudah tidak berlaku sebagai "belum bisa diaudit" — audit Level A–G untuk portal-portal ini kini bisa dan perlu dijadwalkan.
+
+- **Seluruh dashboard aktor (Guru, BK, Wali Kelas, Kaprodi, Kepala Sekolah, Siswa, Orang Tua, DUDI)** ~~belum diaudit pada ketujuh level di atas karena belum dibangun~~ → **sudah dibangun per 2026, siap diaudit.** Audit Level A sampai G perlu dijadwalkan untuk aplikasi-aplikasi ini — termasuk audit hak akses, privasi, UX, dan visual.
 - **Mekanisme Sistem Alert (ABSENCE_HIGH, CONCERN_REPEATED, TEACHER_NO_RECORD)** — ditemukan satu tampilan data ringkas di tingkat sistem inti yang sepertinya ditujukan untuk ini (disebut di Level C sebagai salah satu dari tujuh tampilan data yang belum terpakai), tapi belum dikonfirmasi apakah logikanya benar-benar lengkap dan akan berfungsi sesuai rancangan begitu dashboard Kepala Sekolah/Kaprodi/BK dibangun. Perlu audit khusus saat itu terjadi.
 - **Hak akses untuk peran Dinas Pendidikan** disebutkan di requirements (akses data agregat tanpa identitas individu) tapi tidak tercakup dalam matrix hak akses di Level D — peran ini sepertinya belum punya implementasi apa pun di sistem dan perlu audit akses tersendiri jika/saat dibangun.
 - **Kemampuan ekspor data dan log aktivitas** — keduanya sudah diputuskan untuk disembunyikan sampai diimplementasikan (lihat Keputusan Domain), sehingga belum ada yang bisa diaudit dari sisi keamanan, privasi, atau UX untuk fitur ini. Perlu audit penuh begitu pembangunannya dimulai.

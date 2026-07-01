@@ -15,6 +15,7 @@ import {
     fetchDudiPartners, fetchPklAttendance, fetchDudiObservations,
     createPlacement, bulkImportPkl,
     getSchoolStats, getAbsentTeachersToday,
+    getJournalEntries, insertJournalEntry, deleteJournalEntry,
 } from './api.js';
 
 // ─── State ───────────────────────────────────────────────────
@@ -78,6 +79,7 @@ function buildTabs() {
     const nav = document.getElementById('tab-nav');
     const tabs = [{ key: 'guru', label: 'Dashboard Guru' }];
     jabatan.forEach(j => tabs.push({ key: j, label: jabatanLabel(j) }));
+    tabs.push({ key: 'jurnal', label: 'Jurnal Mengajar' });
 
     nav.innerHTML = tabs.map(t =>
         `<button class="tab-btn" data-tab="${t.key}">${esc(t.label)}</button>`
@@ -107,6 +109,7 @@ async function loadTabContent(key) {
         case 'waka_kesiswaan': break;  // placeholder
         case 'waka_kurikulum': await initWakaKurTab(); break;
         case 'kepsek':      await initKepsekTab(); break;
+        case 'jurnal':      await initJurnalTab(); break;
     }
 }
 
@@ -717,6 +720,91 @@ async function initKepsekTab() {
         document.getElementById('ks-hadir').textContent  = stats.kehadiran_hari_ini;
     } catch (err) {
         console.error('[kepsek]', err);
+    }
+}
+
+// ─── TAB JURNAL MENGAJAR ─────────────────────────────────────
+
+let _jurnalTabInit = false;
+async function initJurnalTab() {
+    if (_jurnalTabInit) return;
+    _jurnalTabInit = true;
+
+    // Tanggal default hari ini, tersembunyi
+    const dateEl = document.getElementById('journal-date');
+    dateEl.value = new Date().toISOString().slice(0, 10);
+
+    document.getElementById('journal-date-toggle').addEventListener('click', () => {
+        const row = document.getElementById('journal-date-row');
+        const visible = row.style.display !== 'none';
+        row.style.display = visible ? 'none' : 'block';
+    });
+
+    await loadJurnalList();
+
+    document.getElementById('journal-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn     = document.getElementById('journal-submit-btn');
+        const msgEl   = document.getElementById('journal-form-msg');
+        const content = document.getElementById('journal-content').value.trim();
+        const date    = document.getElementById('journal-date').value;
+
+        if (!content) return;
+
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan…';
+        msgEl.style.display = 'none';
+
+        try {
+            await insertJournalEntry(currentUser.user_id, date, content);
+            document.getElementById('journal-content').value = '';
+            msgEl.textContent = 'Catatan berhasil disimpan.';
+            msgEl.style.display = 'block';
+            await loadJurnalList();
+        } catch (err) {
+            msgEl.textContent = 'Gagal menyimpan: ' + err.message;
+            msgEl.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Simpan';
+        }
+    });
+}
+
+async function loadJurnalList() {
+    const listEl = document.getElementById('journal-list');
+    listEl.innerHTML = '<p class="hint">Memuat…</p>';
+    try {
+        const entries = await getJournalEntries(currentUser.user_id);
+        if (!entries.length) {
+            listEl.innerHTML = '<p class="hint">Belum ada catatan.</p>';
+            return;
+        }
+        listEl.innerHTML = entries.map(e => `
+            <div class="section-card" style="margin-bottom:8px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                    <strong>${fmt(e.entry_date)}</strong>
+                    <button class="btn btn-secondary btn-sm" data-delete="${esc(e.journal_id)}">Hapus</button>
+                </div>
+                <p style="white-space:pre-wrap;margin:0">${esc(e.content)}</p>
+            </div>
+        `).join('');
+
+        listEl.querySelectorAll('[data-delete]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!confirm('Hapus catatan ini?')) return;
+                btn.disabled = true;
+                try {
+                    await deleteJournalEntry(btn.dataset.delete);
+                    await loadJurnalList();
+                } catch (err) {
+                    alert('Gagal menghapus: ' + err.message);
+                    btn.disabled = false;
+                }
+            });
+        });
+    } catch (err) {
+        listEl.innerHTML = `<p class="hint">Gagal memuat: ${esc(err.message)}</p>`;
     }
 }
 

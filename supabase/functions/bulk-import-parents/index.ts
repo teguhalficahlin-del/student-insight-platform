@@ -142,6 +142,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { data: students, error: studentErr } = await admin
                 .from('students')
                 .select('student_id, nis')
+                .eq('school_id', user.school_id)
                 .in('nis', nisList);
 
             if (studentErr) {
@@ -232,6 +233,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     login_identifier: nik,
                     identifier_type:  'NIK',
                     role_type:        'ORTU',
+                    school_id:        user.school_id,
                 })
                 .select('user_id')
                 .single();

@@ -135,10 +135,11 @@ function overlaps(aS: number, aE: number, bS: number, bE: number): boolean {
 /** Ambil (atau buat) subject default "KBM" yang dipakai semua sesi jadwal.
  *  teaching_assignments.subject_id NOT NULL, jadi tetap butuh satu subject;
  *  "KBM" disembunyikan dari TU (tidak ada di template jadwal). */
-async function getOrCreateDefaultSubject(admin: ReturnType<typeof getAdminClient>): Promise<string> {
+async function getOrCreateDefaultSubject(admin: ReturnType<typeof getAdminClient>, schoolId: string): Promise<string> {
     const { data: existing, error: selErr } = await admin
         .from('subjects')
         .select('subject_id')
+        .eq('school_id', schoolId)
         .eq('code', 'KBM')
         .maybeSingle();
     if (selErr) throw selErr;
@@ -146,7 +147,7 @@ async function getOrCreateDefaultSubject(admin: ReturnType<typeof getAdminClient
 
     const { data: created, error: insErr } = await admin
         .from('subjects')
-        .insert({ code: 'KBM', name: 'Kegiatan Belajar Mengajar', is_active: true })
+        .insert({ code: 'KBM', name: 'Kegiatan Belajar Mengajar', is_active: true, school_id: schoolId })
         .select('subject_id')
         .single();
     if (insErr) throw insErr;
@@ -181,7 +182,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const { data: schoolConfig, error: configErr } = await admin
             .from('school_config')
             .select('current_academic_year, current_semester')
-            .single();
+            .eq('school_id', user.school_id)
+            .maybeSingle();
 
         if (configErr || !schoolConfig) {
             console.error('[bulk-import-schedules] school_config lookup failed:', configErr);
@@ -195,6 +197,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const { data: period, error: periodErr } = await admin
             .from('academic_periods')
             .select('start_date, end_date')
+            .eq('school_id', user.school_id)
             .eq('academic_year', academicYear)
             .eq('semester', semester)
             .maybeSingle();
@@ -266,8 +269,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const classNames = [...new Set(validRows.map(r => r.nama_kelas.trim()))];
 
             const [{ data: classes, error: classErr }, { data: teachers, error: teacherErr }] = await Promise.all([
-                admin.from('classes').select('class_id, name').eq('academic_year', academicYear).in('name', classNames),
+                admin.from('classes').select('class_id, name').eq('school_id', user.school_id).eq('academic_year', academicYear).in('name', classNames),
                 admin.from('users').select('user_id, full_name')
+                    .eq('school_id', user.school_id)
                     .in('role_type', ['GURU', 'WALI_KELAS', 'KAPRODI', 'KEPSEK', 'BK']),
             ]);
 
@@ -285,7 +289,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 teacherByName.set(key, arr);
             }
 
-            const defaultSubjectId = await getOrCreateDefaultSubject(admin);
+            const defaultSubjectId = await getOrCreateDefaultSubject(admin, user.school_id);
 
             for (const row of [...validRows]) {
                 const classId = classMap.get(row.nama_kelas.trim());
@@ -345,6 +349,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 const { data: existing, error: exErr } = await admin
                     .from('schedule_templates')
                     .select('start_time, end_time, class_id')
+                    .eq('school_id', user.school_id)
                     .eq('academic_year', academicYear)
                     .eq('semester', semester)
                     .eq('day_of_week', row.hari)

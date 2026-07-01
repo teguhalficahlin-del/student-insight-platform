@@ -123,7 +123,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { error: upsertErr } = await admin
                 .from('programs')
                 .upsert(
-                    validRows.map(r => ({ code: r.kode, name: r.nama })),
+                    validRows.map(r => ({ code: r.kode, name: r.nama, school_id: user.school_id })),
                     { onConflict: 'code' },
                 );
 

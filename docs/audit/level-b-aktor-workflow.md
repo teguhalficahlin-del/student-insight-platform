@@ -1,5 +1,13 @@
 # Audit Level B — Aktor & Workflow
-Tanggal: 24 Juni 2025
+Tanggal audit awal: 24 Juni 2025
+Pembaruan terakhir: 1 Juli 2026
+
+## PEMBARUAN 1 Juli 2026
+
+- **Audit Aktor — Kepala Sekolah, Kaprodi, dan peran sekolah lain:** Kondisi "tidak bisa login ke mana pun" sudah tidak berlaku. Portal masing-masing sudah dibangun: `guru/` (Guru, Wali Kelas, BK, Kaprodi), `stakeholder/` (Kepsek, Waka), `student/`, `parent/`, `dudi/`. Audit aktor untuk portal-portal ini belum dilakukan secara formal.
+- Audit workflow di bawah masih mencerminkan console Admin — relevan dan tidak perlu diubah.
+
+---
 
 ## Audit Aktor
 
@@ -11,6 +19,8 @@ Tanggal: 24 Juni 2025
 - Risiko: Admin adalah satu-satunya pihak yang bisa membuka console ini — login dicek ketat, hanya akun dengan peran Admin yang bisa masuk (akun lain ditolak dan diarahkan kembali ke halaman login). Ini berarti seluruh beban input data dasar sekolah (ratusan siswa, puluhan guru, jadwal satu semester penuh) bertumpu pada satu peran saja. Jika Admin berhalangan atau akunnya bermasalah, tidak ada peran lain yang bisa membantu menyelesaikan setup atau tutup semester/tahun ajaran, padahal secara konsep sekolah biasanya berbagi tugas ini ke beberapa pihak (misalnya kaprodi mengurus data jurusannya sendiri, kepala sekolah menyetujui tutup semester).
 
 ### Kepala Sekolah, Kaprodi, dan peran sekolah lain (Guru, BK, Wali Kelas, Siswa, Orang Tua, DUDI)
+> **Pembaruan 1 Juli 2026:** Deskripsi di bawah khusus untuk **console Admin** — memang benar semua peran ini tidak bisa masuk ke `admin/`. Namun sejak 2026 mereka masing-masing sudah punya portal sendiri (`guru/`, `stakeholder/`, `student/`, `parent/`, `dudi/`). Audit aktor untuk portal-portal tersebut belum dilakukan.
+
 - Input: tidak ada — peran-peran ini tidak bisa login ke console admin ini sama sekali. Saat mencoba masuk, sistem langsung menolak dan mengarahkan kembali ke halaman login dengan pesan "akun ini tidak memiliki akses ke konsol admin".
 - Output: tidak ada — mereka tidak melihat apa pun dari console ini secara langsung. Mereka hanya merasakan hasilnya secara tidak langsung (misalnya guru baru bisa login ke sistem lain setelah Admin mengimpor datanya, siswa baru muncul di kelas setelah Admin selesai memetakan kenaikan kelas).
 - Keputusan: tidak ada keputusan yang bisa diambil lewat console ini, walaupun beberapa dari peran ini (Kepala Sekolah, Kaprodi) seharusnya ikut menentukan urusan seperti penutupan semester atau pembukaan tahun ajaran baru menurut gambaran tugas mereka di rancangan awal sistem.

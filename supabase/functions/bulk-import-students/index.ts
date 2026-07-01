@@ -99,7 +99,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const { data: schoolConfig, error: configErr } = await admin
             .from('school_config')
             .select('current_academic_year, current_semester')
-            .single();
+            .eq('school_id', user.school_id)
+            .maybeSingle();
 
         if (configErr) {
             console.error('[bulk-import-students] school_config lookup failed:', configErr);
@@ -160,6 +161,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { data: programs, error: programErr } = await admin
                 .from('programs')
                 .select('program_id, code')
+                .eq('school_id', user.school_id)
                 .in('code', codes);
 
             if (programErr) {
@@ -191,6 +193,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { data: classes, error: classErr } = await admin
                 .from('classes')
                 .select('class_id, name, academic_year')
+                .eq('school_id', user.school_id)
                 .eq('academic_year', academicYear)
                 .in('name', classNames);
 
@@ -223,6 +226,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { data: existing, error: dupErr } = await admin
                 .from('students')
                 .select('nis')
+                .eq('school_id', user.school_id)
                 .in('nis', validRows.map(r => r.nis));
 
             if (dupErr) {
@@ -242,6 +246,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { data: studentRow, error: fetchErr } = await admin
                 .from('students')
                 .select('student_id')
+                .eq('school_id', user.school_id)
                 .eq('nis', row.nis)
                 .single();
 

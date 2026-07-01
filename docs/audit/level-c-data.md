@@ -1,5 +1,14 @@
 # Audit Level C — Data
-Tanggal: 24 Juni 2025
+Tanggal audit awal: 24 Juni 2025
+Pembaruan terakhir: 1 Juli 2026
+
+## PEMBARUAN 1 Juli 2026
+
+- **Relasi Rusak (CRITICAL #1):** SELESAI. Migration `20260630230000_fix_apply_schedule.sql` memperkenalkan RPC `fn_apply_schedule_templates()` yang secara otomatis mengisi `teaching_assignments` saat admin menerapkan jadwal dari template. Kolom `assignment_id` di `teaching_schedules` kini selalu terisi valid. Lihat catatan inline di bagian Relasi Rusak di bawah.
+- **Kepemilikan Data — "Penugasan guru tetap" (tidak jelas pemiliknya):** Kini dikelola oleh proses `fn_apply_schedule_templates()` — dibuat otomatis oleh sistem saat Admin menerapkan jadwal, bukan manual oleh aktor tertentu.
+- **Kepemilikan Data — "Penempatan PKL" (belum ada antarmuka):** Kini sudah ada antarmuka di portal Kaprodi dalam `guru/dashboard.html`.
+
+---
 
 ## Audit Model Data
 
@@ -65,6 +74,10 @@ CLEAR untuk hampir semua data berstatus/berkategori — seluruh nilai seperti pe
 Satu pengecualian kecil: nilai tahun ajaran (format "2025/2026") disimpan sebagai teks bebas di kedelapan tempat yang menyimpannya, **tanpa ada aturan format yang dipaksakan oleh sistem inti** — aturan format ini hanya dicek di kode aplikasi pada beberapa tempat (misalnya saat pengisian formulir setup awal dan formulir buka tahun ajaran baru), tapi tidak di semua tempat data ini bisa masuk. Risikonya kecil karena jalur masuk data ke kedelapan tempat ini hampir semua melalui proses yang sudah dikontrol (wizard, impor CSV, fungsi backend), tapi tetap merupakan celah jika ada jalur baru ditambahkan di masa depan tanpa menyalin aturan format yang sama.
 
 ### Relasi Rusak
+> **Pembaruan 1 Juli 2026: Temuan ini telah DISELESAIKAN.** Lihat migration `20260630230000_fix_apply_schedule.sql`. RPC `fn_apply_schedule_templates()` kini secara otomatis upsert `teaching_assignments` per pasangan (guru, kelas) sebelum membuat `teaching_schedules`, sehingga `assignment_id` selalu terisi. Constraint `uq_schedule_per_assignment_date` yang over-restriktif juga sudah di-drop.
+
+*(Teks asli Juni 2025, disimpan sebagai rekaman historis:)*
+
 **TEMUAN KRITIS:** ditemukan relasi yang secara struktural tidak terhubung dengan benar, dan ini berdampak langsung pada fitur Absensi Siswa — fitur yang sebelumnya diklasifikasikan WAJIB di audit kebutuhan.
 
 Penjelasannya begini: aturan akses yang mengatur siapa boleh mencatat absensi siswa mensyaratkan jadwal mengajar itu terhubung ke sebuah data "penugasan guru tetap" yang mencatat bahwa guru tersebut memang ditugaskan mengajar kelas dan mata pelajaran itu. Tapi:

@@ -269,6 +269,41 @@
         </div>
     </div>
 
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: JURNAL MENGAJAR
+    ════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-jurnal">
+        <div class="page-body">
+
+            <!-- Form tulis entri baru -->
+            <div class="section-card">
+                <h3>Tulis Catatan</h3>
+                <form id="journal-form">
+                    <div class="field">
+                        <textarea id="journal-content" class="input" rows="5"
+                            placeholder="Tulis catatan mengajar…"
+                            style="resize:vertical; width:100%"></textarea>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px">
+                        <button type="submit" class="btn btn-primary" id="journal-submit-btn">Simpan</button>
+                        <span id="journal-date-toggle" style="font-size:0.85em; color:var(--color-text-muted); cursor:pointer; text-decoration:underline">Ubah tanggal</span>
+                    </div>
+                    <div id="journal-date-row" style="display:none; margin-top:8px">
+                        <input type="date" id="journal-date" class="input" style="width:auto">
+                    </div>
+                    <div id="journal-form-msg" style="display:none; margin-top:6px" class="hint"></div>
+                </form>
+            </div>
+
+            <!-- Daftar entri -->
+            <div class="section-card">
+                <h3>Riwayat Jurnal</h3>
+                <div id="journal-list"><p class="hint">Memuat…</p></div>
+            </div>
+
+        </div>
+    </div>
+
 </div><!-- #app -->
 
 <script type="module" src="js/dashboard.js"></script>
