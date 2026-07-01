@@ -477,6 +477,16 @@ export async function deleteJournalEntry(journalId) {
 
 // ─── KASUS ───────────────────────────────────────────────────
 
+export async function countNewCaseEvents(roleType, since) {
+    const { count, error } = await supabase
+        .from('case_events')
+        .select('case_id', { count: 'exact', head: true })
+        .eq('new_handler_role', roleType)
+        .gt('created_at', since);
+    if (error) throw error;
+    return count ?? 0;
+}
+
 export async function getCases() {
     const { data, error } = await supabase
         .from('cases')

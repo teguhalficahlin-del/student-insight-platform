@@ -19,8 +19,46 @@ import {
     getJournalEntries, insertJournalEntry, deleteJournalEntry,
     getCases, getCase, getCaseEvents, createCase,
     addCaseComment, escalateCase, changeCaseStatus, closeCase,
+    countNewCaseEvents,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
+
+// ─── Kasus badge ─────────────────────────────────────────────
+// Tampilkan angka di tab Kasus jika ada escalasi baru ke role user.
+// last_seen disimpan di localStorage; di-update saat tab Kasus dibuka.
+
+function _kasusBadgeKey() { return `kasus-seen-${currentUser?.user_id}`; }
+
+function setKasusBadge(n) {
+    document.querySelectorAll('[data-tab="kasus"]').forEach(btn => {
+        let badge = btn.querySelector('.kasus-notif-badge');
+        if (n > 0) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'kasus-notif-badge';
+                badge.style.cssText = 'display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--color-danger,#dc2626);color:#fff;font-size:11px;font-weight:700;text-align:center;padding:0 4px;margin-left:5px;vertical-align:middle';
+                btn.appendChild(badge);
+            }
+            badge.textContent = n > 99 ? '99+' : String(n);
+        } else {
+            badge?.remove();
+        }
+    });
+}
+
+async function refreshKasusBadge() {
+    if (!currentUser?.role_type) return;
+    const since = LC.get(_kasusBadgeKey()) ?? '2000-01-01T00:00:00Z';
+    try {
+        const n = await countNewCaseEvents(currentUser.role_type, since);
+        setKasusBadge(n);
+    } catch { /* tidak kritis — badge hilang saja */ }
+}
+
+function markKasusAsSeen() {
+    LC.set(_kasusBadgeKey(), new Date().toISOString());
+    setKasusBadge(0);
+}
 
 // ─── State ───────────────────────────────────────────────────
 let currentUser  = null;
@@ -110,6 +148,9 @@ async function init() {
     window.addEventListener('online',  runFlush);
     window.addEventListener('offline', updateSyncBanner);
     runFlush();
+
+    // Badge kasus: cek eskalasi baru ke role user ini di background.
+    refreshKasusBadge();
 }
 
 // ─── Tab navigation ──────────────────────────────────────────
@@ -1025,6 +1066,7 @@ let _kasusAllCases  = [];
 let _kasusCurrentId = null;
 
 async function initKasusTab() {
+    markKasusAsSeen();
     if (_kasusTabInit) { renderKasusList(); return; }
     _kasusTabInit = true;
 
