@@ -176,12 +176,12 @@ export async function fetchObservations(studentId) {
             dimension,
             content,
             visibility,
-            created_at,
+            observed_at,
             author:users!observations_author_user_id_fkey ( full_name )
         `)
         .eq('student_id', studentId)
         .eq('visibility', 'STUDENT_VISIBLE')
-        .order('created_at', { ascending: false })
+        .order('observed_at', { ascending: false })
         .limit(50);
 
     if (error) throw error;
@@ -191,6 +191,6 @@ export async function fetchObservations(studentId) {
         dimension: r.dimension,
         content:   r.content,
         author:    r.author?.full_name ?? '-',
-        date:      r.created_at,
+        date:      r.observed_at,
     }));
 }
