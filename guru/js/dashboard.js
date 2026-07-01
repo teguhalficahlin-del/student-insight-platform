@@ -17,6 +17,7 @@ import {
     getSchoolStats, getAbsentTeachersToday,
     getJournalEntries, insertJournalEntry, deleteJournalEntry,
 } from './api.js';
+import { saveAttendanceBatch, flushPending, pendingCount } from './offline.js';
 
 // ─── State ───────────────────────────────────────────────────
 let currentUser  = null;
@@ -72,6 +73,12 @@ async function init() {
 
     activateTab('guru');
     await initGuruTab();
+
+    // Offline sync: tampilkan status + kirim absensi tertunda.
+    await updateSyncBanner();
+    window.addEventListener('online',  runFlush);
+    window.addEventListener('offline', updateSyncBanner);
+    runFlush();
 }
 
 // ─── Tab navigation ──────────────────────────────────────────
@@ -278,17 +285,37 @@ async function saveAttendance(scheduleId, students) {
     statusEl.style.display = 'none';
 
     try {
-        const rows = students.map(s => {
-            const checked   = document.querySelector(`input[name="att_${scheduleId}_${s.student_id}"]:checked`);
-            const status    = checked?.value ?? 'HADIR';
-            const notesEl   = document.getElementById(`notes_${scheduleId}_${s.student_id}`);
-            const notes     = status === 'IZIN' ? (notesEl?.value.trim() || null) : null;
-            return { student_id: s.student_id, status, notes };
+        const records = students.map(s => {
+            const checked = document.querySelector(`input[name="att_${scheduleId}_${s.student_id}"]:checked`);
+            const status  = checked?.value ?? 'HADIR';
+            const notesEl = document.getElementById(`notes_${scheduleId}_${s.student_id}`);
+            const notes   = status === 'IZIN' ? (notesEl?.value.trim() || null) : null;
+            return { student_id: s.student_id, status, source: 'TEACHER_DECLARED', notes };
         });
-        await upsertAttendance(scheduleId, rows);
-        statusEl.textContent = `✓ Tersimpan — ${rows.length} siswa`;
-        statusEl.className   = 'status-msg status-ok';
+
+        // Satu jalur idempoten (online + offline). session_date = tanggal
+        // yang sedang dilihat di tab Guru.
+        const batch = {
+            idempotency_key: crypto.randomUUID(),
+            schedule_id:     scheduleId,
+            submitted_by:    currentUser.user_id,
+            session_date:    document.getElementById('sched-date').value,
+            records,
+        };
+
+        const result = await saveAttendanceBatch(batch);
+        if (result.status === 'synced') {
+            statusEl.textContent = `✓ Tersimpan — ${records.length} siswa`;
+            statusEl.className   = 'status-msg status-ok';
+        } else if (result.status === 'queued') {
+            statusEl.textContent = `⏳ Tersimpan di perangkat — menunggu sinkron (${records.length} siswa)`;
+            statusEl.className   = 'status-msg status-warn';
+        } else {
+            statusEl.textContent = `✗ ${result.error}`;
+            statusEl.className   = 'status-msg status-err';
+        }
         statusEl.style.display = 'inline-block';
+        await updateSyncBanner();
     } catch (err) {
         statusEl.textContent = `✗ ${err.message}`;
         statusEl.className   = 'status-msg status-err';
@@ -297,6 +324,39 @@ async function saveAttendance(scheduleId, students) {
         saveBtn.disabled    = false;
         saveBtn.textContent = `Simpan Kehadiran (${students.length} siswa)`;
     }
+}
+
+// ── Sinkronisasi offline: indikator + flush ───────────────────
+
+async function updateSyncBanner() {
+    let el = document.getElementById('sync-banner');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'sync-banner';
+        el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2000;padding:8px 14px;' +
+            'font-size:13px;text-align:center;display:none;background:var(--color-warning-bg,#fffbeb);' +
+            'color:var(--color-warning,#b45309);border-top:1px solid var(--color-warning,#d97706)';
+        document.body.appendChild(el);
+    }
+    let n = 0;
+    try { n = await pendingCount(); } catch (_) { n = 0; }
+    if (n > 0) {
+        el.textContent = navigator.onLine
+            ? `⏳ ${n} absensi menunggu sinkron — menyinkronkan…`
+            : `⏳ ${n} absensi tersimpan di perangkat — akan terkirim saat online`;
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+async function runFlush() {
+    try {
+        const { synced, remaining } = await flushPending();
+        if (synced > 0) console.log(`[offline] ${synced} absensi tersinkron`);
+        await updateSyncBanner();
+        return remaining;
+    } catch (e) { console.warn('[offline] flush gagal:', e); }
 }
 
 // ── Observasi ─────────────────────────────────────────────────

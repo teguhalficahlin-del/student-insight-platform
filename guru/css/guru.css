@@ -178,6 +178,7 @@ details[open] .att-accordion-summary::before { transform: rotate(90deg); }
 .status-msg { font-size: 13px; padding: 8px 12px; border-radius: var(--radius); margin-top: 8px; }
 .status-ok  { background: var(--color-success-bg); color: var(--color-success); }
 .status-err { background: var(--color-danger-bg);  color: var(--color-danger); }
+.status-warn { background: var(--color-warning-bg); color: var(--color-warning); }
 
 /* ── Loading ─────────────────────────────────────────────── */
 #loading { padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 14px; }

@@ -20,8 +20,8 @@ Dokumen ini menggabungkan beberapa lintasan audit yang sebelumnya terpisah, kini
 |---|---|---|---|
 | **C1** | Semua RPC `SECURITY DEFINER` + edge function service-role menulis tanpa `school_id` → gagal `NOT NULL` | — | 🔴 CRITICAL → ✅ **FIXED** (1 Juli) |
 | **C2** | Resolusi data lintas-tenant di edge function (lookup & `.single()` tak discope `school_id`) | — | 🔴 CRITICAL → ✅ **FIXED** (1 Juli) |
-| **J1** | Kontrak offline tidak terpasang di portal mana pun — fitur WAJIB "absensi saat internet mati" tetap kosong; data bisa hilang diam-diam | E, A | 🔴 CRITICAL |
-| **LF-1** | Inversi arsitektur: semua portal **Server-First** (`await server → UI`), kebalikan persis dari prinsip local-first yang ditetapkan platform; desain local-first lengkap ada tapi nol implementasi | Local-First | 🔴 CRITICAL |
+| **J1** | Kontrak offline tidak terpasang di portal mana pun — fitur WAJIB "absensi saat internet mati" tetap kosong | E, A | 🔴 CRITICAL → 🟡 **absensi guru offline SELESAI** (1 Juli); observasi/kasus/jurnal masih online |
+| **LF-1** | Inversi arsitektur: semua portal Server-First; desain local-first ada tapi nol implementasi | Local-First | 🔴 CRITICAL → 🟡 **absensi guru kini local-first-write**; portal lain masih server-first |
 | **H1** | Isolasi WALI_KELAS & KAPRODI belum tuntas — observasi/kasus/absensi/prestasi/enrolmen masih sekolah-wide | D | 🟠 HIGH → ✅ **FIXED** (1 Juli) |
 | **H2** | `fn_kaprodi_program_id()` membaca kolom salah (`program_id` vs `kaprodi_program_id`) | D | 🟠 HIGH → ✅ **FIXED** (1 Juli) |
 | **H3** | Flag jabatan multi-role (`is_bk`, `is_kepsek`, `is_waka_*`) tak pernah dibaca RLS (baca) | D | 🟠 HIGH → ✅ **FIXED** (baca; 1 Juli) |
@@ -201,6 +201,12 @@ Di `20260701130000_rls_add_school_filter.sql`, policy berikut hanya `WITH CHECK 
 # BAGIAN 2 — Re-Audit Menyeluruh Portal Aktor (lensa A–H, sisi-klien)
 
 Telaah seluruh portal aktor (`guru/`, `student/`, `parent/`, `dudi/`, `stakeholder/`, `superadmin/`) + `shared/` + `contracts/` + `sw.js` + ke-7 file `*/css/*.css`, dengan menerapkan kerangka lensa audit **A–H** (`docs/audit/level-a … level-h`).
+
+> 🟡 **STATUS: SEBAGIAN SELESAI (1 Juli 2026) — absensi guru offline TERBANGUN & terverifikasi E2E.**
+> - **Server (brick 1):** `fn_sync_attendance_batch` diperbaiki (school_id di `sync_idempotency` migrasi `310000`; `notes` migrasi `320000`); edge fn `sync-attendance-batch` terverifikasi via JWT guru (records_upserted + idempotensi `was_duplicate:true`).
+> - **Klien (brick 2):** `guru/js/offline.js` baru — antrian IndexedDB + kirim idempoten + flush saat online; `guru/js/dashboard.js saveAttendance` kini online-first, **antre saat offline** dengan status jujur "⏳ Menunggu sinkron" (bukan "Tersimpan" palsu) + banner + auto-flush on `online` event. Satu jalur idempoten untuk online+offline.
+> - **Bukti E2E (browser, login guru):** simulasi offline → simpan 35 siswa → terantre di IndexedDB + banner muncul → kembali online → auto-sync → **35 baris absensi mendarat di server** (source TEACHER_DECLARED, recorded_by benar). Data uji dihapus.
+> - **Belum:** observasi/kasus/jurnal offline (belum ada receiver server selain absensi); Background Sync API (v1 sinkron saat app terbuka/dibuka-ulang online); baca-lokal offline (LF-2) & wipe-on-logout (LF-6). Ini gelombang berikutnya.
 
 ## 🔴 J1 — Kontrak offline tidak terpasang; fitur WAJIB "absensi saat internet mati" tetap kosong
 
