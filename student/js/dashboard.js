@@ -20,13 +20,20 @@ let obsLoaded   = false;
 let pklLoaded   = false;
 
 const DIMENSION_LABELS = { AKADEMIK:'Akademik', KEHADIRAN:'Kehadiran', PERILAKU:'Perilaku', SOSIAL:'Sosial', AFEKTIF:'Afektif', BAKAT_MINAT:'Bakat & Minat', FISIK:'Fisik', LAINNYA:'Lainnya' };
-const STATUS_LABELS    = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Alpha', EKSKUL:'Ekskul' };
+const STATUS_LABELS    = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Tidak Hadir', EKSKUL:'Ekskul' };
 const STATUS_BADGE     = { HADIR:'badge-hadir', IZIN:'badge-izin', SAKIT:'badge-sakit', TIDAK_HADIR:'badge-tidak-hadir', EKSKUL:'badge-ekskul' };
 
 function esc(s) {
     const el = document.createElement('span');
     el.textContent = s ?? '';
     return el.innerHTML;
+}
+function fe(err) {
+    console.error('[student]', err);
+    const m = String(err?.message ?? '').toLowerCase();
+    if (m.includes('jwt') || m.includes('expired')) return 'Sesi habis. Silakan login ulang.';
+    if (m.includes('fetch') || m.includes('network') || m.includes('failed to fetch')) return 'Tidak ada koneksi. Periksa jaringan.';
+    return 'Gagal memuat data. Silakan coba lagi.';
 }
 function fmt(d) {
     if (!d) return '—';
@@ -163,7 +170,7 @@ async function loadSchedule() {
             </table>
             </div>`;
     } catch (err) {
-        contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat: ${esc(err.message)}</p>`;
+        contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
     }
 }
 
@@ -179,6 +186,10 @@ async function loadAttendance() {
         document.getElementById('att-filter-btn').onclick = loadAttendance;
         attInit = true;
     }
+
+    const filterBtn = document.getElementById('att-filter-btn');
+    const prevLabel = filterBtn?.textContent;
+    if (filterBtn) { filterBtn.disabled = true; filterBtn.textContent = 'Memuat…'; }
 
     const start   = document.getElementById('att-date-start').value;
     const end     = document.getElementById('att-date-end').value;
@@ -215,7 +226,9 @@ async function loadAttendance() {
             </tr>`;
         }).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="3" style="color:var(--color-danger)">${esc(err.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="3" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
+    } finally {
+        if (filterBtn) { filterBtn.disabled = false; filterBtn.textContent = prevLabel; }
     }
 }
 
@@ -246,7 +259,7 @@ async function loadObservations() {
                 <p class="obs-content">${esc(r.content)}</p>
             </div>`).join('');
     } catch (err) {
-        hintEl.textContent = `Gagal memuat: ${err.message}`;
+        hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
     }
 }
 
@@ -300,7 +313,7 @@ async function loadPkl() {
             </tr>`).join('');
         }
     } catch (err) {
-        infoEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat: ${esc(err.message)}</p>`;
+        infoEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
     }
 }
 

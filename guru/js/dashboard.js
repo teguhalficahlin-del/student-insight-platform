@@ -35,6 +35,17 @@ function esc(s) {
     el.textContent = s ?? '';
     return el.innerHTML;
 }
+/** Pesan error ramah pengguna — detail teknis ke console saja. */
+function fe(err, ctx = 'muat') {
+    console.error('[guru]', err);
+    const m = String(err?.message ?? '').toLowerCase();
+    if (m.includes('jwt') || m.includes('expired')) return 'Sesi habis. Silakan login ulang.';
+    if (m.includes('fetch') || m.includes('network') || m.includes('failed to fetch')) return 'Tidak ada koneksi. Periksa jaringan.';
+    if (m.includes('security policy') || m.includes('permission') || m.includes('forbidden')) return 'Tidak memiliki izin.';
+    return ctx === 's' ? 'Gagal menyimpan. Silakan coba lagi.'
+         : ctx === 'h' ? 'Gagal menghapus. Silakan coba lagi.'
+         : 'Gagal memuat data. Silakan coba lagi.';
+}
 function fmt(d) {
     if (!d) return '—';
     return new Date(d).toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
@@ -178,7 +189,7 @@ async function loadSchedule() {
             btn.addEventListener('click', () => toggleAttPanel(btn));
         });
     } catch (err) {
-        contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat: ${esc(err.message)}</p>`;
+        contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
     }
 }
 
@@ -212,7 +223,7 @@ async function toggleAttPanel(btn) {
         }
 
         const statuses = ['HADIR','IZIN','SAKIT','TIDAK_HADIR'];
-        const statusLabel = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Alpha' };
+        const statusLabel = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Tidak Hadir' };
 
         function renderStudentRow(s) {
             const cur      = existing.get(s.student_id)?.status ?? 'HADIR';
@@ -273,7 +284,7 @@ async function toggleAttPanel(btn) {
         btn.disabled = false;
         btn.textContent = 'Tutup';
     } catch (err) {
-        panel.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal: ${esc(err.message)}</p>`;
+        panel.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
         btn.disabled = false; btn.textContent = 'Input Kehadiran';
     }
 }
@@ -318,7 +329,7 @@ async function saveAttendance(scheduleId, students) {
         statusEl.style.display = 'inline-block';
         await updateSyncBanner();
     } catch (err) {
-        statusEl.textContent = `✗ ${err.message}`;
+        statusEl.textContent = `✗ ${fe(err, 's')}`;
         statusEl.className   = 'status-msg status-err';
         statusEl.style.display = 'inline-block';
     } finally {
@@ -454,7 +465,7 @@ async function initObsForm() {
             form.reset();
             hiddenEl.value = '';
         } catch (err) {
-            statusEl.textContent   = `✗ ${err.message}`;
+            statusEl.textContent   = `✗ ${fe(err, 's')}`;
             statusEl.className     = 'status-msg status-err';
             statusEl.style.display = 'block';
         } finally {
@@ -512,7 +523,7 @@ async function loadWaliSummary() {
             </tr>`;
         }).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger)">${esc(err.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
 
@@ -547,7 +558,7 @@ async function initBkTab() {
                 <p class="obs-content">${esc(r.content)}</p>
             </div>`).join('');
     } catch (err) {
-        hintEl.textContent = `Gagal memuat: ${err.message}`;
+        hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
     }
 }
 
@@ -591,7 +602,7 @@ async function loadWkAttendanceRecap() {
             </tr>`;
         }).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(err.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
 
@@ -624,7 +635,7 @@ async function loadWkObservations() {
                 <p class="obs-content">${esc(r.content)}</p>
             </div>`).join('');
     } catch (err) {
-        hintEl.textContent = `Gagal memuat: ${err.message}`;
+        hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
     }
 }
 
@@ -654,7 +665,7 @@ async function loadWkOpenCases() {
             <td>${fmt(c.created_at)}</td>
         </tr>`).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="4" style="color:var(--color-danger)">${esc(err.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
 
@@ -749,7 +760,7 @@ async function loadKpRecap() {
             return `<tr><td>${esc(a.name)}</td><td>${a.HADIR}</td><td>${a.SAKIT}</td><td>${a.IZIN}</td><td>${a.TIDAK_HADIR}</td><td>${a.total > 0 ? pct+'%' : '—'}</td></tr>`;
         }).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(err.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
 
@@ -772,7 +783,7 @@ async function loadKpObs() {
                 <p class="obs-content">${esc(r.content)}</p>
             </div>`).join('');
     } catch (err) {
-        listEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">${esc(err.message)}</p>`;
+        listEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">${esc(fe(err))}</p>`;
     }
 }
 
@@ -818,7 +829,7 @@ async function initKpPlacementForm(programId) {
             renderKpSummary(); renderKpStudents();
             await reloadStudentSelect();
         } catch (err) {
-            resultEl.innerHTML = `<p style="color:var(--color-danger)">✗ ${esc(err.message)}</p>`;
+            resultEl.innerHTML = `<p style="color:var(--color-danger)">✗ ${esc(fe(err))}</p>`;
         } finally {
             btn.disabled = false; btn.textContent = 'Simpan Penempatan';
         }
@@ -846,7 +857,7 @@ async function initKpPlacementForm(programId) {
             renderKpSummary(); renderKpStudents();
             await reloadStudentSelect();
         } catch (err) {
-            resultEl.innerHTML = `<p style="color:var(--color-danger)">✗ ${esc(err.message)}</p>`;
+            resultEl.innerHTML = `<p style="color:var(--color-danger)">✗ ${esc(fe(err))}</p>`;
         } finally {
             fileInput.value = '';
         }
@@ -876,7 +887,7 @@ async function initWakaKurTab() {
             <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
         </tr>`).join('');
     } catch (err) {
-        hintEl.textContent = `Gagal memuat: ${err.message}`;
+        hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
     }
 }
 
@@ -936,7 +947,7 @@ async function initJurnalTab() {
             msgEl.style.display = 'block';
             if (r.status === 'synced') await loadJurnalList();
         } catch (err) {
-            msgEl.textContent = 'Gagal menyimpan: ' + err.message;
+            msgEl.textContent = fe(err, 's');
             msgEl.style.display = 'block';
         } finally {
             btn.disabled = false;
@@ -972,13 +983,13 @@ async function loadJurnalList() {
                     await deleteJournalEntry(btn.dataset.delete);
                     await loadJurnalList();
                 } catch (err) {
-                    alert('Gagal menghapus: ' + err.message);
+                    alert(fe(err, 'h'));
                     btn.disabled = false;
                 }
             });
         });
     } catch (err) {
-        listEl.innerHTML = `<p class="hint">Gagal memuat: ${esc(err.message)}</p>`;
+        listEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
     }
 }
 

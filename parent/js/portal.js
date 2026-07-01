@@ -87,7 +87,7 @@ async function init() {
     try {
         children = await fetchChildren(currentUser.user_id);
     } catch (err) {
-        loadingEl.textContent = 'Gagal memuat data anak: ' + err.message;
+        loadingEl.textContent = fe(err);
         return;
     }
 
@@ -157,7 +157,7 @@ async function loadSchedule(classId) {
             </tr>
         `).join('');
     } catch (err) {
-        schedTbody.innerHTML = `<tr><td colspan="3" class="hint">Gagal memuat: ${esc(err.message)}</td></tr>`;
+        schedTbody.innerHTML = `<tr><td colspan="3" class="hint">Gagal memuat data. ${esc(fe(err))}</td></tr>`;
     }
 }
 
@@ -210,7 +210,7 @@ async function loadAttendance(studentId) {
         `).join('');
 
     } catch (err) {
-        attTbody.innerHTML = `<tr><td colspan="6" class="hint">Gagal memuat: ${esc(err.message)}</td></tr>`;
+        attTbody.innerHTML = `<tr><td colspan="6" class="hint">Gagal memuat data. ${esc(fe(err))}</td></tr>`;
     }
 }
 
@@ -237,7 +237,7 @@ async function loadObservations(studentId) {
         `).join('');
 
     } catch (err) {
-        obsListEl.innerHTML = `<p class="hint">Gagal memuat: ${esc(err.message)}</p>`;
+        obsListEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
     }
 }
 
@@ -252,17 +252,40 @@ function esc(str) {
     el.textContent = str;
     return el.innerHTML;
 }
+function fe(err) {
+    console.error('[parent]', err);
+    const m = String(err?.message ?? '').toLowerCase();
+    if (m.includes('jwt') || m.includes('expired')) return 'Sesi habis. Silakan login ulang.';
+    if (m.includes('fetch') || m.includes('network') || m.includes('failed to fetch')) return 'Tidak ada koneksi. Periksa jaringan.';
+    return 'Gagal memuat data. Silakan coba lagi.';
+}
 
 selectChild.addEventListener('change', () => loadChildData(Number(selectChild.value)));
 
-btnFilter.addEventListener('click', () => {
+btnFilter.addEventListener('click', async () => {
     const idx = Number(selectChild.value);
-    loadAttendance(children[idx].student_id);
+    const prev = btnFilter.textContent;
+    btnFilter.disabled = true;
+    btnFilter.textContent = 'Memuat…';
+    try {
+        await loadAttendance(children[idx].student_id);
+    } finally {
+        btnFilter.disabled = false;
+        btnFilter.textContent = prev;
+    }
 });
 
-btnSchedule.addEventListener('click', () => {
+btnSchedule.addEventListener('click', async () => {
     const idx = Number(selectChild.value);
-    loadSchedule(children[idx].class_id);
+    const prev = btnSchedule.textContent;
+    btnSchedule.disabled = true;
+    btnSchedule.textContent = 'Memuat…';
+    try {
+        await loadSchedule(children[idx].class_id);
+    } finally {
+        btnSchedule.disabled = false;
+        btnSchedule.textContent = prev;
+    }
 });
 
 logoutBtn.addEventListener('click', async () => {

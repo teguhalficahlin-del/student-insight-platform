@@ -87,7 +87,7 @@ async function init() {
     try {
         students = await fetchMyStudents();
     } catch (err) {
-        loadingEl.textContent = 'Gagal memuat data siswa: ' + err.message;
+        loadingEl.textContent = fe(err);
         return;
     }
 
@@ -122,7 +122,7 @@ async function loadAttendanceForDate(date) {
     try {
         byStudent = await fetchAttendanceForDate(ids, date);
     } catch (err) {
-        attendanceListEl.innerHTML = `<p class="hint">Gagal memuat absensi: ${esc(err.message)}</p>`;
+        attendanceListEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
         return;
     }
 
@@ -212,7 +212,7 @@ async function handleSaveAttendance(btn, date) {
         const updated = await fetchAttendanceForDate(ids, date);
         updateSummary(updated);
     } catch (err) {
-        saveStatusEl.textContent = '✗ ' + err.message;
+        saveStatusEl.textContent = '✗ ' + fe(err, 's');
         saveStatusEl.style.color = 'var(--color-danger)';
     } finally {
         btn.disabled = false;
@@ -241,7 +241,7 @@ async function loadHistory() {
             </tr>
         `).join('');
     } catch (err) {
-        historyTbody.innerHTML = `<tr><td colspan="4" class="hint">Gagal memuat: ${esc(err.message)}</td></tr>`;
+        historyTbody.innerHTML = `<tr><td colspan="4" class="hint">Gagal memuat data. ${esc(fe(err))}</td></tr>`;
     }
 }
 
@@ -277,7 +277,7 @@ obsForm.addEventListener('submit', async (e) => {
         obsCharCount.textContent = '0';
         await loadObservationHistory();
     } catch (err) {
-        obsErrorEl.textContent   = 'Gagal menyimpan: ' + err.message;
+        obsErrorEl.textContent   = fe(err, 's');
         obsErrorEl.style.display = 'block';
     } finally {
         obsSubmitBtn.disabled    = false;
@@ -309,7 +309,7 @@ async function loadObservationHistory() {
             </div>
         `).join('');
     } catch (err) {
-        obsHistoryListEl.innerHTML = `<p class="hint">Gagal memuat: ${esc(err.message)}</p>`;
+        obsHistoryListEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
     }
 }
 
@@ -352,6 +352,13 @@ function esc(str) {
     const el = document.createElement('span');
     el.textContent = str ?? '';
     return el.innerHTML;
+}
+function fe(err, ctx = 'muat') {
+    console.error('[dudi]', err);
+    const m = String(err?.message ?? '').toLowerCase();
+    if (m.includes('jwt') || m.includes('expired')) return 'Sesi habis. Silakan login ulang.';
+    if (m.includes('fetch') || m.includes('network') || m.includes('failed to fetch')) return 'Tidak ada koneksi. Periksa jaringan.';
+    return ctx === 's' ? 'Gagal menyimpan. Silakan coba lagi.' : 'Gagal memuat data. Silakan coba lagi.';
 }
 
 init();
