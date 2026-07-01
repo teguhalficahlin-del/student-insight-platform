@@ -1,5 +1,51 @@
 # Offline Sync Contract Reference
-**Version:** 1.0.0
+**Version:** 1.1.0
+
+---
+
+## Kategori Operasi Offline
+
+### Category A — Tulis Operasional (Queue + Background Sync)
+Operasi tulis yang harus sampai ke server. Ditangani oleh `offline.js` + IndexedDB `offline_queue` + Service Worker Background Sync.
+
+| Operasi | Queue Type | Portal |
+|---|---|---|
+| Absensi siswa (guru) | `ATTENDANCE_BATCH` | Guru |
+| Observasi siswa | `OBSERVATION_CREATE` | Guru, DUDI |
+| Entri jurnal | `JOURNAL_CREATE` | Guru |
+| Event kasus | `CASE_EVENT_CREATE` | Guru |
+
+**Aturan:** Kasus baru (`CASE_CREATE`) **wajib online** — tidak diantrikan. Tombol diblokir saat `navigator.onLine === false`.
+
+### Category B — Baca Agregat (LocalStorage stale-while-revalidate)
+Data tampilan yang aman ditampilkan stale, lalu di-refresh di latar belakang. Diimplementasi langsung di `dashboard.js` masing-masing portal via helper `LC` (localStorage prefix per portal).
+
+| Data | Cache Key | Portal |
+|---|---|---|
+| Daftar siswa | `smkhr:myStudents-{userId}` | Guru |
+| Jadwal mengajar | `smkhr:sched-{userId}-{date}` | Guru |
+| Daftar jurnal | `smkhr:jurnal-{userId}` | Guru |
+| Jadwal siswa | `smkhr:stu-sched-{studentId}-{date}` | Siswa |
+| Observasi siswa | `smkhr:stu-obs-{studentId}` | Siswa |
+| Observasi (ortu) | `smkhr:ortu-obs-{studentId}` | Ortu |
+| Daftar siswa DUDI | `dudi:students-{userId}` | DUDI |
+| Riwayat absensi DUDI | `dudi:att-hist-{userId}` | DUDI |
+| Riwayat observasi DUDI | `dudi:obs-{userId}` | DUDI |
+
+**Pola implementasi:**
+```javascript
+const cached = LC.get(key);
+if (cached) render(cached);          // tampil instan
+try {
+    const fresh = await fetchData();
+    LC.set(key, fresh);
+    render(fresh);                   // update dengan data baru
+} catch (err) {
+    if (!cached) showError(err);     // error hanya jika tidak ada cache
+}
+```
+
+**Saat logout:** `LC.clear()` menghapus semua key dengan prefix portal tersebut.
 
 ---
 

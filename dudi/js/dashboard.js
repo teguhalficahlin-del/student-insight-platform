@@ -49,6 +49,17 @@ const obsHistoryEmptyEl = document.getElementById('obs-history-empty');
 const historyTbody  = document.getElementById('history-tbody');
 const historyEmptyEl = document.getElementById('history-empty');
 
+// ── LocalStorage cache (Category B — stale-while-revalidate) ──
+const LC = (() => {
+    const PFX = 'dudi:';
+    return {
+        get(k)    { try { return JSON.parse(localStorage.getItem(PFX+k)); } catch { return null; } },
+        set(k, v) { try { localStorage.setItem(PFX+k, JSON.stringify(v)); } catch {} },
+        del(k)    { localStorage.removeItem(PFX+k); },
+        clear()   { Object.keys(localStorage).filter(k => k.startsWith(PFX)).forEach(k => localStorage.removeItem(k)); },
+    };
+})();
+
 // ── State ─────────────────────────────────────────────────────
 let currentUser = null;
 let students    = [];
@@ -84,25 +95,50 @@ async function init() {
     orgNameEl.textContent  = userRow.dudi_org_name ?? userRow.full_name;
     userNameEl.textContent = 'PJ: ' + userRow.full_name;
 
-    try {
-        students = await fetchMyStudents();
-    } catch (err) {
-        loadingEl.textContent = fe(err);
-        return;
+    const uid = currentUser.user_id;
+
+    // Cache-first: tampilkan data lama dulu
+    const cachedStudents = LC.get(`students-${uid}`);
+    if (cachedStudents?.length) {
+        students = cachedStudents;
+        statTotal.textContent = students.length;
+        populateStudentSelect();
+        attendanceDateEl.value = todayStr();
+        loadingEl.style.display  = 'none';
+        dashBodyEl.style.display = 'block';
+        // Render cache segera, fetch latar belakang
+        loadAttendanceForDate(attendanceDateEl.value);
+        loadHistory();
+        loadObservationHistory();
     }
 
-    statTotal.textContent = students.length;
+    // Fetch latar belakang → update cache + re-render
+    try {
+        const fresh = await fetchMyStudents();
+        LC.set(`students-${uid}`, fresh);
+        if (JSON.stringify(fresh) !== JSON.stringify(students)) {
+            students = fresh;
+            statTotal.textContent = students.length;
+            populateStudentSelect();
+        }
+    } catch (err) {
+        if (!cachedStudents?.length) {
+            loadingEl.textContent = fe(err);
+            return;
+        }
+        // Data lama sudah tampil — biarkan saja
+    }
 
-    populateStudentSelect();
-
-    // Default tanggal: hari ini
-    attendanceDateEl.value = todayStr();
-    await loadAttendanceForDate(attendanceDateEl.value);
-
-    loadingEl.style.display  = 'none';
-    dashBodyEl.style.display = 'block';
-
-    await Promise.all([loadHistory(), loadObservationHistory()]);
+    if (!cachedStudents?.length) {
+        attendanceDateEl.value = todayStr();
+        loadingEl.style.display  = 'none';
+        dashBodyEl.style.display = 'block';
+        await Promise.all([
+            loadAttendanceForDate(attendanceDateEl.value),
+            loadHistory(),
+            loadObservationHistory(),
+        ]);
+    }
 }
 
 // ── Attendance ────────────────────────────────────────────────
@@ -220,28 +256,38 @@ async function handleSaveAttendance(btn, date) {
 }
 
 // ── History ───────────────────────────────────────────────────
+function renderHistoryRows(rows, nameById) {
+    if (rows.length === 0) {
+        historyTbody.innerHTML = '';
+        historyEmptyEl.style.display = 'block';
+        return;
+    }
+    historyEmptyEl.style.display = 'none';
+    historyTbody.innerHTML = rows.map(r => `
+        <tr>
+            <td>${formatDate(r.attendance_date)}</td>
+            <td>${esc(nameById.get(r.student_id) ?? '—')}</td>
+            <td><span class="badge badge-${r.status.toLowerCase().replace('_', '_')}">${STATUS_LABELS[r.status] ?? r.status}</span></td>
+            <td>${esc(r.notes ?? '—')}</td>
+        </tr>
+    `).join('');
+}
+
 async function loadHistory() {
-    const ids = students.map(s => s.student_id);
+    const ids      = students.map(s => s.student_id);
     const nameById = new Map(students.map(s => [s.student_id, s.full_name]));
+    const uid      = currentUser.user_id;
+    const ckey     = `att-hist-${uid}`;
+
+    const cached = LC.get(ckey);
+    if (cached) renderHistoryRows(cached, nameById);
 
     try {
         const rows = await fetchRecentAttendance(ids, 14);
-        if (rows.length === 0) {
-            historyTbody.innerHTML = '';
-            historyEmptyEl.style.display = 'block';
-            return;
-        }
-        historyEmptyEl.style.display = 'none';
-        historyTbody.innerHTML = rows.map(r => `
-            <tr>
-                <td>${formatDate(r.attendance_date)}</td>
-                <td>${esc(nameById.get(r.student_id) ?? '—')}</td>
-                <td><span class="badge badge-${r.status.toLowerCase().replace('_', '_')}">${STATUS_LABELS[r.status] ?? r.status}</span></td>
-                <td>${esc(r.notes ?? '—')}</td>
-            </tr>
-        `).join('');
+        LC.set(ckey, rows);
+        renderHistoryRows(rows, nameById);
     } catch (err) {
-        historyTbody.innerHTML = `<tr><td colspan="4" class="hint">Gagal memuat data. ${esc(fe(err))}</td></tr>`;
+        if (!cached) historyTbody.innerHTML = `<tr><td colspan="4" class="hint">Gagal memuat data. ${esc(fe(err))}</td></tr>`;
     }
 }
 
@@ -285,31 +331,41 @@ obsForm.addEventListener('submit', async (e) => {
     }
 });
 
+function renderObsHistory(rows, nameById) {
+    if (rows.length === 0) {
+        obsHistoryListEl.innerHTML = '';
+        obsHistoryEmptyEl.style.display = 'block';
+        return;
+    }
+    obsHistoryEmptyEl.style.display = 'none';
+    obsHistoryListEl.innerHTML = rows.map(r => `
+        <div class="obs-card obs-${r.sentiment.toLowerCase()}">
+            <div class="obs-meta">
+                <strong>${esc(nameById.get(r.student_id) ?? 'Siswa')}</strong>
+                &middot; ${DIMENSION_LABELS[r.dimension] ?? r.dimension}
+                &middot; ${r.sentiment === 'POSITIF' ? 'Positif' : 'Perlu Perhatian'}
+                &middot; ${formatDate(r.observed_at ?? r.created_at)}
+            </div>
+            <p class="obs-content">${esc(r.content)}</p>
+        </div>
+    `).join('');
+}
+
 async function loadObservationHistory() {
-    const ids = students.map(s => s.student_id);
+    const ids      = students.map(s => s.student_id);
     const nameById = new Map(students.map(s => [s.student_id, s.full_name]));
+    const uid      = currentUser.user_id;
+    const ckey     = `obs-${uid}`;
+
+    const cached = LC.get(ckey);
+    if (cached) renderObsHistory(cached, nameById);
 
     try {
         const rows = await fetchMyObservations(ids);
-        if (rows.length === 0) {
-            obsHistoryListEl.innerHTML = '';
-            obsHistoryEmptyEl.style.display = 'block';
-            return;
-        }
-        obsHistoryEmptyEl.style.display = 'none';
-        obsHistoryListEl.innerHTML = rows.map(r => `
-            <div class="obs-card obs-${r.sentiment.toLowerCase()}">
-                <div class="obs-meta">
-                    <strong>${esc(nameById.get(r.student_id) ?? 'Siswa')}</strong>
-                    &middot; ${DIMENSION_LABELS[r.dimension] ?? r.dimension}
-                    &middot; ${r.sentiment === 'POSITIF' ? 'Positif' : 'Perlu Perhatian'}
-                    &middot; ${formatDate(r.observed_at ?? r.created_at)}
-                </div>
-                <p class="obs-content">${esc(r.content)}</p>
-            </div>
-        `).join('');
+        LC.set(ckey, rows);
+        renderObsHistory(rows, nameById);
     } catch (err) {
-        obsHistoryListEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
+        if (!cached) obsHistoryListEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
     }
 }
 
@@ -334,6 +390,7 @@ btnNextDay.addEventListener('click', () => {
 
 // ── Logout ────────────────────────────────────────────────────
 logoutBtn.addEventListener('click', async () => {
+    LC.clear();
     await logout();
     window.location.href = 'index.html';
 });
