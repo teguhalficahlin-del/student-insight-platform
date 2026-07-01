@@ -70,7 +70,7 @@ Telaah statik atas migrasi RLS/multi-tenant, helper functions, edge functions (p
 > - **Migrasi `20260701270000_apply_schedule_tenant_aware`** — `fn_apply_schedule_templates` stamp `school_id` eksplisit (subjects/assignments/schedules). *Bukti:* RPC dijalankan live → 1330 template, 369 assignment ter-upsert, 0 error NOT NULL.
 > - **Edge functions** (`auth.ts` kini mengembalikan `school_id`; stamp eksplisit pada tabel tanpa induk): `bulk-import-programs` (programs), `bulk-import-users`/`-parents`/`-dudi` + `provision-student-accounts` (users). Semua ter-deploy.
 > - *Bukti gabungan:* `fn_bulk_import_students` dijalankan live → success=1, siswa+enrolmen keduanya `school_id` terisi. Data uji dihapus.
-> - **Residual (belum):** `sync-attendance-batch` (`sync_idempotency` tanpa induk) — ditunda karena sinkronisasi offline belum dibangun (lihat J1/LF-1).
+> - ~~Residual: `sync-attendance-batch` (`sync_idempotency` tanpa induk)~~ → ✅ **FIXED** migrasi `20260701310000_sync_attendance_school_id` (fn_sync_attendance_batch stamp `sync_idempotency.school_id` dari jadwal). *Bukti:* RPC dijalankan live, records_upserted=1, `sync_idempotency.school_id` terisi. Ini fondasi penerima-data untuk absensi offline (Kelompok 6/J1 brick 1).
 
 **Akar masalah.** Migrasi `20260701110000_add_school_id_to_tables.sql` menetapkan `school_id` **NOT NULL tanpa default** pada seluruh tabel, lalu pengisian diserahkan ke trigger `fn_auto_set_school_id` (`20260701120000_school_id_functions_triggers.sql`) yang mengambil dari `fn_current_school_id()` → berbasis `auth.uid()`.
 
