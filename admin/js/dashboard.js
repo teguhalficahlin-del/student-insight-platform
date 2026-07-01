@@ -25,7 +25,7 @@ const PANEL_RENDERERS = {
     jadwal:             renderJadwalPanel,
     tutupsemester:      () => mountSemesterPanel(panelContent),
     'academic-year':    () => { window.location.href = 'tutup-tahun.html'; },
-    export:             renderComingSoon,
+    export:             renderExportPanel,
     'activity-log':     renderComingSoon,
 };
 
@@ -495,6 +495,136 @@ async function renderJadwalPanel() {
         <p class="hint">Sesi jadwal ter-generate (teaching_schedules): <strong>${(schedCount ?? 0).toLocaleString('id-ID')} sesi</strong>.</p>
         <p class="hint">Untuk menyusun atau mengubah jadwal, buka <a href="wizard.html">Setup Wizard</a> langkah 10.</p>
     `;
+}
+
+// ─────────────────────────────────────────────────────────────
+// EXPORT DATA
+// ─────────────────────────────────────────────────────────────
+
+const EXPORT_DEFS = [
+    {
+        id: 'staf',
+        label: 'Staf & Peran',
+        hint: 'NIP/NIK, nama, kode guru, jabatan',
+        filename: 'export_staf.xlsx',
+        async fetch() {
+            return fetchAllRows('users',
+                q => q.select('full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, wali_kelas_class_id, kaprodi_program_id')
+                      .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")')
+                      .order('full_name'));
+        },
+        headers: ['Nama', 'NIP/NIK', 'Kode Guru', 'Jabatan'],
+        rowOf: u => [u.full_name, u.login_identifier, u.teacher_code ?? '', buildJabatan(u)],
+    },
+    {
+        id: 'siswa',
+        label: 'Siswa Aktif',
+        hint: 'NIS, nama, program keahlian',
+        filename: 'export_siswa_aktif.xlsx',
+        async fetch() {
+            return fetchAllRows('students',
+                q => q.select('full_name, nis, program:programs ( name )')
+                      .eq('student_status', 'AKTIF')
+                      .order('full_name'));
+        },
+        headers: ['NIS', 'Nama', 'Program Keahlian'],
+        rowOf: s => [s.nis, s.full_name, s.program?.name ?? ''],
+    },
+    {
+        id: 'alumni',
+        label: 'Alumni',
+        hint: 'NIS, nama, tahun lulus, program',
+        filename: 'export_alumni.xlsx',
+        async fetch() {
+            return fetchAllRows('students',
+                q => q.select('full_name, nis, graduated_academic_year, program:programs ( name )')
+                      .eq('student_status', 'LULUS')
+                      .order('graduated_academic_year', { ascending: false }));
+        },
+        headers: ['NIS', 'Nama', 'Tahun Lulus', 'Program Keahlian'],
+        rowOf: s => [s.nis, s.full_name, s.graduated_academic_year ?? '', s.program?.name ?? ''],
+    },
+    {
+        id: 'ortu',
+        label: 'Orang Tua',
+        hint: 'NIK, nama',
+        filename: 'export_ortu.xlsx',
+        async fetch() {
+            return fetchAllRows('users',
+                q => q.select('full_name, login_identifier').eq('role_type', 'ORTU').order('full_name'));
+        },
+        headers: ['NIK', 'Nama'],
+        rowOf: u => [u.login_identifier, u.full_name],
+    },
+    {
+        id: 'dudi',
+        label: 'DUDI / Mitra PKL',
+        hint: 'Login, nama usaha, penanggung jawab, program',
+        filename: 'export_dudi.xlsx',
+        async fetch() {
+            const [users, programs] = await Promise.all([
+                fetchAllRows('users',
+                    q => q.select('full_name, login_identifier, dudi_org_name, program_id').eq('role_type', 'DUDI').order('dudi_org_name')),
+                getPrograms(),
+            ]);
+            const pn = new Map(programs.map(p => [p.program_id, p.name]));
+            return users.map(u => ({ ...u, _program: pn.get(u.program_id) ?? '' }));
+        },
+        headers: ['Login', 'Nama Usaha', 'Penanggung Jawab', 'Program Keahlian'],
+        rowOf: u => [u.login_identifier, u.dudi_org_name ?? '', u.full_name, u._program],
+    },
+];
+
+function xlsxExport(headers, rows, sheetName, filename) {
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    // Auto-lebar kolom: karakter terpanjang per kolom
+    const colWidths = headers.map((h, ci) => {
+        const max = Math.max(h.length, ...rows.map(r => String(r[ci] ?? '').length));
+        return { wch: Math.min(max + 2, 50) };
+    });
+    ws['!cols'] = colWidths;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, filename);
+}
+
+async function renderExportPanel() {
+    panelContent.innerHTML = `
+        <h3>Export Data</h3>
+        <p class="hint" style="margin-bottom:20px">Unduh data sekolah sebagai file Excel (.xlsx) untuk keperluan arsip atau pengolahan lanjutan.</p>
+        <div id="export-cards" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px">
+            ${EXPORT_DEFS.map(d => `
+                <div style="border:1px solid var(--color-border,#dde3e9); border-radius:10px; padding:16px">
+                    <div style="font-weight:600; margin-bottom:4px">${d.label}</div>
+                    <div class="hint" style="font-size:12px; margin-bottom:12px">${d.hint}</div>
+                    <button class="btn btn-primary btn-sm" data-export-id="${d.id}">⬇ Unduh Excel</button>
+                    <span class="export-status-${d.id} hint" style="display:block; margin-top:6px; font-size:12px"></span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    for (const def of EXPORT_DEFS) {
+        document.querySelector(`[data-export-id="${def.id}"]`).addEventListener('click', async (e) => {
+            const btn    = e.currentTarget;
+            const status = panelContent.querySelector(`.export-status-${def.id}`);
+            btn.disabled = true;
+            btn.textContent = 'Memuat…';
+            status.textContent = '';
+            try {
+                const rows = await def.fetch();
+                xlsxExport(def.headers, rows.map(def.rowOf), def.label, def.filename);
+                status.textContent = `✓ ${rows.length} baris diunduh`;
+            } catch (err) {
+                console.error('[export]', err);
+                status.style.color = 'var(--color-danger,#dc2626)';
+                status.textContent = 'Gagal memuat data.';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⬇ Unduh Excel';
+            }
+        });
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
