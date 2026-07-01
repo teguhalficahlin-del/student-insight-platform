@@ -31,13 +31,13 @@ Dokumen ini menggabungkan beberapa lintasan audit yang sebelumnya terpisah, kini
 | *(baru)* | Pola sama M1 tapi di 19 policy `FOR ALL`/14 tabel inti (students/classes/programs/school_config/teaching_assignments/dst) — `WITH CHECK` tanpa cek peran, ditemukan saat verifikasi RESIDUAL-1 | D | 🔴 CRITICAL → ✅ **FIXED** (1 Juli) |
 | **M2** | Daftar jadwal guru (by `scheduled_teacher_id`) vs RLS absensi (by `teaching_assignment`) bisa mismatch | C, D | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
 | **M2b** | (Ditemukan saat verifikasi M2) Jalur simpan absensi guru punya 2 bug laten (belum kena krn attendance=0): `recorded_by_user_id` NOT NULL tak terisi; portal kirim `source='MANUAL'` (enum tak valid) | C | 🟠 HIGH → ✅ DB fixed; ⏳ frontend belum deploy |
-| **J4** | Tab "Waka Kesiswaan" placeholder mati ditampilkan ke pengguna nyata | A, F2 | 🟡 MEDIUM |
-| **J5** | `login_identifier` DUDI diekspos sebagai kolom di tab Kaprodi | D | 🟡 MEDIUM |
+| **J4** | Tab "Waka Kesiswaan" placeholder mati ditampilkan ke pengguna nyata | A, F2 | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
+| **J5** | `login_identifier` DUDI diekspos sebagai kolom di tab Kaprodi | D | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
 | **J6** | Portal aktor (mobile-first) tidak menerapkan prinsip Level H (bottom-nav / exception-first / primary-action-first) | H | 🟡 MEDIUM |
 | **J10** | Jadwal `scheduled_teacher_id` vs RLS absensi `teaching_assignment` — dikonfirmasi di kode portal (menguatkan M2) | D, C | 🟡 MEDIUM |
-| **J11** | Pasangan warna gagal-kontras (Level G admin) direplikasi di 6 portal terang, tepat pada badge kehadiran; superadmin pakai palet beda (tema gelap) | G, F2 | 🟡 MEDIUM |
+| **J11** | Pasangan warna gagal-kontras (Level G admin) direplikasi di 6 portal terang, tepat pada badge kehadiran; superadmin pakai palet beda (tema gelap) | G, F2 | 🟡 MEDIUM → ✅ **FIXED** (1 Juli, success/warning) |
 | **F-1** | Pesan error mentah (`err.message` teknis Supabase/RLS/JWT) bocor ke pengguna akhir di semua portal | F | 🟡 MEDIUM |
-| **F-2** | Input `font-size:14px` (<16px) di keenam portal → HP auto-zoom saat field difokus (portal justru mobile-first) | F (Mobile) | 🟡 MEDIUM |
+| **F-2** | Input `font-size:14px` (<16px) di keenam portal → HP auto-zoom saat field difokus (portal justru mobile-first) | F (Mobile) | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
 | **M3** | `shared/branding.js` `_applyToDom` menghilangkan atribut `data-brand` logo saat apply ganda | — | 🟢 LOW |
 | **J7** | Umpan balik pakai `alert()`/`confirm()` native, tak konsisten dgn pola status in-page | F | 🟢 LOW |
 | **J8** | Superadmin: master key di `sessionStorage` + verifikasi via efek samping | D | 🟢 LOW |
@@ -51,7 +51,7 @@ Dokumen ini menggabungkan beberapa lintasan audit yang sebelumnya terpisah, kini
 | **LF-7** | Token sync disimpan statis di memori SW (`getToken: ()=>token`) → tak refresh; offline lama → token kedaluwarsa → sync 401 → item ke dead_letter | Local-First | 🟡 MEDIUM |
 | **LF-4/5/8** | Pemisahan Category A/B belum tercermin di kode; kasus belum punya UI (jalur offline kasus tanpa konsumen); migrasi major menghapus antrian belum-sync | Local-First | 🟡 MEDIUM |
 | **IN-1** | Identitas PWA hardcoded single-tenant ("SMK Harapan Rokan" + theme statis) di ke-6 manifest → app terinstal tampil identitas sekolah-A untuk semua tenant | Installable | 🟡 MEDIUM |
-| **IN-2** | Path aset relatif (`css/…`,`manifest.json`) patah tanpa trailing slash → portal unstyled + manifest 404 (**terbukti runtime**); tertutup redirect GitHub Pages, patah di host lain | Installable, Responsive | 🟡 MEDIUM |
+| **IN-2** | Path aset relatif (`css/…`,`manifest.json`) patah tanpa trailing slash → portal unstyled + manifest 404 (**terbukti runtime**); tertutup redirect GitHub Pages, patah di host lain | Installable, Responsive | 🟡 MEDIUM → ✅ **FIXED** (1 Juli) |
 | **FE-tabel** | Tabel responsif menyembunyikan **header saja** (`th:nth-child`), td tak ikut → kolom misalign di mobile (siswa & ortu) | Responsive (Tables) | 🟡 MEDIUM |
 | **IN-3** | Ikon hanya SVG `sizes:"any"` (tak ada PNG 192/512); `theme_color` manifest ≠ warna app; tak ada `id` | Installable | 🟢 LOW |
 | **Resp-7** | Login numerik (NIP/NIK/NIS) `type=text` tanpa `inputmode` → keyboard HP salah (**terbukti runtime**) | Responsive (Forms) | 🟢 LOW |
@@ -286,11 +286,15 @@ Menariknya portal Ortu **sudah** diperbaiki dengan komentar eksplisit ("PostgRES
 
 Ini **bertentangan dengan Keputusan Domain yang Dikunci di Level A**: Export Data & Log Aktivitas sengaja **disembunyikan** justru agar placeholder kosong tidak membingungkan pengguna. Prinsip yang sama belum diterapkan konsisten ke tab Waka Kesiswaan. (Bandingkan: tab Waka Kurikulum nyata berfungsi — "Guru Tidak Hadir Hari Ini".)
 
+> ✅ **STATUS: FIXED (1 Juli 2026, LIVE + terverifikasi via login RLS).** Keputusan pemilik: isi konten sungguhan (bukan sembunyikan). Tab kini menampilkan 3 bagian nyata: **Kehadiran Per Kelas** (rekap harian per kelas, fungsi baru `getAttendanceRecapPerClass()` — agregasi client-side dari `teaching_schedules` + `attendance!inner`), **Observasi Terbaru** (reuse pola tab BK, sekolah-luas via RLS existing), **Kasus Terbuka** (fungsi baru `getOpenCases()`, list read-only `cases` status≠CLOSED). Semua data sudah discope otomatis oleh RLS H1-H3 (Waka Kesiswaan = schoolwide observer). Bukti: login Dra. Mira (Waka Kesiswaan asli) — rekap kehadiran tampil benar (1 HADIR + 1 SAKIT = 50% untuk kelas uji), observasi PKL nyata tampil, kasus kosong (tabel memang kosong).
+
 ---
 
 ## 🟡 J5 — `login_identifier` DUDI diekspos sebagai kolom di tab Kaprodi
 
 `guru/js/api.js:305-314` `fetchDudiPartners` menyeleksi `login_identifier`; `guru/js/dashboard.js:550-552` `renderKpDudi` menampilkan kolom **"Login"** berisi identifier login DUDI. Kaprodi melihat ID login mitra eksternal. Mirip ekspos row-level yang sudah "diterima" untuk siswa/ortu (Level D, F4), tapi di sini secara eksplisit dijadikan kolom tabel. Perlu konfirmasi apakah disengaja; jika tidak, hapus kolom Login.
+
+> ✅ **STATUS: FIXED (1 Juli 2026).** Keputusan pemilik: hapus kolom Login. `fetchDudiPartners` tak lagi menyeleksi `login_identifier` dari `users` (dihapus dari query, bukan cuma disembunyikan di UI); kolom "Login" & sel-nya dihapus dari `guru/dashboard.html` dan `renderKpDudi()`.
 
 ---
 
@@ -332,6 +336,8 @@ Audit Level G (admin) sudah menyatakan tiga pasangan teks/latar **gagal WCAG AA 
 - `.badge-izin` ditulis tak konsisten: `guru`=`#eff6ff`, `parent`=`#eff4ff`, `dudi`=hardcode `#eff6ff`+`#1d4ed8` (bukan token). Kosmetik.
 - **Tidak ada** `prefers-color-scheme` maupun `@media print` di portal mana pun (sama seperti admin). Untuk PWA mobile, dark mode lebih diharapkan pengguna daripada di console desktop — catatan LOW, bukan blocker.
 
+> ✅ **STATUS: FIXED (1 Juli 2026) untuk pasangan hijau & oranye.** `--color-success` `#16a34a`→`#15803d`, `--color-warning` `#d97706`→`#b45309`, di keenam portal terang (admin, guru, student, parent, dudi, stakeholder) — persis rekomendasi audit. Terverifikasi via computed style browser (`getComputedStyle(document.documentElement)`). `--color-danger` & teks abu-abu `#6b7280` tidak diubah (di luar rekomendasi eksplisit audit; keduanya hanya marginal di bawah 4,5:1). Superadmin (tema gelap) tetap tak disentuh sesuai catatan "inkonsistensi sadar, vendor-only".
+
 ---
 
 ## 🟢 J7 — Umpan balik native `alert()`/`confirm()` tak konsisten
@@ -368,6 +374,8 @@ Saat RLS menolak (mis. *"new row violates row-level security policy for table �
 ### 🟡 F-2 — Input `font-size:14px` memicu auto-zoom HP *(Audit Mobile)*
 
 `.input` = **14px** di **keenam** portal (`guru/css/guru.css:55`, `student:56`, `parent:82`, `dudi:85`, `stakeholder:53`, `superadmin:47`). iOS Safari mem-zoom otomatis saat field <16px difokus — setiap kali pengguna mengetuk kotak tanggal/teks, layar membesar tiba-tiba. Ini **temuan F-Mobile yang sama dgn console Admin**, tapi **lebih relevan** karena portal aktor justru **mobile-first** (admin desktop-only secara desain). **Rekomendasi:** input ≥16px (atau 16px khusus breakpoint mobile).
+
+> ✅ **STATUS: FIXED (1 Juli 2026).** `.input`/`select.input`/`textarea.input` font-size dinaikkan ke 16px di ke-7 file CSS (guru, student, parent, dudi, stakeholder, superadmin, + admin sekalipun desktop-only — tak merugikan). Hanya baris font-size input yang diubah; `.hint`/label/tombol lain tak disentuh. Terverifikasi visual via preview (input terlihat wajar, tak ada elemen pecah).
 
 ### 🟢 F-3 — Touch target di bawah anjuran *(Audit Mobile)*
 
@@ -503,7 +511,7 @@ manifest      : href 'manifest.json' @ /guru → /manifest.json → 404
 
 Di **GitHub Pages** ini **tertutup** oleh redirect 301 otomatis `/guru` → `/guru/`, jadi produksi saat ini aman. Namun **rapuh**: di host tanpa redirect trailing-slash — termasuk **config `serve` milik repo ini sendiri** (`.claude/launch.json`) — seluruh portal memuat **tanpa CSS + tanpa manifest + module script gagal**. **Rekomendasi:** pakai path root-absolut, `<base href>`, atau jamin trailing-slash. (Runtime testing menangkap ini; pembacaan statik tidak.)
 
-## 🟡 FE-tabel — Tabel responsif menyembunyikan header saja → kolom misalign
+> ✅ **STATUS: FIXED (1 Juli 2026, terverifikasi runtime via preview `serve` tanpa redirect trailing-slash).** Path root-absolut TIDAK dipakai (akan salah di GitHub Pages karena situs ini di subpath `/student-insight-platform/`, bukan domain root). Solusi: script inline 1-baris di awal `<head>` (sebelum `<link>` CSS/manifest) di ke-17 file HTML portal — mendeteksi jika path terakhir URL adalah nama folder portal telanjang (`admin`/`guru`/`student`/`parent`/`dudi`/`stakeholder`/`superadmin` tanpa trailing slash) lalu menyuntik `<base href>` yang benar. Path lain (file seperti `dashboard.html`/`dashboard` clean-URL) sengaja TIDAK disentuh — resolusi relatif default browser sudah benar untuk itu (celah nyatanya cuma pada path folder telanjang). Diverifikasi: login lengkap guru (`/guru` tanpa slash → isi form → submit → `/guru/dashboard`) & siswa (`/student`) render ter-styling penuh via `serve` lokal (yang TIDAK redirect trailing-slash, sehingga sebelumnya pasti gagal).
 
 `student/css/student.css:180` `.table th:nth-child(2){ display:none }` (≤480px) dan `parent/css/parent.css:369` `.data-table th:nth-child(4){ display:none }` menyembunyikan **sel header** tetapi **tak ada aturan `td` pasangannya**. Akibat: baris header kehilangan satu sel sementara baris data tetap lengkap → **kolom bergeser/misalign**, dan data (Mata Pelajaran di siswa / Guru di ortu) tetap tampil **tanpa header**. Melanggar Responsive **#6** ("jangan potong data penting" + tabel tetap usable). **Rekomendasi:** sembunyikan `th`+`td` berpasangan, atau pakai card-layout di mobile. (Keyakinan tinggi dari CSS; render runtime terhalang butuh login.)
 

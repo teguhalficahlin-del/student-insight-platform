@@ -12,11 +12,11 @@
     --color-primary:      #0d9488;
     --color-primary-dark: #0f766e;
     --color-primary-bg:   #f0fdfa;
-    --color-success:      #16a34a;
+    --color-success:      #15803d;
     --color-success-bg:   #ecfdf3;
     --color-danger:       #dc2626;
     --color-danger-bg:    #fef2f2;
-    --color-warning:      #d97706;
+    --color-warning:      #b45309;
     --color-warning-bg:   #fffbeb;
 
     --radius:    8px;
@@ -53,7 +53,7 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .field { margin-bottom: 18px; }
 .input, select.input, textarea.input {
     width: 100%; padding: 10px 12px; border: 1px solid var(--color-border);
-    border-radius: var(--radius); font-size: 14px; font-family: inherit;
+    border-radius: var(--radius); font-size: 16px; font-family: inherit;
     background: var(--color-surface); color: var(--color-text); outline: none;
     transition: border-color .15s;
 }

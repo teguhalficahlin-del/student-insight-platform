@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Guru — SMK Harapan Rokan</title>
+<script>(function(){var last=location.pathname.split("/").filter(Boolean).pop();if(["admin","guru","student","parent","dudi","stakeholder","superadmin"].indexOf(last)>-1){var b=document.createElement("base");b.href=location.pathname+"/";document.head.appendChild(b);}})();</script>
     <link rel="stylesheet" href="css/guru.css">
   <link rel="manifest" href="manifest.json">
 </head>
@@ -206,7 +207,7 @@
             <div class="section-card">
                 <h3>Mitra DUDI</h3>
                 <div class="table-wrapper">
-                    <table class="table"><thead><tr><th>Nama Usaha</th><th>Penanggung Jawab</th><th>Login</th></tr></thead>
+                    <table class="table"><thead><tr><th>Nama Usaha</th><th>Penanggung Jawab</th></tr></thead>
                     <tbody id="kp-dudi-body"></tbody></table>
                 </div>
                 <p class="hint" id="kp-dudi-empty" style="display:none">Belum ada mitra DUDI terdaftar untuk program ini.</p>
@@ -228,8 +229,36 @@
     <div class="tab-panel" id="tab-waka_kesiswaan">
         <div class="page-body">
             <div class="section-card">
-                <h3>Dashboard Waka Kesiswaan</h3>
-                <p class="hint">Fitur dalam pengembangan. Akan menampilkan kehadiran siswa per kelas, observasi, dan kasus.</p>
+                <h3>Kehadiran Per Kelas</h3>
+                <div class="date-row" style="margin-bottom:12px">
+                    <label>Tanggal:</label>
+                    <input type="date" id="wk-att-date" class="input" style="width:auto">
+                    <button class="btn btn-secondary btn-sm" id="wk-att-filter-btn">Filter</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="table" id="wk-att-table">
+                        <thead><tr><th>Kelas</th><th>Hadir</th><th>Izin</th><th>Sakit</th><th>Tidak Hadir</th><th>% Hadir</th></tr></thead>
+                        <tbody id="wk-att-body"></tbody>
+                    </table>
+                </div>
+                <p class="hint" id="wk-att-empty" style="display:none">Belum ada data kehadiran pada tanggal ini.</p>
+            </div>
+
+            <div class="section-card">
+                <h3>Observasi Terbaru</h3>
+                <p class="hint" id="wk-obs-hint">Memuat…</p>
+                <div id="wk-obs-list"></div>
+            </div>
+
+            <div class="section-card">
+                <h3>Kasus Terbuka</h3>
+                <div class="table-wrapper">
+                    <table class="table" id="wk-cases-table">
+                        <thead><tr><th>Siswa</th><th>Judul</th><th>Tahap</th><th>Dibuka</th></tr></thead>
+                        <tbody id="wk-cases-body"></tbody>
+                    </table>
+                </div>
+                <p class="hint" id="wk-cases-empty" style="display:none">Tidak ada kasus terbuka.</p>
             </div>
         </div>
     </div>

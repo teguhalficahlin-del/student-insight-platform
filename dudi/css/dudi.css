@@ -13,11 +13,11 @@
     --color-primary:     #b45309;
     --color-primary-dark:#92400e;
     --color-primary-bg:  #fffbeb;
-    --color-success:     #16a34a;
+    --color-success:     #15803d;
     --color-success-bg:  #ecfdf3;
     --color-danger:      #dc2626;
     --color-danger-bg:   #fef2f2;
-    --color-warning:     #d97706;
+    --color-warning:     #b45309;
     --color-warning-bg:  #fffbeb;
 
     --radius:    8px;
@@ -82,7 +82,7 @@ label {
     padding: 10px 12px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
-    font-size: 14px;
+    font-size: 16px;
     background: var(--color-surface);
     color: var(--color-text);
     font-family: var(--font-sans);

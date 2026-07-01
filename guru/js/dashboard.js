@@ -15,6 +15,7 @@ import {
     fetchDudiPartners, fetchPklAttendance, fetchDudiObservations,
     createPlacement, bulkImportPkl,
     getSchoolStats, getAbsentTeachersToday,
+    getAttendanceRecapPerClass, getOpenCases,
     getJournalEntries, insertJournalEntry, deleteJournalEntry,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount } from './offline.js';
@@ -113,7 +114,7 @@ async function loadTabContent(key) {
         case 'wali_kelas':  await initWaliTab(); break;
         case 'bk':          await initBkTab(); break;
         case 'kaprodi':     await initKaprodiTab(); break;
-        case 'waka_kesiswaan': break;  // placeholder
+        case 'waka_kesiswaan': await initWakaKesiswaanTab(); break;
         case 'waka_kurikulum': await initWakaKurTab(); break;
         case 'kepsek':      await initKepsekTab(); break;
         case 'jurnal':      await initJurnalTab(); break;
@@ -547,6 +548,113 @@ async function initBkTab() {
     }
 }
 
+// ─── TAB WAKA KESISWAAN ──────────────────────────────────────
+
+async function initWakaKesiswaanTab() {
+    const today = new Date().toISOString().slice(0, 10);
+    document.getElementById('wk-att-date').value = today;
+    document.getElementById('wk-att-filter-btn').onclick = loadWkAttendanceRecap;
+
+    await Promise.all([
+        loadWkAttendanceRecap(),
+        loadWkObservations(),
+        loadWkOpenCases(),
+    ]);
+}
+
+async function loadWkAttendanceRecap() {
+    const date    = document.getElementById('wk-att-date').value;
+    const tbody   = document.getElementById('wk-att-body');
+    const emptyEl = document.getElementById('wk-att-empty');
+    tbody.innerHTML = '<tr><td colspan="6" class="hint">Memuat…</td></tr>';
+    emptyEl.style.display = 'none';
+
+    try {
+        const rows = await getAttendanceRecapPerClass(date);
+        if (rows.length === 0) {
+            tbody.innerHTML = '';
+            emptyEl.style.display = 'block';
+            return;
+        }
+        tbody.innerHTML = rows.map(r => {
+            const pct = r.total > 0 ? Math.round(r.HADIR / r.total * 100) : 0;
+            return `<tr>
+                <td>${esc(r.name)}</td>
+                <td>${r.HADIR}</td>
+                <td>${r.IZIN}</td>
+                <td>${r.SAKIT}</td>
+                <td>${r.TIDAK_HADIR}</td>
+                <td>${r.total > 0 ? pct + '%' : '—'}</td>
+            </tr>`;
+        }).join('');
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(err.message)}</td></tr>`;
+    }
+}
+
+async function loadWkObservations() {
+    const hintEl = document.getElementById('wk-obs-hint');
+    const listEl = document.getElementById('wk-obs-list');
+    hintEl.textContent = 'Memuat…';
+    listEl.innerHTML = '';
+
+    try {
+        const { data, error } = await supabase
+            .from('observations')
+            .select(`observation_id, sentiment, dimension, content, observed_at, created_at,
+                student:students(full_name, nis),
+                author:users!observations_author_user_id_fkey(full_name)`)
+            .order('created_at', { ascending: false })
+            .limit(50);
+        if (error) throw error;
+
+        if (!data?.length) { hintEl.textContent = 'Belum ada observasi.'; return; }
+        hintEl.style.display = 'none';
+        listEl.innerHTML = data.map(r => `
+            <div class="obs-card obs-${(r.sentiment ?? '').toLowerCase()}">
+                <div class="obs-meta">
+                    <strong>${esc(r.student?.full_name ?? '—')}</strong> (${esc(r.student?.nis ?? '—')})
+                    &middot; ${esc(DIMENSION_LABELS[r.dimension] ?? r.dimension)}
+                    &middot; oleh ${esc(r.author?.full_name ?? '—')}
+                    &middot; ${fmt(r.observed_at ?? r.created_at)}
+                </div>
+                <p class="obs-content">${esc(r.content)}</p>
+            </div>`).join('');
+    } catch (err) {
+        hintEl.textContent = `Gagal memuat: ${err.message}`;
+    }
+}
+
+const HANDLER_ROLE_LABELS = {
+    GURU: 'Guru', WALI_KELAS: 'Wali Kelas', BK: 'BK', KAPRODI: 'Kaprodi',
+    KEPSEK: 'Kepala Sekolah', WAKA_KESISWAAN: 'Waka Kesiswaan',
+    WAKA_KURIKULUM: 'Waka Kurikulum', DUDI: 'DUDI',
+};
+
+async function loadWkOpenCases() {
+    const tbody   = document.getElementById('wk-cases-body');
+    const emptyEl = document.getElementById('wk-cases-empty');
+    tbody.innerHTML = '<tr><td colspan="4" class="hint">Memuat…</td></tr>';
+    emptyEl.style.display = 'none';
+
+    try {
+        const rows = await getOpenCases();
+        if (rows.length === 0) {
+            tbody.innerHTML = '';
+            emptyEl.style.display = 'block';
+            return;
+        }
+        tbody.innerHTML = rows.map(c => `<tr>
+            <td>${esc(c.student?.full_name ?? '—')} (${esc(c.student?.nis ?? '—')})</td>
+            <td>${esc(c.title)}</td>
+            <td>${esc(HANDLER_ROLE_LABELS[c.current_handler_role] ?? c.current_handler_role ?? '—')}</td>
+            <td>${fmt(c.created_at)}</td>
+        </tr>`).join('');
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" style="color:var(--color-danger)">${esc(err.message)}</td></tr>`;
+    }
+}
+
 // ─── TAB KAPRODI ─────────────────────────────────────────────
 
 async function initKaprodiTab() {
@@ -608,7 +716,7 @@ function renderKpDudi() {
     if (kpDudiList.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
     tbody.innerHTML = kpDudiList.map(d => `<tr>
-        <td>${esc(d.org_name)}</td><td>${esc(d.pic_name)}</td><td>${esc(d.login)}</td>
+        <td>${esc(d.org_name)}</td><td>${esc(d.pic_name)}</td>
     </tr>`).join('');
 }
 

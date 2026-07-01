@@ -309,12 +309,12 @@ export async function fetchNonPklStudents(programId) {
 export async function fetchDudiPartners(programId) {
     const { data, error } = await supabase
         .from('users')
-        .select('user_id, full_name, dudi_org_name, login_identifier')
+        .select('user_id, full_name, dudi_org_name')
         .eq('role_type', 'DUDI')
         .eq('program_id', programId)
         .order('dudi_org_name');
     if (error) throw error;
-    return (data ?? []).map(u => ({ user_id: u.user_id, org_name: u.dudi_org_name ?? u.full_name, pic_name: u.full_name, login: u.login_identifier }));
+    return (data ?? []).map(u => ({ user_id: u.user_id, org_name: u.dudi_org_name ?? u.full_name, pic_name: u.full_name }));
 }
 
 export async function fetchPklAttendance(studentIds, dateStart, dateEnd) {
@@ -393,6 +393,44 @@ export async function getAbsentTeachersToday() {
         .select('schedule_id, session_start, session_end, scheduled_teacher_id, class:classes(name), teacher:users(full_name)')
         .eq('session_date', today)
         .eq('meeting_status', 'GURU_TIDAK_HADIR');
+    if (error) throw error;
+    return data ?? [];
+}
+
+// ─── WAKA KESISWAAN ─────────────────────────────────────────
+
+export async function getAttendanceRecapPerClass(sessionDate) {
+    const { data, error } = await supabase
+        .from('teaching_schedules')
+        .select('class:classes(class_id, name), attendance!inner(status, is_void)')
+        .eq('session_date', sessionDate)
+        .eq('attendance.is_void', false);
+    if (error) throw error;
+
+    const map = new Map();
+    for (const sched of data ?? []) {
+        const classId = sched.class?.class_id;
+        if (!classId) continue;
+        if (!map.has(classId)) {
+            map.set(classId, { class_id: classId, name: sched.class?.name ?? '—',
+                HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0, EKSKUL: 0, total: 0 });
+        }
+        const agg = map.get(classId);
+        for (const r of sched.attendance ?? []) {
+            if (agg[r.status] !== undefined) agg[r.status]++;
+            agg.total++;
+        }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function getOpenCases() {
+    const { data, error } = await supabase
+        .from('cases')
+        .select('case_id, title, status, track, current_handler_role, created_at, student:students(full_name, nis)')
+        .neq('status', 'CLOSED')
+        .order('created_at', { ascending: false })
+        .limit(100);
     if (error) throw error;
     return data ?? [];
 }
