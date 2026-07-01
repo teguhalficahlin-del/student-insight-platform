@@ -51,6 +51,7 @@ const STEP_NAMES = {
 const state = {
     currentStep:    1,
     completedSteps: new Set(),
+    schoolId:       null,
     data: {
         schoolName:   '',
         address:      '',
@@ -438,13 +439,14 @@ async function saveStep2() {
         .from('academic_periods')
         .upsert(
             {
+                school_id:     state.schoolId,
                 academic_year: academicYear,
                 semester,
                 start_date:    startDate,
                 end_date:      endDate,
                 status:        'ACTIVE',
             },
-            { onConflict: 'academic_year,semester' },
+            { onConflict: 'school_id,academic_year,semester' },
         );
     if (periodErr) throw new Error(periodErr.message);
 
@@ -1802,6 +1804,7 @@ window.addEventListener('beforeunload', (e) => {
 
     const userRow = await getCurrentUserRow();
     if (!requireAdministrativeOrRedirect(userRow)) return;
+    state.schoolId = userRow.school_id;
 
     // Tombol logout di header — di-wire lebih awal agar tetap berfungsi
     // bahkan saat wizard terblokir oleh modal ganti password.
