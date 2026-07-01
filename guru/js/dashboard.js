@@ -447,7 +447,12 @@ async function initObsForm() {
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        if (!hiddenEl.value) { alert('Pilih siswa terlebih dahulu.'); return; }
+        if (!hiddenEl.value) {
+            statusEl.style.display = 'block';
+            statusEl.style.color = 'var(--color-danger)';
+            statusEl.textContent = 'Pilih siswa terlebih dahulu.';
+            return;
+        }
         statusEl.style.display = 'none';
         submitBtn.disabled = true;
         submitBtn.textContent = 'Menyimpan…';
@@ -1286,7 +1291,22 @@ function renderKasusActions(kasus) {
     newCloseBtn.addEventListener('click', async () => {
         const note  = document.getElementById('kasus-status-note').value.trim();
         const msgEl = document.getElementById('kasus-status-msg');
-        if (!confirm('Tutup kasus ini? Kasus yang ditutup tidak bisa dibuka kembali.')) return;
+        // Inline konfirmasi: tanya dulu, baru eksekusi saat klik kedua
+        if (newCloseBtn.dataset.confirming !== 'yes') {
+            newCloseBtn.dataset.confirming = 'yes';
+            msgEl.style.color   = 'var(--color-warning)';
+            msgEl.textContent   = 'Kasus yang ditutup tidak bisa dibuka kembali. Klik "Tutup Kasus" sekali lagi untuk konfirmasi.';
+            newCloseBtn.textContent = 'Konfirmasi Tutup';
+            setTimeout(() => {
+                if (newCloseBtn.dataset.confirming === 'yes') {
+                    newCloseBtn.dataset.confirming = '';
+                    newCloseBtn.textContent = 'Tutup Kasus';
+                    msgEl.textContent = '';
+                }
+            }, 6000);
+            return;
+        }
+        newCloseBtn.dataset.confirming = '';
         newCloseBtn.disabled = true; newCloseBtn.textContent = 'Menutup…';
         try {
             await closeCase({ caseId: kasus.case_id, note, authorUserId: currentUser.user_id, authorRole: currentUser.role_type });
@@ -1382,25 +1402,45 @@ async function loadJurnalList() {
             return;
         }
         listEl.innerHTML = entries.map(e => `
-            <div class="section-card" style="margin-bottom:8px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div class="section-card" style="margin-bottom:8px" data-entry-id="${esc(e.journal_id)}">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
                     <strong>${fmt(e.entry_date)}</strong>
-                    <button class="btn btn-secondary btn-sm" data-delete="${esc(e.journal_id)}">Hapus</button>
+                    <div class="jrn-del-confirm" style="display:none;align-items:center;gap:8px">
+                        <span style="font-size:13px;color:var(--color-text-muted)">Hapus catatan ini?</span>
+                        <button class="btn btn-danger btn-sm jrn-del-yes">Ya, Hapus</button>
+                        <button class="btn btn-secondary btn-sm jrn-del-no">Batal</button>
+                    </div>
+                    <button class="btn btn-secondary btn-sm jrn-del-ask" data-delete="${esc(e.journal_id)}">Hapus</button>
                 </div>
                 <p style="white-space:pre-wrap;margin:0">${esc(e.content)}</p>
+                <p class="jrn-del-err" style="display:none;font-size:13px;color:var(--color-danger);margin:4px 0 0"></p>
             </div>
         `).join('');
 
-        listEl.querySelectorAll('[data-delete]').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!confirm('Hapus catatan ini?')) return;
-                btn.disabled = true;
+        listEl.querySelectorAll('[data-entry-id]').forEach(card => {
+            const askBtn    = card.querySelector('.jrn-del-ask');
+            const confirmEl = card.querySelector('.jrn-del-confirm');
+            const yesBtn    = card.querySelector('.jrn-del-yes');
+            const noBtn     = card.querySelector('.jrn-del-no');
+            const errEl     = card.querySelector('.jrn-del-err');
+
+            askBtn.addEventListener('click', () => {
+                confirmEl.style.display = 'flex';
+                askBtn.style.display    = 'none';
+            });
+            noBtn.addEventListener('click', () => {
+                confirmEl.style.display = 'none';
+                askBtn.style.display    = 'inline-flex';
+            });
+            yesBtn.addEventListener('click', async () => {
+                yesBtn.disabled = true; yesBtn.textContent = 'Menghapus…';
                 try {
-                    await deleteJournalEntry(btn.dataset.delete);
+                    await deleteJournalEntry(askBtn.dataset.delete);
                     await loadJurnalList();
                 } catch (err) {
-                    alert(fe(err, 'h'));
-                    btn.disabled = false;
+                    errEl.textContent = fe(err, 'h');
+                    errEl.style.display = 'block';
+                    yesBtn.disabled = false; yesBtn.textContent = 'Ya, Hapus';
                 }
             });
         });
