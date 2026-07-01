@@ -15,8 +15,10 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 function getSlugFromURL() {
     const param = new URLSearchParams(window.location.search).get('school');
     if (param) return param.toLowerCase().trim();
-    const parts = window.location.hostname.split('.');
-    if (parts.length >= 3) return parts[0].toLowerCase();
+    // Subdomain detection: hanya berlaku untuk custom domain (bukan github.io)
+    const host  = window.location.hostname;
+    const parts = host.split('.');
+    if (parts.length >= 3 && !host.endsWith('.github.io')) return parts[0].toLowerCase();
     return null;
 }
 
