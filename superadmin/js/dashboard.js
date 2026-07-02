@@ -56,10 +56,19 @@ async function loadSchools() {
 
         hintEl.style.display = 'none';
         tableEl.style.display = '';
-        tbody.innerHTML = data.map(s => `<tr>
+        const BASE = location.origin + location.pathname.replace(/superadmin\/$/, '');
+        tbody.innerHTML = data.map(s => {
+            const adminUrl = s.slug ? `${BASE}admin/?school=${esc(s.slug)}` : null;
+            const slugCell = adminUrl
+                ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                     <a href="${adminUrl}" target="_blank" style="font-size:12px;color:var(--color-warning);word-break:break-all">${adminUrl}</a>
+                     <button class="btn btn-sm btn-secondary copy-url-btn" data-url="${adminUrl}" title="Salin link" style="padding:2px 8px;font-size:11px">Salin</button>
+                   </div>`
+                : '—';
+            return `<tr>
             <td>${esc(s.name)}</td>
             <td>${esc(s.npsn)}</td>
-            <td>${s.slug ? `<code style="font-size:12px;color:var(--color-warning)">?school=${esc(s.slug)}</code>` : '—'}</td>
+            <td>${slugCell}</td>
             <td>${s.primary_color ? `<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:3px;background:${esc(s.primary_color)};display:inline-block"></span>${esc(s.primary_color)}</span>` : '—'}</td>
             <td>${esc(s.phone)}</td>
             <td><span class="badge ${s.is_active ? 'badge-active' : 'badge-inactive'}">${s.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
@@ -70,13 +79,23 @@ async function loadSchools() {
                     ${!s.admin_identifier ? 'disabled title="Tidak ada akun admin"' : ''}>
                 Reset Password
             </button></td>
-        </tr>`).join('');
+        </tr>`;
+        }).join('');
 
-        // Event delegation untuk tombol reset password
+        // Event delegation untuk tombol reset password dan salin URL
         tbody.addEventListener('click', e => {
-            const btn = e.target.closest('.reset-pw-btn');
-            if (!btn || btn.disabled) return;
-            openResetModal(btn.dataset.schoolId, btn.dataset.schoolName);
+            const resetBtn = e.target.closest('.reset-pw-btn');
+            if (resetBtn && !resetBtn.disabled) {
+                openResetModal(resetBtn.dataset.schoolId, resetBtn.dataset.schoolName);
+            }
+            const copyBtn = e.target.closest('.copy-url-btn');
+            if (copyBtn) {
+                navigator.clipboard.writeText(copyBtn.dataset.url).then(() => {
+                    const orig = copyBtn.textContent;
+                    copyBtn.textContent = 'Tersalin!';
+                    setTimeout(() => { copyBtn.textContent = orig; }, 1500);
+                });
+            }
         });
     } catch (err) {
         hintEl.textContent = `Gagal memuat: ${err.message}`;
