@@ -4,6 +4,29 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const saKey = sessionStorage.getItem('sa_key');
 if (!saKey) window.location.href = 'index.html';
 
+// ── Tab navigation ────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelector(`.tab-panel[data-panel="${btn.dataset.tab}"]`).classList.add('active');
+    });
+});
+
+// ── Toggle form daftarkan sekolah ─────────────────────────────
+const provisionCard = document.getElementById('provision-card');
+document.getElementById('toggle-provision-btn').addEventListener('click', () => {
+    const open = provisionCard.style.display !== 'none';
+    provisionCard.style.display = open ? 'none' : '';
+    document.getElementById('toggle-provision-btn').textContent = open ? '+ Daftarkan Baru' : '✕ Tutup Form';
+    if (!open) provisionCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+document.getElementById('cancel-provision-btn').addEventListener('click', () => {
+    provisionCard.style.display = 'none';
+    document.getElementById('toggle-provision-btn').textContent = '+ Daftarkan Baru';
+});
+
 // ── Sinkron color picker ↔ hex input ─────────────────────────
 function syncColor(pickerId, hexId) {
     const picker = document.getElementById(pickerId);
@@ -301,15 +324,16 @@ loadSchools();
 // ── Pemeliharaan Sistem (banner global) ──────────────────────
 const maintBtn     = document.getElementById('maint-toggle-btn');
 const maintMsgEl   = document.getElementById('maint-message');
-const maintStatus  = document.getElementById('maint-status');
+const maintBanner  = document.getElementById('maint-status-banner');
 const maintResult  = document.getElementById('maint-result');
 let   maintActive  = false;
 
 function renderMaintState() {
-    maintBtn.textContent = maintActive ? 'Matikan Pemeliharaan' : 'Nyalakan Pemeliharaan';
-    maintBtn.className    = 'btn ' + (maintActive ? 'btn-danger' : 'btn-primary');
-    maintStatus.textContent = maintActive ? '● Banner AKTIF di semua portal' : '○ Banner tidak aktif';
-    maintStatus.style.color = maintActive ? '#b45309' : 'var(--color-text-muted)';
+    maintBtn.textContent = maintActive ? '🔴 Matikan Pemeliharaan' : '🟢 Nyalakan Pemeliharaan';
+    maintBtn.className   = 'btn btn-block ' + (maintActive ? 'btn-danger' : 'btn-primary');
+    maintBanner.style.display = '';
+    maintBanner.className = 'status-banner ' + (maintActive ? 'active' : 'inactive');
+    maintBanner.textContent = maintActive ? '● Banner pemeliharaan AKTIF di semua portal' : '○ Banner tidak aktif';
 }
 
 async function loadMaintenance() {

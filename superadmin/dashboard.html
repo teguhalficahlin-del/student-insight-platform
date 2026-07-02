@@ -10,157 +10,173 @@
 <body>
 
 <header class="app-header">
-    <h2>⚙️ Platform Sekolah — Superadmin</h2>
+    <h2>⚙️ Superadmin</h2>
     <button class="btn btn-danger btn-sm" id="logout-btn">Keluar</button>
 </header>
 
+<!-- Tab nav -->
+<nav class="tab-nav" role="tablist">
+    <button class="tab-btn active" data-tab="schools" role="tab">🏫 Sekolah</button>
+    <button class="tab-btn" data-tab="maintenance" role="tab">🛠 Pemeliharaan</button>
+    <button class="tab-btn" data-tab="storage" role="tab">💾 Storage</button>
+</nav>
+
 <div class="page-body">
 
-    <!-- Pemeliharaan sistem (banner global) -->
-    <div class="section-card">
-        <h3>🛠 Pemeliharaan Sistem</h3>
-        <p class="hint" style="font-size:13px;color:var(--color-text-muted);margin-bottom:12px">
-            Jika dinyalakan, banner pemeliharaan tampil di semua portal (guru, siswa, orang tua, admin, dll).
-            Gunakan saat ada gangguan atau pemeliharaan terjadwal.
-        </p>
-        <div class="field field-full" style="margin-bottom:10px">
-            <label for="maint-message">Pesan banner (opsional)</label>
-            <input type="text" id="maint-message" class="input"
-                   placeholder="Sistem sedang dalam pemeliharaan hingga pukul 22.00 WIB.">
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <button type="button" class="btn btn-primary" id="maint-toggle-btn">Memuat…</button>
-            <span id="maint-status" class="hint" style="font-size:13px"></span>
-        </div>
-        <div id="maint-result" class="alert" style="display:none;margin-top:10px"></div>
-    </div>
+    <!-- ── TAB: Sekolah ─────────────────────────────────────── -->
+    <div class="tab-panel active" data-panel="schools">
 
-    <!-- Monitoring penyimpanan database -->
-    <div class="section-card">
-        <h3>💾 Penyimpanan Database</h3>
-        <p class="hint" style="font-size:13px;color:var(--color-text-muted);margin-bottom:12px">
-            Pantau ukuran database agar tidak mendadak penuh. Batas kuota tergantung paket Supabase
-            (Free ±500 MB, Pro ±8 GB).
-        </p>
-        <div id="storage-summary" class="hint" style="font-size:14px;margin-bottom:12px">Memuat…</div>
-        <div class="table-wrapper">
-            <table class="table" id="storage-table" style="display:none;font-size:13px">
-                <thead><tr><th>Tabel</th><th style="text-align:right">Ukuran</th><th style="text-align:right">± Baris</th></tr></thead>
-                <tbody id="storage-body"></tbody>
-            </table>
+        <!-- Daftar sekolah -->
+        <div class="section-card">
+            <div class="section-header">
+                <h3>Sekolah Terdaftar</h3>
+                <button class="btn btn-primary btn-sm" id="toggle-provision-btn">+ Daftarkan Baru</button>
+            </div>
+            <p id="schools-hint" class="hint">Memuat…</p>
+            <div class="table-wrapper">
+                <table class="table schools-table" id="schools-table" style="display:none">
+                    <thead>
+                        <tr>
+                            <th>Nama Sekolah</th>
+                            <th class="col-hide-mobile">NPSN</th>
+                            <th>Link Login Admin</th>
+                            <th class="col-hide-mobile">Warna</th>
+                            <th class="col-hide-mobile">Telepon</th>
+                            <th>Status</th>
+                            <th class="col-hide-mobile">Terdaftar</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="schools-body"></tbody>
+                </table>
+            </div>
         </div>
-    </div>
 
-    <!-- Form daftar sekolah baru -->
-    <div class="section-card">
-        <h3>Daftarkan Sekolah Baru</h3>
-        <form id="provision-form" class="form-grid">
-            <div class="field field-full">
-                <label>Nama Sekolah *</label>
-                <input type="text" id="f-school-name" class="input" placeholder="SMK Contoh Sejahtera" required>
-            </div>
-            <div class="field">
-                <label>NPSN</label>
-                <input type="text" id="f-npsn" class="input" placeholder="12345678">
-            </div>
-            <div class="field">
-                <label>Telepon</label>
-                <input type="text" id="f-phone" class="input" placeholder="0812xxxxxxxx">
-            </div>
-            <div class="field field-full">
-                <label>Alamat</label>
-                <input type="text" id="f-address" class="input" placeholder="Jl. Pendidikan No. 1, Kota...">
-            </div>
-            <div class="field">
-                <label>Nama Admin IT *</label>
-                <input type="text" id="f-admin-name" class="input" placeholder="Budi Santoso" required>
-            </div>
-            <div class="field">
-                <label>NIP / NIK Admin IT *</label>
-                <input type="text" id="f-admin-id" class="input" placeholder="197801012005011001" required>
-            </div>
-            <div class="field field-full" style="border-top:1px solid var(--color-border);padding-top:16px;margin-top:4px">
-                <label style="color:var(--color-primary);font-size:12px;letter-spacing:.05em;text-transform:uppercase">Branding Sekolah</label>
-            </div>
-            <div class="field field-full">
-                <label>Slug URL <span style="font-weight:400;color:var(--color-text-muted)">(contoh: smkhr → ?school=smkhr)</span></label>
-                <input type="text" id="f-slug" class="input" placeholder="smkhr" pattern="[a-z0-9\-]+" title="Huruf kecil, angka, dan tanda hubung saja">
-            </div>
-            <div class="field field-full">
-                <label>URL Logo <span style="font-weight:400;color:var(--color-text-muted)">(opsional, https://...)</span></label>
-                <input type="url" id="f-logo-url" class="input" placeholder="https://...">
-            </div>
-            <div class="field">
-                <label>Warna Primer</label>
-                <div style="display:flex;gap:8px;align-items:center">
-                    <input type="color" id="f-primary-color" value="#1a56db" style="width:48px;height:38px;padding:2px;border:1px solid var(--color-border);border-radius:var(--radius);background:var(--color-bg);cursor:pointer">
-                    <input type="text" id="f-primary-color-hex" class="input" value="#1a56db" placeholder="#1a56db" style="flex:1;font-family:monospace">
+        <!-- Form daftarkan sekolah baru (collapsed by default) -->
+        <div class="section-card collapsible-card" id="provision-card" style="display:none">
+            <h3>Daftarkan Sekolah Baru</h3>
+            <form id="provision-form" class="form-grid">
+                <div class="field field-full">
+                    <label>Nama Sekolah *</label>
+                    <input type="text" id="f-school-name" class="input" placeholder="SMK Contoh Sejahtera" required>
                 </div>
-            </div>
-            <div class="field">
-                <label>Warna Sekunder <span style="font-weight:400;color:var(--color-text-muted)">(hover/dark)</span></label>
-                <div style="display:flex;gap:8px;align-items:center">
-                    <input type="color" id="f-secondary-color" value="#1e40af" style="width:48px;height:38px;padding:2px;border:1px solid var(--color-border);border-radius:var(--radius);background:var(--color-bg);cursor:pointer">
-                    <input type="text" id="f-secondary-color-hex" class="input" value="#1e40af" placeholder="#1e40af" style="flex:1;font-family:monospace">
+                <div class="field">
+                    <label>NPSN</label>
+                    <input type="text" id="f-npsn" class="input" placeholder="12345678">
                 </div>
+                <div class="field">
+                    <label>Telepon</label>
+                    <input type="text" id="f-phone" class="input" placeholder="0812xxxxxxxx">
+                </div>
+                <div class="field field-full">
+                    <label>Alamat</label>
+                    <input type="text" id="f-address" class="input" placeholder="Jl. Pendidikan No. 1, Kota...">
+                </div>
+                <div class="field">
+                    <label>Nama Admin IT *</label>
+                    <input type="text" id="f-admin-name" class="input" placeholder="Budi Santoso" required>
+                </div>
+                <div class="field">
+                    <label>NIP / NIK Admin IT *</label>
+                    <input type="text" id="f-admin-id" class="input" placeholder="197801012005011001" required>
+                </div>
+
+                <div class="field field-full field-divider">
+                    <span class="field-section-label">Branding Sekolah</span>
+                </div>
+                <div class="field field-full">
+                    <label>Slug URL <span class="label-note">(contoh: smkhr → ?school=smkhr)</span></label>
+                    <input type="text" id="f-slug" class="input" placeholder="smkhr" pattern="[a-z0-9\-]+" title="Huruf kecil, angka, dan tanda hubung saja">
+                </div>
+                <div class="field field-full">
+                    <label>URL Logo <span class="label-note">(opsional)</span></label>
+                    <input type="url" id="f-logo-url" class="input" placeholder="https://...">
+                </div>
+                <div class="field">
+                    <label>Warna Primer</label>
+                    <div class="color-row">
+                        <input type="color" id="f-primary-color" value="#1a56db" class="color-picker">
+                        <input type="text" id="f-primary-color-hex" class="input" value="#1a56db" placeholder="#1a56db">
+                    </div>
+                </div>
+                <div class="field">
+                    <label>Warna Sekunder</label>
+                    <div class="color-row">
+                        <input type="color" id="f-secondary-color" value="#1e40af" class="color-picker">
+                        <input type="text" id="f-secondary-color-hex" class="input" value="#1e40af" placeholder="#1e40af">
+                    </div>
+                </div>
+                <div class="field field-full form-actions">
+                    <button type="submit" class="btn btn-primary" id="provision-btn">Daftarkan Sekolah</button>
+                    <button type="button" class="btn btn-ghost" id="cancel-provision-btn">Batal</button>
+                </div>
+            </form>
+            <div id="provision-result" class="alert" style="display:none"></div>
+            <div id="cred-box" class="cred-box" style="display:none">
+                <span class="cred-label">Nama Sekolah</span>
+                <span class="cred-value" id="cred-school"></span>
+                <span class="cred-label">Login Admin (NIP/NIK)</span>
+                <span class="cred-value" id="cred-identifier"></span>
+                <span class="cred-label">Password Sementara</span>
+                <span class="cred-value" id="cred-password"></span>
+                <small class="cred-warn">⚠️ Simpan password ini sekarang — tidak bisa dilihat lagi setelah halaman ditutup.</small>
             </div>
-            <div class="field field-full" style="margin-top:4px">
-                <button type="submit" class="btn btn-primary" id="provision-btn">Daftarkan Sekolah</button>
+        </div>
+
+    </div><!-- /tab schools -->
+
+    <!-- ── TAB: Pemeliharaan ────────────────────────────────── -->
+    <div class="tab-panel" data-panel="maintenance">
+        <div class="section-card">
+            <h3>🛠 Pemeliharaan Sistem</h3>
+            <p class="hint-sm">Banner tampil di semua portal saat dinyalakan. Gunakan saat ada gangguan atau pemeliharaan terjadwal.</p>
+
+            <div id="maint-status-banner" class="status-banner" style="display:none"></div>
+
+            <div class="field" style="margin-top:16px">
+                <label for="maint-message">Pesan banner <span class="label-note">(opsional)</span></label>
+                <input type="text" id="maint-message" class="input"
+                       placeholder="Sistem sedang dalam pemeliharaan hingga pukul 22.00 WIB.">
             </div>
-        </form>
-
-        <!-- Hasil kredensial -->
-        <div id="provision-result" class="alert" style="display:none"></div>
-        <div id="cred-box" class="cred-box" style="display:none">
-            <span class="cred-label">Nama Sekolah</span>
-            <span class="cred-value" id="cred-school"></span>
-            <br><br>
-            <span class="cred-label">Login Admin (NIP/NIK)</span>
-            <span class="cred-value" id="cred-identifier"></span>
-            <br><br>
-            <span class="cred-label">Password Sementara</span>
-            <span class="cred-value" id="cred-password"></span>
-            <br><br>
-            <small style="color:var(--color-text-muted)">⚠️ Simpan password ini sekarang — tidak bisa dilihat lagi setelah halaman ditutup.</small>
+            <button type="button" class="btn btn-block" id="maint-toggle-btn">Memuat…</button>
+            <div id="maint-result" class="alert" style="display:none;margin-top:12px"></div>
         </div>
-    </div>
+    </div><!-- /tab maintenance -->
 
-    <!-- Daftar sekolah terdaftar -->
-    <div class="section-card">
-        <h3>Sekolah Terdaftar</h3>
-        <p id="schools-hint" class="hint" style="font-size:13px;color:var(--color-text-muted)">Memuat…</p>
-        <div class="table-wrapper">
-        <table class="table schools-table" id="schools-table" style="display:none">
-            <thead>
-                <tr>
-                    <th>Nama Sekolah</th>
-                    <th class="col-hide-mobile">NPSN</th>
-                    <th>Link Login Admin</th>
-                    <th class="col-hide-mobile">Warna</th>
-                    <th class="col-hide-mobile">Telepon</th>
-                    <th>Status</th>
-                    <th class="col-hide-mobile">Terdaftar</th>
-                    <th>Aksi</th>
-                </tr>
-            </thead>
-            <tbody id="schools-body"></tbody>
-        </table>
+    <!-- ── TAB: Storage ─────────────────────────────────────── -->
+    <div class="tab-panel" data-panel="storage">
+        <div class="section-card">
+            <h3>💾 Penyimpanan Database</h3>
+            <p class="hint-sm">Batas kuota Supabase: Free ±500 MB, Pro ±8 GB.</p>
+            <div id="storage-summary" class="storage-summary">Memuat…</div>
+            <div class="table-wrapper" style="margin-top:12px">
+                <table class="table" id="storage-table" style="display:none;font-size:13px">
+                    <thead>
+                        <tr>
+                            <th>Tabel</th>
+                            <th style="text-align:right">Ukuran</th>
+                            <th style="text-align:right">± Baris</th>
+                        </tr>
+                    </thead>
+                    <tbody id="storage-body"></tbody>
+                </table>
+            </div>
         </div>
-    </div>
+    </div><!-- /tab storage -->
 
-</div>
+</div><!-- /page-body -->
 
 <!-- Modal reset password admin sekolah -->
-<div id="reset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
-    <div style="background:var(--color-card);border-radius:var(--radius-lg);padding:28px 32px;width:100%;max-width:440px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+<div id="reset-modal" class="modal-overlay" style="display:none">
+    <div class="modal-box">
         <h3 style="margin:0 0 4px">Reset Password Admin</h3>
-        <p id="reset-modal-school" style="margin:0 0 20px;font-size:13px;color:var(--color-text-muted)"></p>
+        <p id="reset-modal-school" class="modal-subtitle"></p>
 
         <div id="reset-confirm-view">
-            <p style="margin:0 0 20px;font-size:14px">Password lama akan diganti dengan password acak baru. Admin wajib mengganti password saat login berikutnya.</p>
-            <div style="display:flex;gap:10px">
+            <p style="font-size:14px;margin:0 0 20px;color:var(--color-text-muted)">Password lama diganti dengan password acak baru. Admin wajib mengganti password saat login berikutnya.</p>
+            <div class="modal-actions">
                 <button class="btn btn-danger" id="reset-confirm-btn">Ya, Reset Sekarang</button>
-                <button class="btn btn-secondary" id="reset-cancel-btn">Batal</button>
+                <button class="btn btn-ghost" id="reset-cancel-btn">Batal</button>
             </div>
         </div>
 
@@ -168,13 +184,11 @@
             <div class="cred-box">
                 <span class="cred-label">Admin (NIP/NIK)</span>
                 <span class="cred-value" id="reset-cred-identifier"></span>
-                <br><br>
                 <span class="cred-label">Password Baru</span>
                 <span class="cred-value" id="reset-cred-password"></span>
-                <br><br>
-                <small style="color:var(--color-text-muted)">⚠️ Simpan password ini sekarang — tidak bisa dilihat lagi setelah ditutup.</small>
+                <small class="cred-warn">⚠️ Simpan password ini sekarang — tidak bisa dilihat lagi setelah ditutup.</small>
             </div>
-            <button class="btn btn-primary" id="reset-close-btn" style="margin-top:16px;width:100%">Tutup</button>
+            <button class="btn btn-primary btn-block" id="reset-close-btn" style="margin-top:16px">Tutup</button>
         </div>
 
         <p id="reset-error" style="display:none;color:var(--color-danger);margin-top:12px;font-size:13px"></p>
