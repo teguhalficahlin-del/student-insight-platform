@@ -10,6 +10,10 @@ import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, lo
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
+function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 const panelContent = document.getElementById('panel-content');
 
 const PANEL_RENDERERS = {
