@@ -66,6 +66,7 @@ function markKasusAsSeen() {
 let currentUser  = null;
 let config       = null;   // { current_academic_year, current_semester }
 let jabatan      = [];
+let isTeacher    = false;  // hanya GURU & WALI_KELAS yang mengajar
 let myStudents   = [];     // for observation selector
 let kpStudents   = [];     // kaprodi PKL students
 let kpDudiList   = [];
@@ -126,15 +127,14 @@ async function init() {
     applyBrandingById(currentUser.school_id, supabase);
     initIdleTimeout({ onIdle: async () => { await logout(); window.location.href = 'index.html'; } });
     config  = await getSchoolConfig();
-    jabatan = getJabatan(currentUser);
+    jabatan   = getJabatan(currentUser);
+    isTeacher = ['GURU', 'WALI_KELAS'].includes(currentUser.role_type);
 
     // Header
     document.getElementById('hdr-name').textContent = currentUser.full_name;
-    const NON_GURU_ROLES = new Set(['KEPSEK', 'WAKA_KESISWAAN', 'WAKA_KURIKULUM']);
-    const isGuruBiasa = !NON_GURU_ROLES.has(currentUser.role_type);
     const roleLabel = jabatan.length
-        ? (isGuruBiasa ? 'Guru' : '') +
-          (isGuruBiasa && jabatan.length ? ' · ' : '') +
+        ? (isTeacher ? 'Guru' : '') +
+          (isTeacher && jabatan.length ? ' · ' : '') +
           jabatan.map(jabatanLabel).join(' · ')
         : 'Guru';
     document.getElementById('hdr-role').textContent = roleLabel;
@@ -143,8 +143,9 @@ async function init() {
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display     = 'block';
 
-    activateTab('guru');
-    await initGuruTab();
+    const defaultTab = isTeacher ? 'guru' : (jabatan[0] ?? 'kasus');
+    activateTab(defaultTab);
+    if (isTeacher) await initGuruTab();
 
     // Offline sync: tampilkan status + kirim absensi tertunda.
     await updateSyncBanner();
@@ -166,10 +167,11 @@ const TAB_SHORT = {
 function buildTabs() {
     const nav    = document.getElementById('tab-nav');
     const botNav = document.getElementById('bottom-nav');
-    const tabs = [{ key: 'guru', label: 'Dashboard Guru' }];
+    const tabs = [];
+    if (isTeacher) tabs.push({ key: 'guru', label: 'Dashboard Guru' });
     jabatan.forEach(j => tabs.push({ key: j, label: jabatanLabel(j) }));
     tabs.push({ key: 'kasus', label: 'Kasus' });
-    tabs.push({ key: 'jurnal', label: 'Jurnal Mengajar' });
+    if (isTeacher) tabs.push({ key: 'jurnal', label: 'Jurnal Mengajar' });
 
     nav.innerHTML = tabs.map(t =>
         `<button class="tab-btn" data-tab="${t.key}">${esc(t.label)}</button>`
