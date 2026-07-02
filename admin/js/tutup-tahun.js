@@ -363,6 +363,8 @@ async function fetchPromotableClasses(config) {
         .select('class_id, name, grade_level')
         .eq('academic_year', nextAcademicYear);
     if (nextErr) throw nextErr;
+    console.log('[debug] nextAcademicYear:', nextAcademicYear);
+    console.log('[debug] nextClasses:', nextClasses);
 
     // Map nama kelas tujuan → { class_id, grade_level } (untuk validasi
     // dan pengelompokan per tingkat tanpa query tambahan per kelas)
