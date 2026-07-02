@@ -395,9 +395,10 @@ export async function getSchoolStats(academicYear, semester) {
 }
 
 export async function getKepsekMonitoring(period = 'hari_ini', academicYear = null) {
-    const params = { p_period: period };
-    if (academicYear) params.p_academic_year = academicYear;
-    const { data, error } = await supabase.rpc('fn_kepsek_monitoring', params);
+    const { data, error } = await supabase.rpc('fn_kepsek_monitoring', {
+        p_period: period,
+        p_academic_year: academicYear,
+    });
     if (error) throw error;
     return data;
 }
