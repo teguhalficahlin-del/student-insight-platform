@@ -244,11 +244,22 @@ function setupStep2() {
         }).join('');
     }
 
+    // Deteksi kelulusan sudah dilakukan sebelumnya (mis. setelah hard reload)
+    const alreadyGraduated = students.length > 0 && students.every(s => s.student_status === 'LULUS');
+    if (alreadyGraduated) state.graduationDone = true;
+
     document.querySelectorAll('.grad-checkbox').forEach(cb => cb.addEventListener('change', updateGraduationPreview));
     updateGraduationPreview();
 
-    document.getElementById('confirm-graduation-btn').disabled = state.graduationDone;
-    document.getElementById('confirm-graduation-btn').onclick = onConfirmGraduation;
+    const confirmBtn = document.getElementById('confirm-graduation-btn');
+    if (state.graduationDone) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Kelulusan Terkonfirmasi';
+    } else {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Konfirmasi Kelulusan';
+        confirmBtn.onclick = onConfirmGraduation;
+    }
 }
 
 function updateGraduationPreview() {
