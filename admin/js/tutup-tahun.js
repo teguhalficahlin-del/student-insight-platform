@@ -252,10 +252,29 @@ function setupStep2() {
 }
 
 function updateGraduationPreview() {
-    const total   = state.gradeXIIStudents.length;
-    const checked = document.querySelectorAll('.grad-checkbox:checked').length;
-    document.getElementById('graduation-preview').textContent =
-        `${checked} siswa akan diluluskan, ${total - checked} tidak diluluskan`;
+    const total      = state.gradeXIIStudents.length;
+    const checkedEls = [...document.querySelectorAll('.grad-checkbox:checked')];
+    const checked    = checkedEls.length;
+    const notChecked = total - checked;
+
+    // Hitung per program dari checkbox yang tercentang
+    const byProgram = new Map();
+    for (const cb of checkedEls) {
+        const s = state.gradeXIIStudents.find(x => x.student_id === cb.dataset.studentId);
+        if (!s) continue;
+        byProgram.set(s.programName, (byProgram.get(s.programName) ?? 0) + 1);
+    }
+    const programRows = [...byProgram.entries()]
+        .sort(([a], [b]) => a.localeCompare(b, 'id'))
+        .map(([prog, n]) => `<li>${prog}: <strong>${n} siswa</strong></li>`)
+        .join('');
+
+    document.getElementById('graduation-preview').innerHTML = `
+        <div class="alert alert-warning" style="display:block;margin-top:16px">
+            <strong>⚠️ Periksa sebelum konfirmasi — tindakan ini tidak dapat dibatalkan.</strong><br>
+            Akan diluluskan: <strong>${checked} siswa</strong>${notChecked > 0 ? `, tidak diluluskan: <strong>${notChecked} siswa</strong>` : ''}.
+            <ul style="margin:8px 0 0 16px;padding:0">${programRows}</ul>
+        </div>`;
 }
 
 async function onConfirmGraduation() {
@@ -263,7 +282,7 @@ async function onConfirmGraduation() {
     const resultArea = document.getElementById('graduation-result');
     const checkedIds = [...document.querySelectorAll('.grad-checkbox:checked')].map(cb => cb.dataset.studentId);
 
-    if (!window.confirm(`Luluskan ${checkedIds.length} siswa? Tindakan ini tidak dapat dibatalkan.`)) return;
+    if (!window.confirm(`Luluskan ${checkedIds.length} siswa?\n\nPastikan jumlah sudah benar. Tindakan ini TIDAK DAPAT DIBATALKAN.`)) return;
 
     btn.disabled = true;
     btn.textContent = 'Memproses...';
