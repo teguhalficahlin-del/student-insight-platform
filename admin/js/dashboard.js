@@ -7,7 +7,7 @@
 
 import { applyBrandingById } from '../../shared/branding.js';
 import { initIdleTimeout } from '../../shared/idle-timeout.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -628,7 +628,7 @@ async function renderParentsPanel() {
 async function renderAlumniPanel() {
     // ── Siswa alumni ──
     const siswaRaw = await fetchAllRows('students',
-        q => q.select(`full_name, nis, graduated_academic_year,
+        q => q.select(`student_id, full_name, nis, graduated_academic_year,
             program:programs ( name ),
             enrollment:class_enrollments ( academic_year, class:classes ( name ) )
         `).eq('student_status', 'LULUS').order('full_name'));
@@ -670,20 +670,100 @@ async function renderAlumniPanel() {
         });
     }
 
-    const siswaHtml = renderNestedYearProgramClass(siswaRows, ['Nama', 'NIS'],
-        s => `<tr><td>${s.full_name}</td><td>${s.nis}</td></tr>`);
+    const siswaHtml = renderNestedYearProgramClass(siswaRows, ['Nama', 'NIS', 'Dokumen'],
+        s => `<tr><td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td>
+            <td><button class="btn btn-sm alumni-recap-btn" data-student-id="${s.student_id}" data-name="${esc(s.full_name)}"
+                style="font-size:11px;padding:3px 8px">Cetak Rekap</button></td></tr>`);
     const ortuHtml = renderNestedYearProgramClass(ortuRows, ['Nama', 'NIK'],
-        u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td></tr>`);
+        u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td></tr>`);
 
     panelContent.innerHTML = `
         <h3>Siswa Alumni (${siswaRows.length})</h3>
-        <p class="hint" style="margin-bottom:12px">Dikelompokkan per tahun lulus → program keahlian → kelas.</p>
+        <p class="hint" style="margin-bottom:12px">Dikelompokkan per tahun lulus → program keahlian → kelas. Tombol <strong>Cetak Rekap</strong> membuat surat keterangan rekap (kehadiran, catatan, PKL) untuk alumnus.</p>
         ${siswaHtml}
         <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
         <h3>Orang Tua Alumni (${ortuRows.length})</h3>
         <p class="hint" style="margin-bottom:12px">Mengikuti tahun lulus, program, dan kelas anak alumninya.</p>
         ${ortuHtml}
     `;
+
+    panelContent.querySelectorAll('.alumni-recap-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            btn.disabled = true; btn.textContent = 'Memuat…';
+            try {
+                await printAlumniRecap(btn.dataset.studentId);
+            } catch (err) {
+                alert(`Gagal membuat rekap: ${err.message}`);
+            } finally {
+                btn.disabled = false; btn.textContent = 'Cetak Rekap';
+            }
+        });
+    });
+}
+
+// Buka jendela cetak berisi surat keterangan rekap alumnus (10.2/10.3).
+async function printAlumniRecap(studentId) {
+    const recap = await getAlumniRecap(studentId);
+    const s = recap.student;
+    const schoolName = document.getElementById('dashboard-school-name')?.textContent?.trim() || 'Sekolah';
+    const kelas = alumniClassName(s.enrollment, s.graduated_academic_year);
+    const ATT_LABEL = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Tidak Hadir', EKSKUL:'Ekskul' };
+    const totalAtt = Object.values(recap.attendance).reduce((a, b) => a + b, 0);
+    const hadir = recap.attendance.HADIR ?? 0;
+    const pctHadir = totalAtt ? Math.round((hadir / totalAtt) * 100) : null;
+
+    const attRows = Object.keys(ATT_LABEL)
+        .filter(k => recap.attendance[k])
+        .map(k => `<tr><td>${ATT_LABEL[k]}</td><td style="text-align:right">${recap.attendance[k]}</td></tr>`).join('')
+        || '<tr><td colspan="2">Tidak ada data kehadiran.</td></tr>';
+
+    const pklRows = recap.pkl.length
+        ? recap.pkl.map(p => `<tr><td>${esc(p.org)}</td><td>${p.start_date ?? '—'} s.d. ${p.end_date ?? '—'}</td>
+            <td>${p.completed ? '✔ Selesai' : 'Berjalan / belum selesai'}</td></tr>`).join('')
+        : '<tr><td colspan="3">Tidak ada data PKL.</td></tr>';
+
+    const today = new Date().toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' });
+    const html = `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">
+        <title>Rekap Alumnus — ${esc(s.full_name)}</title>
+        <style>
+            body{font-family:Arial,Helvetica,sans-serif;color:#111;max-width:720px;margin:32px auto;padding:0 24px;line-height:1.5}
+            h1{font-size:20px;text-align:center;margin:0}
+            h2{font-size:15px;border-bottom:2px solid #333;padding-bottom:4px;margin-top:28px}
+            .sub{text-align:center;color:#555;margin:4px 0 0}
+            table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}
+            th,td{border:1px solid #ccc;padding:6px 10px;text-align:left}
+            th{background:#f3f4f6}
+            .id-tbl td{border:none;padding:2px 8px}
+            .foot{margin-top:40px;font-size:13px}
+            @media print{button{display:none}}
+        </style></head><body>
+        <h1>${esc(schoolName)}</h1>
+        <p class="sub">Rekap / Surat Keterangan Alumnus</p>
+        <h2>Data Alumnus</h2>
+        <table class="id-tbl">
+            <tr><td style="width:180px">Nama</td><td>: <strong>${esc(s.full_name)}</strong></td></tr>
+            <tr><td>NIS</td><td>: ${esc(s.nis ?? '—')}</td></tr>
+            <tr><td>Program Keahlian</td><td>: ${esc(s.program?.name ?? '—')}</td></tr>
+            <tr><td>Kelas Terakhir</td><td>: ${esc(kelas)}</td></tr>
+            <tr><td>Tahun Lulus</td><td>: ${esc(s.graduated_academic_year ?? '—')}</td></tr>
+        </table>
+        <h2>Rekap Kehadiran</h2>
+        <table><thead><tr><th>Status</th><th style="text-align:right">Jumlah</th></tr></thead>
+            <tbody>${attRows}</tbody></table>
+        ${pctHadir !== null ? `<p style="font-size:13px;margin-top:6px">Persentase kehadiran: <strong>${pctHadir}%</strong> (${hadir} dari ${totalAtt} sesi tercatat)</p>` : ''}
+        <h2>Catatan Pembinaan</h2>
+        <p style="font-size:13px">Catatan positif/prestasi: <strong>${recap.obsPositif}</strong> · Catatan perhatian: <strong>${recap.obsPerhatian}</strong></p>
+        <h2>Praktik Kerja Lapangan (PKL)</h2>
+        <table><thead><tr><th>Tempat (DUDI)</th><th>Periode</th><th>Status</th></tr></thead>
+            <tbody>${pklRows}</tbody></table>
+        <p class="foot">Dokumen ini dicetak dari sistem pada ${today}.</p>
+        <div style="text-align:center;margin-top:24px"><button onclick="window.print()">Cetak</button></div>
+        </body></html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) throw new Error('Popup diblokir browser. Izinkan popup lalu coba lagi.');
+    w.document.write(html);
+    w.document.close();
 }
 
 async function renderDudiPanel() {

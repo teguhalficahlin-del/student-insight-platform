@@ -66,6 +66,56 @@ export async function logout() {
 }
 
 /**
+ * Rekap lengkap seorang alumnus untuk dokumen/surat keterangan (10.2/10.3):
+ * identitas, rekap kehadiran (per status), rekap observasi (positif/perhatian),
+ * dan riwayat PKL. Semua mengecualikan entri yang di-void.
+ */
+export async function getAlumniRecap(studentId) {
+    const [stuRes, attRes, obsRes, pklRes] = await Promise.all([
+        supabase.from('students')
+            .select(`full_name, nis, graduated_academic_year, graduated_at, student_status,
+                program:programs ( name ),
+                enrollment:class_enrollments ( academic_year, class:classes ( name ) )`)
+            .eq('student_id', studentId).maybeSingle(),
+        supabase.from('attendance').select('status').eq('student_id', studentId).eq('is_void', false),
+        supabase.from('observations').select('sentiment').eq('student_id', studentId).eq('is_void', false),
+        supabase.from('pkl_placements')
+            .select('start_date, end_date, is_active, dudi_user_id')
+            .eq('student_id', studentId).order('start_date', { ascending: false }),
+    ]);
+
+    if (stuRes.error) throw stuRes.error;
+    const student = stuRes.data;
+    if (!student) throw new Error('Data siswa tidak ditemukan.');
+
+    const attendance = {};
+    for (const r of (attRes.data ?? [])) attendance[r.status] = (attendance[r.status] ?? 0) + 1;
+
+    let obsPositif = 0, obsPerhatian = 0;
+    for (const o of (obsRes.data ?? [])) {
+        if (o.sentiment === 'POSITIF') obsPositif++; else obsPerhatian++;
+    }
+
+    // Nama DUDI untuk tiap penempatan PKL (lookup terpisah agar tak bergantung nama FK)
+    const placements = pklRes.data ?? [];
+    const dudiIds = [...new Set(placements.map(p => p.dudi_user_id).filter(Boolean))];
+    const dudiNames = {};
+    if (dudiIds.length) {
+        const { data: dudis } = await supabase.from('users')
+            .select('user_id, full_name, dudi_org_name').in('user_id', dudiIds);
+        for (const d of (dudis ?? [])) dudiNames[d.user_id] = d.dudi_org_name || d.full_name;
+    }
+    const pkl = placements.map(p => ({
+        org:       dudiNames[p.dudi_user_id] ?? '—',
+        start_date: p.start_date,
+        end_date:   p.end_date,
+        completed:  !p.is_active && !!p.end_date,
+    }));
+
+    return { student, attendance, obsPositif, obsPerhatian, pkl };
+}
+
+/**
  * Batalkan (void) sebuah observasi yang salah — soft-delete.
  * Baris tetap tersimpan untuk audit; disembunyikan dari siswa/ortu/DUDI
  * lewat RLS. Hanya ADMINISTRATIVE/KEPSEK yang diizinkan (RLS + di sini).
