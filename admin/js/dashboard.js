@@ -7,7 +7,7 @@
 
 import { applyBrandingById } from '../../shared/branding.js';
 import { initIdleTimeout } from '../../shared/idle-timeout.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -115,11 +115,11 @@ async function renderSetupPanel() {
     ] = await Promise.all([
         supabase.from('programs').select('*', { count: 'exact', head: true }),
         supabase.from('classes').select('*', { count: 'exact', head: true }),
-        supabase.from('users').select('*', { count: 'exact', head: true }).not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")'),
+        supabase.from('users').select('*', { count: 'exact', head: true }).not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")').is('deleted_at', null),
         supabase.from('students').select('*', { count: 'exact', head: true }).eq('student_status', 'AKTIF'),
         supabase.from('students').select('*', { count: 'exact', head: true }).eq('student_status', 'LULUS'),
-        supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'DUDI'),
-        supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'STAKEHOLDER'),
+        supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'DUDI').is('deleted_at', null),
+        supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'STAKEHOLDER').is('deleted_at', null),
         supabase.from('schedule_templates').select('*', { count: 'exact', head: true }),
         fetchAllRows('student_parents', q => q.select('parent_user_id, students(student_status)')),
     ]);
@@ -444,6 +444,7 @@ async function renderStaffPanel() {
     const users = await fetchAllRows('users',
         q => q.select('user_id, full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, wali_kelas_class_id, kaprodi_program_id, is_active')
               .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")')
+              .is('deleted_at', null)
               .order('full_name'));
     const aktif    = users.filter(u => u.is_active !== false);
     const nonaktif = users.filter(u => u.is_active === false);
@@ -472,7 +473,121 @@ async function renderStaffPanel() {
             <tbody id="staff-tbody">${users.map(staffRow).join('')}</tbody>
         </table>
         <p class="hint" style="margin-top:8px;font-size:12px">Staf nonaktif tidak bisa login. Data absensi dan catatan mereka tetap tersimpan.</p>
+        <div style="margin-top:12px;border-top:1px solid var(--color-border);padding-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+            <button id="btn-stale-staff" class="btn btn-secondary btn-sm">Cek Staf Tanpa Jadwal Aktif…</button>
+            <button id="btn-recycle-bin" class="btn btn-secondary btn-sm">🗑 Recycle Bin</button>
+        </div>
+        <div id="stale-staff-panel"  style="display:none;margin-top:10px"></div>
+        <div id="recycle-bin-panel"  style="display:none;margin-top:10px"></div>
     `;
+
+    document.getElementById('btn-stale-staff')?.addEventListener('click', async () => {
+        const btn   = document.getElementById('btn-stale-staff');
+        const panel = document.getElementById('stale-staff-panel');
+        btn.disabled = true; btn.textContent = 'Memeriksa…';
+        try {
+            const stale = await getStaleStaff();
+            if (stale.length === 0) {
+                panel.innerHTML = '<p class="hint" style="color:var(--color-success)">✓ Semua guru aktif memiliki jadwal di tahun ajaran ini.</p>';
+            } else {
+                panel.innerHTML = `
+                    <div class="alert alert-warning" style="display:block;margin-bottom:10px">
+                        <strong>${stale.length} guru</strong> aktif tidak memiliki jadwal mengajar di tahun ajaran saat ini.
+                        Mereka bisa dinonaktifkan agar tidak bisa login.
+                    </div>
+                    <table class="table" style="margin-bottom:10px">
+                        <thead><tr><th>Nama</th><th>NIP/NIK</th><th>Kode</th></tr></thead>
+                        <tbody>${stale.map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td>${esc(u.teacher_code ?? '—')}</td></tr>`).join('')}</tbody>
+                    </table>
+                    <button id="btn-stale-confirm" class="btn btn-sm" style="background:#b45309;color:#fff;border-color:#b45309">
+                        Nonaktifkan ${stale.length} staf ini
+                    </button>
+                    <button id="btn-stale-cancel" class="btn btn-sm btn-secondary" style="margin-left:8px">Batal</button>
+                `;
+                document.getElementById('btn-stale-cancel')?.addEventListener('click', () => {
+                    panel.style.display = 'none';
+                    btn.disabled = false; btn.textContent = 'Cek Staf Tanpa Jadwal Aktif…';
+                });
+                document.getElementById('btn-stale-confirm')?.addEventListener('click', async () => {
+                    const confirmBtn = document.getElementById('btn-stale-confirm');
+                    confirmBtn.disabled = true; confirmBtn.textContent = 'Memproses…';
+                    try {
+                        const count = await deactivateStaleStaff();
+                        panel.innerHTML = `<p class="hint" style="color:var(--color-success)">✓ ${count} staf berhasil dinonaktifkan.</p>`;
+                        await renderStaffPanel();
+                    } catch (err) {
+                        panel.innerHTML = `<p style="color:var(--color-danger)">Gagal: ${esc(err.message)}</p>`;
+                    }
+                });
+            }
+            panel.style.display = 'block';
+        } catch (err) {
+            panel.innerHTML = `<p style="color:var(--color-danger)">Gagal memeriksa: ${esc(err.message)}</p>`;
+            panel.style.display = 'block';
+        } finally {
+            btn.disabled = false; btn.textContent = 'Cek Staf Tanpa Jadwal Aktif…';
+        }
+    });
+
+    document.getElementById('btn-recycle-bin')?.addEventListener('click', async () => {
+        const btn   = document.getElementById('btn-recycle-bin');
+        const panel = document.getElementById('recycle-bin-panel');
+        // toggle
+        if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+        btn.disabled = true;
+        try {
+            const deleted = await getDeletedUsers();
+            if (deleted.length === 0) {
+                panel.innerHTML = '<p class="hint" style="color:var(--color-success)">✓ Tidak ada pengguna dalam recycle bin.</p>';
+            } else {
+                const fmt = iso => new Date(iso).toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
+                const daysLeft = iso => Math.max(0, 30 - Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
+                panel.innerHTML = `
+                    <div class="alert alert-warning" style="display:block;margin-bottom:10px">
+                        <strong>${deleted.length} pengguna</strong> dihapus sementara. Restore dalam batas 30 hari, atau purge permanen.
+                    </div>
+                    <table class="table" style="margin-bottom:0">
+                        <thead><tr><th>Nama</th><th>NIP/NIK</th><th>Peran</th><th>Dihapus</th><th>Sisa</th><th>Aksi</th></tr></thead>
+                        <tbody>
+                        ${deleted.map(u => `<tr data-uid="${u.user_id}">
+                            <td>${esc(u.full_name)}</td>
+                            <td>${esc(u.login_identifier)}</td>
+                            <td>${esc(u.role_type)}</td>
+                            <td>${fmt(u.deleted_at)}</td>
+                            <td>${daysLeft(u.deleted_at)} hari</td>
+                            <td style="white-space:nowrap">
+                                ${daysLeft(u.deleted_at) > 0
+                                    ? `<button class="btn btn-sm btn-secondary rb-restore-btn" data-uid="${u.user_id}" style="font-size:11px;margin-right:4px">Pulihkan</button>`
+                                    : ''}
+                                <button class="btn btn-sm rb-purge-btn" data-uid="${u.user_id}" style="font-size:11px;background:#dc2626;color:#fff;border-color:#dc2626">Purge</button>
+                            </td>
+                        </tr>`).join('')}
+                        </tbody>
+                    </table>`;
+
+                panel.querySelectorAll('.rb-restore-btn').forEach(b => b.addEventListener('click', async () => {
+                    if (!confirm(`Pulihkan ${b.closest('tr').querySelector('td').textContent}?`)) return;
+                    b.disabled = true; b.textContent = '…';
+                    try { await restoreUser(b.dataset.uid); await renderStaffPanel(); }
+                    catch (e) { alert(`Gagal: ${e.message}`); b.disabled = false; b.textContent = 'Pulihkan'; }
+                }));
+
+                panel.querySelectorAll('.rb-purge-btn').forEach(b => b.addEventListener('click', async () => {
+                    const nama = b.closest('tr').querySelector('td').textContent;
+                    if (!confirm(`Hapus PERMANEN ${nama}?\n\nTindakan ini tidak bisa dibatalkan.`)) return;
+                    b.disabled = true; b.textContent = '…';
+                    try { await purgeUser(b.dataset.uid); await renderStaffPanel(); }
+                    catch (e) { alert(`Gagal: ${e.message}`); b.disabled = false; b.textContent = 'Purge'; }
+                }));
+            }
+            panel.style.display = 'block';
+        } catch (err) {
+            panel.innerHTML = `<p style="color:var(--color-danger)">Gagal memuat: ${esc(err.message)}</p>`;
+            panel.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+        }
+    });
 
     document.getElementById('staff-tbody')?.addEventListener('click', async e => {
         const btn = e.target.closest('.staff-toggle-btn');
@@ -871,7 +986,7 @@ async function printAlumniRecap(studentId) {
 
 async function renderDudiPanel() {
     const [{ data: users }, programs] = await Promise.all([
-        supabase.from('users').select('full_name, dudi_org_name, program_id').eq('role_type', 'DUDI').order('dudi_org_name'),
+        supabase.from('users').select('full_name, dudi_org_name, program_id').eq('role_type', 'DUDI').is('deleted_at', null).order('dudi_org_name'),
         getPrograms(),
     ]);
     const pn = new Map(programs.map(p => [p.program_id, p.name]));
@@ -888,7 +1003,7 @@ async function renderDudiPanel() {
 }
 
 async function renderStakeholdersPanel() {
-    const { data: users } = await supabase.from('users').select('full_name, login_identifier').eq('role_type', 'STAKEHOLDER').order('full_name');
+    const { data: users } = await supabase.from('users').select('full_name, login_identifier').eq('role_type', 'STAKEHOLDER').is('deleted_at', null).order('full_name');
     panelContent.innerHTML = `
         <h3>Stakeholder (${(users ?? []).length})</h3>
         <table class="table">

@@ -1,20 +1,16 @@
 /**
- * @file delete-user/index.ts
- * @edge-function delete-user
+ * @file restore-user/index.ts
+ * @edge-function restore-user
  *
- * Soft-delete user: ban Auth account + set deleted_at + is_active=false.
- * Data historis (absensi, observasi, kasus) tetap utuh.
- * Admin bisa restore via edge fn restore-user dalam 30 hari.
+ * Pulihkan user yang dihapus sementara (soft-delete):
+ *   - Unban Auth account
+ *   - Hapus deleted_at
+ *   - Set is_active = true
  *
  * CONTRACT:
- *   DELETE /functions/v1/delete-user
+ *   POST /functions/v1/restore-user
  *   Body: { "user_id": "<uuid>" }
  *   Caller: ADMINISTRATIVE only
- *
- * URUTAN:
- *   1. Validasi — user ada, sekolah sama, bukan ADMINISTRATIVE, bukan diri sendiri
- *   2. Ban Auth account (bukan hapus) agar tidak bisa login
- *   3. Set users.deleted_at = now(), is_active = false
  */
 
 import { handleCors, corsHeaders }  from '../_shared/cors.ts';
@@ -24,12 +20,10 @@ import { ok, badRequest, forbidden,
 import { resolveAuth, isAuthError }  from '../_shared/auth.ts';
 import { getAdminClient }            from '../_shared/db.ts';
 
-const BAN_DURATION = '876600h'; // ~100 tahun = ban permanen efektif
-
 Deno.serve(async (req: Request): Promise<Response> => {
 
     if (req.method === 'OPTIONS') return handleCors();
-    if (req.method !== 'DELETE') {
+    if (req.method !== 'POST') {
         return new Response('Method Not Allowed',
             { status: 405, headers: corsHeaders });
     }
@@ -44,7 +38,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const { user } = authResult;
 
         if (user.role_type !== 'ADMINISTRATIVE') {
-            return forbidden('Hanya ADMINISTRATIVE yang dapat menghapus pengguna');
+            return forbidden('Hanya ADMINISTRATIVE yang dapat memulihkan pengguna');
         }
 
         let body: { user_id?: string };
@@ -57,11 +51,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const { user_id } = body;
         if (!user_id) return badRequest('Field user_id wajib diisi');
 
-        if (user_id === user.user_id) {
-            return forbidden('Tidak dapat menghapus akun Anda sendiri');
-        }
-
-        // 1. Ambil target user — filter school_id mencegah hapus user sekolah lain
+        // Ambil target — pastikan sekolah sama dan memang soft-deleted
         const { data: targetUser, error: fetchErr } = await admin
             .from('users')
             .select('auth_user_id, role_type, full_name, school_id, deleted_at')
@@ -73,40 +63,44 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (!targetUser) {
             return badRequest(`Pengguna dengan user_id "${user_id}" tidak ditemukan di sekolah ini`);
         }
-        if (targetUser.role_type === 'ADMINISTRATIVE') {
-            return forbidden('Akun ADMINISTRATIVE tidak dapat dihapus melalui panel ini');
-        }
-        if (targetUser.deleted_at) {
-            return badRequest('Pengguna ini sudah dihapus sebelumnya. Gunakan restore-user untuk memulihkan.');
+        if (!targetUser.deleted_at) {
+            return badRequest('Pengguna ini tidak dalam status terhapus sementara.');
         }
 
-        // 2. Ban Auth account agar tidak bisa login (bukan dihapus — bisa di-unban saat restore)
+        // Cek batas 30 hari
+        const deletedAt  = new Date(targetUser.deleted_at);
+        const daysSince  = (Date.now() - deletedAt.getTime()) / 86_400_000;
+        if (daysSince > 30) {
+            return badRequest(
+                `Tidak bisa dipulihkan — sudah lebih dari 30 hari sejak dihapus (${Math.floor(daysSince)} hari).`
+            );
+        }
+
+        // Unban Auth account
         if (targetUser.auth_user_id) {
-            const { error: banErr } = await admin.auth.admin
-                .updateUserById(targetUser.auth_user_id, { ban_duration: BAN_DURATION });
-            if (banErr) {
-                if (!banErr.message?.includes('not found') && !banErr.message?.includes('User not found')) {
-                    console.error('[delete-user] Auth ban failed:', banErr);
-                    return internalError(banErr);
+            const { error: unbanErr } = await admin.auth.admin
+                .updateUserById(targetUser.auth_user_id, { ban_duration: 'none' });
+            if (unbanErr) {
+                if (!unbanErr.message?.includes('not found') && !unbanErr.message?.includes('User not found')) {
+                    console.error('[restore-user] Auth unban failed:', unbanErr);
+                    return internalError(unbanErr);
                 }
-                console.warn('[delete-user] Auth user not found, skipping ban:', targetUser.auth_user_id);
+                console.warn('[restore-user] Auth user not found, skipping unban');
             }
         }
 
-        // 3. Soft-delete: tandai deleted_at + nonaktifkan
+        // Pulihkan baris user
         const { error: updateErr } = await admin
             .from('users')
-            .update({ deleted_at: new Date().toISOString(), is_active: false })
+            .update({ deleted_at: null, is_active: true })
             .eq('user_id', user_id);
 
         if (updateErr) return internalError(updateErr);
 
         return ok({
-            deleted: true,
-            soft: true,
+            restored: true,
             user_id,
             full_name: targetUser.full_name,
-            note: 'Pengguna dihapus sementara. Bisa dipulihkan dalam 30 hari melalui Recycle Bin.',
         });
 
     } catch (err) {

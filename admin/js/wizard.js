@@ -1013,6 +1013,7 @@ const STEP_LIST = {
             const data = await fetchAllRows('users',
                 q => q.select('user_id, full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, wali_kelas_class_id, kaprodi_program_id')
                       .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE")')
+                      .is('deleted_at', null)
                       .order('full_name'));
             return data.map(u => {
                 const jabatan = [];
@@ -1082,6 +1083,7 @@ const STEP_LIST = {
             const parents = await fetchAllRows('users',
                 q => q.select('user_id, full_name, login_identifier')
                       .eq('role_type', 'ORTU')
+                      .is('deleted_at', null)
                       .order('full_name'));
             if (parents.length === 0) return [];
 
@@ -1141,6 +1143,7 @@ const STEP_LIST = {
                 fetchAllRows('users',
                     q => q.select('user_id, full_name, dudi_org_name, program_id')
                           .eq('role_type', 'DUDI')
+                          .is('deleted_at', null)
                           .order('dudi_org_name')),
                 getPrograms(),
             ]);
@@ -1167,6 +1170,7 @@ const STEP_LIST = {
             const data = await fetchAllRows('users',
                 q => q.select('user_id, full_name, login_identifier')
                       .eq('role_type', 'STAKEHOLDER')
+                      .is('deleted_at', null)
                       .order('full_name'));
             return data.map(u => ({
                 id: u.user_id,
@@ -1207,6 +1211,7 @@ async function fetchUsersByRole(roleType, toCells, toEditData) {
     const data = await fetchAllRows('users',
         q => q.select('user_id, full_name, login_identifier, teacher_code, wali_kelas_class_id')
               .eq('role_type', roleType)
+              .is('deleted_at', null)
               .order('full_name'));
     return data.map(u => {
         const row = { id: u.user_id, cells: toCells(u) };
@@ -1261,6 +1266,7 @@ async function renderAlumniParentsSection(parentEl) {
     const parents = await fetchAllRows('users',
         q => q.select('user_id, full_name, login_identifier')
               .eq('role_type', 'ORTU')
+              .is('deleted_at', null)
               .order('full_name'));
     if (parents.length === 0) return;
 

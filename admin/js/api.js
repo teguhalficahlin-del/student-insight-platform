@@ -588,16 +588,16 @@ export async function applyScheduleTemplates() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// EDGE FUNCTIONS — delete-user
+// EDGE FUNCTIONS — delete / restore / purge user
 // ─────────────────────────────────────────────────────────────
 
-async function callEdgeDelete(functionName, body) {
+async function callEdge(method, functionName, body) {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
     if (!token) throw new Error('Sesi login tidak ditemukan. Silakan login ulang.');
 
     const res = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, {
-        method:  'DELETE',
+        method,
         headers: {
             'Content-Type':     'application/json',
             'Authorization':    `Bearer ${token}`,
@@ -608,18 +608,35 @@ async function callEdgeDelete(functionName, body) {
 
     const resBody = await res.json();
     if (!res.ok) {
-        const message = resBody?.error?.message ?? 'Hapus gagal';
-        throw new Error(message);
+        throw new Error(resBody?.error?.message ?? `${functionName} gagal`);
     }
     return resBody.data;
 }
 
-/**
- * Hapus user beserta Auth account-nya.
- * Harus lewat Edge Function — bukan REST DELETE langsung.
- */
+/** Soft-delete user — ban Auth + set deleted_at. Bisa di-restore dalam 30 hari. */
 export async function deleteUserWithAuth(user_id) {
-    return callEdgeDelete('delete-user', { user_id });
+    return callEdge('DELETE', 'delete-user', { user_id });
+}
+
+/** Pulihkan user yang di-soft-delete (dalam 30 hari). */
+export async function restoreUser(user_id) {
+    return callEdge('POST', 'restore-user', { user_id });
+}
+
+/** Hard-delete permanen — hanya untuk user yang sudah di-soft-delete. */
+export async function purgeUser(user_id) {
+    return callEdge('DELETE', 'purge-user', { user_id });
+}
+
+/** Ambil daftar user yang soft-deleted di sekolah ini. */
+export async function getDeletedUsers() {
+    const { data, error } = await supabase
+        .from('users')
+        .select('user_id, full_name, login_identifier, role_type, deleted_at')
+        .not('deleted_at', 'is', null)
+        .order('deleted_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -865,6 +882,20 @@ export async function releaseTeacherFromSchedules(user_id) {
         .eq('scheduled_teacher_id', user_id)
         .gte('session_date', today);
     if (e2) throw e2;
+}
+
+/** Kembalikan daftar GURU aktif tanpa teaching_assignment di tahun ajaran aktif. */
+export async function getStaleStaff() {
+    const { data, error } = await supabase.rpc('fn_get_stale_staff');
+    if (error) throw error;
+    return data ?? [];
+}
+
+/** Nonaktifkan semua GURU tanpa jadwal. Kembalikan jumlah yang dinonaktifkan. */
+export async function deactivateStaleStaff() {
+    const { data, error } = await supabase.rpc('fn_deactivate_stale_staff');
+    if (error) throw error;
+    return data ?? 0;
 }
 
 /** Toggle status aktif/nonaktif mata pelajaran. */
