@@ -287,10 +287,12 @@ async function onConfirmGraduation() {
         state.graduationDone = true;
         btn.style.display = 'none';
 
-        resultArea.innerHTML = `<div class="alert alert-success">${checkedIds.length} siswa berhasil diluluskan.</div>`;
+        resultArea.innerHTML = `<div class="alert alert-success" style="display:block">✅ ${checkedIds.length} siswa berhasil diluluskan. Lanjutkan ke Kenaikan Kelas.</div>`;
+        resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
         renderStepVisibility();
     } catch (err) {
-        resultArea.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        resultArea.innerHTML = `<div class="alert alert-danger" style="display:block">❌ Gagal: ${err.message}</div>`;
+        resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
         btn.disabled = false;
         btn.textContent = 'Konfirmasi Kelulusan';
     }
@@ -509,7 +511,8 @@ async function onConfirmPromotion() {
     state.promotionMapping = mapping;
     state.promotionDone = true;
 
-    resultArea.innerHTML = `<div class="alert alert-success">Pemetaan kenaikan kelas untuk ${totalStudents} siswa telah dikonfirmasi. Data akan disimpan setelah tahun ajaran baru dibuka.</div>`;
+    resultArea.innerHTML = `<div class="alert alert-success" style="display:block">✅ Pemetaan kenaikan kelas untuk ${totalStudents} siswa telah dikonfirmasi. Lanjutkan ke Tahun Ajaran Baru.</div>`;
+    resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
     document.getElementById('confirm-promotion-btn').disabled = true;
     renderStepVisibility();
 }
@@ -605,10 +608,12 @@ async function onConfirmNewYear() {
         state.promotedCount   = data.enrolled_count;
         state.newYearDone     = true;
 
-        resultArea.innerHTML = `<div class="alert alert-success">Tahun ajaran ${newAcademicYear} semester ${newSemester} aktif. ${data.enrolled_count} siswa naik kelas.</div>`;
+        resultArea.innerHTML = `<div class="alert alert-success" style="display:block">✅ Tahun ajaran ${newAcademicYear} semester ${newSemester} aktif. ${data.enrolled_count} siswa naik kelas.</div>`;
+        resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
         renderStepVisibility();
     } catch (err) {
-        resultArea.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        resultArea.innerHTML = `<div class="alert alert-danger" style="display:block">❌ Gagal: ${err.message}</div>`;
+        resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
         btn.disabled = false;
         btn.textContent = 'Konfirmasi';
     }
