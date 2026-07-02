@@ -494,6 +494,8 @@ async function setupStep3() {
         }).join('');
     }
 
+    updatePromotionPreview();
+
     const confirmBtn = document.getElementById('confirm-promotion-btn');
     confirmBtn.disabled = !allValid || state.promotionDone;
     confirmBtn.onclick  = onConfirmPromotion;
@@ -521,6 +523,26 @@ async function setupStep3() {
                 halaman ini.
             </div>`;
     }
+}
+
+function updatePromotionPreview() {
+    const total = state.sourceClasses.reduce((s, c) => s + c.studentIds.length, 0);
+    if (total === 0) return;
+
+    const byProgram = {};
+    for (const c of state.sourceClasses) {
+        byProgram[c.programName] = (byProgram[c.programName] ?? 0) + c.studentIds.length;
+    }
+    const programRows = Object.entries(byProgram)
+        .map(([prog, n]) => `<li>${prog}: <strong>${n} siswa</strong></li>`)
+        .join('');
+
+    document.getElementById('promotion-preview').innerHTML = `
+        <div class="alert alert-warning" style="display:block;margin-top:16px">
+            <strong>⚠️ Periksa sebelum konfirmasi — tindakan ini tidak dapat dibatalkan.</strong><br>
+            Akan dinaikkan kelas: <strong>${total} siswa</strong>.
+            <ul style="margin:8px 0 0 16px;padding:0">${programRows}</ul>
+        </div>`;
 }
 
 async function onConfirmPromotion() {
