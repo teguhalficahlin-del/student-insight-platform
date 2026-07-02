@@ -115,23 +115,33 @@ async function renderStep() {
 // ─────────────────────────────────────────────────────────────
 
 async function fetchGradeXIIStudents(config) {
+    // Tidak filter semester — enrollment hanya dibuat di semester 1,
+    // semester 2 memakai data yang sama. Ambil semua semester tahun ini,
+    // filter grade_level=12 di sisi klien, deduplikasi per student_id.
     const { data, error } = await supabase
         .from('class_enrollments')
-        .select('student_id, class_id, students!inner(student_id, full_name, nis, student_status), classes!inner(name, grade_level)')
+        .select('student_id, class_id, semester, students!inner(student_id, full_name, nis, student_status), classes!inner(name, grade_level)')
         .eq('academic_year', config.current_academic_year)
-        .eq('semester', config.current_semester)
         .is('withdrawn_at', null)
-        .eq('classes.grade_level', 12);
+        .order('semester', { ascending: false });
     if (error) throw error;
 
-    return data.map(r => ({
-        student_id:     r.student_id,
-        class_id:       r.class_id,
-        full_name:      r.students.full_name,
-        nis:            r.students.nis,
-        student_status: r.students.student_status,
-        className:      r.classes.name,
-    }));
+    const seen = new Set();
+    return data
+        .filter(r => r.classes.grade_level === 12)
+        .filter(r => {
+            if (seen.has(r.student_id)) return false;
+            seen.add(r.student_id);
+            return true;
+        })
+        .map(r => ({
+            student_id:     r.student_id,
+            class_id:       r.class_id,
+            full_name:      r.students.full_name,
+            nis:            r.students.nis,
+            student_status: r.students.student_status,
+            className:      r.classes.name,
+        }));
 }
 
 async function setupStep1() {
@@ -244,17 +254,21 @@ async function fetchPromotableClasses(config) {
         ])
     );
 
-    // Fetch enrollments
+    // Fetch enrollments — tidak filter semester (enrollment hanya di sem 1,
+    // deduplikasi per student+class agar tidak dobel jika ada 2 semester)
     const { data: enrollments, error: enrollErr } = await supabase
         .from('class_enrollments')
         .select('student_id, class_id')
         .eq('academic_year', config.current_academic_year)
-        .eq('semester', config.current_semester)
         .is('withdrawn_at', null);
     if (enrollErr) throw enrollErr;
 
     const studentsByClass = new Map();
+    const seenEnroll = new Set();
     for (const e of enrollments) {
+        const key = `${e.student_id}:${e.class_id}`;
+        if (seenEnroll.has(key)) continue;
+        seenEnroll.add(key);
         if (!studentsByClass.has(e.class_id)) studentsByClass.set(e.class_id, []);
         studentsByClass.get(e.class_id).push(e.student_id);
     }
