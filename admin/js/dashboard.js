@@ -514,19 +514,44 @@ async function renderStaffPanel() {
 }
 
 async function renderStudentsPanel() {
-    const [aktif, noAccount] = await Promise.all([
+    const [aktif, noAccount, config] = await Promise.all([
         fetchAllRows('students',
-            q => q.select('full_name, nis, student_status, program:programs ( name )')
+            q => q.select('student_id, full_name, nis, student_status')
                   .eq('student_status', 'AKTIF')
                   .order('full_name')),
         countStudentsWithoutAccount().catch(() => 0),
+        getSchoolConfig(),
     ]);
+
+    // Map student_id → nama kelas berdasarkan tahun ajaran aktif
+    const { data: enrollments } = await supabase
+        .from('class_enrollments')
+        .select('student_id, class:classes(name, grade_level)')
+        .eq('academic_year', config?.current_academic_year ?? '')
+        .is('withdrawn_at', null);
+
+    const classOf = new Map((enrollments ?? []).map(e => [
+        e.student_id,
+        { name: e.class?.name ?? 'Tanpa Kelas', grade: e.class?.grade_level ?? 99 },
+    ]));
+
+    for (const s of aktif) {
+        const c = classOf.get(s.student_id);
+        s._className  = c?.name  ?? 'Tanpa Kelas';
+        s._classGrade = c?.grade ?? 99;
+    }
+
+    // Urutkan: tingkat asc → nama kelas asc → nama siswa asc (sudah ter-order)
+    aktif.sort((a, b) => {
+        if (a._classGrade !== b._classGrade) return a._classGrade - b._classGrade;
+        return a._className.localeCompare(b._className, 'id');
+    });
 
     const aktifHtml = renderGroupedTable(
         aktif,
-        s => s.program?.name ?? 'Tanpa Program',
+        s => s._className,
         ['Nama', 'NIS'],
-        s => `<tr><td>${s.full_name}</td><td>${s.nis}</td></tr>`,
+        s => `<tr><td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td></tr>`,
     );
 
     const provisionHtml = `
