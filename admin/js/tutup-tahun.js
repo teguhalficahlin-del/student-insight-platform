@@ -120,7 +120,7 @@ async function fetchGradeXIIStudents(config) {
     // filter grade_level=12 di sisi klien, deduplikasi per student_id.
     const { data, error } = await supabase
         .from('class_enrollments')
-        .select('student_id, class_id, semester, students!inner(student_id, full_name, nis, student_status), classes!inner(name, grade_level)')
+        .select('student_id, class_id, semester, students!inner(student_id, full_name, nis, student_status), classes!inner(name, grade_level, programs(name))')
         .eq('academic_year', config.current_academic_year)
         .is('withdrawn_at', null)
         .order('semester', { ascending: false });
@@ -141,6 +141,7 @@ async function fetchGradeXIIStudents(config) {
             nis:            r.students.nis,
             student_status: r.students.student_status,
             className:      r.classes.name,
+            programName:    r.classes.programs?.name ?? 'Tanpa Program',
         }));
 }
 
@@ -148,17 +149,37 @@ async function setupStep1() {
     state.gradeXIIStudents = await fetchGradeXIIStudents(state.config);
     const students = state.gradeXIIStudents;
 
-    // Ringkasan per kelas
-    const byClass = {};
-    for (const s of students) byClass[s.className] = (byClass[s.className] ?? 0) + 1;
-    const summaryRows = Object.entries(byClass)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([kelas, n]) => `<tr><td style="padding:3px 8px">${kelas}</td><td style="padding:3px 8px;text-align:right;font-weight:600">${n} siswa</td></tr>`)
-        .join('');
+    // Kelompokkan per program keahlian → per kelas
+    const byProgram = new Map();
+    for (const s of students) {
+        if (!byProgram.has(s.programName)) byProgram.set(s.programName, new Map());
+        const byClass = byProgram.get(s.programName);
+        if (!byClass.has(s.className)) byClass.set(s.className, []);
+        byClass.get(s.className).push(s);
+    }
+    const programKeys = [...byProgram.keys()].sort((a, b) => a.localeCompare(b, 'id'));
 
-    const detailRows = students.map(s =>
-        `<tr><td>${s.full_name}</td><td>${s.nis}</td><td>${s.className}</td><td>${s.student_status}</td></tr>`
-    ).join('') || `<tr><td colspan="4" class="hint">—</td></tr>`;
+    const accordionHtml = programKeys.map(prog => {
+        const byClass = byProgram.get(prog);
+        const progTotal = [...byClass.values()].reduce((t, arr) => t + arr.length, 0);
+        const classHtml = [...byClass.keys()].sort((a, b) => a.localeCompare(b, 'id')).map(kls => {
+            const list = byClass.get(kls);
+            const rows = list.map(s => `<tr><td>${s.full_name}</td><td>${s.nis}</td><td>${s.student_status}</td></tr>`).join('');
+            return `
+                <details style="margin:4px 0 4px 16px">
+                    <summary style="cursor:pointer;font-weight:600">${kls} (${list.length})</summary>
+                    <table class="table" style="margin-top:4px">
+                        <thead><tr><th>Nama</th><th>NIS</th><th>Status</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </details>`;
+        }).join('');
+        return `
+            <details style="margin-bottom:8px">
+                <summary style="cursor:pointer;font-weight:600">${prog} (${progTotal})</summary>
+                ${classHtml}
+            </details>`;
+    }).join('');
 
     const step1 = document.querySelector('.wizard-step[data-step="1"]');
     step1.innerHTML = `
@@ -168,30 +189,11 @@ async function setupStep1() {
 
         ${students.length === 0
             ? `<div class="alert alert-warning" style="display:block">Tidak ada siswa kelas XII pada tahun ajaran ini.</div>`
-            : `<div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap">
-                <div style="flex:0 0 auto;min-width:160px;padding:14px 20px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe">
+            : `<div style="padding:14px 20px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;display:inline-block;margin-bottom:20px">
                     <div style="font-size:32px;font-weight:700;color:var(--color-primary)">${students.length}</div>
                     <div style="font-size:12px;color:var(--color-text-muted);margin-top:2px">Total Siswa Kelas XII</div>
-                </div>
-                <table style="flex:1;min-width:160px;border-collapse:collapse;font-size:13px;align-self:center">
-                    <thead><tr>
-                        <th style="text-align:left;padding:4px 8px;color:var(--color-text-muted);font-size:11px;text-transform:uppercase">Kelas</th>
-                        <th style="text-align:right;padding:4px 8px;color:var(--color-text-muted);font-size:11px;text-transform:uppercase">Jumlah</th>
-                    </tr></thead>
-                    <tbody>${summaryRows}</tbody>
-                </table>
                </div>
-               <details>
-                   <summary style="cursor:pointer;font-size:13px;color:var(--color-primary);user-select:none;margin-bottom:8px">
-                       ▶ Lihat daftar lengkap (${students.length} siswa)
-                   </summary>
-                   <div style="max-height:280px;overflow-y:auto;border:1px solid var(--color-border);border-radius:6px;margin-top:4px">
-                       <table class="table" id="grade12-table">
-                           <thead><tr><th>Nama</th><th>NIS</th><th>Kelas</th><th>Status</th></tr></thead>
-                           <tbody>${detailRows}</tbody>
-                       </table>
-                   </div>
-               </details>`
+               ${accordionHtml}`
         }
     `;
 }
