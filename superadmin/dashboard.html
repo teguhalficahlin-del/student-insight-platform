@@ -16,6 +16,25 @@
 
 <div class="page-body">
 
+    <!-- Pemeliharaan sistem (banner global) -->
+    <div class="section-card">
+        <h3>🛠 Pemeliharaan Sistem</h3>
+        <p class="hint" style="font-size:13px;color:var(--color-text-muted);margin-bottom:12px">
+            Jika dinyalakan, banner pemeliharaan tampil di semua portal (guru, siswa, orang tua, admin, dll).
+            Gunakan saat ada gangguan atau pemeliharaan terjadwal.
+        </p>
+        <div class="field field-full" style="margin-bottom:10px">
+            <label for="maint-message">Pesan banner (opsional)</label>
+            <input type="text" id="maint-message" class="input"
+                   placeholder="Sistem sedang dalam pemeliharaan hingga pukul 22.00 WIB.">
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button type="button" class="btn btn-primary" id="maint-toggle-btn">Memuat…</button>
+            <span id="maint-status" class="hint" style="font-size:13px"></span>
+        </div>
+        <div id="maint-result" class="alert" style="display:none;margin-top:10px"></div>
+    </div>
+
     <!-- Form daftar sekolah baru -->
     <div class="section-card">
         <h3>Daftarkan Sekolah Baru</h3>

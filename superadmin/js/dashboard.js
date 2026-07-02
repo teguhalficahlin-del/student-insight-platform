@@ -297,3 +297,64 @@ document.getElementById('reset-confirm-btn').addEventListener('click', async () 
 });
 
 loadSchools();
+
+// ── Pemeliharaan Sistem (banner global) ──────────────────────
+const maintBtn     = document.getElementById('maint-toggle-btn');
+const maintMsgEl   = document.getElementById('maint-message');
+const maintStatus  = document.getElementById('maint-status');
+const maintResult  = document.getElementById('maint-result');
+let   maintActive  = false;
+
+function renderMaintState() {
+    maintBtn.textContent = maintActive ? 'Matikan Pemeliharaan' : 'Nyalakan Pemeliharaan';
+    maintBtn.className    = 'btn ' + (maintActive ? 'btn-danger' : 'btn-primary');
+    maintStatus.textContent = maintActive ? '● Banner AKTIF di semua portal' : '○ Banner tidak aktif';
+    maintStatus.style.color = maintActive ? '#b45309' : 'var(--color-text-muted)';
+}
+
+async function loadMaintenance() {
+    try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/set-maintenance`, {
+            headers: { 'x-superadmin-key': saKey },
+        });
+        if (!res.ok) throw new Error('Gagal memuat status');
+        const data = await res.json();
+        maintActive = !!data.active;
+        if (data.message) maintMsgEl.value = data.message;
+        renderMaintState();
+    } catch (err) {
+        maintBtn.textContent = 'Coba lagi';
+        maintStatus.textContent = err.message;
+    }
+}
+
+maintBtn.addEventListener('click', async () => {
+    const next = !maintActive;
+    if (next && !confirm('Nyalakan banner pemeliharaan di SEMUA portal sekarang?')) return;
+    maintBtn.disabled = true;
+    maintResult.style.display = 'none';
+    try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/set-maintenance`, {
+            method:  'PATCH',
+            headers: { 'x-superadmin-key': saKey, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ active: next, message: maintMsgEl.value }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Gagal menyimpan');
+        maintActive = next;
+        renderMaintState();
+        maintResult.className = 'alert alert-success';
+        maintResult.textContent = next
+            ? 'Banner pemeliharaan dinyalakan. Semua portal akan menampilkannya.'
+            : 'Banner pemeliharaan dimatikan.';
+        maintResult.style.display = 'block';
+    } catch (err) {
+        maintResult.className = 'alert alert-danger';
+        maintResult.textContent = err.message;
+        maintResult.style.display = 'block';
+    } finally {
+        maintBtn.disabled = false;
+    }
+});
+
+loadMaintenance();

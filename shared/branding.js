@@ -122,3 +122,46 @@ function _applyToDom(branding) {
     }
     return branding;
 }
+
+// ─────────────────────────────────────────────────────────────
+// BANNER PEMELIHARAAN PLATFORM-WIDE (kemungkinan_buruk 6.4/7.3)
+// branding.js diimpor semua portal → banner otomatis muncul di mana saja.
+// ─────────────────────────────────────────────────────────────
+
+async function checkMaintenanceBanner() {
+    try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/fn_maintenance_status`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON },
+            body:    '{}',
+        });
+        if (!res.ok) return;
+        const status = await res.json();
+        if (status?.active) renderMaintenanceBanner(status.message);
+    } catch { /* fail-safe: jika gagal fetch, jangan tampilkan apa-apa */ }
+}
+
+function renderMaintenanceBanner(message) {
+    if (document.getElementById('maintenance-banner')) return;
+    const bar = document.createElement('div');
+    bar.id = 'maintenance-banner';
+    bar.setAttribute('role', 'status');
+    bar.style.cssText =
+        'position:fixed;top:0;left:0;right:0;z-index:100000;background:#b45309;color:#fff;' +
+        'padding:10px 16px;text-align:center;font-size:14px;font-weight:600;' +
+        'box-shadow:0 2px 8px rgba(0,0,0,.2);line-height:1.4';
+    bar.textContent = '🛠 ' + (message?.trim() ||
+        'Sistem sedang dalam pemeliharaan. Beberapa fitur mungkin tidak tersedia sementara.');
+    const applyPad = () => { document.body.style.paddingTop = bar.offsetHeight + 'px'; };
+    document.body.appendChild(bar);
+    applyPad();
+    window.addEventListener('resize', applyPad);
+}
+
+if (typeof window !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', checkMaintenanceBanner);
+    } else {
+        checkMaintenanceBanner();
+    }
+}
