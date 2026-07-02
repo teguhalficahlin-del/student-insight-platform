@@ -1057,16 +1057,11 @@ async function loadKepsekMonitoring(period = 'hari_ini') {
     const pctGuru   = document.getElementById('ks-pct-guru');
     const detSiswa  = document.getElementById('ks-detail-siswa');
     const detGuru   = document.getElementById('ks-detail-guru');
-    const chartWrap = document.getElementById('ks-chart-wrap');
-    const chartEmpty= document.getElementById('ks-chart-empty');
-
     pctSiswa.textContent = '…';
     pctGuru.textContent  = '…';
     detSiswa.textContent = '';
     detGuru.textContent  = '';
     errEl.style.display  = 'none';
-    chartWrap.style.display  = 'none';
-    chartEmpty.style.display = 'none';
 
     try {
         const ayLalu = prevAcademicYear(config?.current_academic_year);
@@ -1083,16 +1078,7 @@ async function loadKepsekMonitoring(period = 'hari_ini') {
             ? `${s.guru_hadir} dari ${s.guru_total} sesi terjadwal`
             : 'Belum ada data';
 
-        // Grafik hanya untuk periode multi-hari
-        if (period !== 'hari_ini') {
-            const chart = d.chart ?? [];
-            if (chart.length === 0) {
-                chartEmpty.style.display = 'block';
-            } else {
-                chartWrap.style.display = 'block';
-                renderKepsekChart(chart, d.by_month);
-            }
-        }
+        renderKepsekChart(d.chart ?? [], d.by_month);
 
     } catch (err) {
         errEl.textContent   = `Gagal memuat data: ${fe(err)}`;
