@@ -7,6 +7,7 @@
 <script>(function(){var last=location.pathname.split("/").filter(Boolean).pop();if(["admin","guru","student","parent","dudi","stakeholder","superadmin"].indexOf(last)>-1){var b=document.createElement("base");b.href=location.pathname.endsWith("/")?location.pathname:location.pathname+"/";document.head.appendChild(b);}})();</script>
     <link rel="stylesheet" href="css/guru.css">
   <link rel="manifest" href="manifest.json">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -290,27 +291,42 @@
     <div class="tab-panel" id="tab-kepsek">
         <div class="page-body">
             <div class="section-card">
-                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;flex-wrap:wrap;gap:4px">
-                    <h3 style="margin:0">Ketidakhadiran</h3>
-                    <div id="ks-period-toggle" style="display:flex;gap:4px">
-                        <button class="btn btn-sm ks-period-btn active" data-period="harian">Harian</button>
-                        <button class="btn btn-sm ks-period-btn" data-period="mingguan">Mingguan</button>
-                        <button class="btn btn-sm ks-period-btn" data-period="bulanan">Bulanan</button>
+                <!-- Header + toggle periode -->
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+                    <h3 style="margin:0">Kehadiran Sekolah</h3>
+                    <div id="ks-period-toggle" role="group" aria-label="Pilih periode" style="display:flex;gap:4px;flex-wrap:wrap">
+                        <button class="btn btn-sm ks-period-btn active" data-period="hari_ini">Hari Ini</button>
+                        <button class="btn btn-sm ks-period-btn" data-period="7_hari">7 Hari Terakhir</button>
+                        <button class="btn btn-sm ks-period-btn" data-period="minggu_lalu">Minggu Lalu</button>
+                        <button class="btn btn-sm ks-period-btn" data-period="bulan_lalu">Bulan Lalu</button>
+                        <button class="btn btn-sm ks-period-btn" data-period="tahun_ajaran_lalu">Tahun Ajaran Lalu</button>
                     </div>
                 </div>
-                <div id="ks-monitoring-error" style="display:none" class="hint" style="color:var(--color-danger)"></div>
-                <div class="stats-row" id="ks-monitoring-stats">
+
+                <!-- Error -->
+                <div id="ks-monitoring-error" style="display:none;color:var(--color-danger);font-size:13px;margin-bottom:8px"></div>
+
+                <!-- Kartu ringkasan -->
+                <div class="stats-row" style="margin-bottom:16px">
                     <div class="stat-card">
                         <span class="stat-value" id="ks-pct-siswa">—</span>
-                        <div class="stat-label">Siswa Tidak Hadir</div>
-                        <div class="hint" id="ks-detail-siswa" style="font-size:11px;margin-top:2px"></div>
+                        <div class="stat-label">Kehadiran Siswa</div>
+                        <div id="ks-detail-siswa" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
                     </div>
                     <div class="stat-card">
                         <span class="stat-value" id="ks-pct-guru">—</span>
-                        <div class="stat-label">Guru Tidak Hadir di Kelas</div>
-                        <div class="hint" id="ks-detail-guru" style="font-size:11px;margin-top:2px"></div>
+                        <div class="stat-label">Kehadiran Guru di Kelas</div>
+                        <div id="ks-detail-guru" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
                     </div>
                 </div>
+
+                <!-- Grafik (disembunyikan untuk Hari Ini) -->
+                <div id="ks-chart-wrap" style="display:none;position:relative;height:220px">
+                    <canvas id="ks-chart" aria-label="Grafik kehadiran siswa dan guru"></canvas>
+                </div>
+                <p id="ks-chart-empty" style="display:none;font-size:13px;color:var(--color-text-muted);text-align:center;padding:20px 0">
+                    Belum ada data untuk periode ini.
+                </p>
             </div>
 
             <!-- Kelola Admin -->

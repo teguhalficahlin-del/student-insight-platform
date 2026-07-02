@@ -1008,7 +1008,22 @@ async function initWakaKurTab() {
 
 // ─── TAB KEPSEK (Monitoring) ─────────────────────────────────
 
+const BULAN_ID = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+
+function fmtChartLabel(dateStr, byMonth) {
+    const d = new Date(dateStr + 'T00:00:00');
+    if (byMonth) return BULAN_ID[d.getMonth()] + ' ' + d.getFullYear();
+    return d.getDate() + ' ' + BULAN_ID[d.getMonth()];
+}
+
+function prevAcademicYear(current) {
+    // '2025/2026' → '2024/2025'
+    const y = parseInt(current?.split('/')[0] ?? new Date().getFullYear());
+    return `${y - 1}/${y}`;
+}
+
 let _kepsekTabInit = false;
+let _ksChart       = null;
 
 async function initKepsekTab() {
     if (!_kepsekTabInit) {
@@ -1026,42 +1041,120 @@ async function initKepsekTab() {
         document.getElementById('ks-add-admin-form').addEventListener('submit', handleAddAdmin);
     }
 
-    await loadKepsekMonitoring('harian');
+    await loadKepsekMonitoring('hari_ini');
 }
 
-async function loadKepsekMonitoring(period = 'harian') {
-    const errEl    = document.getElementById('ks-monitoring-error');
-    const pctSiswa = document.getElementById('ks-pct-siswa');
-    const pctGuru  = document.getElementById('ks-pct-guru');
-    const detSiswa = document.getElementById('ks-detail-siswa');
-    const detGuru  = document.getElementById('ks-detail-guru');
+async function loadKepsekMonitoring(period = 'hari_ini') {
+    const errEl     = document.getElementById('ks-monitoring-error');
+    const pctSiswa  = document.getElementById('ks-pct-siswa');
+    const pctGuru   = document.getElementById('ks-pct-guru');
+    const detSiswa  = document.getElementById('ks-detail-siswa');
+    const detGuru   = document.getElementById('ks-detail-guru');
+    const chartWrap = document.getElementById('ks-chart-wrap');
+    const chartEmpty= document.getElementById('ks-chart-empty');
 
     pctSiswa.textContent = '…';
     pctGuru.textContent  = '…';
     detSiswa.textContent = '';
     detGuru.textContent  = '';
     errEl.style.display  = 'none';
+    chartWrap.style.display  = 'none';
+    chartEmpty.style.display = 'none';
 
     try {
-        const d = await getKepsekMonitoring(period);
+        const ayLalu = prevAcademicYear(config?.current_academic_year);
+        const d = await getKepsekMonitoring(period, period === 'tahun_ajaran_lalu' ? ayLalu : null);
+        const s = d.summary ?? {};
 
-        pctSiswa.textContent = d.pct_siswa_absen != null ? d.pct_siswa_absen + '%' : '—';
-        pctGuru.textContent  = d.pct_guru_absen  != null ? d.pct_guru_absen  + '%' : '—';
+        pctSiswa.textContent = s.pct_siswa != null ? s.pct_siswa + '%' : '—';
+        pctGuru.textContent  = s.pct_guru  != null ? s.pct_guru  + '%' : '—';
 
-        const prefixSiswa = period === 'harian' ? '' : 'rata-rata ';
-        detSiswa.textContent = d.siswa_aktif > 0
-            ? `${prefixSiswa}${d.siswa_absen_avg} dari ${d.siswa_aktif} siswa`
+        detSiswa.textContent = (s.siswa_total > 0)
+            ? `${s.siswa_hadir} dari ${s.siswa_total} sesi tercatat`
             : 'Belum ada data';
-        detGuru.textContent  = d.guru_total > 0
-            ? `${d.guru_absen} dari ${d.guru_total} sesi`
+        detGuru.textContent  = (s.guru_total > 0)
+            ? `${s.guru_hadir} dari ${s.guru_total} sesi terjadwal`
             : 'Belum ada data';
+
+        // Grafik hanya untuk periode multi-hari
+        if (period !== 'hari_ini') {
+            const chart = d.chart ?? [];
+            if (chart.length === 0) {
+                chartEmpty.style.display = 'block';
+            } else {
+                chartWrap.style.display = 'block';
+                renderKepsekChart(chart, d.by_month);
+            }
+        }
+
     } catch (err) {
-        errEl.textContent   = `Gagal memuat data monitoring: ${fe(err)}`;
+        errEl.textContent   = `Gagal memuat data: ${fe(err)}`;
         errEl.style.display = 'block';
         pctSiswa.textContent = '—';
         pctGuru.textContent  = '—';
         console.error('[kepsek monitoring]', err);
     }
+}
+
+function renderKepsekChart(chartData, byMonth) {
+    const canvas = document.getElementById('ks-chart');
+    const labels = chartData.map(p => fmtChartLabel(p.date, byMonth));
+    const dataSiswa = chartData.map(p => p.pct_siswa);
+    const dataGuru  = chartData.map(p => p.pct_guru);
+
+    const primary = getComputedStyle(document.documentElement)
+        .getPropertyValue('--color-primary').trim() || '#4361ee';
+
+    if (_ksChart) { _ksChart.destroy(); _ksChart = null; }
+
+    _ksChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Kehadiran Siswa (%)',
+                    data: dataSiswa,
+                    borderColor: primary,
+                    backgroundColor: primary + '22',
+                    tension: 0.3,
+                    fill: true,
+                    pointRadius: chartData.length <= 14 ? 4 : 2,
+                    spanGaps: true,
+                },
+                {
+                    label: 'Kehadiran Guru (%)',
+                    data: dataGuru,
+                    borderColor: '#e67e22',
+                    backgroundColor: '#e67e2222',
+                    tension: 0.3,
+                    fill: true,
+                    pointRadius: chartData.length <= 14 ? 4 : 2,
+                    spanGaps: true,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y != null ? ctx.parsed.y + '%' : '—'}`,
+                    },
+                },
+            },
+            scales: {
+                y: {
+                    min: 0, max: 100,
+                    ticks: { callback: v => v + '%', font: { size: 11 } },
+                    grid: { color: '#0001' },
+                },
+                x: { ticks: { font: { size: 11 }, maxRotation: 45 } },
+            },
+        },
+    });
 }
 
 async function loadAdminList() {
