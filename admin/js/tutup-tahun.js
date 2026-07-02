@@ -612,6 +612,23 @@ function setupStep4() {
 
     document.getElementById('confirm-new-year-btn').disabled = state.newYearDone;
     document.getElementById('confirm-new-year-btn').onclick = onConfirmNewYear;
+
+    const totalPromo = state.sourceClasses.reduce((s, c) => s + c.studentIds.length, 0);
+    const byProgram  = {};
+    for (const c of state.sourceClasses) {
+        byProgram[c.programName] = (byProgram[c.programName] ?? 0) + c.studentIds.length;
+    }
+    const programRows = Object.entries(byProgram)
+        .map(([prog, n]) => `<li>${prog}: <strong>${n} siswa</strong></li>`)
+        .join('');
+
+    const newYear = document.getElementById('new-academic-year').value || '—';
+    document.getElementById('new-year-preview').innerHTML = `
+        <div class="alert alert-warning" style="display:block;margin-top:16px">
+            <strong>⚠️ Periksa sebelum konfirmasi — tindakan ini tidak dapat dibatalkan.</strong><br>
+            Akan dibuka tahun ajaran <strong>${newYear}</strong> dan <strong>${totalPromo} siswa</strong> dipindahkan ke kelas barunya.
+            <ul style="margin:8px 0 0 16px;padding:0">${programRows}</ul>
+        </div>`;
 }
 
 async function onConfirmNewYear() {
