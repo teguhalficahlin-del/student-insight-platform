@@ -56,13 +56,16 @@ async function loadSchools() {
 
         hintEl.style.display = 'none';
         tableEl.style.display = '';
-        const BASE = location.origin + location.pathname.replace(/superadmin\/$/, '');
+        const BASE = location.origin + location.pathname.replace(/superadmin\/.*$/, '');
         tbody.innerHTML = data.map(s => {
             const adminUrl = s.slug ? `${BASE}admin/?school=${esc(s.slug)}` : null;
             const slugCell = adminUrl
-                ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                     <a href="${adminUrl}" target="_blank" style="font-size:12px;color:var(--color-warning);word-break:break-all">${adminUrl}</a>
-                     <button class="btn btn-sm btn-secondary copy-url-btn" data-url="${adminUrl}" title="Salin link" style="padding:2px 8px;font-size:11px">Salin</button>
+                ? `<div style="display:flex;flex-direction:column;gap:4px">
+                     <code style="font-size:12px;color:var(--color-warning)">?school=${esc(s.slug)}</code>
+                     <div style="display:flex;gap:6px">
+                       <button class="btn btn-sm btn-secondary copy-url-btn" data-url="${adminUrl}" style="padding:2px 8px;font-size:11px">Salin Link</button>
+                       <a href="${adminUrl}" target="_blank" class="btn btn-sm btn-secondary" style="padding:2px 8px;font-size:11px">Buka ↗</a>
+                     </div>
                    </div>`
                 : '—';
             return `<tr>
@@ -73,16 +76,24 @@ async function loadSchools() {
             <td>${esc(s.phone)}</td>
             <td><span class="badge ${s.is_active ? 'badge-active' : 'badge-inactive'}">${s.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
             <td>${fmt(s.created_at)}</td>
-            <td><button class="btn btn-sm btn-secondary reset-pw-btn"
+            <td style="display:flex;flex-direction:column;gap:6px;padding:10px 8px">
+                <button class="btn btn-sm btn-secondary reset-pw-btn"
                     data-school-id="${esc(s.school_id)}"
                     data-school-name="${esc(s.name)}"
                     ${!s.admin_identifier ? 'disabled title="Tidak ada akun admin"' : ''}>
-                Reset Password
-            </button></td>
+                    Reset Password
+                </button>
+                <button class="btn btn-sm btn-danger delete-school-btn"
+                    data-school-id="${esc(s.school_id)}"
+                    data-school-name="${esc(s.name)}"
+                    style="background:#dc2626;color:#fff;border-color:#dc2626">
+                    Hapus Sekolah
+                </button>
+            </td>
         </tr>`;
         }).join('');
 
-        // Event delegation untuk tombol reset password dan salin URL
+        // Event delegation
         tbody.addEventListener('click', e => {
             const resetBtn = e.target.closest('.reset-pw-btn');
             if (resetBtn && !resetBtn.disabled) {
@@ -96,6 +107,8 @@ async function loadSchools() {
                     setTimeout(() => { copyBtn.textContent = orig; }, 1500);
                 });
             }
+            const delBtn = e.target.closest('.delete-school-btn');
+            if (delBtn) confirmDeleteSchool(delBtn.dataset.schoolId, delBtn.dataset.schoolName);
         });
     } catch (err) {
         hintEl.textContent = `Gagal memuat: ${err.message}`;
@@ -156,6 +169,36 @@ document.getElementById('provision-form').addEventListener('submit', async (e) =
         btn.disabled = false; btn.textContent = 'Daftarkan Sekolah';
     }
 });
+
+// ── Hapus sekolah ────────────────────────────────────────────
+async function confirmDeleteSchool(schoolId, schoolName) {
+    const konfirmasi = prompt(
+        `⚠️ HAPUS PERMANEN: ${schoolName}\n\n` +
+        `Semua data sekolah ini (guru, siswa, absensi, observasi) akan dihapus selamanya.\n\n` +
+        `Ketik nama sekolah persis untuk konfirmasi:\n${schoolName}`
+    );
+    if (konfirmasi !== schoolName) {
+        if (konfirmasi !== null) alert('Nama tidak cocok. Penghapusan dibatalkan.');
+        return;
+    }
+
+    try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-school`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type':    'application/json',
+                'x-superadmin-key': saKey,
+            },
+            body: JSON.stringify({ school_id: schoolId }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error ?? json?.message ?? 'Gagal menghapus');
+        alert(`Sekolah "${schoolName}" berhasil dihapus.`);
+        loadSchools();
+    } catch (err) {
+        alert(`Error: ${err.message}`);
+    }
+}
 
 // ── Modal reset password admin sekolah ───────────────────────
 const resetModal       = document.getElementById('reset-modal');
