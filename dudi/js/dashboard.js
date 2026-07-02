@@ -6,6 +6,7 @@
 import { applyBrandingById } from '../../shared/branding.js';
 import { initIdleTimeout } from '../../shared/idle-timeout.js';
 import { checkMustChangePassword } from '../../shared/change-password.js';
+import { initLoginGuard } from '../../shared/login-guard.js';
 import {
     supabase,
     getCurrentUserRow,
@@ -96,6 +97,7 @@ async function init() {
     applyBrandingById(userRow.school_id, supabase);
     initIdleTimeout({ onIdle: async () => { await logout(); window.location.href = 'index.html'; } });
     await checkMustChangePassword(supabase, userRow);
+    await initLoginGuard(supabase, userRow);
     orgNameEl.textContent  = userRow.dudi_org_name ?? userRow.full_name;
     userNameEl.textContent = 'PJ: ' + userRow.full_name;
 
