@@ -697,6 +697,7 @@ async function onConfirmNewYear() {
         state.promotedCount   = data.enrolled_count;
         state.newYearDone     = true;
 
+        btn.textContent = 'Terkonfirmasi';
         resultArea.innerHTML = `<div class="alert alert-success" style="display:block">✅ Tahun ajaran ${newAcademicYear} semester ${newSemester} aktif. ${data.enrolled_count} siswa naik kelas.</div>`;
         resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
         renderStepVisibility();
