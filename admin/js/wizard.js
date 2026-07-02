@@ -371,12 +371,54 @@ async function renderScheduleStep() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 10 dari ${TOTAL_STEPS}</div>
         <h3>Jadwal</h3>
-        <p class="hint">Susun jadwal mengajar secara visual. Staf (langkah 5) dan kelas (langkah 4) harus sudah ada. Langkah ini bisa dilewati dan disusun nanti.</p>
+        <p class="hint">Susun jadwal mengajar secara visual, atau impor dari file CSV. Staf (langkah 5) dan kelas (langkah 4) harus sudah ada. Langkah ini bisa dilewati dan disusun nanti.</p>
         <button type="button" class="btn btn-primary" id="wz-open-schedule" style="margin-bottom:16px;padding:10px 20px;font-size:14px">Susun Jadwal Visual</button>
-        <div id="wz-data-list"><p class="hint">Memuat data…</p></div>
+
+        <hr style="margin:16px 0;border-color:var(--color-border)">
+        <h4 style="margin:0 0 6px">Impor dari file CSV</h4>
+        <p class="hint" style="margin:0 0 10px">Kolom yang diharapkan: <code>nama_guru, nama_kelas, hari, start_time, end_time</code><br>
+        Hari: SENIN/SELASA/RABU/KAMIS/JUMAT/SABTU &nbsp;|&nbsp; Waktu: HH:MM (contoh: 07:00)</p>
+        <div class="field" style="margin-bottom:8px">
+            <input type="file" id="wz-schedule-file" accept=".csv" class="input" style="padding:6px">
+        </div>
+        <button type="button" class="btn btn-secondary" id="wz-schedule-import" style="padding:8px 18px">Unggah &amp; Impor</button>
+        <div id="wz-schedule-import-status" style="margin-top:10px"></div>
+
+        <div id="wz-data-list" style="margin-top:16px"><p class="hint">Memuat data…</p></div>
     `;
 
     document.getElementById('wz-open-schedule').addEventListener('click', () => openScheduleBuilder());
+
+    document.getElementById('wz-schedule-import').addEventListener('click', async () => {
+        const fileInput  = document.getElementById('wz-schedule-file');
+        const statusEl   = document.getElementById('wz-schedule-import-status');
+        const btn        = document.getElementById('wz-schedule-import');
+        const file       = fileInput.files?.[0];
+        if (!file) { statusEl.innerHTML = '<p class="hint" style="color:var(--color-danger)">Pilih file CSV terlebih dahulu.</p>'; return; }
+
+        btn.disabled = true;
+        btn.textContent = 'Mengimpor…';
+        statusEl.innerHTML = '<p class="hint">Memproses file…</p>';
+
+        try {
+            const csvText = await file.text();
+            const result  = await importSchedules(csvText);
+            const { total_templates = 0, schedules_generated = 0, failed = 0, errors = [] } = result ?? {};
+            if (failed > 0) {
+                const errList = errors.slice(0, 5).map(e => `<li>Baris ${e.row}: ${e.message}</li>`).join('');
+                statusEl.innerHTML = `<div class="alert alert-danger"><strong>${failed} baris gagal.</strong><ul style="margin:4px 0 0 16px">${errList}${errors.length > 5 ? `<li>…dan ${errors.length - 5} lainnya</li>` : ''}</ul></div>`;
+            } else {
+                statusEl.innerHTML = `<div class="alert alert-success">✓ Berhasil: ${total_templates} template jadwal, ${schedules_generated} sesi dibuat.</div>`;
+            }
+            await refreshDataList(10);
+        } catch (err) {
+            statusEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal: ${err.message}</p>`;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Unggah & Impor';
+        }
+    });
+
     await refreshDataList(10);
     nextBtn.disabled = false;
 }
