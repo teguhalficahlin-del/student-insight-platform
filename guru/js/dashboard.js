@@ -161,7 +161,7 @@ async function init() {
 const TAB_SHORT = {
     guru: 'Beranda', wali_kelas: 'Wali', bk: 'BK', kaprodi: 'Prodi',
     waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', kepsek: 'Kepsek',
-    kasus: 'Kasus', jurnal: 'Jurnal',
+    kasus: 'Pembinaan', jurnal: 'Jurnal',
 };
 
 function buildTabs() {
@@ -170,7 +170,7 @@ function buildTabs() {
     const tabs = [];
     if (isTeacher) tabs.push({ key: 'guru', label: 'Dashboard Guru' });
     jabatan.forEach(j => tabs.push({ key: j, label: jabatanLabel(j) }));
-    tabs.push({ key: 'kasus', label: 'Kasus' });
+    tabs.push({ key: 'kasus', label: 'Pembinaan Siswa' });
     if (isTeacher) tabs.push({ key: 'jurnal', label: 'Jurnal Mengajar' });
 
     nav.innerHTML = tabs.map(t =>
