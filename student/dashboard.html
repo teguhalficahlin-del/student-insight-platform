@@ -128,11 +128,14 @@
 
 <script type="module" src="js/dashboard.js"></script>
 <script>
+  /* SW DINONAKTIFKAN SEMENTARA u2014 lihat commit 8745e4c (fix v8 stuck cache).
+     Uncomment blok di bawah untuk reaktivasi service worker.
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('../sw.js', { updateViaCache: 'none' });
     });
   }
+  */
 </script>
 </body>
 </html>
