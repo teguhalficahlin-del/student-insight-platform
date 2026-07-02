@@ -230,7 +230,7 @@ function setupStep2() {
                         <td>${s.full_name}</td><td>${s.nis}</td>
                     </tr>`).join('');
                 return `
-                    <details style="margin:4px 0 4px 16px" open>
+                    <details style="margin:4px 0 4px 16px">
                         <summary style="cursor:pointer;font-weight:600">${kls} (${list.length})</summary>
                         <table class="table" style="margin-top:4px">
                             <thead><tr><th></th><th>Nama</th><th>NIS</th></tr></thead>
@@ -239,7 +239,7 @@ function setupStep2() {
                     </details>`;
             }).join('');
             return `
-                <details style="margin-bottom:8px" open>
+                <details style="margin-bottom:8px">
                     <summary style="cursor:pointer;font-weight:600">${prog} (${progTotal})</summary>
                     ${classHtml}
                 </details>`;
@@ -428,7 +428,7 @@ async function setupStep3() {
 
             const progTotal = classList.reduce((t, c) => t + c.studentIds.length, 0);
             return `
-                <details style="margin-bottom:8px" open>
+                <details style="margin-bottom:8px">
                     <summary style="cursor:pointer;font-weight:600">${prog} (${progTotal} siswa)</summary>
                     <table class="table" style="margin-top:4px">
                         <thead><tr><th>Kelas Asal</th><th>Jumlah</th><th>Kelas Tujuan</th></tr></thead>
