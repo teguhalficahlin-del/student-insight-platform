@@ -44,6 +44,12 @@ body.page-dashboard {
     overflow-x: hidden;
 }
 
+html.page-login,
+body.page-login {
+    min-width: 360px;
+    overflow-x: hidden;
+}
+
 html.page-wizard,
 body.page-wizard {
     min-width: 360px;
@@ -159,10 +165,16 @@ label {
 
 .login-card {
     width: 400px;
+    max-width: calc(100vw - 32px);
     background: var(--color-surface);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
     padding: 36px 32px;
+}
+
+@media (max-width: 480px) {
+    .login-screen { align-items: flex-start; padding-top: 48px; }
+    .login-card { padding: 28px 20px; }
 }
 
 .login-card .brand {
