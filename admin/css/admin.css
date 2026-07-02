@@ -510,6 +510,21 @@ label {
 .wizard-step { display: none; }
 .wizard-step.is-active { display: block; }
 
+@media (max-width: 600px) {
+    .wizard-shell { margin: 16px auto; padding: 0 12px; }
+    .wizard-panel { padding: 20px 14px; }
+    /* Progress bar: sembunyikan label, tampilkan hanya dot aktif & nomor */
+    .wizard-progress { gap: 0; margin-bottom: 20px; }
+    .wizard-progress .step-dot { font-size: 10px; padding-top: 24px; }
+    .wizard-progress .step-dot:not(.is-active):not(.is-done) { color: transparent; }
+    .wizard-progress .step-dot::before { width: 16px; height: 16px; margin-left: -8px; }
+    /* Tabel dalam wizard bisa scroll horizontal */
+    .wizard-panel .table { min-width: 380px; font-size: 13px; }
+    .wizard-panel .table th,
+    .wizard-panel .table td { padding: 7px 8px; }
+    .wizard-panel > .wizard-step { overflow-x: auto; }
+}
+
 /* ── CSV import widgets ──────────────────────────────────── */
 
 .dropzone {
