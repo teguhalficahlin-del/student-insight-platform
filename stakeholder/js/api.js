@@ -37,7 +37,7 @@ export async function getCurrentUserRow() {
     if (!auth?.user) return null;
     const { data, error } = await supabase
         .from('users')
-        .select('user_id, full_name, role_type, login_identifier')
+        .select('user_id, full_name, role_type, login_identifier, is_active')
         .eq('auth_user_id', auth.user.id)
         .maybeSingle();
     if (error) throw error;

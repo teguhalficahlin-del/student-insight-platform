@@ -36,7 +36,7 @@ export async function getCurrentUserRow() {
         .select(`
             user_id, full_name, role_type, login_identifier, teacher_code,
             wali_kelas_class_id, kaprodi_program_id,
-            is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan
+            is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, is_active
         `)
         .eq('auth_user_id', auth.user.id)
         .maybeSingle();

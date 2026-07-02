@@ -116,7 +116,7 @@ async function init() {
     if (!auth?.user) { window.location.href = 'index.html'; return; }
 
     currentUser = await getCurrentUserRow();
-    if (!currentUser || !GURU_ROLES.includes(currentUser.role_type)) {
+    if (!currentUser || !GURU_ROLES.includes(currentUser.role_type) || currentUser.is_active === false) {
         await supabase.auth.signOut();
         window.location.href = 'index.html';
         return;

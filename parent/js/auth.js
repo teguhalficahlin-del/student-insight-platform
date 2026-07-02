@@ -47,6 +47,13 @@ form.addEventListener('submit', async (e) => {
             submitBtn.textContent = 'Masuk';
             return;
         }
+        if (userRow.is_active === false) {
+            errorEl.textContent   = 'Akun Anda telah dinonaktifkan. Hubungi admin sekolah.';
+            errorEl.style.display = 'block';
+            submitBtn.disabled    = false;
+            submitBtn.textContent = 'Masuk';
+            return;
+        }
 
         window.location.href = 'portal.html';
 

@@ -143,4 +143,5 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; c
     .table { font-size: 13px; }
     .table th, .table td { padding: 8px 10px; }
     .cred-value { font-size: 13px; }
+    .col-hide-mobile { display: none; }
 }

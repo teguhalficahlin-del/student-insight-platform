@@ -49,6 +49,10 @@ form.addEventListener('submit', async (e) => {
             showError('Akun ini bukan akun DUDI. Hubungi sekolah jika ada masalah.');
             return;
         }
+        if (userRow.is_active === false) {
+            showError('Akun Anda telah dinonaktifkan. Hubungi admin sekolah.');
+            return;
+        }
 
         window.location.href = 'dashboard.html';
     } catch (err) {

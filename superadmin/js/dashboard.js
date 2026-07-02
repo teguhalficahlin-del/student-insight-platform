@@ -70,12 +70,12 @@ async function loadSchools() {
                 : '—';
             return `<tr>
             <td>${esc(s.name)}</td>
-            <td>${esc(s.npsn)}</td>
+            <td class="col-hide-mobile">${esc(s.npsn)}</td>
             <td>${slugCell}</td>
-            <td>${s.primary_color ? `<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:3px;background:${esc(s.primary_color)};display:inline-block"></span>${esc(s.primary_color)}</span>` : '—'}</td>
-            <td>${esc(s.phone)}</td>
+            <td class="col-hide-mobile">${s.primary_color ? `<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:3px;background:${esc(s.primary_color)};display:inline-block"></span>${esc(s.primary_color)}</span>` : '—'}</td>
+            <td class="col-hide-mobile">${esc(s.phone)}</td>
             <td><span class="badge ${s.is_active ? 'badge-active' : 'badge-inactive'}">${s.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
-            <td>${fmt(s.created_at)}</td>
+            <td class="col-hide-mobile">${fmt(s.created_at)}</td>
             <td style="display:flex;flex-direction:column;gap:6px;padding:10px 8px">
                 <button class="btn btn-sm btn-secondary reset-pw-btn"
                     data-school-id="${esc(s.school_id)}"

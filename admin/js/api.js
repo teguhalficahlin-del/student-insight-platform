@@ -719,6 +719,15 @@ export async function deleteBulk(table, ids, onProgress) {
     return { deleted, errors };
 }
 
+/** Aktifkan atau nonaktifkan akun staf (soft-delete). */
+export async function setUserActive(user_id, is_active) {
+    const { error } = await supabase
+        .from('users')
+        .update({ is_active })
+        .eq('user_id', user_id);
+    if (error) throw error;
+}
+
 /** Toggle status aktif/nonaktif mata pelajaran. */
 export async function toggleSubjectActive(subject_id, is_active) {
     const { data, error } = await supabase

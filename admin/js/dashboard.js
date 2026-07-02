@@ -6,7 +6,7 @@
  */
 
 import { applyBrandingById } from '../../shared/branding.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -385,16 +385,55 @@ function buildJabatan(u) {
 
 async function renderStaffPanel() {
     const users = await fetchAllRows('users',
-        q => q.select('full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, wali_kelas_class_id, kaprodi_program_id')
+        q => q.select('user_id, full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, wali_kelas_class_id, kaprodi_program_id, is_active')
               .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")')
               .order('full_name'));
+    const aktif    = users.filter(u => u.is_active !== false);
+    const nonaktif = users.filter(u => u.is_active === false);
+
+    function staffRow(u) {
+        const rowStyle = u.is_active === false ? 'opacity:.5' : '';
+        const badge    = u.is_active === false
+            ? '<span style="font-size:11px;background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 6px;margin-left:6px">Nonaktif</span>'
+            : '';
+        const btn = u.is_active === false
+            ? `<button class="btn btn-sm btn-secondary staff-toggle-btn" data-user-id="${u.user_id}" data-active="false" style="font-size:11px;padding:3px 8px">Aktifkan</button>`
+            : `<button class="btn btn-sm staff-toggle-btn" data-user-id="${u.user_id}" data-active="true" style="font-size:11px;padding:3px 8px;background:#b45309;color:#fff;border-color:#b45309">Nonaktifkan</button>`;
+        return `<tr style="${rowStyle}">
+            <td>${esc(u.full_name)}${badge}</td>
+            <td>${esc(u.login_identifier)}</td>
+            <td>${esc(u.teacher_code ?? '—')}</td>
+            <td>${buildJabatan(u)}</td>
+            <td>${btn}</td>
+        </tr>`;
+    }
+
     panelContent.innerHTML = `
-        <h3>Staf & Peran (${users.length})</h3>
+        <h3>Staf & Peran (${aktif.length} aktif${nonaktif.length ? `, ${nonaktif.length} nonaktif` : ''})</h3>
         <table class="table">
-            <thead><tr><th>Nama</th><th>NIP/NIK</th><th>Kode</th><th>Jabatan</th></tr></thead>
-            <tbody>${users.map(u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td><td>${u.teacher_code ?? '—'}</td><td>${buildJabatan(u)}</td></tr>`).join('')}</tbody>
+            <thead><tr><th>Nama</th><th>NIP/NIK</th><th>Kode</th><th>Jabatan</th><th>Aksi</th></tr></thead>
+            <tbody id="staff-tbody">${users.map(staffRow).join('')}</tbody>
         </table>
+        <p class="hint" style="margin-top:8px;font-size:12px">Staf nonaktif tidak bisa login. Data absensi dan catatan mereka tetap tersimpan.</p>
     `;
+
+    document.getElementById('staff-tbody')?.addEventListener('click', async e => {
+        const btn = e.target.closest('.staff-toggle-btn');
+        if (!btn) return;
+        const userId   = btn.dataset.userId;
+        const isActive = btn.dataset.active === 'true';
+        const nama     = btn.closest('tr').querySelector('td')?.textContent?.split('\n')[0]?.trim() ?? 'staf ini';
+        const aksi     = isActive ? 'nonaktifkan' : 'aktifkan kembali';
+        if (!confirm(`${isActive ? 'Nonaktifkan' : 'Aktifkan kembali'} ${nama}?\n\n${isActive ? 'Staf ini tidak bisa login sampai diaktifkan kembali.' : 'Staf ini bisa login kembali.'}`)) return;
+        btn.disabled = true;
+        try {
+            await setUserActive(userId, !isActive);
+            await renderStaffPanel();
+        } catch (err) {
+            alert(`Gagal ${aksi}: ${err.message}`);
+            btn.disabled = false;
+        }
+    });
 }
 
 async function renderStudentsPanel() {

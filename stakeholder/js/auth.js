@@ -26,7 +26,7 @@ applyBranding().then(b => {
 supabase.auth.getUser().then(async ({ data }) => {
     if (!data?.user) return;
     const row = await getCurrentUserRow();
-    if (row && STAKEHOLDER_ROLES.includes(row.role_type)) {
+    if (row && STAKEHOLDER_ROLES.includes(row.role_type) && row.is_active !== false) {
         window.location.href = 'dashboard.html';
     }
 });
@@ -43,6 +43,10 @@ form.addEventListener('submit', async (e) => {
         if (!row || !STAKEHOLDER_ROLES.includes(row.role_type)) {
             await supabase.auth.signOut();
             throw new Error('Akun ini tidak memiliki akses ke Portal Stakeholder.');
+        }
+        if (row.is_active === false) {
+            await supabase.auth.signOut();
+            throw new Error('Akun Anda telah dinonaktifkan. Hubungi admin sekolah.');
         }
         window.location.href = 'dashboard.html';
     } catch (err) {
