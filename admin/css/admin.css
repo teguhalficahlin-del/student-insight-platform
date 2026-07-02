@@ -659,13 +659,23 @@ label {
 
     .page-dashboard .panel { padding: 16px; }
 
-    .page-dashboard .table {
+    /* Cegah panel/tabel melebar melewati layar (child flex default min-width:auto) */
+    .page-dashboard .main-content { min-width: 0; }
+    .page-dashboard .panel { max-width: 100%; }
+
+    /* Tabel lebar digeser horizontal DI DALAM panel — tidak terpotong oleh
+       overflow-x:hidden di body (kolom Aksi dll tetap terjangkau). */
+    .page-dashboard .panel .table {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
         font-size: 13px;
     }
-
-    .page-dashboard .table th,
-    .page-dashboard .table td {
+    .page-dashboard .panel .table th,
+    .page-dashboard .panel .table td {
         padding: 8px 6px;
+        white-space: nowrap;
     }
 }
 
