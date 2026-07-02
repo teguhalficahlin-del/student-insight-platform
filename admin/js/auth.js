@@ -9,14 +9,28 @@
 
 import { loginWithIdentifier, getCurrentUserRow, getSchoolConfig } from './api.js';
 import { applyBranding } from '../../shared/branding.js';
-let _schoolId = null;
-applyBranding().then(b => { _schoolId = b?.school_id ?? null; });
 
-const form        = document.getElementById('login-form');
+let _schoolId = null;
+
+const form         = document.getElementById('login-form');
 const identifierEl = document.getElementById('login-identifier');
 const passwordEl   = document.getElementById('login-password');
-const errorEl       = document.getElementById('login-error');
-const submitBtn     = document.getElementById('login-submit');
+const errorEl      = document.getElementById('login-error');
+const submitBtn    = document.getElementById('login-submit');
+
+// Tombol dinonaktifkan sampai konteks sekolah terkonfirmasi dari URL slug.
+// Tanpa school_id, fn_resolve_login_email menolak — tidak ada fallback global.
+submitBtn.disabled = true;
+
+applyBranding().then(b => {
+    _schoolId = b?.school_id ?? null;
+    if (!_schoolId) {
+        errorEl.textContent = 'Portal ini harus diakses melalui URL sekolah Anda. Hubungi administrator.';
+        errorEl.style.display = 'block';
+    } else {
+        submitBtn.disabled = false;
+    }
+});
 
 form.addEventListener('submit', async (e) => {
     e.preventDefault();

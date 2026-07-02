@@ -455,11 +455,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
                         identifierType,
                     )
             );
-            // STAKEHOLDER: kode login = password awal, agar admin bisa langsung
-            // membagikan kode kepada stakeholder tanpa langkah tambahan.
-            const tempPassword = row.role_type === 'STAKEHOLDER'
-                ? row.nip_atau_nik.trim().toUpperCase()
-                : generateTempPassword();
+            // Semua role termasuk STAKEHOLDER: password acak terpisah dari kode login.
+            // Kode (login_identifier) = identitas, password = rahasia yang berbeda.
+            // Wizard menampilkan keduanya sekali kepada admin setelah berhasil dibuat.
+            const tempPassword = generateTempPassword();
 
             const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                 email:         internalEmail,

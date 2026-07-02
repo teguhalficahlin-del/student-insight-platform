@@ -339,12 +339,14 @@ async function renderStakeholderStep() {
         addBtn.textContent = 'Menyimpan…';
         try {
             const csv = `nama,nip_atau_nik,role_type\n${name},${code},STAKEHOLDER`;
-            await importUsers(csv);
+            const result = await importUsers(csv);
             const savedCode = code;
+            // Password acak terpisah dari kode — ambil dari response edge function
+            const tempPassword = result?.imported?.[0]?.temp_password ?? '(lihat di konsol admin)';
             nameEl.value = '';
             codeEl.value = '';
             await refreshDataList(9);
-            showSuccess(`Stakeholder "${name}" berhasil ditambahkan. Kode login: ${savedCode} — Password awal: ${savedCode}`);
+            showSuccess(`Stakeholder "${name}" berhasil ditambahkan.\nKode login: ${savedCode}\nPassword awal: ${tempPassword}\n\nCatat dan bagikan keduanya kepada stakeholder. Password tidak bisa ditampilkan ulang.`);
         } catch (err) {
             console.error('[wizard] tambah stakeholder error:', err);
             const listEl = document.getElementById('wz-data-list');

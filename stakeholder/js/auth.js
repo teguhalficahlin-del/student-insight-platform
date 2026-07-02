@@ -1,13 +1,26 @@
 import { supabase, loginWithIdentifier, getCurrentUserRow, STAKEHOLDER_ROLES } from './api.js';
 import { applyBranding } from '../../shared/branding.js';
+
 let _schoolId = null;
-applyBranding().then(b => { _schoolId = b?.school_id ?? null; });
 
 const form     = document.getElementById('login-form');
 const identEl  = document.getElementById('identifier');
 const passEl   = document.getElementById('password');
 const errEl    = document.getElementById('login-error');
 const loginBtn = document.getElementById('login-btn');
+
+// Tombol dinonaktifkan sampai konteks sekolah terkonfirmasi dari URL slug.
+loginBtn.disabled = true;
+
+applyBranding().then(b => {
+    _schoolId = b?.school_id ?? null;
+    if (!_schoolId) {
+        errEl.textContent   = 'Portal ini harus diakses melalui URL sekolah Anda. Hubungi administrator.';
+        errEl.style.display = 'block';
+    } else {
+        loginBtn.disabled = false;
+    }
+});
 
 // Jika sudah login sebagai stakeholder, langsung ke dashboard
 supabase.auth.getUser().then(async ({ data }) => {
