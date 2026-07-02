@@ -202,9 +202,7 @@ function setupStep2() {
     const students = state.gradeXIIStudents;
     const container = document.getElementById('graduation-list');
 
-    const cardEl = document.createElement('div');
-    cardEl.innerHTML = summaryCard(students.length, 'Total Siswa Kelas XII');
-    container.before(cardEl);
+    document.getElementById('graduation-summary').innerHTML = summaryCard(students.length, 'Total Siswa Kelas XII');
 
     if (students.length === 0) {
         container.innerHTML = '<p class="hint">Tidak ada siswa untuk diluluskan.</p>';
@@ -394,9 +392,7 @@ async function setupStep3() {
 
     const container = document.getElementById('promotion-list');
     const totalPromotable = state.sourceClasses.reduce((t, c) => t + c.studentIds.length, 0);
-    const cardEl3 = document.createElement('div');
-    cardEl3.innerHTML = summaryCard(totalPromotable, 'Total Siswa Naik Kelas');
-    container.before(cardEl3);
+    document.getElementById('promotion-summary').innerHTML = summaryCard(totalPromotable, 'Total Siswa Naik Kelas');
     let allValid = true;
 
     if (state.sourceClasses.length === 0) {
