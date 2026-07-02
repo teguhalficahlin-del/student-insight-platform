@@ -357,14 +357,15 @@ async function fetchPromotableClasses(config) {
         .in('grade_level', [10, 11]);
     if (classErr) throw classErr;
 
-    // Fetch kelas tujuan yang sudah ada di tahun ajaran baru
+    // Fetch kelas tujuan: kelas grade 11 dan 12 yang sudah ada (tahun ajaran saat ini).
+    // Kelas adalah entitas permanen — tidak dibuat ulang tiap tahun.
+    // Hanya enrollment siswa yang berubah per tahun ajaran.
     const { data: nextClasses, error: nextErr } = await supabase
         .from('classes')
         .select('class_id, name, grade_level')
-        .eq('academic_year', nextAcademicYear);
+        .eq('academic_year', config.current_academic_year)
+        .in('grade_level', [11, 12]);
     if (nextErr) throw nextErr;
-    console.log('[debug] nextAcademicYear:', nextAcademicYear);
-    console.log('[debug] nextClasses:', nextClasses);
 
     // Map nama kelas tujuan → { class_id, grade_level } (untuk validasi
     // dan pengelompokan per tingkat tanpa query tambahan per kelas)
