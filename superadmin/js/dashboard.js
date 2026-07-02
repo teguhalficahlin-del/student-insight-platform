@@ -59,8 +59,6 @@ document.getElementById('logout-btn').addEventListener('click', () => {
 // ── Load daftar sekolah ───────────────────────────────────────
 async function loadSchools() {
     const hintEl  = document.getElementById('schools-hint');
-    const tableEl = document.getElementById('schools-table');
-    const tbody   = document.getElementById('schools-body');
 
     try {
         // Superadmin key-based (bukan Supabase auth) → baca daftar sekolah
@@ -78,62 +76,85 @@ async function loadSchools() {
         }
 
         hintEl.style.display = 'none';
-        tableEl.style.display = '';
+        const listEl = document.getElementById('schools-list');
         const BASE = location.origin + location.pathname.replace(/superadmin\/.*$/, '');
-        tbody.innerHTML = data.map(s => {
+
+        listEl.innerHTML = data.map(s => {
             const adminUrl = s.slug ? `${BASE}admin/?school=${esc(s.slug)}` : null;
-            const slugCell = adminUrl
-                ? `<div style="display:flex;flex-direction:column;gap:4px">
-                     <code style="font-size:12px;color:var(--color-warning)">?school=${esc(s.slug)}</code>
-                     <div style="display:flex;gap:6px">
-                       <button class="btn btn-sm btn-secondary copy-url-btn" data-url="${adminUrl}" style="padding:2px 8px;font-size:11px">Salin Link</button>
-                       <a href="${adminUrl}" target="_blank" class="btn btn-sm btn-secondary" style="padding:2px 8px;font-size:11px">Buka ↗</a>
-                     </div>
-                   </div>`
+            const colorSwatch = s.primary_color
+                ? `<span class="color-swatch" style="background:${esc(s.primary_color)}"></span>${esc(s.primary_color)}`
                 : '—';
-            return `<tr>
-            <td>${esc(s.name)}</td>
-            <td class="col-hide-mobile" data-label="NPSN">${esc(s.npsn)}</td>
-            <td data-label="Link Login">${slugCell}</td>
-            <td class="col-hide-mobile" data-label="Warna">${s.primary_color ? `<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:3px;background:${esc(s.primary_color)};display:inline-block"></span>${esc(s.primary_color)}</span>` : '—'}</td>
-            <td class="col-hide-tablet" data-label="Telepon">${esc(s.phone)}</td>
-            <td data-label="Status"><span class="badge ${s.is_active ? 'badge-active' : 'badge-inactive'}">${s.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
-            <td class="col-hide-tablet" data-label="Terdaftar">${fmt(s.created_at)}</td>
-            <td data-label="aksi" class="aksi-cell">
-                <button class="btn btn-sm btn-secondary reset-pw-btn"
-                    data-school-id="${esc(s.school_id)}"
-                    data-school-name="${esc(s.name)}"
-                    ${!s.admin_identifier ? 'disabled title="Tidak ada akun admin"' : ''}>
-                    Reset PW
-                </button>
-                ${s.is_active
-                    ? `<button class="btn btn-sm toggle-status-btn"
-                            data-school-id="${esc(s.school_id)}"
-                            data-school-name="${esc(s.name)}"
-                            data-active="true"
-                            style="background:#b45309;color:#fff;border-color:#b45309">
-                            Nonaktif
-                       </button>`
-                    : `<button class="btn btn-sm toggle-status-btn"
-                            data-school-id="${esc(s.school_id)}"
-                            data-school-name="${esc(s.name)}"
-                            data-active="false"
-                            style="background:#15803d;color:#fff;border-color:#15803d">
-                            Aktifkan
-                       </button>
-                       <button class="btn btn-sm delete-school-btn"
-                            data-school-id="${esc(s.school_id)}"
-                            data-school-name="${esc(s.name)}"
-                            style="background:#dc2626;color:#fff;border-color:#dc2626">
-                            Hapus
-                       </button>`
-                }
-            </td>
-        </tr>`;
+            return `
+            <div class="school-item">
+              <button class="school-summary" type="button">
+                <span class="school-summary-left">
+                  ${s.primary_color ? `<span class="color-dot" style="background:${esc(s.primary_color)}"></span>` : ''}
+                  <span class="school-summary-name">${esc(s.name)}</span>
+                </span>
+                <span class="school-summary-right">
+                  <span class="badge ${s.is_active ? 'badge-active' : 'badge-inactive'}">${s.is_active ? 'Aktif' : 'Nonaktif'}</span>
+                  <span class="chevron">›</span>
+                </span>
+              </button>
+              <div class="school-detail">
+                <dl class="school-meta">
+                  ${s.npsn ? `<div class="meta-row"><dt>NPSN</dt><dd>${esc(s.npsn)}</dd></div>` : ''}
+                  ${adminUrl ? `<div class="meta-row"><dt>Link Login</dt><dd>
+                    <code class="slug-code">?school=${esc(s.slug)}</code>
+                    <div class="meta-actions">
+                      <button class="btn btn-sm btn-secondary copy-url-btn" data-url="${adminUrl}">Salin Link</button>
+                      <a href="${adminUrl}" target="_blank" class="btn btn-sm btn-secondary">Buka ↗</a>
+                    </div>
+                  </dd></div>` : ''}
+                  ${s.phone ? `<div class="meta-row"><dt>Telepon</dt><dd>${esc(s.phone)}</dd></div>` : ''}
+                  <div class="meta-row"><dt>Warna</dt><dd style="display:flex;align-items:center;gap:6px">${colorSwatch}</dd></div>
+                  <div class="meta-row"><dt>Terdaftar</dt><dd>${fmt(s.created_at)}</dd></div>
+                </dl>
+                <div class="school-actions">
+                  <button class="btn btn-sm btn-secondary reset-pw-btn"
+                      data-school-id="${esc(s.school_id)}"
+                      data-school-name="${esc(s.name)}"
+                      ${!s.admin_identifier ? 'disabled title="Tidak ada akun admin"' : ''}>
+                      Reset Password
+                  </button>
+                  ${s.is_active
+                      ? `<button class="btn btn-sm toggle-status-btn"
+                              data-school-id="${esc(s.school_id)}"
+                              data-school-name="${esc(s.name)}"
+                              data-active="true"
+                              style="background:#b45309;color:#fff;border-color:#b45309">
+                              Nonaktifkan
+                         </button>`
+                      : `<button class="btn btn-sm toggle-status-btn"
+                              data-school-id="${esc(s.school_id)}"
+                              data-school-name="${esc(s.name)}"
+                              data-active="false"
+                              style="background:#15803d;color:#fff;border-color:#15803d">
+                              Aktifkan
+                         </button>
+                         <button class="btn btn-sm delete-school-btn"
+                              data-school-id="${esc(s.school_id)}"
+                              data-school-name="${esc(s.name)}"
+                              style="background:#dc2626;color:#fff;border-color:#dc2626">
+                              Hapus Permanen
+                         </button>`
+                  }
+                </div>
+              </div>
+            </div>`;
         }).join('');
 
-        // Event delegation
-        tbody.addEventListener('click', e => {
+        // Accordion toggle
+        listEl.addEventListener('click', e => {
+            const summary = e.target.closest('.school-summary');
+            if (summary) {
+                const item = summary.closest('.school-item');
+                const isOpen = item.classList.contains('open');
+                // tutup semua lain
+                listEl.querySelectorAll('.school-item.open').forEach(el => el.classList.remove('open'));
+                if (!isOpen) item.classList.add('open');
+                return;
+            }
             const resetBtn = e.target.closest('.reset-pw-btn');
             if (resetBtn && !resetBtn.disabled) {
                 openResetModal(resetBtn.dataset.schoolId, resetBtn.dataset.schoolName);

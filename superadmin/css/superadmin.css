@@ -178,8 +178,48 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; c
 .table td { padding: 10px 12px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
 .table tr:last-child td { border-bottom: none; }
 
-/* ── Aksi cell (tabel sekolah) ───────────────────────────── */
-.aksi-cell { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px; padding: 8px 12px; vertical-align: middle; }
+/* ── Accordion sekolah ───────────────────────────────────── */
+.school-item {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+.school-summary {
+    width: 100%; display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 12px 14px; background: var(--color-bg);
+    border: none; cursor: pointer; text-align: left; min-height: 52px;
+    transition: background .15s;
+}
+.school-summary:hover { background: var(--color-surface); }
+.school-summary-left  { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.school-summary-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.school-summary-name  { font-weight: 600; font-size: 14px; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.chevron { font-size: 18px; color: var(--color-text-muted); transition: transform .2s; display: inline-block; }
+.school-item.open .chevron { transform: rotate(90deg); }
+
+/* Detail panel */
+.school-detail {
+    display: none;
+    padding: 14px;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface);
+}
+.school-item.open .school-detail { display: block; }
+
+/* Meta list */
+.school-meta { margin: 0 0 14px; display: flex; flex-direction: column; gap: 8px; }
+.meta-row { display: flex; gap: 8px; font-size: 13px; }
+.meta-row dt { color: var(--color-text-muted); font-weight: 600; min-width: 80px; flex-shrink: 0; }
+.meta-row dd { margin: 0; color: var(--color-text); }
+.slug-code { font-family: monospace; font-size: 12px; color: var(--color-warning); }
+.meta-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.color-swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+
+/* Aksi buttons */
+.school-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.school-actions .btn { flex: 1; min-width: 120px; }
 
 /* ── Badge ───────────────────────────────────────────────── */
 .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
@@ -220,49 +260,11 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; c
 .modal-actions { display: flex; gap: 10px; }
 .modal-actions .btn { flex: 1; }
 
-/* ── Tablet (≤ 768px): sembunyikan kolom sekunder ───────── */
-@media (max-width: 768px) {
-    .col-hide-tablet { display: none; }
-}
-
 /* ── Mobile (≤ 480px) ────────────────────────────────────── */
 @media (max-width: 480px) {
     .form-grid { grid-template-columns: 1fr; }
     .login-card { padding: 28px 16px; }
     .page-body { padding: 12px; }
     .section-card { border-radius: var(--radius); }
-
-    /* Tabel sekolah → card layout */
-    .table-wrapper { overflow-x: visible; }
-    .schools-table thead { display: none; }
-    .schools-table, .schools-table tbody,
-    .schools-table tr, .schools-table td { display: block; width: 100%; }
-    .schools-table tr {
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius); margin-bottom: 10px;
-        padding: 12px; background: var(--color-bg);
-        /* override table min-width */
-        min-width: 0;
-    }
-    .schools-table .table { min-width: 0; }
-    /* Sembunyikan kolom sekunder di card mobile */
-    .schools-table .col-hide-mobile,
-    .schools-table .col-hide-tablet { display: none; }
-
-    .schools-table td { border: none; padding: 3px 0; font-size: 13px; }
-    .schools-table td:first-child { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
-    .schools-table td[data-label]::before {
-        content: attr(data-label) ": ";
-        font-size: 11px; color: var(--color-text-muted);
-        text-transform: uppercase; font-weight: 600;
-        display: block; margin-top: 8px;
-    }
-    .schools-table td:first-child::before { display: none; }
-    .schools-table .aksi-cell {
-        margin-top: 10px; padding: 0;
-        display: flex !important; flex-direction: row !important;
-        flex-wrap: wrap; gap: 8px;
-    }
-    .schools-table .aksi-cell .btn { flex: 1; min-width: 0; font-size: 13px; }
-    .col-hide-mobile { display: none; }
+    .school-actions .btn { min-width: 0; }
 }
