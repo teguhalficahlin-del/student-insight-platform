@@ -7,7 +7,7 @@
 
 import { applyBrandingById } from '../../shared/branding.js';
 import { initIdleTimeout } from '../../shared/idle-timeout.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, anonymizeAlumnus } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -895,6 +895,7 @@ async function renderAlumniPanel() {
     // ── Siswa alumni ──
     const siswaRaw = await fetchAllRows('students',
         q => q.select(`student_id, full_name, nis, graduated_academic_year,
+            alumni_career_track, alumni_career_note,
             program:programs ( name ),
             enrollment:class_enrollments ( academic_year, class:classes ( name ) )
         `).eq('student_status', 'LULUS').order('full_name'));
@@ -936,34 +937,174 @@ async function renderAlumniPanel() {
         });
     }
 
-    const siswaHtml = renderNestedYearProgramClass(siswaRows, ['Nama', 'NIS', 'Dokumen'],
-        s => `<tr><td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td>
-            <td><button class="btn btn-sm alumni-recap-btn" data-student-id="${s.student_id}" data-name="${esc(s.full_name)}"
-                style="font-size:11px;padding:3px 8px">Cetak Rekap</button></td></tr>`);
+    const CAREER_LABEL = { KULIAH: 'Kuliah', KERJA: 'Kerja', WIRAUSAHA: 'Wirausaha', TIDAK_DIKETAHUI: '—' };
+
+    const siswaHtml = renderNestedYearProgramClass(siswaRows,
+        ['Nama', 'NIS', 'Karir', 'Aksi'],
+        s => `<tr>
+            <td>${esc(s.full_name)}</td>
+            <td>${esc(s.nis)}</td>
+            <td>${esc(CAREER_LABEL[s.alumni_career_track] ?? '—')}</td>
+            <td style="display:flex;gap:4px;flex-wrap:wrap">
+                <button class="btn btn-sm alumni-recap-btn" data-student-id="${s.student_id}" data-name="${esc(s.full_name)}"
+                    style="font-size:11px;padding:3px 8px">Cetak Rekap</button>
+                <button class="btn btn-sm alumni-career-btn" data-student-id="${s.student_id}"
+                    data-track="${esc(s.alumni_career_track ?? '')}" data-note="${esc(s.alumni_career_note ?? '')}"
+                    style="font-size:11px;padding:3px 8px;background:var(--color-secondary,#6b7280);color:#fff">Karir</button>
+            </td></tr>`);
+
     const ortuHtml = renderNestedYearProgramClass(ortuRows, ['Nama', 'NIK'],
         u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td></tr>`);
 
+    // ── Siswa KELUAR (drop-out) — section terpisah
+    const keluarRaw = await fetchAllRows('students',
+        q => q.select('student_id, full_name, nis, keluar_at, keluar_note, program:programs(name)')
+              .eq('student_status', 'KELUAR').order('keluar_at', { ascending: false }));
+    const keluarHtml = keluarRaw.length ? `
+        <table class="table"><thead><tr><th>Nama</th><th>NIS</th><th>Program</th><th>Tanggal Keluar</th><th></th></tr></thead>
+        <tbody>${keluarRaw.map(s => `<tr>
+            <td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td><td>${esc(s.program?.name ?? '—')}</td>
+            <td>${s.keluar_at ? new Date(s.keluar_at).toLocaleDateString('id-ID') : '—'}</td>
+            <td><button class="btn btn-sm alumni-reenroll-btn" data-student-id="${s.student_id}" data-name="${esc(s.full_name)}"
+                style="font-size:11px;padding:3px 8px;background:var(--color-success,#15803d);color:#fff">Re-enroll</button></td>
+        </tr>`).join('')}</tbody></table>` : '<p class="hint">Tidak ada siswa dengan status Keluar.</p>';
+
     panelContent.innerHTML = `
         <h3>Siswa Alumni (${siswaRows.length})</h3>
-        <p class="hint" style="margin-bottom:12px">Dikelompokkan per tahun lulus → program keahlian → kelas. Tombol <strong>Cetak Rekap</strong> membuat surat keterangan rekap (kehadiran, catatan, PKL) untuk alumnus.</p>
+        <p class="hint" style="margin-bottom:12px">Dikelompokkan per tahun lulus → program keahlian → kelas.</p>
         ${siswaHtml}
+        <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
+        <h3>Siswa KELUAR (${keluarRaw.length})</h3>
+        <p class="hint" style="margin-bottom:12px">Drop-out atau pindah sekolah. Tombol <strong>Re-enroll</strong> mengaktifkan kembali akun siswa.</p>
+        ${keluarHtml}
         <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
         <h3>Orang Tua Alumni (${ortuRows.length})</h3>
         <p class="hint" style="margin-bottom:12px">Mengikuti tahun lulus, program, dan kelas anak alumninya.</p>
         ${ortuHtml}
+        <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
+        <div id="retention-section">
+            <h3>Retensi Data Alumni</h3>
+            <p class="hint" style="margin-bottom:12px">Alumni yang lulus ≥5 tahun lalu dapat dianonimkan (nama & NIS diganti). Data absensi/observasi/PKL tetap ada untuk statistik agregat.</p>
+            <button class="btn btn-secondary" id="btn-load-retention" style="font-size:13px">Cek Kandidat Retensi…</button>
+            <div id="retention-result" style="margin-top:12px"></div>
+        </div>
     `;
+
+    // ── Event handlers ──
 
     panelContent.querySelectorAll('.alumni-recap-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
             btn.disabled = true; btn.textContent = 'Memuat…';
+            try { await printAlumniRecap(btn.dataset.studentId); }
+            catch (err) { alert(`Gagal membuat rekap: ${err.message}`); }
+            finally { btn.disabled = false; btn.textContent = 'Cetak Rekap'; }
+        });
+    });
+
+    panelContent.querySelectorAll('.alumni-career-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const track = btn.dataset.track;
+            const note  = btn.dataset.note;
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
+            modal.innerHTML = `
+                <div style="background:var(--color-surface,#fff);border-radius:12px;padding:24px;max-width:380px;width:90%">
+                    <h4 style="margin:0 0 16px">Update Karir Alumni</h4>
+                    <div class="field" style="margin-bottom:12px">
+                        <label class="label">Jalur Karir</label>
+                        <select id="career-track" class="input">
+                            <option value="">— Pilih —</option>
+                            <option value="KULIAH" ${track==='KULIAH'?'selected':''}>Kuliah / Pendidikan Tinggi</option>
+                            <option value="KERJA" ${track==='KERJA'?'selected':''}>Bekerja</option>
+                            <option value="WIRAUSAHA" ${track==='WIRAUSAHA'?'selected':''}>Wirausaha</option>
+                            <option value="TIDAK_DIKETAHUI" ${track==='TIDAK_DIKETAHUI'?'selected':''}>Tidak Diketahui</option>
+                        </select>
+                    </div>
+                    <div class="field" style="margin-bottom:16px">
+                        <label class="label">Catatan (opsional)</label>
+                        <textarea id="career-note" class="input" rows="3" style="resize:vertical">${esc(note)}</textarea>
+                    </div>
+                    <p id="career-status" style="font-size:13px;display:none;margin-bottom:10px"></p>
+                    <div style="display:flex;gap:8px;justify-content:flex-end">
+                        <button id="career-cancel" class="btn btn-secondary btn-sm">Batal</button>
+                        <button id="career-save" class="btn btn-sm" style="background:var(--color-primary,#1d4ed8);color:#fff">Simpan</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            modal.querySelector('#career-cancel').onclick = () => modal.remove();
+            modal.querySelector('#career-save').onclick = async () => {
+                const t = modal.querySelector('#career-track').value;
+                const n = modal.querySelector('#career-note').value.trim();
+                const saveBtn = modal.querySelector('#career-save');
+                const statusEl = modal.querySelector('#career-status');
+                saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan…';
+                try {
+                    await updateAlumniCareer(btn.dataset.studentId, t || null, n || null);
+                    btn.dataset.track = t; btn.dataset.note = n;
+                    statusEl.textContent = '✓ Disimpan'; statusEl.style.color = 'var(--color-success,#15803d)';
+                    statusEl.style.display = 'block';
+                    setTimeout(() => modal.remove(), 900);
+                } catch (err) {
+                    statusEl.textContent = err.message; statusEl.style.color = 'var(--color-danger,#dc2626)';
+                    statusEl.style.display = 'block';
+                    saveBtn.disabled = false; saveBtn.textContent = 'Simpan';
+                }
+            };
+        });
+    });
+
+    panelContent.querySelectorAll('.alumni-reenroll-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm(`Re-enroll ${btn.dataset.name} kembali ke status AKTIF?`)) return;
+            btn.disabled = true; btn.textContent = 'Memproses…';
             try {
-                await printAlumniRecap(btn.dataset.studentId);
+                await reEnrollStudent(btn.dataset.studentId);
+                btn.closest('tr').remove();
             } catch (err) {
-                alert(`Gagal membuat rekap: ${err.message}`);
-            } finally {
-                btn.disabled = false; btn.textContent = 'Cetak Rekap';
+                alert(err.message);
+                btn.disabled = false; btn.textContent = 'Re-enroll';
             }
         });
+    });
+
+    document.getElementById('btn-load-retention')?.addEventListener('click', async () => {
+        const btn = document.getElementById('btn-load-retention');
+        const resultDiv = document.getElementById('retention-result');
+        btn.disabled = true; btn.textContent = 'Memuat…';
+        try {
+            const candidates = await getRetentionCandidates(5);
+            if (!candidates.length) {
+                resultDiv.innerHTML = '<p class="hint">Tidak ada kandidat retensi (belum ada alumni ≥5 tahun lalu).</p>';
+            } else {
+                resultDiv.innerHTML = `
+                    <p class="hint" style="margin-bottom:8px"><strong>${candidates.length} alumni</strong> lulus ≥5 tahun lalu. Data pribadi mereka dapat dianonimkan.</p>
+                    <table class="table"><thead><tr><th>Nama</th><th>NIS</th><th>Tahun Lulus</th><th>Karir</th><th></th></tr></thead>
+                    <tbody>${candidates.map(s => `<tr>
+                        <td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td>
+                        <td>${esc(s.graduated_academic_year ?? '—')}</td>
+                        <td>${esc(CAREER_LABEL[s.alumni_career_track] ?? '—')}</td>
+                        <td><button class="btn btn-sm alumni-anon-btn" data-student-id="${s.student_id}" data-name="${esc(s.full_name)}"
+                            style="font-size:11px;padding:3px 8px;background:#dc2626;color:#fff">Anonimkan</button></td>
+                    </tr>`).join('')}</tbody></table>`;
+                resultDiv.querySelectorAll('.alumni-anon-btn').forEach(ab => {
+                    ab.addEventListener('click', async () => {
+                        if (!confirm(`Anonimkan data ${ab.dataset.name}? Nama dan NIS akan dihapus permanen.`)) return;
+                        ab.disabled = true; ab.textContent = 'Memproses…';
+                        try {
+                            await anonymizeAlumnus(ab.dataset.studentId);
+                            ab.closest('tr').remove();
+                        } catch (err) {
+                            alert(err.message);
+                            ab.disabled = false; ab.textContent = 'Anonimkan';
+                        }
+                    });
+                });
+            }
+        } catch (err) {
+            resultDiv.innerHTML = `<p style="color:var(--color-danger,#dc2626)">${err.message}</p>`;
+        } finally {
+            btn.disabled = false; btn.textContent = 'Cek Kandidat Retensi…';
+        }
     });
 }
 

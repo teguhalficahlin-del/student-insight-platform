@@ -139,6 +139,76 @@ export async function getAlumniRecap(studentId) {
     return { student, attendance, obsPositif, obsPerhatian, pkl };
 }
 
+// ─────────────────────────────────────────────────────────────
+// ALUMNI (10.4–10.6)
+// ─────────────────────────────────────────────────────────────
+
+/** 10.4 — Simpan jalur karir alumnus */
+export async function updateAlumniCareer(studentId, track, note) {
+    const { error } = await supabase
+        .from('students')
+        .update({ alumni_career_track: track || null, alumni_career_note: note || null })
+        .eq('student_id', studentId);
+    if (error) throw error;
+}
+
+/** 10.5 — Tandai siswa aktif sebagai KELUAR */
+export async function markStudentKeluar(studentId, note) {
+    const { error } = await supabase
+        .from('students')
+        .update({ student_status: 'KELUAR', keluar_at: new Date().toISOString(), keluar_note: note || null })
+        .eq('student_id', studentId)
+        .in('student_status', ['AKTIF', 'PKL']);
+    if (error) throw error;
+}
+
+/** 10.5 — Re-enroll siswa KELUAR kembali ke AKTIF */
+export async function reEnrollStudent(studentId) {
+    const { error } = await supabase
+        .from('students')
+        .update({ student_status: 'AKTIF', keluar_at: null, keluar_note: null })
+        .eq('student_id', studentId)
+        .eq('student_status', 'KELUAR');
+    if (error) throw error;
+}
+
+/** 10.6 — Ambil daftar alumni yang graduated_academic_year <= batas retensi */
+export async function getRetentionCandidates(retentionYears = 5) {
+    const currentYear = new Date().getFullYear();
+    const cutoffYear  = String(currentYear - retentionYears);
+    const { data, error } = await supabase
+        .from('students')
+        .select('student_id, full_name, nis, graduated_academic_year, alumni_career_track')
+        .eq('student_status', 'LULUS')
+        .is('anonymized_at', null)
+        .lte('graduated_academic_year', cutoffYear)
+        .order('graduated_academic_year');
+    if (error) throw error;
+    return data ?? [];
+}
+
+/** 10.6 — Anonimkan data alumnus (nama + NIS) untuk memenuhi retensi */
+export async function anonymizeAlumnus(studentId) {
+    const { data: s, error: fetchErr } = await supabase
+        .from('students')
+        .select('nis')
+        .eq('student_id', studentId)
+        .single();
+    if (fetchErr) throw fetchErr;
+
+    const { error } = await supabase
+        .from('students')
+        .update({
+            full_name:    `[Alumni-${s.nis}]`,
+            nis:          `[ANON-${studentId.slice(0, 8)}]`,
+            anonymized_at: new Date().toISOString(),
+        })
+        .eq('student_id', studentId)
+        .eq('student_status', 'LULUS')
+        .is('anonymized_at', null);
+    if (error) throw error;
+}
+
 /**
  * Batalkan (void) sebuah observasi yang salah — soft-delete.
  * Baris tetap tersimpan untuk audit; disembunyikan dari siswa/ortu/DUDI
