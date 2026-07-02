@@ -184,12 +184,12 @@ async function setupStep1() {
     const step1 = document.querySelector('.wizard-step[data-step="1"]');
     step1.innerHTML = `
         <div class="step-label">Langkah 1 dari 5</div>
-        <h3>Review Siswa Kelas XII (${students.length})</h3>
+        <h3>Review Siswa Kelas XII</h3>
         <p class="hint">Siswa yang terdaftar di kelas tingkat 12 pada tahun ajaran aktif.</p>
 
         ${students.length === 0
             ? `<div class="alert alert-warning" style="display:block">Tidak ada siswa kelas XII pada tahun ajaran ini.</div>`
-            : accordionHtml
+            : `${summaryCard(students.length, 'Total Siswa Kelas XII')}${accordionHtml}`
         }
     `;
 }
@@ -201,6 +201,10 @@ async function setupStep1() {
 function setupStep2() {
     const students = state.gradeXIIStudents;
     const container = document.getElementById('graduation-list');
+
+    const cardEl = document.createElement('div');
+    cardEl.innerHTML = summaryCard(students.length, 'Total Siswa Kelas XII');
+    container.before(cardEl);
 
     if (students.length === 0) {
         container.innerHTML = '<p class="hint">Tidak ada siswa untuk diluluskan.</p>';
@@ -293,6 +297,13 @@ async function onConfirmGraduation() {
 }
 
 // ─────────────────────────────────────────────────────────────
+function summaryCard(number, label) {
+    return `<div style="padding:14px 20px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;display:inline-block;margin-bottom:20px">
+        <div style="font-size:32px;font-weight:700;color:var(--color-primary)">${number}</div>
+        <div style="font-size:12px;color:var(--color-text-muted);margin-top:2px">${label}</div>
+    </div>`;
+}
+
 // LANGKAH 3 — Kenaikan Kelas
 // ─────────────────────────────────────────────────────────────
 
@@ -380,6 +391,10 @@ async function setupStep3() {
     }
 
     const container = document.getElementById('promotion-list');
+    const totalPromotable = state.sourceClasses.reduce((t, c) => t + c.studentIds.length, 0);
+    const cardEl3 = document.createElement('div');
+    cardEl3.innerHTML = summaryCard(totalPromotable, 'Total Siswa Naik Kelas');
+    container.before(cardEl3);
     let allValid = true;
 
     if (state.sourceClasses.length === 0) {
