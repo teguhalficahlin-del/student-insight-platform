@@ -4,30 +4,32 @@
    ============================================================ */
 
 :root {
-    --color-bg:           #f4f6f8;
-    --color-surface:      #ffffff;
-    --color-border:       #dde3e9;
-    --color-text:         #1f2937;
-    --color-text-muted:   #6b7280;
+    --color-bg:           #0b1120;
+    --color-surface:      #1a2540;
+    --color-border:       rgba(245, 158, 11, 0.40);
+    --color-text:         rgba(255, 255, 255, 0.90);
+    --color-text-muted:   rgba(255, 255, 255, 0.45);
     --color-primary:      #7c3aed;
     --color-primary-dark: #6d28d9;
-    --color-primary-bg:   #f5f3ff;
-    --color-success:      #15803d;
-    --color-success-bg:   #ecfdf3;
-    --color-danger:       #dc2626;
-    --color-danger-bg:    #fef2f2;
-    --color-warning:      #b45309;
-    --color-warning-bg:   #fffbeb;
+    --color-primary-bg:   rgba(124, 58, 237, 0.15);
+    --color-success:      #4ade80;
+    --color-success-bg:   rgba(21, 128, 61, 0.15);
+    --color-danger:       #f87171;
+    --color-danger-bg:    rgba(220, 38, 38, 0.15);
+    --color-warning:      #fbbf24;
+    --color-warning-bg:   rgba(180, 83, 9, 0.15);
+    --color-gold:         #F59E0B;
 
     --radius:    8px;
     --radius-lg: 12px;
-    --shadow-sm: 0 1px 2px rgba(16,24,40,.06);
-    --shadow-md: 0 4px 12px rgba(16,24,40,.08);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.40);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.50);
     --font-sans: -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; font-family: var(--font-sans); color: var(--color-text); background: var(--color-bg); }
+::placeholder { color: rgba(255, 255, 255, 0.30); opacity: 1; }
 h1,h2,h3,h4 { margin: 0 0 8px; font-weight: 600; }
 p { margin: 0 0 8px; color: var(--color-text-muted); }
 
