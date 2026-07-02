@@ -7,7 +7,7 @@
 
 import { applyBrandingById } from '../../shared/branding.js';
 import { initIdleTimeout } from '../../shared/idle-timeout.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -30,7 +30,7 @@ const PANEL_RENDERERS = {
     stakeholders:       renderStakeholdersPanel,
     jadwal:             renderJadwalPanel,
     tutupsemester:      () => mountSemesterPanel(panelContent),
-    'academic-year':    () => { window.location.href = 'tutup-tahun.html'; },
+    'academic-year':    renderAcademicYearPanel,
     export:             renderExportPanel,
     'activity-log':     renderActivityLogPanel,
 };
@@ -834,6 +834,65 @@ const DIMENSION_LABELS_ADMIN = {
 function fmtTs(ts) {
     if (!ts) return '—';
     return new Date(ts).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+async function renderAcademicYearPanel() {
+    panelContent.innerHTML = '<p class="hint">Memuat…</p>';
+    const cfg = await getSchoolConfig();
+
+    panelContent.innerHTML = `
+        <h3>Tahun Ajaran</h3>
+        <div class="card" style="border:1px solid var(--color-border,#dde3e9);border-radius:12px;padding:16px;margin-bottom:16px">
+            <p style="margin:0 0 4px">Tahun ajaran aktif:
+                <strong>${esc(cfg?.current_academic_year ?? '—')}</strong>
+                Semester <strong>${esc(String(cfg?.current_semester ?? '—'))}</strong></p>
+            <p class="hint" style="margin:0 0 12px">Untuk naik kelas / kelulusan / buka tahun baru, gunakan wizard Tutup Tahun Ajaran.</p>
+            <a href="tutup-tahun.html" class="btn btn-primary btn-sm">Buka Tahun Ajaran Baru (Wizard)</a>
+        </div>
+
+        <div class="card" style="border:1px solid #fecaca;background:#fef2f2;border-radius:12px;padding:16px">
+            <strong style="color:#b91c1c">⚠ Batalkan Tahun Ajaran Terakhir</strong>
+            <p class="hint" style="margin:6px 0 4px;color:#7f1d1d">
+                Gunakan HANYA jika tahun ajaran <strong>${esc(cfg?.current_academic_year ?? '—')}</strong> baru saja dibuka dengan
+                tahun/semester yang salah. Tindakan ini akan:
+            </p>
+            <ul class="hint" style="margin:0 0 10px;color:#7f1d1d;padding-left:20px">
+                <li>Menghapus periode &amp; seluruh enrollment kenaikan kelas tahun ini</li>
+                <li>Memulihkan enrollment tahun sebelumnya untuk siswa yang naik kelas</li>
+                <li>Mengembalikan tahun ajaran aktif ke tahun sebelumnya</li>
+            </ul>
+            <p class="hint" style="margin:0 0 10px;color:#7f1d1d">Status kelulusan siswa (LULUS) <em>tidak</em> berubah — itu langkah terpisah.</p>
+            <button class="btn btn-sm" id="cancel-year-btn"
+                style="background:#dc2626;color:#fff;border-color:#dc2626">Batalkan Tahun Ajaran ${esc(cfg?.current_academic_year ?? '')}</button>
+            <div id="cancel-year-result" class="alert" style="display:none;margin-top:10px"></div>
+        </div>
+    `;
+
+    document.getElementById('cancel-year-btn').addEventListener('click', async () => {
+        const yr = cfg?.current_academic_year ?? '';
+        if (!confirm(`Batalkan pembukaan tahun ajaran ${yr}?\n\nKenaikan kelas tahun ini akan dihapus dan tahun ajaran dikembalikan ke sebelumnya. Tindakan ini tidak bisa di-undo.`)) return;
+        const typed = prompt(`Untuk konfirmasi, ketik: BATALKAN`);
+        if (typed === null) return;
+        if (typed.trim().toUpperCase() !== 'BATALKAN') { alert('Konfirmasi tidak cocok. Dibatalkan.'); return; }
+
+        const btn = document.getElementById('cancel-year-btn');
+        const resultEl = document.getElementById('cancel-year-result');
+        btn.disabled = true; btn.textContent = 'Memproses…';
+        try {
+            const r = await cancelAcademicYear(cfg.config_id);
+            resultEl.className = 'alert alert-success';
+            resultEl.innerHTML = `Tahun ajaran <strong>${esc(r.cancelled_year)}</strong> dibatalkan. ` +
+                `Aktif kembali: <strong>${esc(r.restored_year)}</strong> Semester ${esc(String(r.restored_semester))}. ` +
+                `${r.deleted_enrollments} enrollment dihapus, ${r.restored_enrollments} dipulihkan.`;
+            resultEl.style.display = 'block';
+            setTimeout(renderAcademicYearPanel, 2500);
+        } catch (err) {
+            resultEl.className = 'alert alert-danger';
+            resultEl.textContent = err.message;
+            resultEl.style.display = 'block';
+            btn.disabled = false; btn.textContent = `Batalkan Tahun Ajaran ${yr}`;
+        }
+    });
 }
 
 async function renderActivityLogPanel() {

@@ -66,6 +66,26 @@ export async function logout() {
 }
 
 /**
+ * Batalkan buka tahun ajaran terakhir (4.3) via edge fn cancel-academic-year.
+ * Mengembalikan school_config, hapus periode + enrollment tahun baru,
+ * pulihkan enrollment tahun lama untuk siswa yang naik kelas.
+ */
+export async function cancelAcademicYear(configId) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) throw new Error('Sesi login tidak ditemukan. Silakan login ulang.');
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/cancel-academic-year`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body:    JSON.stringify({ config_id: configId }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body?.error?.message ?? body?.message ?? 'Gagal membatalkan tahun ajaran');
+    return body.data;
+}
+
+/**
  * Rekap lengkap seorang alumnus untuk dokumen/surat keterangan (10.2/10.3):
  * identitas, rekap kehadiran (per status), rekap observasi (positif/perhatian),
  * dan riwayat PKL. Semua mengecualikan entri yang di-void.
