@@ -119,17 +119,24 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // Asset statis (CSS, JS, gambar, font) — cache-first
+    // JS dan CSS — network-first agar perubahan langsung terlihat
+    if (/\.(js|css)(\?|$)/.test(url.pathname)) {
+        event.respondWith(
+            fetch(request)
+                .then(response => {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(c => c.put(request, clone));
+                    return response;
+                })
+                .catch(() => caches.match(request))
+        );
+        return;
+    }
+
+    // Aset lain (gambar, font, ikon) — cache-first
     event.respondWith(
         caches.match(request).then(cached => {
-            if (cached) {
-                // Perbarui cache di background (stale-while-revalidate)
-                fetch(request).then(fresh => {
-                    caches.open(CACHE_NAME).then(c => c.put(request, fresh));
-                }).catch(() => {});
-                return cached;
-            }
-            // Tidak ada di cache — ambil dari network dan simpan
+            if (cached) return cached;
             return fetch(request).then(response => {
                 const clone = response.clone();
                 caches.open(CACHE_NAME).then(c => c.put(request, clone));
