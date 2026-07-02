@@ -96,15 +96,15 @@ async function loadSchools() {
             <td class="col-hide-mobile" data-label="NPSN">${esc(s.npsn)}</td>
             <td data-label="Link Login">${slugCell}</td>
             <td class="col-hide-mobile" data-label="Warna">${s.primary_color ? `<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:3px;background:${esc(s.primary_color)};display:inline-block"></span>${esc(s.primary_color)}</span>` : '—'}</td>
-            <td class="col-hide-mobile" data-label="Telepon">${esc(s.phone)}</td>
+            <td class="col-hide-tablet" data-label="Telepon">${esc(s.phone)}</td>
             <td data-label="Status"><span class="badge ${s.is_active ? 'badge-active' : 'badge-inactive'}">${s.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
-            <td class="col-hide-mobile" data-label="Terdaftar">${fmt(s.created_at)}</td>
-            <td data-label="aksi" style="display:flex;flex-direction:column;gap:6px;padding:10px 8px">
+            <td class="col-hide-tablet" data-label="Terdaftar">${fmt(s.created_at)}</td>
+            <td data-label="aksi" class="aksi-cell">
                 <button class="btn btn-sm btn-secondary reset-pw-btn"
                     data-school-id="${esc(s.school_id)}"
                     data-school-name="${esc(s.name)}"
                     ${!s.admin_identifier ? 'disabled title="Tidak ada akun admin"' : ''}>
-                    Reset Password
+                    Reset PW
                 </button>
                 ${s.is_active
                     ? `<button class="btn btn-sm toggle-status-btn"
@@ -112,7 +112,7 @@ async function loadSchools() {
                             data-school-name="${esc(s.name)}"
                             data-active="true"
                             style="background:#b45309;color:#fff;border-color:#b45309">
-                            Nonaktifkan
+                            Nonaktif
                        </button>`
                     : `<button class="btn btn-sm toggle-status-btn"
                             data-school-id="${esc(s.school_id)}"
@@ -125,7 +125,7 @@ async function loadSchools() {
                             data-school-id="${esc(s.school_id)}"
                             data-school-name="${esc(s.name)}"
                             style="background:#dc2626;color:#fff;border-color:#dc2626">
-                            Hapus Permanen
+                            Hapus
                        </button>`
                 }
             </td>
