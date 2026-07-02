@@ -72,7 +72,7 @@ export function jabatanLabel(key) {
         kaprodi:       'Kaprodi',
         waka_kesiswaan:'Waka Kesiswaan',
         waka_kurikulum:'Waka Kurikulum',
-        kepsek:        'Monitoring',
+        kepsek:        'Kepala Sekolah',
     }[key] ?? key;
 }
 
