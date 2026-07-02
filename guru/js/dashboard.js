@@ -1037,11 +1037,13 @@ async function initKepsekTab() {
             await loadKepsekMonitoring(btn.dataset.period);
         });
 
-        await loadAdminList();
         document.getElementById('ks-add-admin-form').addEventListener('submit', handleAddAdmin);
-    }
 
-    await loadKepsekMonitoring('hari_ini');
+        // Jalankan paralel — monitoring tidak perlu tunggu admin list
+        await Promise.all([loadKepsekMonitoring('hari_ini'), loadAdminList()]);
+    } else {
+        await loadKepsekMonitoring('hari_ini');
+    }
 }
 
 async function loadKepsekMonitoring(period = 'hari_ini') {
