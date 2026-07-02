@@ -283,7 +283,8 @@ async function onConfirmGraduation() {
             .map(s => s.student_id)
             .filter(id => !checkedIds.includes(id));
         state.graduationDone = true;
-        btn.style.display = 'none';
+        btn.disabled = true;
+        btn.textContent = 'Kelulusan Terkonfirmasi';
 
         resultArea.innerHTML = `<div class="alert alert-success" style="display:block">✅ ${checkedIds.length} siswa berhasil diluluskan. Lanjutkan ke Kenaikan Kelas.</div>`;
         resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
