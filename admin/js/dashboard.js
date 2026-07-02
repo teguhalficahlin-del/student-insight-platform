@@ -277,6 +277,24 @@ function renderGroupedTable(items, groupOf, headers, rowOf) {
     }).join('');
 }
 
+// Render accordion per kelas (termasuk kelas kosong).
+// allClasses: [{class_id, name, grade_level}] sudah terurut.
+// classMap: Map<class_id, item[]>
+function renderClassAccordion(allClasses, classMap, headers, rowOf) {
+    if (allClasses.length === 0) return '<p class="hint">Belum ada data kelas.</p>';
+    const head = headers.map(h => `<th>${h}</th>`).join('');
+    return allClasses.map(cls => {
+        const list = classMap.get(cls.class_id) ?? [];
+        const body = list.length > 0
+            ? `<table class="table" style="margin-top:4px"><thead><tr>${head}</tr></thead><tbody>${list.map(rowOf).join('')}</tbody></table>`
+            : `<p class="hint" style="padding:8px 0;margin:0">Belum ada siswa — menunggu PPDB.</p>`;
+        return `<details style="margin-bottom:8px">
+            <summary style="cursor:pointer;font-weight:600">${esc(cls.name)} (${list.length})</summary>
+            ${body}
+        </details>`;
+    }).join('');
+}
+
 // Nama kelas terakhir alumni: enrolment di tahun kelulusannya, atau enrolment
 // terbaru bila tidak ketemu.
 function alumniClassName(enrollment, gradYear) {
@@ -514,42 +532,34 @@ async function renderStaffPanel() {
 }
 
 async function renderStudentsPanel() {
-    const [aktif, noAccount, config] = await Promise.all([
-        fetchAllRows('students',
-            q => q.select('student_id, full_name, nis, student_status')
-                  .eq('student_status', 'AKTIF')
-                  .order('full_name')),
+    const [noAccount, config] = await Promise.all([
         countStudentsWithoutAccount().catch(() => 0),
         getSchoolConfig(),
     ]);
 
-    // Map student_id → nama kelas berdasarkan tahun ajaran aktif
-    const { data: enrollments } = await supabase
-        .from('class_enrollments')
-        .select('student_id, class:classes(name, grade_level)')
-        .eq('academic_year', config?.current_academic_year ?? '')
-        .is('withdrawn_at', null);
+    // Fetch semua kelas + enrollment tahun ajaran aktif sekaligus
+    const [{ data: allClasses }, { data: enrollments }] = await Promise.all([
+        supabase.from('classes').select('class_id, name, grade_level')
+            .order('grade_level').order('name'),
+        supabase.from('class_enrollments')
+            .select('class_id, student:students!inner(student_id, full_name, nis)')
+            .eq('academic_year', config?.current_academic_year ?? '')
+            .is('withdrawn_at', null)
+            .eq('students.student_status', 'AKTIF'),
+    ]);
 
-    const classOf = new Map((enrollments ?? []).map(e => [
-        e.student_id,
-        { name: e.class?.name ?? 'Tanpa Kelas', grade: e.class?.grade_level ?? 99 },
-    ]));
-
-    for (const s of aktif) {
-        const c = classOf.get(s.student_id);
-        s._className  = c?.name  ?? 'Tanpa Kelas';
-        s._classGrade = c?.grade ?? 99;
+    // classId → [siswa aktif] terurut per nama
+    const classMap = new Map((allClasses ?? []).map(c => [c.class_id, []]));
+    for (const e of (enrollments ?? [])) {
+        if (!e.student || !classMap.has(e.class_id)) continue;
+        classMap.get(e.class_id).push(e.student);
     }
+    for (const list of classMap.values()) list.sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
 
-    // Urutkan: tingkat asc → nama kelas asc → nama siswa asc (sudah ter-order)
-    aktif.sort((a, b) => {
-        if (a._classGrade !== b._classGrade) return a._classGrade - b._classGrade;
-        return a._className.localeCompare(b._className, 'id');
-    });
-
-    const aktifHtml = renderGroupedTable(
-        aktif,
-        s => s._className,
+    const totalAktif = [...classMap.values()].reduce((s, l) => s + l.length, 0);
+    const aktifHtml  = renderClassAccordion(
+        allClasses ?? [],
+        classMap,
         ['Nama', 'NIS'],
         s => `<tr><td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td></tr>`,
     );
@@ -570,7 +580,7 @@ async function renderStudentsPanel() {
 
     panelContent.innerHTML = `
         ${provisionHtml}
-        <h3>Siswa Aktif (${aktif.length})</h3>
+        <h3>Siswa Aktif (${totalAktif})</h3>
         <p class="hint" style="margin-bottom:12px">Alumni ada di menu <strong>Alumni</strong>.</p>
         ${aktifHtml}
     `;
@@ -618,52 +628,61 @@ async function renderParentsPanel() {
         getSchoolConfig(),
     ]);
 
-    // Map student_id → {name, grade} dari tahun ajaran aktif
-    const { data: enrollments } = await supabase
-        .from('class_enrollments')
-        .select('student_id, class:classes(name, grade_level)')
-        .eq('academic_year', config?.current_academic_year ?? '')
-        .is('withdrawn_at', null);
+    // Fetch semua kelas + enrollment tahun ajaran aktif
+    const [{ data: allClasses }, { data: enrollments }] = await Promise.all([
+        supabase.from('classes').select('class_id, name, grade_level')
+            .order('grade_level').order('name'),
+        supabase.from('class_enrollments')
+            .select('student_id, class_id')
+            .eq('academic_year', config?.current_academic_year ?? '')
+            .is('withdrawn_at', null),
+    ]);
 
-    const classOf = new Map((enrollments ?? []).map(e => [
-        e.student_id,
-        { name: e.class?.name ?? 'Tanpa Kelas', grade: e.class?.grade_level ?? 99 },
-    ]));
+    // Map student_id → class_id
+    const studentClassId = new Map((enrollments ?? []).map(e => [e.student_id, e.class_id]));
 
+    // Bangun childMap dan tentukan class_id orang tua dari anak aktif
     const childMap = new Map();
     for (const l of links) {
         if (!childMap.has(l.parent_user_id)) childMap.set(l.parent_user_id, []);
         if (l.students) childMap.get(l.parent_user_id).push(l.students);
     }
 
-    const aktif = [];
-    const parentClass = new Map();   // user_id -> {name, grade} kelas anak aktif
+    // classId → [orang tua]
+    const classMap = new Map((allClasses ?? []).map(c => [c.class_id, []]));
+    let tanpaKelas = [];
+
     for (const p of parents) {
         const children = childMap.get(p.user_id) ?? [];
         const hasAktif = children.some(c => c.student_status === 'AKTIF');
-        if (hasAktif || children.length === 0) {
-            aktif.push(p);
-            const refChild = children.find(c => c.student_status === 'AKTIF') ?? children[0];
-            parentClass.set(p.user_id, classOf.get(refChild?.student_id) ?? { name: 'Tanpa Kelas', grade: 99 });
+        if (!hasAktif && children.length > 0) continue; // semua anak alumni, masuk menu Alumni
+        const refChild = children.find(c => c.student_status === 'AKTIF');
+        const clsId = refChild ? studentClassId.get(refChild.student_id) : null;
+        if (clsId && classMap.has(clsId)) {
+            classMap.get(clsId).push(p);
+        } else {
+            tanpaKelas.push(p);
         }
     }
+    for (const list of classMap.values()) list.sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
 
-    // Urutkan: tingkat asc → nama kelas asc → nama orang tua asc (sudah ter-order)
-    aktif.sort((a, b) => {
-        const ca = parentClass.get(a.user_id), cb = parentClass.get(b.user_id);
-        if (ca.grade !== cb.grade) return ca.grade - cb.grade;
-        return ca.name.localeCompare(cb.name, 'id');
-    });
-
-    const aktifHtml = renderGroupedTable(
-        aktif,
-        u => parentClass.get(u.user_id)?.name ?? 'Tanpa Kelas',
+    const totalAktif = [...classMap.values()].reduce((s, l) => s + l.length, 0) + tanpaKelas.length;
+    let aktifHtml = renderClassAccordion(
+        allClasses ?? [],
+        classMap,
         ['Nama', 'NIK'],
         u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td></tr>`,
     );
+    if (tanpaKelas.length > 0) {
+        aktifHtml += `<details style="margin-bottom:8px">
+            <summary style="cursor:pointer;font-weight:600">Tanpa Kelas (${tanpaKelas.length})</summary>
+            <table class="table" style="margin-top:4px"><thead><tr><th>Nama</th><th>NIK</th></tr></thead>
+            <tbody>${tanpaKelas.map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td></tr>`).join('')}</tbody>
+            </table></details>`;
+    }
 
     panelContent.innerHTML = `
-        <h3>Orang Tua Siswa Aktif (${aktif.length})</h3>
+        <h3>Orang Tua Siswa Aktif (${totalAktif})</h3>
         <p class="hint" style="margin-bottom:12px">Orang tua alumni ada di menu <strong>Alumni</strong>.</p>
         ${aktifHtml}
     `;
