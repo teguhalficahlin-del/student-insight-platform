@@ -611,3 +611,41 @@ export async function closeCase({ caseId, note, authorUserId, authorRole }) {
         });
     if (error) throw error;
 }
+
+// ─── KELOLA ADMIN (kepsek only) ───────────────────────────────
+
+export async function listSchoolAdmins() {
+    const { data, error } = await supabase
+        .from('users')
+        .select('user_id, full_name, login_identifier')
+        .eq('role_type', 'ADMINISTRATIVE')
+        .order('full_name');
+    if (error) throw error;
+    return data ?? [];
+}
+
+async function _callManageAdmin(method, body) {
+    const { data: session } = await supabase.auth.getSession();
+    const token = session?.session?.access_token;
+    if (!token) throw new Error('Sesi login tidak ditemukan. Silakan login ulang.');
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-admin-account`, {
+        method,
+        headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json?.error?.message ?? 'Permintaan gagal');
+    return json.data;
+}
+
+export async function addSchoolAdmin({ full_name, login_identifier }) {
+    return _callManageAdmin('POST', { full_name, login_identifier });
+}
+
+export async function removeSchoolAdmin(user_id) {
+    return _callManageAdmin('DELETE', { user_id });
+}

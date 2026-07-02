@@ -6,6 +6,7 @@
 import { applyBrandingById } from '../../shared/branding.js';
 import {
     supabase, logout, getCurrentUserRow, GURU_ROLES,
+    listSchoolAdmins, addSchoolAdmin, removeSchoolAdmin,
     getJabatan, jabatanLabel, getSchoolConfig,
     getMyScheduleForDate, getEnrolledStudents,
     getAttendanceForSession, upsertAttendance,
@@ -1013,7 +1014,88 @@ async function initKepsekTab() {
     } catch (err) {
         console.error('[kepsek]', err);
     }
+
+    await loadAdminList();
+
+    document.getElementById('ks-add-admin-form')
+        .addEventListener('submit', handleAddAdmin);
 }
+
+async function loadAdminList() {
+    const el = document.getElementById('ks-admin-list');
+    try {
+        const admins = await listSchoolAdmins();
+        if (!admins.length) {
+            el.innerHTML = '<p class="hint">Belum ada data admin.</p>';
+            return;
+        }
+        el.innerHTML = `
+            <table class="data-table" style="width:100%">
+                <thead><tr><th>Nama</th><th>Login ID</th><th></th></tr></thead>
+                <tbody>
+                    ${admins.map(a => `
+                        <tr>
+                            <td>${esc(a.full_name)}</td>
+                            <td><code>${esc(a.login_identifier)}</code></td>
+                            <td style="text-align:right">
+                                ${a.user_id === currentUser.user_id
+                                    ? '<span class="hint">(Anda)</span>'
+                                    : `<button class="btn btn-sm btn-danger" data-uid="${esc(a.user_id)}" data-name="${esc(a.full_name)}" onclick="confirmRemoveAdmin(this)">Hapus</button>`
+                                }
+                            </td>
+                        </tr>`).join('')}
+                </tbody>
+            </table>`;
+    } catch (err) {
+        el.innerHTML = `<p class="hint">Gagal memuat daftar admin: ${fe(err)}</p>`;
+    }
+}
+
+async function handleAddAdmin(e) {
+    e.preventDefault();
+    const btn     = document.getElementById('ks-add-admin-btn');
+    const msgEl   = document.getElementById('ks-add-admin-msg');
+    const resultEl = document.getElementById('ks-new-admin-result');
+    const name    = document.getElementById('ks-admin-name').value.trim();
+    const loginId = document.getElementById('ks-admin-loginid').value.trim();
+
+    btn.disabled = true;
+    msgEl.style.display = 'none';
+    resultEl.style.display = 'none';
+
+    try {
+        const result = await addSchoolAdmin({ full_name: name, login_identifier: loginId });
+
+        document.getElementById('ks-result-loginid').textContent   = result.login_identifier;
+        document.getElementById('ks-result-password').textContent  = result.temp_password;
+        resultEl.style.display = 'block';
+
+        e.target.reset();
+        e.target.closest('details').open = false;
+
+        await loadAdminList();
+    } catch (err) {
+        msgEl.textContent    = fe(err);
+        msgEl.style.display  = 'block';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+window.confirmRemoveAdmin = async function(btn) {
+    const uid  = btn.dataset.uid;
+    const name = btn.dataset.name;
+    if (!confirm(`Hapus akun admin "${name}"?\n\nMereka tidak akan bisa login lagi.`)) return;
+
+    btn.disabled = true;
+    try {
+        await removeSchoolAdmin(uid);
+        await loadAdminList();
+    } catch (err) {
+        alert(`Gagal menghapus: ${fe(err)}`);
+        btn.disabled = false;
+    }
+};
 
 // ─── TAB KASUS ───────────────────────────────────────────────
 
