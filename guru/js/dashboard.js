@@ -160,7 +160,7 @@ async function init() {
 // ─── Tab navigation ──────────────────────────────────────────
 const TAB_SHORT = {
     guru: 'Beranda', wali_kelas: 'Wali', bk: 'BK', kaprodi: 'Prodi',
-    waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', kepsek: 'Monitor',
+    waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', kepsek: 'Monitor', ks_admin: 'Admin',
     kasus: 'Pembinaan', jurnal: 'Jurnal',
 };
 
@@ -171,6 +171,7 @@ function buildTabs() {
     if (isTeacher) tabs.push({ key: 'guru', label: 'Dashboard Guru' });
     jabatan.forEach(j => tabs.push({ key: j, label: jabatanLabel(j) }));
     tabs.push({ key: 'kasus', label: 'Pembinaan Siswa' });
+    if (jabatan.includes('kepsek')) tabs.push({ key: 'ks_admin', label: 'Kelola Admin' });
     if (isTeacher) tabs.push({ key: 'jurnal', label: 'Jurnal Mengajar' });
 
     nav.innerHTML = tabs.map(t =>
@@ -207,6 +208,7 @@ async function loadTabContent(key) {
         case 'waka_kesiswaan': await initWakaKesiswaanTab(); break;
         case 'waka_kurikulum': await initWakaKurTab(); break;
         case 'kepsek':      await initKepsekTab(); break;
+        case 'ks_admin':    await initKsAdminTab(); break;
         case 'kasus':       await initKasusTab(); break;
         case 'jurnal':      await initJurnalTab(); break;
     }
@@ -1028,7 +1030,6 @@ let _ksChart       = null;
 async function initKepsekTab() {
     if (!_kepsekTabInit) {
         _kepsekTabInit = true;
-
         document.getElementById('ks-period-toggle').addEventListener('click', async (e) => {
             const btn = e.target.closest('.ks-period-btn');
             if (!btn) return;
@@ -1036,14 +1037,18 @@ async function initKepsekTab() {
             btn.classList.add('active');
             await loadKepsekMonitoring(btn.dataset.period);
         });
-
-        document.getElementById('ks-add-admin-form').addEventListener('submit', handleAddAdmin);
-
-        // Jalankan paralel — monitoring tidak perlu tunggu admin list
-        await Promise.all([loadKepsekMonitoring('hari_ini'), loadAdminList()]);
-    } else {
-        await loadKepsekMonitoring('hari_ini');
     }
+    await loadKepsekMonitoring('hari_ini');
+}
+
+let _ksAdminTabInit = false;
+
+async function initKsAdminTab() {
+    if (!_ksAdminTabInit) {
+        _ksAdminTabInit = true;
+        document.getElementById('ks-add-admin-form').addEventListener('submit', handleAddAdmin);
+    }
+    await loadAdminList();
 }
 
 async function loadKepsekMonitoring(period = 'hari_ini') {
