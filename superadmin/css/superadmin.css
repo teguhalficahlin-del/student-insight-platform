@@ -245,6 +245,10 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; c
         min-width: 0;
     }
     .schools-table .table { min-width: 0; }
+    /* Sembunyikan kolom sekunder di card mobile */
+    .schools-table .col-hide-mobile,
+    .schools-table .col-hide-tablet { display: none; }
+
     .schools-table td { border: none; padding: 3px 0; font-size: 13px; }
     .schools-table td:first-child { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
     .schools-table td[data-label]::before {
