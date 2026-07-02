@@ -18,6 +18,7 @@ const DB_NAME    = 'smkhr-guru-offline';
 const STORE_ATT  = 'att_queue';
 const STORE_OBS  = 'obs_queue';
 const STORE_JRN  = 'jrn_queue';
+const STORE_CASE = 'case_queue';
 
 // Versi schema antrian. Naikkan saat format payload berubah secara breaking.
 // Item lama dengan versi berbeda akan di-discard (bukan dikirim) saat flush.
@@ -30,20 +31,20 @@ const STORE = STORE_ATT;
 // ── IndexedDB helpers ─────────────────────────────────────────
 function openDB() {
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, 2); // v2 tambah obs_queue + jrn_queue
+        const req = indexedDB.open(DB_NAME, 3); // v3 tambah case_queue
         req.onupgradeneeded = (e) => {
             const db = req.result;
-            // Store absensi (sudah ada sejak v1)
             if (!db.objectStoreNames.contains(STORE_ATT)) {
                 db.createObjectStore(STORE_ATT, { keyPath: 'idempotency_key' });
             }
-            // Store observasi (baru di v2)
             if (!db.objectStoreNames.contains(STORE_OBS)) {
                 db.createObjectStore(STORE_OBS, { keyPath: 'idempotency_key' });
             }
-            // Store jurnal (baru di v2)
             if (!db.objectStoreNames.contains(STORE_JRN)) {
                 db.createObjectStore(STORE_JRN, { keyPath: 'idempotency_key' });
+            }
+            if (!db.objectStoreNames.contains(STORE_CASE)) {
+                db.createObjectStore(STORE_CASE, { keyPath: 'idempotency_key' });
             }
         };
         req.onsuccess = () => resolve(req.result);
@@ -120,6 +121,11 @@ async function submitObservation(obs) {
 // ── Kirim satu jurnal ke server ───────────────────────────────
 async function submitJournal(jrn) {
     return postEdgeFn('sync-journal', jrn);
+}
+
+// ── Kirim satu kasus ke server ────────────────────────────────
+async function submitCase(cs) {
+    return postEdgeFn('sync-case', cs);
 }
 
 // ── Helper flush untuk satu store ────────────────────────────
@@ -201,19 +207,35 @@ export async function saveJournalEntry(jrn) {
 }
 
 /**
+ * Simpan satu kasus baru. Online-first, antre bila offline.
+ * cs harus berisi idempotency_key + case_id (UUID v4 dibuat pemanggil).
+ * @returns {{status:'synced'|'queued'|'error', case_id?:string, error?:string}}
+ */
+export async function saveCase(cs) {
+    if (navigator.onLine) {
+        const r = await submitCase(cs);
+        if (r.ok) return { status: 'synced', case_id: cs.case_id };
+        if (!r.networkError) return { status: 'error', error: r.error };
+    }
+    await idbPutTo(STORE_CASE, { ...cs, _schema_ver: OFFLINE_SCHEMA_VER });
+    return { status: 'queued', case_id: cs.case_id };
+}
+
+/**
  * Kirim semua item tertunda (absensi + observasi + jurnal).
  * @returns {{synced:number, remaining:number}}
  */
 export async function flushPending() {
-    const [att, obs, jrn] = await Promise.all([
-        flushStore(STORE_ATT, submitBatch),
-        flushStore(STORE_OBS, submitObservation),
-        flushStore(STORE_JRN, submitJournal),
+    const [att, obs, jrn, cas] = await Promise.all([
+        flushStore(STORE_ATT,  submitBatch),
+        flushStore(STORE_OBS,  submitObservation),
+        flushStore(STORE_JRN,  submitJournal),
+        flushStore(STORE_CASE, submitCase),
     ]);
     return {
-        synced:         att.synced    + obs.synced    + jrn.synced,
-        remaining:      att.remaining + obs.remaining + jrn.remaining,
-        sessionExpired: !!(att.sessionExpired || obs.sessionExpired || jrn.sessionExpired),
+        synced:         att.synced    + obs.synced    + jrn.synced    + cas.synced,
+        remaining:      att.remaining + obs.remaining + jrn.remaining + cas.remaining,
+        sessionExpired: !!(att.sessionExpired || obs.sessionExpired || jrn.sessionExpired || cas.sessionExpired),
     };
 }
 
@@ -223,7 +245,7 @@ export async function flushPending() {
  */
 export async function clearOfflineQueue() {
     const db = await openDB();
-    await Promise.all([STORE_ATT, STORE_OBS, STORE_JRN].map(store =>
+    await Promise.all([STORE_ATT, STORE_OBS, STORE_JRN, STORE_CASE].map(store =>
         new Promise((res, rej) => {
             const t = txStore(db, store, 'readwrite').clear();
             t.onsuccess = () => res(); t.onerror = () => rej(t.error);
@@ -233,10 +255,11 @@ export async function clearOfflineQueue() {
 }
 
 export async function pendingCount() {
-    const [att, obs, jrn] = await Promise.all([
+    const [att, obs, jrn, cas] = await Promise.all([
         idbGetAllFrom(STORE_ATT),
         idbGetAllFrom(STORE_OBS),
         idbGetAllFrom(STORE_JRN),
+        idbGetAllFrom(STORE_CASE),
     ]);
-    return att.length + obs.length + jrn.length;
+    return att.length + obs.length + jrn.length + cas.length;
 }

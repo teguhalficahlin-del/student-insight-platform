@@ -4,7 +4,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { saveObservation, saveJournalEntry } from './offline.js';
+import { saveObservation, saveJournalEntry, saveCase } from './offline.js';
 
 const SUPABASE_URL      = 'https://xovvuuwexoweoqyltepq.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvdnZ1dXdleG93ZW9xeWx0ZXBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDk0NzUsImV4cCI6MjA5Nzc4NTQ3NX0.mFwmVfSqYM7ITURtLC143BsurK6Yr31WFViJe5PFGN8';
@@ -548,21 +548,19 @@ export async function getCaseEvents(caseId) {
 }
 
 export async function createCase({ studentId, title, description, track, authorUserId, authorRole }) {
-    const { data: caseRow, error } = await supabase
-        .from('cases')
-        .insert({
-            student_id:           studentId,
-            created_by_user_id:   authorUserId,
-            initiated_by_role:    authorRole,
-            current_handler_role: authorRole,
-            track,
-            title,
-            description,
-        })
-        .select('case_id')
-        .single();
-    if (error) throw error;
-    return caseRow;
+    const payload = {
+        idempotency_key:    crypto.randomUUID(),
+        case_id:            crypto.randomUUID(),
+        student_id:         studentId,
+        created_by_user_id: authorUserId,
+        initiated_by_role:  authorRole,
+        track,
+        title,
+        description,
+    };
+    const r = await saveCase(payload);
+    if (r.status === 'error') throw new Error(r.error);
+    return { case_id: payload.case_id, _queued: r.status === 'queued' };
 }
 
 export async function addCaseComment({ caseId, text, authorUserId, authorRole, privacyLevel = 'INTERNAL_SCHOOL' }) {

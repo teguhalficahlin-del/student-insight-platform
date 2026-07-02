@@ -1360,7 +1360,7 @@ async function initKasusTab() {
 
         btnEl.disabled = true; btnEl.textContent = 'Menyimpan…';
         try {
-            await createCase({
+            const r = await createCase({
                 studentId:   sId,
                 title,
                 description: desc,
@@ -1369,6 +1369,9 @@ async function initKasusTab() {
                 authorRole:   currentUser.role_type,
             });
             closeKasusModal();
+            if (r._queued) {
+                showCreateMsg('Kasus disimpan lokal. Akan dikirim saat koneksi kembali.', false);
+            }
             _kasusAllCases = [];
             _kasusTabInit = false;
             await initKasusTab();
