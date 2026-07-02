@@ -43,6 +43,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const admin = getAdminClient();
 
+    // 0. Pastikan sekolah sudah nonaktif sebelum dihapus
+    const { data: school, error: schoolErr } = await admin
+        .from('schools')
+        .select('is_active, name')
+        .eq('school_id', school_id)
+        .single();
+
+    if (schoolErr || !school) return json({ error: 'Sekolah tidak ditemukan' }, 404);
+    if (school.is_active) {
+        return json({ error: 'Sekolah harus dinonaktifkan terlebih dahulu sebelum dihapus' }, 409);
+    }
+
     // 1. Ambil semua auth_user_id pengguna sekolah ini
     const { data: users, error: usersErr } = await admin
         .from('users')

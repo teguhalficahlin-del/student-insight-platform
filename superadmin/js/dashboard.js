@@ -83,12 +83,28 @@ async function loadSchools() {
                     ${!s.admin_identifier ? 'disabled title="Tidak ada akun admin"' : ''}>
                     Reset Password
                 </button>
-                <button class="btn btn-sm btn-danger delete-school-btn"
-                    data-school-id="${esc(s.school_id)}"
-                    data-school-name="${esc(s.name)}"
-                    style="background:#dc2626;color:#fff;border-color:#dc2626">
-                    Hapus Sekolah
-                </button>
+                ${s.is_active
+                    ? `<button class="btn btn-sm toggle-status-btn"
+                            data-school-id="${esc(s.school_id)}"
+                            data-school-name="${esc(s.name)}"
+                            data-active="true"
+                            style="background:#b45309;color:#fff;border-color:#b45309">
+                            Nonaktifkan
+                       </button>`
+                    : `<button class="btn btn-sm toggle-status-btn"
+                            data-school-id="${esc(s.school_id)}"
+                            data-school-name="${esc(s.name)}"
+                            data-active="false"
+                            style="background:#15803d;color:#fff;border-color:#15803d">
+                            Aktifkan
+                       </button>
+                       <button class="btn btn-sm delete-school-btn"
+                            data-school-id="${esc(s.school_id)}"
+                            data-school-name="${esc(s.name)}"
+                            style="background:#dc2626;color:#fff;border-color:#dc2626">
+                            Hapus Permanen
+                       </button>`
+                }
             </td>
         </tr>`;
         }).join('');
@@ -109,6 +125,9 @@ async function loadSchools() {
             }
             const delBtn = e.target.closest('.delete-school-btn');
             if (delBtn) confirmDeleteSchool(delBtn.dataset.schoolId, delBtn.dataset.schoolName);
+
+            const toggleBtn = e.target.closest('.toggle-status-btn');
+            if (toggleBtn) toggleSchoolStatus(toggleBtn);
         });
     } catch (err) {
         hintEl.textContent = `Gagal memuat: ${err.message}`;
@@ -197,6 +216,30 @@ async function confirmDeleteSchool(schoolId, schoolName) {
         loadSchools();
     } catch (err) {
         alert(`Error: ${err.message}`);
+    }
+}
+
+async function toggleSchoolStatus(btn) {
+    const schoolId   = btn.dataset.schoolId;
+    const schoolName = btn.dataset.schoolName;
+    const isActive   = btn.dataset.active === 'true';
+    const aksi       = isActive ? 'nonaktifkan' : 'aktifkan kembali';
+
+    if (!confirm(`${isActive ? 'Nonaktifkan' : 'Aktifkan'} sekolah "${schoolName}"?\n\n${isActive ? 'Semua pengguna sekolah ini tidak bisa login sampai diaktifkan kembali.' : 'Semua pengguna bisa login kembali.'}`)) return;
+
+    btn.disabled = true;
+    try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/update-school-status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'x-superadmin-key': saKey },
+            body: JSON.stringify({ school_id: schoolId, is_active: !isActive }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error ?? 'Gagal');
+        loadSchools();
+    } catch (err) {
+        alert(`Gagal ${aksi}: ${err.message}`);
+        btn.disabled = false;
     }
 }
 
