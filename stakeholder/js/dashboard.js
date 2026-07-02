@@ -5,6 +5,7 @@
 
 import { applyBrandingById } from '../../shared/branding.js';
 import { initIdleTimeout } from '../../shared/idle-timeout.js';
+import { checkMustChangePassword } from '../../shared/change-password.js';
 import {
     supabase, logout, getCurrentUserRow, STAKEHOLDER_ROLES,
     getStakeholderSummary,
@@ -30,6 +31,7 @@ async function init() {
 
     applyBrandingById(user.school_id, supabase);
     initIdleTimeout({ onIdle: async () => { await logout(); window.location.href = 'index.html'; } });
+    await checkMustChangePassword(supabase, user);
     document.getElementById('hdr-name').textContent = user.full_name;
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display     = 'block';

@@ -242,6 +242,11 @@ export async function changePassword(newPassword) {
     await upsertSchoolConfig({ password_changed: true });
 }
 
+/** Admin reset password user lain. User akan diminta ganti saat login berikutnya. */
+export async function adminResetUserPassword(user_id, new_password) {
+    return callEdge('POST', 'set-user-password', { user_id, new_password });
+}
+
 // ─────────────────────────────────────────────────────────────
 // PAGINATION
 // ─────────────────────────────────────────────────────────────

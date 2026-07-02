@@ -7,7 +7,7 @@
 
 import { applyBrandingById } from '../../shared/branding.js';
 import { initIdleTimeout } from '../../shared/idle-timeout.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -457,12 +457,13 @@ async function renderStaffPanel() {
         const btn = u.is_active === false
             ? `<button class="btn btn-sm btn-secondary staff-toggle-btn" data-user-id="${u.user_id}" data-active="false" style="font-size:11px;padding:3px 8px">Aktifkan</button>`
             : `<button class="btn btn-sm staff-toggle-btn" data-user-id="${u.user_id}" data-active="true" style="font-size:11px;padding:3px 8px;background:#b45309;color:#fff;border-color:#b45309">Nonaktifkan</button>`;
+        const resetBtn = `<button class="btn btn-sm btn-secondary staff-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px;margin-left:4px">Reset PW</button>`;
         return `<tr style="${rowStyle}">
             <td>${esc(u.full_name)}${badge}</td>
             <td>${esc(u.login_identifier)}</td>
             <td>${esc(u.teacher_code ?? '—')}</td>
             <td>${buildJabatan(u)}</td>
-            <td>${btn}</td>
+            <td style="white-space:nowrap">${btn}${resetBtn}</td>
         </tr>`;
     }
 
@@ -590,6 +591,53 @@ async function renderStaffPanel() {
     });
 
     document.getElementById('staff-tbody')?.addEventListener('click', async e => {
+        // Reset password
+        const resetBtn = e.target.closest('.staff-reset-pw-btn');
+        if (resetBtn) {
+            const userId = resetBtn.dataset.userId;
+            const nama   = resetBtn.dataset.nama;
+            const modal  = document.createElement('div');
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
+            modal.innerHTML = `
+                <div style="background:var(--color-surface);border-radius:12px;padding:24px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+                    <h4 style="margin:0 0 4px">Reset Password</h4>
+                    <p class="hint" style="margin:0 0 16px">Set password sementara untuk <strong>${esc(nama)}</strong>. User akan diminta ganti saat login berikutnya.</p>
+                    <div class="field" style="margin-bottom:12px">
+                        <label class="label">Password Baru (min. 8 karakter)</label>
+                        <input id="reset-pw-input" type="text" class="input" placeholder="Masukkan password sementara" autocomplete="off">
+                    </div>
+                    <div style="display:flex;gap:8px;justify-content:flex-end">
+                        <button id="reset-pw-cancel" class="btn btn-secondary btn-sm">Batal</button>
+                        <button id="reset-pw-confirm" class="btn btn-sm" style="background:var(--color-primary);color:#fff">Set Password</button>
+                    </div>
+                    <p id="reset-pw-status" style="margin:8px 0 0;font-size:13px;display:none"></p>
+                </div>`;
+            document.body.appendChild(modal);
+            document.getElementById('reset-pw-cancel').addEventListener('click', () => modal.remove());
+            document.getElementById('reset-pw-confirm').addEventListener('click', async () => {
+                const pw  = document.getElementById('reset-pw-input').value.trim();
+                const btn = document.getElementById('reset-pw-confirm');
+                const st  = document.getElementById('reset-pw-status');
+                if (pw.length < 8) { st.textContent = 'Password minimal 8 karakter.'; st.style.color = 'var(--color-danger)'; st.style.display = 'block'; return; }
+                btn.disabled = true; btn.textContent = 'Memproses…';
+                try {
+                    await adminResetUserPassword(userId, pw);
+                    st.textContent = '✓ Password berhasil direset. User akan diminta ganti saat login.';
+                    st.style.color = 'var(--color-success)';
+                    st.style.display = 'block';
+                    btn.style.display = 'none';
+                    document.getElementById('reset-pw-cancel').textContent = 'Tutup';
+                } catch (err) {
+                    st.textContent = `Gagal: ${esc(err.message)}`;
+                    st.style.color = 'var(--color-danger)';
+                    st.style.display = 'block';
+                    btn.disabled = false; btn.textContent = 'Set Password';
+                }
+            });
+            return;
+        }
+
+        // Toggle aktif/nonaktif
         const btn = e.target.closest('.staff-toggle-btn');
         if (!btn) return;
         const userId   = btn.dataset.userId;

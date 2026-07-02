@@ -5,6 +5,7 @@
 
 import { applyBrandingById } from '../../shared/branding.js';
 import { initIdleTimeout } from '../../shared/idle-timeout.js';
+import { checkMustChangePassword, initChangePassword } from '../../shared/change-password.js';
 import {
     supabase, logout, getCurrentUserRow, GURU_ROLES,
     listSchoolAdmins, addSchoolAdmin, removeSchoolAdmin,
@@ -126,6 +127,10 @@ async function init() {
 
     applyBrandingById(currentUser.school_id, supabase);
     initIdleTimeout({ onIdle: async () => { await logout(); window.location.href = 'index.html'; } });
+
+    // Cek paksa ganti password (admin sudah reset)
+    await checkMustChangePassword(supabase, currentUser);
+
     config  = await getSchoolConfig();
     jabatan   = getJabatan(currentUser);
     isTeacher = ['GURU', 'WALI_KELAS'].includes(currentUser.role_type);
