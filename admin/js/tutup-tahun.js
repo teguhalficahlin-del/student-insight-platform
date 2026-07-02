@@ -314,7 +314,7 @@ async function fetchPromotableClasses(config) {
     // Fetch kelas sumber (grade 10 dan 11, tahun ajaran aktif)
     const { data: classes, error: classErr } = await supabase
         .from('classes')
-        .select('class_id, name, program_id, grade_level')
+        .select('class_id, name, program_id, grade_level, programs(name)')
         .eq('academic_year', config.current_academic_year)
         .in('grade_level', [10, 11]);
     if (classErr) throw classErr;
@@ -359,6 +359,7 @@ async function fetchPromotableClasses(config) {
         nextClassMap,
         classes: classes.map(c => ({
             ...c,
+            programName:   c.programs?.name ?? 'Tanpa Program',
             studentIds:    studentsByClass.get(c.class_id) ?? [],
             suggestedName: suggestNextClassName(c.name),
         })),
@@ -382,40 +383,60 @@ async function setupStep3() {
         nextClassesByGrade.get(grade_level).push({ name: upperName, displayName, class_id });
     }
 
-    const tbody = document.querySelector('#promotion-table tbody');
+    const container = document.getElementById('promotion-list');
     let allValid = true;
 
-    tbody.innerHTML = state.sourceClasses.map(c => {
-        const targetGrade  = c.grade_level + 1;
-        const options      = nextClassesByGrade.get(targetGrade) ?? [];
-        const suggested    = options.find(o =>
-            o.name === suggestNextClassName(c.name).trim().toUpperCase()
-        ) ?? options[0];
-        const hasOptions   = options.length > 0;
-        if (!hasOptions) allValid = false;
+    if (state.sourceClasses.length === 0) {
+        container.innerHTML = '<p class="hint">Tidak ada kelas tingkat 10/11.</p>';
+    } else {
+        // Kelompokkan per program keahlian
+        const byProgram = new Map();
+        for (const c of state.sourceClasses) {
+            if (!byProgram.has(c.programName)) byProgram.set(c.programName, []);
+            byProgram.get(c.programName).push(c);
+        }
+        const programKeys = [...byProgram.keys()].sort((a, b) => a.localeCompare(b, 'id'));
 
-        const rowStyle = hasOptions ? '' : 'background:var(--color-danger-light, #fff0f0)';
+        container.innerHTML = programKeys.map(prog => {
+            const classList = byProgram.get(prog)
+                .sort((a, b) => a.grade_level - b.grade_level || a.name.localeCompare(b.name, 'id'));
 
-        return `
-            <tr style="${rowStyle}">
-                <td>${c.name} (Kelas ${c.grade_level})</td>
-                <td>${c.studentIds.length}</td>
-                <td>
-                    ${hasOptions ? `
-                    <select class="input promotion-target-select"
-                            data-source-class-id="${c.class_id}">
-                        <option value="">-- Pilih Kelas Tujuan --</option>
-                        ${options.map(o => `
-                            <option value="${o.class_id}"
-                                ${suggested && o.name === suggested.name ? 'selected' : ''}>
-                                ${o.displayName}
-                            </option>
-                        `).join('')}
-                    </select>` : `<span style="color:var(--color-danger)">Tidak ada kelas tujuan</span>`}
-                </td>
-            </tr>
-        `;
-    }).join('') || `<tr><td colspan="3" class="hint">Tidak ada kelas tingkat 10/11.</td></tr>`;
+            const rows = classList.map(c => {
+                const targetGrade = c.grade_level + 1;
+                const options     = nextClassesByGrade.get(targetGrade) ?? [];
+                const suggested   = options.find(o =>
+                    o.name === suggestNextClassName(c.name).trim().toUpperCase()
+                ) ?? options[0];
+                const hasOptions  = options.length > 0;
+                if (!hasOptions) allValid = false;
+
+                const rowStyle = hasOptions ? '' : 'background:var(--color-danger-light,#fff0f0)';
+                return `
+                    <tr style="${rowStyle}">
+                        <td>${c.name} (Kelas ${c.grade_level})</td>
+                        <td>${c.studentIds.length}</td>
+                        <td>
+                            ${hasOptions
+                                ? `<select class="input promotion-target-select" data-source-class-id="${c.class_id}">
+                                       <option value="">-- Pilih Kelas Tujuan --</option>
+                                       ${options.map(o => `<option value="${o.class_id}" ${suggested && o.name === suggested.name ? 'selected' : ''}>${o.displayName}</option>`).join('')}
+                                   </select>`
+                                : `<span style="color:var(--color-danger)">Tidak ada kelas tujuan</span>`}
+                        </td>
+                    </tr>`;
+            }).join('');
+
+            const progTotal = classList.reduce((t, c) => t + c.studentIds.length, 0);
+            return `
+                <details style="margin-bottom:8px" open>
+                    <summary style="cursor:pointer;font-weight:600">${prog} (${progTotal} siswa)</summary>
+                    <table class="table" style="margin-top:4px">
+                        <thead><tr><th>Kelas Asal</th><th>Jumlah</th><th>Kelas Tujuan</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </details>`;
+        }).join('');
+    }
 
     const confirmBtn = document.getElementById('confirm-promotion-btn');
     confirmBtn.disabled = !allValid || state.promotionDone;
