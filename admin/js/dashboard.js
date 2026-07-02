@@ -7,7 +7,7 @@
 
 import { applyBrandingById } from '../../shared/branding.js';
 import { initIdleTimeout } from '../../shared/idle-timeout.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -769,7 +769,7 @@ async function renderActivityLogPanel() {
             .limit(50),
         supabase
             .from('observations')
-            .select(`dimension, sentiment, created_at,
+            .select(`observation_id, dimension, sentiment, content, created_at, is_void, void_reason,
                 author:users!observations_author_user_id_fkey ( full_name, role_type ),
                 student:students ( full_name )`)
             .order('created_at', { ascending: false })
@@ -797,14 +797,17 @@ async function renderActivityLogPanel() {
     const obsHtml = obsRows.length === 0
         ? '<p class="hint">Belum ada observasi.</p>'
         : `<table class="table" style="font-size:13px">
-            <thead><tr><th>Waktu</th><th>Dimensi</th><th>Sentimen</th><th>Siswa</th><th>Oleh</th></tr></thead>
+            <thead><tr><th>Waktu</th><th>Dimensi</th><th>Sentimen</th><th>Siswa</th><th>Oleh</th><th>Aksi</th></tr></thead>
             <tbody>${obsRows.map(o => `
-                <tr>
+                <tr style="${o.is_void ? 'opacity:.55' : ''}">
                     <td style="white-space:nowrap">${fmtTs(o.created_at)}</td>
-                    <td>${DIMENSION_LABELS_ADMIN[o.dimension] ?? o.dimension}</td>
+                    <td${o.is_void ? ' style="text-decoration:line-through"' : ''}>${DIMENSION_LABELS_ADMIN[o.dimension] ?? o.dimension}</td>
                     <td>${o.sentiment === 'POSITIF' ? '✅ Positif' : '⚠ Perhatian'}</td>
-                    <td>${o.student?.full_name ?? '—'}</td>
-                    <td>${o.author?.full_name ?? '—'}</td>
+                    <td>${esc(o.student?.full_name ?? '—')}</td>
+                    <td>${esc(o.author?.full_name ?? '—')}</td>
+                    <td>${o.is_void
+                        ? `<span class="hint" title="${esc(o.void_reason ?? '')}" style="font-size:11px;color:#b45309">Dibatalkan</span>`
+                        : `<button class="btn btn-sm obs-void-btn" data-obs-id="${o.observation_id}" data-obs-content="${esc((o.content ?? '').slice(0, 80))}" style="font-size:11px;padding:3px 8px;background:#b45309;color:#fff;border-color:#b45309">Batalkan</button>`}</td>
                 </tr>`).join('')}
             </tbody>
            </table>`;
@@ -824,9 +827,33 @@ async function renderActivityLogPanel() {
             <summary style="cursor:pointer; font-weight:600; margin-bottom:8px">
                 Observasi Siswa (${obsRows.length})
             </summary>
+            <p class="hint" style="margin:0 0 8px;font-size:12px">Observasi yang salah bisa dibatalkan — akan disembunyikan dari siswa &amp; orang tua, tapi tetap tercatat untuk audit.</p>
             <div style="overflow-x:auto">${obsHtml}</div>
         </details>
     `;
+
+    panelContent.querySelectorAll('.obs-void-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const obsId   = btn.dataset.obsId;
+            const preview = btn.dataset.obsContent || '';
+            const reason  = window.prompt(
+                `Batalkan observasi ini?\n\n"${preview}${preview.length >= 80 ? '…' : ''}"\n\nAlasan pembatalan (wajib):`
+            );
+            if (reason === null) return;                 // batal di dialog
+            if (!reason.trim()) { alert('Alasan pembatalan wajib diisi.'); return; }
+
+            btn.disabled = true;
+            btn.textContent = 'Memproses…';
+            try {
+                await voidObservation(obsId, reason);
+                await renderActivityLogPanel();
+            } catch (err) {
+                alert(`Gagal membatalkan: ${err.message}`);
+                btn.disabled = false;
+                btn.textContent = 'Batalkan';
+            }
+        });
+    });
 }
 
 // ─────────────────────────────────────────────────────────────

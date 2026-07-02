@@ -65,6 +65,35 @@ export async function logout() {
     await supabase.auth.signOut();
 }
 
+/**
+ * Batalkan (void) sebuah observasi yang salah — soft-delete.
+ * Baris tetap tersimpan untuk audit; disembunyikan dari siswa/ortu/DUDI
+ * lewat RLS. Hanya ADMINISTRATIVE/KEPSEK yang diizinkan (RLS + di sini).
+ * @param {string} observationId
+ * @param {string} reason - alasan pembatalan (wajib, untuk jejak audit)
+ */
+export async function voidObservation(observationId, reason) {
+    const me = await getCurrentUserRow();
+    if (!me) throw new Error('Sesi tidak ditemukan. Silakan login ulang.');
+
+    const { data, error } = await supabase
+        .from('observations')
+        .update({
+            is_void:     true,
+            void_reason: reason?.trim() || null,
+            voided_by:   me.user_id,
+            voided_at:   new Date().toISOString(),
+        })
+        .eq('observation_id', observationId)
+        .eq('is_void', false)   // idempoten: hanya yang belum dibatalkan
+        .select('observation_id')
+        .maybeSingle();
+
+    if (error) throw error;
+    if (!data) throw new Error('Observasi tidak ditemukan atau sudah dibatalkan.');
+    return data;
+}
+
 export function requireAdministrativeOrRedirect(userRow) {
     if (!userRow || userRow.role_type !== 'ADMINISTRATIVE') {
         window.location.href = 'index.html';
