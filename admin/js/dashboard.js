@@ -612,9 +612,23 @@ async function runProvisionStudents() {
 }
 
 async function renderParentsPanel() {
-    const parents = await fetchAllRows('users', q => q.select('user_id, full_name, login_identifier').eq('role_type', 'ORTU').order('full_name'));
-    const links = await fetchAllRows('student_parents',
-        q => q.select('parent_user_id, students ( student_status, program:programs ( name ) )'));
+    const [parents, links, config] = await Promise.all([
+        fetchAllRows('users', q => q.select('user_id, full_name, login_identifier').eq('role_type', 'ORTU').order('full_name')),
+        fetchAllRows('student_parents', q => q.select('parent_user_id, students ( student_id, student_status )')),
+        getSchoolConfig(),
+    ]);
+
+    // Map student_id → {name, grade} dari tahun ajaran aktif
+    const { data: enrollments } = await supabase
+        .from('class_enrollments')
+        .select('student_id, class:classes(name, grade_level)')
+        .eq('academic_year', config?.current_academic_year ?? '')
+        .is('withdrawn_at', null);
+
+    const classOf = new Map((enrollments ?? []).map(e => [
+        e.student_id,
+        { name: e.class?.name ?? 'Tanpa Kelas', grade: e.class?.grade_level ?? 99 },
+    ]));
 
     const childMap = new Map();
     for (const l of links) {
@@ -623,22 +637,29 @@ async function renderParentsPanel() {
     }
 
     const aktif = [];
-    const parentProgram = new Map();   // user_id -> nama program anak aktif
+    const parentClass = new Map();   // user_id -> {name, grade} kelas anak aktif
     for (const p of parents) {
         const children = childMap.get(p.user_id) ?? [];
         const hasAktif = children.some(c => c.student_status === 'AKTIF');
         if (hasAktif || children.length === 0) {
             aktif.push(p);
             const refChild = children.find(c => c.student_status === 'AKTIF') ?? children[0];
-            parentProgram.set(p.user_id, refChild?.program?.name ?? 'Tanpa Program');
+            parentClass.set(p.user_id, classOf.get(refChild?.student_id) ?? { name: 'Tanpa Kelas', grade: 99 });
         }
     }
 
+    // Urutkan: tingkat asc → nama kelas asc → nama orang tua asc (sudah ter-order)
+    aktif.sort((a, b) => {
+        const ca = parentClass.get(a.user_id), cb = parentClass.get(b.user_id);
+        if (ca.grade !== cb.grade) return ca.grade - cb.grade;
+        return ca.name.localeCompare(cb.name, 'id');
+    });
+
     const aktifHtml = renderGroupedTable(
         aktif,
-        u => parentProgram.get(u.user_id) ?? 'Tanpa Program',
+        u => parentClass.get(u.user_id)?.name ?? 'Tanpa Kelas',
         ['Nama', 'NIK'],
-        u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td></tr>`,
+        u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td></tr>`,
     );
 
     panelContent.innerHTML = `
