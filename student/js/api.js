@@ -20,6 +20,10 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // Role yang boleh masuk portal ini
 export const STUDENT_ROLES = ['SISWA'];
 
+// Status siswa yang masih boleh mengakses Portal Siswa.
+// LULUS (alumni) & KELUAR (mutasi) diblokir; PKL tetap aktif (sedang magang).
+export const ACTIVE_STUDENT_STATUSES = ['AKTIF', 'PKL'];
+
 export async function loginWithIdentifier(identifier, password, schoolId = null) {
     const { data: email, error: resolveErr } = await supabase
         .rpc('fn_resolve_login_email', { p_identifier: identifier, p_school_id: schoolId });

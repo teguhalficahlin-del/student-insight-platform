@@ -6,7 +6,7 @@
 import { applyBrandingById } from '../../shared/branding.js';
 import { initIdleTimeout } from '../../shared/idle-timeout.js';
 import {
-    supabase, logout, getCurrentUserRow, STUDENT_ROLES,
+    supabase, logout, getCurrentUserRow, STUDENT_ROLES, ACTIVE_STUDENT_STATUSES,
     getMyStudent, getSchoolConfig, getMyClass,
     getScheduleForDate, getMyAttendance, getMyObservations,
     getMyPklPlacement, getMyPklAttendance,
@@ -78,6 +78,13 @@ async function init() {
         // Akun SISWA belum tertaut ke data siswa
         document.getElementById('loading').textContent =
             'Akun ini belum tertaut ke data siswa. Hubungi admin sekolah.';
+        return;
+    }
+
+    // Alumni (LULUS) / mutasi (KELUAR) tidak boleh lagi mengakses portal
+    if (!ACTIVE_STUDENT_STATUSES.includes(student.student_status)) {
+        await logout();
+        window.location.href = 'index.html';
         return;
     }
 

@@ -1,4 +1,4 @@
-import { supabase, loginWithIdentifier, getCurrentUserRow, STUDENT_ROLES } from './api.js';
+import { supabase, loginWithIdentifier, getCurrentUserRow, getMyStudent, STUDENT_ROLES, ACTIVE_STUDENT_STATUSES } from './api.js';
 import { applyBranding } from '../../shared/branding.js';
 
 let _schoolId = null;
@@ -22,11 +22,13 @@ applyBranding().then(b => {
     }
 });
 
-// Jika sudah login sebagai siswa, langsung ke dashboard
+// Jika sudah login sebagai siswa aktif, langsung ke dashboard
 supabase.auth.getUser().then(async ({ data }) => {
     if (!data?.user) return;
     const row = await getCurrentUserRow();
     if (row && STUDENT_ROLES.includes(row.role_type) && row.is_active !== false) {
+        const s = await getMyStudent(row.user_id).catch(() => null);
+        if (s && !ACTIVE_STUDENT_STATUSES.includes(s.student_status)) return; // alumni/keluar: jangan auto-masuk
         window.location.href = 'dashboard.html';
     }
 });
@@ -48,9 +50,16 @@ form.addEventListener('submit', async (e) => {
             await supabase.auth.signOut();
             throw new Error('Akun Anda telah dinonaktifkan. Hubungi admin sekolah.');
         }
+        const student = await getMyStudent(row.user_id).catch(() => null);
+        if (student && !ACTIVE_STUDENT_STATUSES.includes(student.student_status)) {
+            await supabase.auth.signOut();
+            throw new Error(student.student_status === 'LULUS'
+                ? 'Akun ini sudah berstatus alumni (lulus). Portal Siswa tidak lagi tersedia.'
+                : 'Akun siswa ini sudah tidak aktif. Hubungi admin sekolah.');
+        }
         window.location.href = 'dashboard.html';
     } catch (err) {
-        const isOurMsg = err.message?.startsWith('Akun ini');
+        const isOurMsg = err.message?.startsWith('Akun ini') || err.message?.startsWith('Akun siswa');
         errEl.textContent    = isOurMsg ? err.message : 'Login gagal. Periksa NIS dan password Anda.';
         errEl.style.display  = 'block';
         loginBtn.disabled    = false;
