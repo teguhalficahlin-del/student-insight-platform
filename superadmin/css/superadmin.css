@@ -140,8 +140,36 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; c
     .app-header { padding: 10px 12px; }
     .app-header h2 { font-size: 13px; }
     .btn-sm { padding: 5px 10px; font-size: 12px; }
-    .table { font-size: 13px; }
-    .table th, .table td { padding: 8px 10px; }
     .cred-value { font-size: 13px; }
+
+    /* Tabel sekolah → card layout */
+    .table-wrapper { overflow-x: visible; }
+    .schools-table thead { display: none; }
+    .schools-table, .schools-table tbody,
+    .schools-table tr, .schools-table td { display: block; width: 100%; }
+    .schools-table tr {
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        margin-bottom: 10px;
+        padding: 10px 12px;
+        background: var(--color-card);
+    }
+    .schools-table td {
+        border: none;
+        padding: 3px 0;
+        font-size: 13px;
+    }
+    .schools-table td:first-child { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+    .schools-table td[data-label]::before {
+        content: attr(data-label) ": ";
+        font-size: 11px;
+        color: var(--color-text-muted);
+        text-transform: uppercase;
+        font-weight: 600;
+        display: block;
+        margin-top: 6px;
+    }
+    .schools-table td:first-child::before { display: none; }
+    .schools-table td[data-label="aksi"] { margin-top: 8px; }
     .col-hide-mobile { display: none; }
 }
