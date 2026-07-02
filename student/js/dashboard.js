@@ -107,6 +107,7 @@ async function init() {
 
 // ─── Tab navigation ──────────────────────────────────────────
 const TAB_SHORT = { jadwal: 'Jadwal', kehadiran: 'Hadir', observasi: 'Observasi', pkl: 'PKL' };
+const TAB_ICON  = { jadwal: 'ti-calendar', kehadiran: 'ti-clipboard-check', observasi: 'ti-eye', pkl: 'ti-briefcase' };
 
 function buildTabs() {
     const nav    = document.getElementById('tab-nav');
@@ -121,9 +122,12 @@ function buildTabs() {
     nav.innerHTML = tabs.map(t =>
         `<button class="tab-btn" data-tab="${t.key}">${esc(t.label)}</button>`
     ).join('');
-    botNav.innerHTML = tabs.map(t =>
-        `<button class="tab-btn" data-tab="${t.key}">${esc(TAB_SHORT[t.key] ?? t.label)}</button>`
-    ).join('');
+    botNav.innerHTML = `<div class="bottom-nav-inner">${
+        tabs.map(t => {
+            const icon = TAB_ICON[t.key] ?? 'ti-circle';
+            return `<button class="tab-btn" data-tab="${t.key}"><i class="ti ${icon} nav-icon" aria-hidden="true"></i>${esc(TAB_SHORT[t.key] ?? t.label)}</button>`;
+        }).join('')
+    }</div>`;
 
     const handler = async (e) => {
         const key = e.target.dataset?.tab;

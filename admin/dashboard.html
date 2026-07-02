@@ -6,6 +6,7 @@
     <title>Dashboard — Admin Console</title>
 <script>(function(){var last=location.pathname.split("/").filter(Boolean).pop();if(["admin","guru","student","parent","dudi","stakeholder","superadmin"].indexOf(last)>-1){var b=document.createElement("base");b.href=location.pathname.endsWith("/")?location.pathname:location.pathname+"/";document.head.appendChild(b);}})();</script>
     <link rel="stylesheet" href="css/admin.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
   <link rel="manifest" href="manifest.json">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -66,6 +67,15 @@
         </main>
     </div>
 
+    <nav class="admin-bottom-nav" id="admin-bottom-nav" aria-label="Navigasi cepat">
+        <div class="admin-bottom-nav-inner">
+            <button class="nav-tab" data-panel="students"><i class="ti ti-users nav-icon" aria-hidden="true"></i>Siswa</button>
+            <button class="nav-tab" data-panel="staff"><i class="ti ti-id-badge nav-icon" aria-hidden="true"></i>Staf</button>
+            <button class="nav-tab" data-panel="jadwal"><i class="ti ti-calendar nav-icon" aria-hidden="true"></i>Jadwal</button>
+            <button class="nav-tab" data-panel="setup"><i class="ti ti-settings nav-icon" aria-hidden="true"></i>Setup</button>
+            <button class="nav-tab nav-menu-btn" id="bottom-menu-btn"><i class="ti ti-menu-2 nav-icon" aria-hidden="true"></i>Menu</button>
+        </div>
+    </nav>
     <script type="module" src="js/dashboard.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
