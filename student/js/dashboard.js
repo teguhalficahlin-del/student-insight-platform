@@ -4,6 +4,7 @@
  */
 
 import { applyBrandingById } from '../../shared/branding.js';
+import { initIdleTimeout } from '../../shared/idle-timeout.js';
 import {
     supabase, logout, getCurrentUserRow, STUDENT_ROLES,
     getMyStudent, getSchoolConfig, getMyClass,
@@ -69,6 +70,7 @@ async function init() {
     }
 
     applyBrandingById(currentUser.school_id, supabase);
+    initIdleTimeout({ onIdle: async () => { await logout(); window.location.href = 'index.html'; } });
     config  = await getSchoolConfig();
     student = await getMyStudent(currentUser.user_id);
 

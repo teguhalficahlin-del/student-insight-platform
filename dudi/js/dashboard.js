@@ -4,6 +4,7 @@
  */
 
 import { applyBrandingById } from '../../shared/branding.js';
+import { initIdleTimeout } from '../../shared/idle-timeout.js';
 import {
     supabase,
     getCurrentUserRow,
@@ -92,6 +93,7 @@ async function init() {
 
     currentUser = userRow;
     applyBrandingById(userRow.school_id, supabase);
+    initIdleTimeout({ onIdle: async () => { await logout(); window.location.href = 'index.html'; } });
     orgNameEl.textContent  = userRow.dudi_org_name ?? userRow.full_name;
     userNameEl.textContent = 'PJ: ' + userRow.full_name;
 

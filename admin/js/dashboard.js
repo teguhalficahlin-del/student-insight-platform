@@ -6,6 +6,7 @@
  */
 
 import { applyBrandingById } from '../../shared/branding.js';
+import { initIdleTimeout } from '../../shared/idle-timeout.js';
 import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
@@ -970,6 +971,7 @@ async function renderExportPanel() {
     if (!requireAdministrativeOrRedirect(userRow)) return;
 
     applyBrandingById(userRow.school_id, supabase);
+    initIdleTimeout({ onIdle: async () => { await logout(); window.location.href = 'index.html'; } });
     const config = await getSchoolConfig();
     document.getElementById('dashboard-school-name').textContent = config?.school_name ?? 'Sekolah';
     document.getElementById('dashboard-user-name').textContent = `Masuk sebagai ${userRow.full_name}`;

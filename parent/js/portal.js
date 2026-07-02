@@ -6,6 +6,7 @@
  */
 
 import { applyBrandingById } from '../../shared/branding.js';
+import { initIdleTimeout } from '../../shared/idle-timeout.js';
 import {
     supabase,
     getCurrentUserRow,
@@ -97,6 +98,7 @@ async function init() {
     }
 
     applyBrandingById(currentUser.school_id, supabase);
+    initIdleTimeout({ onIdle: async () => { await logout(); window.location.href = 'index.html'; } });
     portalUserName.textContent = currentUser.full_name;
 
     try {
