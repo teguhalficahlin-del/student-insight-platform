@@ -346,7 +346,7 @@ function renderObsHistory(rows, nameById) {
                 <strong>${esc(nameById.get(r.student_id) ?? 'Siswa')}</strong>
                 &middot; ${DIMENSION_LABELS[r.dimension] ?? r.dimension}
                 &middot; ${r.sentiment === 'POSITIF' ? 'Positif' : 'Perlu Perhatian'}
-                &middot; ${formatDate(r.observed_at ?? r.created_at)}
+                &middot; ${formatDate(r.observed_at)}
             </div>
             <p class="obs-content">${esc(r.content)}</p>
         </div>
