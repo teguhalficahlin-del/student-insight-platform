@@ -16,7 +16,7 @@ import {
     getProgram, fetchPklStudents, fetchNonPklStudents,
     fetchDudiPartners, fetchPklAttendance, fetchDudiObservations,
     createPlacement, bulkImportPkl,
-    getSchoolStats, getAbsentTeachersToday,
+    getSchoolStats, getKepsekMonitoring, getAbsentTeachersToday,
     getAttendanceRecapPerClass, getOpenCases,
     getJournalEntries, insertJournalEntry, deleteJournalEntry,
     getCases, getCase, getCaseEvents, createCase,
@@ -160,7 +160,7 @@ async function init() {
 // ─── Tab navigation ──────────────────────────────────────────
 const TAB_SHORT = {
     guru: 'Beranda', wali_kelas: 'Wali', bk: 'BK', kaprodi: 'Prodi',
-    waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', kepsek: 'Kepsek',
+    waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', kepsek: 'Monitor',
     kasus: 'Pembinaan', jurnal: 'Jurnal',
 };
 
@@ -1006,23 +1006,61 @@ async function initWakaKurTab() {
     }
 }
 
-// ─── TAB KEPSEK ──────────────────────────────────────────────
+// ─── TAB KEPSEK (Monitoring) ─────────────────────────────────
+
+let _kepsekTabInit = false;
 
 async function initKepsekTab() {
-    try {
-        const stats = await getSchoolStats(config.current_academic_year, config.current_semester);
-        document.getElementById('ks-siswa').textContent  = stats.total_siswa;
-        document.getElementById('ks-staf').textContent   = stats.total_staf;
-        document.getElementById('ks-sesi').textContent   = stats.sesi_hari_ini;
-        document.getElementById('ks-hadir').textContent  = stats.kehadiran_hari_ini;
-    } catch (err) {
-        console.error('[kepsek]', err);
+    if (!_kepsekTabInit) {
+        _kepsekTabInit = true;
+
+        document.getElementById('ks-period-toggle').addEventListener('click', async (e) => {
+            const btn = e.target.closest('.ks-period-btn');
+            if (!btn) return;
+            document.querySelectorAll('.ks-period-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            await loadKepsekMonitoring(btn.dataset.period);
+        });
+
+        await loadAdminList();
+        document.getElementById('ks-add-admin-form').addEventListener('submit', handleAddAdmin);
     }
 
-    await loadAdminList();
+    await loadKepsekMonitoring('harian');
+}
 
-    document.getElementById('ks-add-admin-form')
-        .addEventListener('submit', handleAddAdmin);
+async function loadKepsekMonitoring(period = 'harian') {
+    const errEl    = document.getElementById('ks-monitoring-error');
+    const pctSiswa = document.getElementById('ks-pct-siswa');
+    const pctGuru  = document.getElementById('ks-pct-guru');
+    const detSiswa = document.getElementById('ks-detail-siswa');
+    const detGuru  = document.getElementById('ks-detail-guru');
+
+    pctSiswa.textContent = '…';
+    pctGuru.textContent  = '…';
+    detSiswa.textContent = '';
+    detGuru.textContent  = '';
+    errEl.style.display  = 'none';
+
+    try {
+        const d = await getKepsekMonitoring(period);
+
+        pctSiswa.textContent = d.pct_siswa_absen != null ? d.pct_siswa_absen + '%' : '—';
+        pctGuru.textContent  = d.pct_guru_absen  != null ? d.pct_guru_absen  + '%' : '—';
+
+        detSiswa.textContent = d.siswa_total > 0
+            ? `${d.siswa_absen} dari ${d.siswa_total} sesi`
+            : 'Belum ada data';
+        detGuru.textContent  = d.guru_total > 0
+            ? `${d.guru_absen} dari ${d.guru_total} sesi`
+            : 'Belum ada data';
+    } catch (err) {
+        errEl.textContent   = `Gagal memuat data monitoring: ${fe(err)}`;
+        errEl.style.display = 'block';
+        pctSiswa.textContent = '—';
+        pctGuru.textContent  = '—';
+        console.error('[kepsek monitoring]', err);
+    }
 }
 
 async function loadAdminList() {
@@ -1401,7 +1439,9 @@ function renderKasusActions(kasus) {
     const nextRoles  = chain.slice(handlerIdx + 1);
     const isHandler  = kasus.current_handler_role === currentUser.role_type;
 
-    if (nextRoles.length && isHandler) {
+    const isKepsek   = currentUser.role_type === 'KEPSEK';
+    const canEscalate = nextRoles.length && (isHandler || isKepsek);
+    if (canEscalate) {
         escalateTo.innerHTML = nextRoles.map(r =>
             `<option value="${r}">${esc(ROLE_LABEL[r] ?? r)}</option>`
         ).join('');

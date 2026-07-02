@@ -71,7 +71,7 @@ export function jabatanLabel(key) {
         kaprodi:       'Kaprodi',
         waka_kesiswaan:'Waka Kesiswaan',
         waka_kurikulum:'Waka Kurikulum',
-        kepsek:        'Kepala Sekolah',
+        kepsek:        'Monitoring',
     }[key] ?? key;
 }
 
@@ -392,6 +392,12 @@ export async function getSchoolStats(academicYear, semester) {
         sesi_hari_ini:     schedToday.count ?? 0,
         kehadiran_hari_ini: attToday.count ?? 0,
     };
+}
+
+export async function getKepsekMonitoring(period = 'harian') {
+    const { data, error } = await supabase.rpc('fn_kepsek_monitoring', { p_period: period });
+    if (error) throw error;
+    return data;
 }
 
 export async function getAbsentTeachersToday() {

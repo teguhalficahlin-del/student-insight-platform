@@ -285,20 +285,31 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════════
-         TAB: KEPSEK
+         TAB: KEPSEK (Monitoring)
     ════════════════════════════════════════════════════════ -->
     <div class="tab-panel" id="tab-kepsek">
         <div class="page-body">
-            <div class="section-card" style="padding-bottom:8px">
-                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;flex-wrap:wrap;gap:4px">
-                    <h3 style="margin:0">Ringkasan Sekolah</h3>
-                    <span class="hint" style="font-size:12px;margin:0">Diperbarui setiap kali tab ini dibuka</span>
+            <div class="section-card">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;flex-wrap:wrap;gap:4px">
+                    <h3 style="margin:0">Ketidakhadiran</h3>
+                    <div id="ks-period-toggle" style="display:flex;gap:4px">
+                        <button class="btn btn-sm ks-period-btn active" data-period="harian">Harian</button>
+                        <button class="btn btn-sm ks-period-btn" data-period="mingguan">Mingguan</button>
+                        <button class="btn btn-sm ks-period-btn" data-period="bulanan">Bulanan</button>
+                    </div>
                 </div>
-                <div class="stats-row" id="kepsek-stats">
-                    <div class="stat-card"><span class="stat-value" id="ks-siswa">—</span><div class="stat-label">Siswa Aktif</div></div>
-                    <div class="stat-card"><span class="stat-value" id="ks-staf">—</span><div class="stat-label">Tenaga Pendidik</div></div>
-                    <div class="stat-card"><span class="stat-value" id="ks-sesi">—</span><div class="stat-label">Sesi Mengajar</div></div>
-                    <div class="stat-card"><span class="stat-value" id="ks-hadir">—</span><div class="stat-label">Hadir Hari Ini</div></div>
+                <div id="ks-monitoring-error" style="display:none" class="hint" style="color:var(--color-danger)"></div>
+                <div class="stats-row" id="ks-monitoring-stats">
+                    <div class="stat-card">
+                        <span class="stat-value" id="ks-pct-siswa">—</span>
+                        <div class="stat-label">Siswa Tidak Hadir</div>
+                        <div class="hint" id="ks-detail-siswa" style="font-size:11px;margin-top:2px"></div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="ks-pct-guru">—</span>
+                        <div class="stat-label">Guru Tidak Hadir di Kelas</div>
+                        <div class="hint" id="ks-detail-guru" style="font-size:11px;margin-top:2px"></div>
+                    </div>
                 </div>
             </div>
 
