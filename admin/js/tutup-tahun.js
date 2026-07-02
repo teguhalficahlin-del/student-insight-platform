@@ -203,13 +203,48 @@ async function setupStep1() {
 // ─────────────────────────────────────────────────────────────
 
 function setupStep2() {
-    const tbody = document.querySelector('#graduation-table tbody');
-    tbody.innerHTML = state.gradeXIIStudents.map(s => `
-        <tr>
-            <td><input type="checkbox" class="grad-checkbox" data-student-id="${s.student_id}" checked /></td>
-            <td>${s.full_name}</td><td>${s.nis}</td><td>${s.className}</td>
-        </tr>
-    `).join('') || `<tr><td colspan="4" class="hint">Tidak ada siswa untuk diluluskan.</td></tr>`;
+    const students = state.gradeXIIStudents;
+    const container = document.getElementById('graduation-list');
+
+    if (students.length === 0) {
+        container.innerHTML = '<p class="hint">Tidak ada siswa untuk diluluskan.</p>';
+    } else {
+        // Kelompokkan per program → per kelas
+        const byProgram = new Map();
+        for (const s of students) {
+            if (!byProgram.has(s.programName)) byProgram.set(s.programName, new Map());
+            const byClass = byProgram.get(s.programName);
+            if (!byClass.has(s.className)) byClass.set(s.className, []);
+            byClass.get(s.className).push(s);
+        }
+        const programKeys = [...byProgram.keys()].sort((a, b) => a.localeCompare(b, 'id'));
+
+        container.innerHTML = programKeys.map(prog => {
+            const byClass = byProgram.get(prog);
+            const progTotal = [...byClass.values()].reduce((t, arr) => t + arr.length, 0);
+            const classHtml = [...byClass.keys()].sort((a, b) => a.localeCompare(b, 'id')).map(kls => {
+                const list = byClass.get(kls);
+                const rows = list.map(s => `
+                    <tr>
+                        <td style="width:36px"><input type="checkbox" class="grad-checkbox" data-student-id="${s.student_id}" checked /></td>
+                        <td>${s.full_name}</td><td>${s.nis}</td>
+                    </tr>`).join('');
+                return `
+                    <details style="margin:4px 0 4px 16px" open>
+                        <summary style="cursor:pointer;font-weight:600">${kls} (${list.length})</summary>
+                        <table class="table" style="margin-top:4px">
+                            <thead><tr><th></th><th>Nama</th><th>NIS</th></tr></thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </details>`;
+            }).join('');
+            return `
+                <details style="margin-bottom:8px" open>
+                    <summary style="cursor:pointer;font-weight:600">${prog} (${progTotal})</summary>
+                    ${classHtml}
+                </details>`;
+        }).join('');
+    }
 
     document.querySelectorAll('.grad-checkbox').forEach(cb => cb.addEventListener('change', updateGraduationPreview));
     updateGraduationPreview();
