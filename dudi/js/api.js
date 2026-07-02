@@ -20,7 +20,11 @@ export async function loginWithIdentifier(identifier, password, schoolId = null)
     if (resolveErr || !email) throw new Error('ID login atau password salah');
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error('ID login atau password salah');
+    if (error) {
+        if (error.status === 429 || /rate limit|too many/i.test(error.message || ''))
+            throw new Error('Terlalu banyak percobaan login. Tunggu ±15 menit lalu coba lagi.');
+        throw new Error('ID login atau password salah');
+    }
 }
 
 export async function getCurrentUserRow() {

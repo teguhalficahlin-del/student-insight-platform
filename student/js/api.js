@@ -29,7 +29,11 @@ export async function loginWithIdentifier(identifier, password, schoolId = null)
         .rpc('fn_resolve_login_email', { p_identifier: identifier, p_school_id: schoolId });
     if (resolveErr || !email) throw new Error('NIS atau password salah');
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error('NIS atau password salah');
+    if (error) {
+        if (error.status === 429 || /rate limit|too many/i.test(error.message || ''))
+            throw new Error('Terlalu banyak percobaan login. Tunggu ±15 menit lalu coba lagi.');
+        throw new Error('NIS atau password salah');
+    }
 }
 
 export async function logout() {

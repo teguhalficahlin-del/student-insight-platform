@@ -42,7 +42,11 @@ export async function loginWithIdentifier(identifier, password, schoolId = null)
     }
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error('Identifier atau password salah');
+    if (error) {
+        if (error.status === 429 || /rate limit|too many/i.test(error.message || ''))
+            throw new Error('Terlalu banyak percobaan login. Tunggu ±15 menit lalu coba lagi.');
+        throw new Error('Identifier atau password salah');
+    }
 
     return data.user;
 }
