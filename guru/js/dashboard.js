@@ -163,6 +163,11 @@ const TAB_SHORT = {
     waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', kepsek: 'Monitor', ks_admin: 'Admin',
     kasus: 'Pembinaan', jurnal: 'Jurnal',
 };
+const TAB_ICON = {
+    guru: 'ti-home', wali_kelas: 'ti-users', bk: 'ti-heart-handshake', kaprodi: 'ti-building',
+    waka_kesiswaan: 'ti-school', waka_kurikulum: 'ti-book', kepsek: 'ti-chart-line', ks_admin: 'ti-shield-check',
+    kasus: 'ti-alert-triangle', jurnal: 'ti-notebook',
+};
 
 function buildTabs() {
     const nav    = document.getElementById('tab-nav');
@@ -178,9 +183,12 @@ function buildTabs() {
         `<button class="tab-btn" data-tab="${t.key}">${esc(t.label)}</button>`
     ).join('');
 
-    botNav.innerHTML = tabs.map(t =>
-        `<button class="tab-btn" data-tab="${t.key}">${esc(TAB_SHORT[t.key] ?? t.label)}</button>`
-    ).join('');
+    botNav.innerHTML = `<div class="bottom-nav-inner">${
+        tabs.map(t => {
+            const icon = TAB_ICON[t.key] ?? 'ti-circle';
+            return `<button class="tab-btn" data-tab="${t.key}"><i class="ti ${icon} nav-icon" aria-hidden="true"></i>${esc(TAB_SHORT[t.key] ?? t.label)}</button>`;
+        }).join('')
+    }</div>`;
 
     const handler = async (e) => {
         const key = e.target.dataset?.tab;

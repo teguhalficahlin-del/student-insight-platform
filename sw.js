@@ -6,7 +6,7 @@
  *   - Navigasi offline: tampilkan offline.html
  */
 
-const CACHE_NAME = 'smkhr-v8';
+const CACHE_NAME = 'smkhr-v9';
 
 const PRECACHE_URLS = [
     './',
