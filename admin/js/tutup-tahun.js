@@ -407,6 +407,10 @@ async function fetchPromotableClasses(config) {
     };
 }
 
+function promotionLsKey() {
+    return `promotionDone_${state.config.school_id}_${state.config.current_academic_year}`;
+}
+
 async function setupStep3() {
     const { nextAcademicYear, nextClassMap, classes } =
         await fetchPromotableClasses(state.config);
@@ -414,6 +418,15 @@ async function setupStep3() {
     state.sourceClasses    = classes;
     state.nextAcademicYear = nextAcademicYear;
     state.nextClassMap     = nextClassMap;
+
+    // Pulihkan status konfirmasi dari localStorage setelah hard reload
+    const saved = localStorage.getItem(promotionLsKey());
+    if (saved) {
+        try {
+            state.promotionMapping = JSON.parse(saved);
+            state.promotionDone    = true;
+        } catch (_) { localStorage.removeItem(promotionLsKey()); }
+    }
 
     // Kelompokkan kelas tujuan per tingkat dari nextClassMap
     // grade 10 → butuh grade 11, grade 11 → butuh grade 12
@@ -485,6 +498,12 @@ async function setupStep3() {
     confirmBtn.disabled = !allValid || state.promotionDone;
     confirmBtn.onclick  = onConfirmPromotion;
 
+    if (state.promotionDone) {
+        const totalStudents = state.promotionMapping.reduce((s, m) => s + m.studentIds.length, 0);
+        document.getElementById('promotion-result').innerHTML =
+            `<div class="alert alert-success" style="display:block">✅ Pemetaan kenaikan kelas untuk ${totalStudents} siswa telah dikonfirmasi. Lanjutkan ke Tahun Ajaran Baru.</div>`;
+    }
+
     if (!allValid) {
         const missingCount = state.sourceClasses.filter(c => {
             const targetGrade = c.grade_level + 1;
@@ -540,6 +559,7 @@ async function onConfirmPromotion() {
 
     state.promotionMapping = mapping;
     state.promotionDone = true;
+    localStorage.setItem(promotionLsKey(), JSON.stringify(mapping));
 
     resultArea.innerHTML = `<div class="alert alert-success" style="display:block">✅ Pemetaan kenaikan kelas untuk ${totalStudents} siswa telah dikonfirmasi. Lanjutkan ke Tahun Ajaran Baru.</div>`;
     resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });

@@ -511,18 +511,26 @@ label {
 .wizard-step.is-active { display: block; }
 
 @media (max-width: 600px) {
-    .wizard-shell { margin: 16px auto; padding: 0 12px; }
-    .wizard-panel { padding: 20px 14px; }
+    .wizard-shell { margin: 0; padding: 0; width: 100%; }
+    .wizard-panel { padding: 16px 12px; border-radius: 0; box-shadow: none; }
     /* Progress bar: sembunyikan label, tampilkan hanya dot aktif & nomor */
-    .wizard-progress { gap: 0; margin-bottom: 20px; }
+    .wizard-progress { gap: 0; margin-bottom: 16px; }
     .wizard-progress .step-dot { font-size: 10px; padding-top: 24px; }
     .wizard-progress .step-dot:not(.is-active):not(.is-done) { color: transparent; }
     .wizard-progress .step-dot::before { width: 16px; height: 16px; margin-left: -8px; }
     /* Tabel dalam wizard bisa scroll horizontal */
-    .wizard-panel .table { min-width: 380px; font-size: 13px; }
+    .wizard-panel .table { min-width: 0; font-size: 13px; width: 100%; }
     .wizard-panel .table th,
     .wizard-panel .table td { padding: 7px 8px; }
     .wizard-panel > .wizard-step { overflow-x: auto; }
+    /* Judul dan progress di atas panel */
+    .wizard-shell > h2 { font-size: 18px; margin: 16px 12px 4px; }
+    .wizard-shell > p { margin: 0 12px 12px; font-size: 13px; }
+    /* Tombol aksi full-width di mobile */
+    .wizard-actions { flex-direction: column-reverse; gap: 8px; }
+    .wizard-actions .btn { width: 100%; text-align: center; }
+    /* Form fields full-width */
+    .wizard-step input, .wizard-step select { width: 100%; box-sizing: border-box; }
 }
 
 /* ── CSV import widgets ──────────────────────────────────── */
