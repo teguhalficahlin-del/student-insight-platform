@@ -728,6 +728,42 @@ export async function setUserActive(user_id, is_active) {
     if (error) throw error;
 }
 
+/**
+ * Cek apakah guru masih punya penugasan jadwal aktif.
+ * Kembalikan { templates, sessions } — jumlah baris per tabel.
+ */
+export async function checkTeacherScheduleDependencies(user_id) {
+    const today = new Date().toISOString().slice(0, 10);
+    const [tmpl, sess] = await Promise.all([
+        supabase.from('schedule_templates').select('template_id', { count: 'exact', head: true }).eq('teacher_id', user_id),
+        supabase.from('teaching_schedules').select('schedule_id',  { count: 'exact', head: true }).eq('scheduled_teacher_id', user_id).gte('session_date', today),
+    ]);
+    return {
+        templates: tmpl.count ?? 0,
+        sessions:  sess.count ?? 0,
+    };
+}
+
+/**
+ * Hapus semua penugasan jadwal guru: template + sesi mendatang.
+ * Sesi yang sudah lewat (data historis absensi) TIDAK dihapus.
+ */
+export async function releaseTeacherFromSchedules(user_id) {
+    const today = new Date().toISOString().slice(0, 10);
+    const { error: e1 } = await supabase
+        .from('schedule_templates')
+        .delete()
+        .eq('teacher_id', user_id);
+    if (e1) throw e1;
+
+    const { error: e2 } = await supabase
+        .from('teaching_schedules')
+        .delete()
+        .eq('scheduled_teacher_id', user_id)
+        .gte('session_date', today);
+    if (e2) throw e2;
+}
+
 /** Toggle status aktif/nonaktif mata pelajaran. */
 export async function toggleSubjectActive(subject_id, is_active) {
     const { data, error } = await supabase

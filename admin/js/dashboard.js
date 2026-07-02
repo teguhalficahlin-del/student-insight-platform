@@ -6,7 +6,7 @@
  */
 
 import { applyBrandingById } from '../../shared/branding.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -423,15 +423,91 @@ async function renderStaffPanel() {
         const userId   = btn.dataset.userId;
         const isActive = btn.dataset.active === 'true';
         const nama     = btn.closest('tr').querySelector('td')?.textContent?.split('\n')[0]?.trim() ?? 'staf ini';
-        const aksi     = isActive ? 'nonaktifkan' : 'aktifkan kembali';
-        if (!confirm(`${isActive ? 'Nonaktifkan' : 'Aktifkan kembali'} ${nama}?\n\n${isActive ? 'Staf ini tidak bisa login sampai diaktifkan kembali.' : 'Staf ini bisa login kembali.'}`)) return;
+
+        // Aktifkan kembali — langsung, tidak perlu cek
+        if (!isActive) {
+            if (!confirm(`Aktifkan kembali ${nama}?\n\nStaf ini bisa login kembali ke portal.`)) return;
+            btn.disabled = true;
+            try {
+                await setUserActive(userId, true);
+                await renderStaffPanel();
+            } catch (err) {
+                alert(`Gagal mengaktifkan: ${err.message}`);
+                btn.disabled = false;
+            }
+            return;
+        }
+
+        // Nonaktifkan — cek dependensi jadwal dulu
         btn.disabled = true;
+        btn.textContent = 'Memeriksa…';
         try {
-            await setUserActive(userId, !isActive);
-            await renderStaffPanel();
+            const dep = await checkTeacherScheduleDependencies(userId);
+            const hasSchedule = dep.templates > 0 || dep.sessions > 0;
+
+            if (!hasSchedule) {
+                // Bersih — langsung nonaktifkan
+                if (!confirm(`Nonaktifkan ${nama}?\n\nStaf ini tidak bisa login sampai diaktifkan kembali.`)) {
+                    btn.disabled = false; btn.textContent = 'Nonaktifkan'; return;
+                }
+                await setUserActive(userId, false);
+                await renderStaffPanel();
+                return;
+            }
+
+            // Ada penugasan jadwal — tampilkan peringatan inline
+            const row = btn.closest('tr');
+            const existingWarn = row.nextElementSibling?.classList.contains('staff-warn-row');
+            if (existingWarn) { btn.disabled = false; btn.textContent = 'Nonaktifkan'; return; }
+
+            const warnParts = [];
+            if (dep.templates > 0) warnParts.push(`${dep.templates} template jadwal`);
+            if (dep.sessions  > 0) warnParts.push(`${dep.sessions} sesi mendatang`);
+
+            const warnRow = document.createElement('tr');
+            warnRow.className = 'staff-warn-row';
+            warnRow.innerHTML = `
+                <td colspan="5" style="padding:10px 12px;background:#fef9c3;border-left:3px solid #ca8a04">
+                    <strong style="color:#92400e">⚠ ${nama} masih punya ${warnParts.join(' dan ')}.</strong><br>
+                    <span style="font-size:12px;color:#78350f">
+                        Jika dinonaktifkan, semua template jadwal dan sesi yang belum berlangsung akan dihapus otomatis.
+                        Data absensi yang sudah tercatat <em>tidak</em> ikut terhapus.
+                    </span>
+                    <div style="margin-top:8px;display:flex;gap:8px">
+                        <button class="btn btn-sm staff-confirm-deactivate"
+                            data-user-id="${userId}" data-nama="${esc(nama)}"
+                            style="background:#b45309;color:#fff;border-color:#b45309;font-size:12px">
+                            Hapus jadwal &amp; Nonaktifkan
+                        </button>
+                        <button class="btn btn-sm btn-secondary staff-cancel-deactivate" style="font-size:12px">Batal</button>
+                    </div>
+                </td>`;
+            row.insertAdjacentElement('afterend', warnRow);
+
+            warnRow.querySelector('.staff-cancel-deactivate').addEventListener('click', () => {
+                warnRow.remove();
+                btn.disabled = false; btn.textContent = 'Nonaktifkan';
+            });
+            warnRow.querySelector('.staff-confirm-deactivate').addEventListener('click', async () => {
+                const confirmBtn = warnRow.querySelector('.staff-confirm-deactivate');
+                confirmBtn.disabled = true; confirmBtn.textContent = 'Memproses…';
+                try {
+                    await releaseTeacherFromSchedules(userId);
+                    await setUserActive(userId, false);
+                    await renderStaffPanel();
+                } catch (err) {
+                    alert(`Gagal nonaktifkan: ${err.message}`);
+                    warnRow.remove();
+                    btn.disabled = false; btn.textContent = 'Nonaktifkan';
+                }
+            });
+
         } catch (err) {
-            alert(`Gagal ${aksi}: ${err.message}`);
-            btn.disabled = false;
+            alert(`Gagal memeriksa jadwal: ${err.message}`);
+        } finally {
+            if (btn.textContent === 'Memeriksa…') {
+                btn.disabled = false; btn.textContent = 'Nonaktifkan';
+            }
         }
     });
 }
