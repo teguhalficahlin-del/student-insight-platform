@@ -119,8 +119,9 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // JS dan CSS — network-first agar perubahan langsung terlihat
-    if (/\.(js|css)(\?|$)/.test(url.pathname)) {
+    // JS dan CSS same-origin — network-first agar perubahan langsung terlihat
+    // CDN eksternal (Chart.js dll) dibiarkan ke cache-first di bawah
+    if (url.origin === self.location.origin && /\.(js|css)(\?|$)/.test(url.pathname)) {
         event.respondWith(
             fetch(request)
                 .then(response => {
