@@ -80,11 +80,13 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 
 /* ── App layout ──────────────────────────────────────────── */
 .app-header {
-    background: var(--color-primary); color: #fff;
+    background: var(--color-surface); color: #fff;
+    border-bottom: 2px solid var(--color-gold);
     padding: 12px 20px; display: flex; align-items: center; gap: 12px;
     flex-wrap: wrap;
     border-radius: 0 0 16px 16px;
 }
+.app-header h2 { color: var(--color-gold); }
 .app-header h2 { color: #fff; margin: 0; font-size: 16px; flex: 1; }
 .header-info { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .header-name { font-size: 14px; font-weight: 600; }
