@@ -54,7 +54,7 @@
                 <h3>Tulis Observasi Siswa</h3>
                 <form id="obs-form">
                     <div class="field" style="position:relative">
-                        <label for="obs-student">Siswa</label>
+                        <label for="obs-student-search">Siswa</label>
                         <input type="text" id="obs-student-search" class="input" placeholder="Cari nama siswa…" autocomplete="off">
                         <input type="hidden" id="obs-student-id">
                         <div id="obs-student-list" style="display:none; border:1px solid var(--color-border); border-radius:var(--radius); background:var(--color-surface); max-height:180px; overflow-y:auto; position:absolute; z-index:100; left:0; right:0; top:100%"></div>
@@ -109,9 +109,9 @@
             <div class="section-card">
                 <h3 id="wali-class-title">Kelas Walian</h3>
                 <div class="date-row" style="margin-bottom:12px">
-                    <label>Dari:</label>
+                    <label for="wali-date-start">Dari:</label>
                     <input type="date" id="wali-date-start" class="input" style="width:auto">
-                    <label>s/d:</label>
+                    <label for="wali-date-end">s/d:</label>
                     <input type="date" id="wali-date-end" class="input" style="width:auto">
                     <button class="btn btn-secondary btn-sm" id="wali-filter-btn">Filter</button>
                 </div>
@@ -166,19 +166,19 @@
                 <h3>Penempatan PKL</h3>
                 <form id="kp-placement-form" style="display:grid; gap:12px; grid-template-columns:1fr 1fr; margin-bottom:16px">
                     <div class="field" style="margin:0">
-                        <label>Siswa</label>
+                        <label for="kp-pl-student">Siswa</label>
                         <select id="kp-pl-student" class="input"><option value="">-- Pilih siswa --</option></select>
                     </div>
                     <div class="field" style="margin:0">
-                        <label>Mitra DUDI</label>
+                        <label for="kp-pl-dudi">Mitra DUDI</label>
                         <select id="kp-pl-dudi" class="input"><option value="">-- Pilih DUDI --</option></select>
                     </div>
                     <div class="field" style="margin:0">
-                        <label>Tanggal Mulai</label>
+                        <label for="kp-pl-start">Tanggal Mulai</label>
                         <input type="date" id="kp-pl-start" class="input">
                     </div>
                     <div class="field" style="margin:0">
-                        <label>Tanggal Selesai</label>
+                        <label for="kp-pl-end">Tanggal Selesai</label>
                         <input type="date" id="kp-pl-end" class="input">
                     </div>
                     <div style="grid-column:1/-1; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
@@ -195,8 +195,8 @@
             <div class="section-card">
                 <h3>Rekap Absensi PKL</h3>
                 <div class="date-row" style="margin-bottom:12px">
-                    <label>Dari:</label><input type="date" id="kp-date-start" class="input" style="width:auto">
-                    <label>s/d:</label><input type="date" id="kp-date-end" class="input" style="width:auto">
+                    <label for="kp-date-start">Dari:</label><input type="date" id="kp-date-start" class="input" style="width:auto">
+                    <label for="kp-date-end">s/d:</label><input type="date" id="kp-date-end" class="input" style="width:auto">
                     <button class="btn btn-secondary btn-sm" id="kp-filter-btn">Filter</button>
                 </div>
                 <div class="table-wrapper">
@@ -234,7 +234,7 @@
             <div class="section-card">
                 <h3>Kehadiran Per Kelas</h3>
                 <div class="date-row" style="margin-bottom:12px">
-                    <label>Tanggal:</label>
+                    <label for="wk-att-date">Tanggal:</label>
                     <input type="date" id="wk-att-date" class="input" style="width:auto">
                     <button class="btn btn-secondary btn-sm" id="wk-att-filter-btn">Filter</button>
                 </div>
@@ -310,11 +310,11 @@
                     <summary style="cursor:pointer; font-weight:600; color:var(--color-primary)">+ Tambah Admin Baru</summary>
                     <form id="ks-add-admin-form" style="margin-top:12px; display:flex; flex-direction:column; gap:10px">
                         <div class="field">
-                            <label class="label">Nama Lengkap</label>
+                            <label class="label" for="ks-admin-name">Nama Lengkap</label>
                             <input id="ks-admin-name" class="input" type="text" placeholder="Nama admin baru" required>
                         </div>
                         <div class="field">
-                            <label class="label">NIP / NIK</label>
+                            <label class="label" for="ks-admin-loginid">NIP / NIK</label>
                             <input id="ks-admin-loginid" class="input" type="text" inputmode="numeric" placeholder="Masukkan NIP atau NIK admin baru" required>
                         </div>
                         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
