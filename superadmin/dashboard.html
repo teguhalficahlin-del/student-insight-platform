@@ -35,6 +35,22 @@
         <div id="maint-result" class="alert" style="display:none;margin-top:10px"></div>
     </div>
 
+    <!-- Monitoring penyimpanan database -->
+    <div class="section-card">
+        <h3>💾 Penyimpanan Database</h3>
+        <p class="hint" style="font-size:13px;color:var(--color-text-muted);margin-bottom:12px">
+            Pantau ukuran database agar tidak mendadak penuh. Batas kuota tergantung paket Supabase
+            (Free ±500 MB, Pro ±8 GB).
+        </p>
+        <div id="storage-summary" class="hint" style="font-size:14px;margin-bottom:12px">Memuat…</div>
+        <div class="table-wrapper">
+            <table class="table" id="storage-table" style="display:none;font-size:13px">
+                <thead><tr><th>Tabel</th><th style="text-align:right">Ukuran</th><th style="text-align:right">± Baris</th></tr></thead>
+                <tbody id="storage-body"></tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- Form daftar sekolah baru -->
     <div class="section-card">
         <h3>Daftarkan Sekolah Baru</h3>

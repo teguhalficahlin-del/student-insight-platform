@@ -358,3 +358,38 @@ maintBtn.addEventListener('click', async () => {
 });
 
 loadMaintenance();
+
+// ── Monitoring Penyimpanan Database ──────────────────────────
+async function loadStorage() {
+    const summary = document.getElementById('storage-summary');
+    const table   = document.getElementById('storage-table');
+    const body    = document.getElementById('storage-body');
+    try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/platform-stats`, {
+            headers: { 'x-superadmin-key': saKey },
+        });
+        if (!res.ok) throw new Error('Gagal memuat statistik penyimpanan');
+        const data = await res.json();
+
+        const mb = (data.db_size_bytes ?? 0) / (1024 * 1024);
+        let color = '#16a34a', note = 'Aman';
+        if (mb >= 500)      { color = '#dc2626'; note = 'Melewati kuota Free (±500 MB) — cek paket / bersihkan data'; }
+        else if (mb >= 400) { color = '#b45309'; note = 'Mendekati kuota Free (±500 MB)'; }
+
+        summary.innerHTML =
+            `Ukuran database: <strong style="color:${color};font-size:16px">${esc(data.db_size_pretty)}</strong> ` +
+            `<span style="color:${color}">— ${esc(note)}</span>`;
+
+        body.innerHTML = (data.tables ?? []).map(t => `
+            <tr>
+                <td>${esc(t.name)}</td>
+                <td style="text-align:right;white-space:nowrap">${esc(t.size_pretty)}</td>
+                <td style="text-align:right">${t.est_rows < 0 ? '—' : Number(t.est_rows).toLocaleString('id-ID')}</td>
+            </tr>`).join('');
+        table.style.display = '';
+    } catch (err) {
+        summary.textContent = err.message;
+    }
+}
+
+loadStorage();
