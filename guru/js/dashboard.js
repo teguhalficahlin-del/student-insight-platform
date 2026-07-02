@@ -197,7 +197,7 @@ function buildTabs() {
     }</div>`;
 
     const handler = async (e) => {
-        const key = e.target.dataset?.tab;
+        const key = e.target.closest('[data-tab]')?.dataset?.tab;
         if (!key) return;
         activateTab(key);
         await loadTabContent(key);
