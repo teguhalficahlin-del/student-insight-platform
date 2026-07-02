@@ -170,6 +170,13 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; c
         margin-top: 6px;
     }
     .schools-table td:first-child::before { display: none; }
-    .schools-table td[data-label="aksi"] { margin-top: 8px; }
+    .schools-table td[data-label="aksi"] {
+        margin-top: 8px;
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .schools-table td[data-label="aksi"] .btn { flex: 1; min-width: 0; font-size: 12px; padding: 6px 8px; }
     .col-hide-mobile { display: none; }
 }
