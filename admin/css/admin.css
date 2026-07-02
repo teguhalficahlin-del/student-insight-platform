@@ -638,6 +638,8 @@ label {
         transform: translateX(-100%);
         transition: transform 0.2s;
         box-shadow: var(--shadow-md);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .page-dashboard .sidebar.open {
