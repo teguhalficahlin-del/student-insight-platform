@@ -6,13 +6,17 @@
  *   - Navigasi offline: tampilkan offline.html
  */
 
-const CACHE_NAME = 'smkhr-v10';
+const CACHE_NAME = 'smkhr-v11';
 
 const PRECACHE_URLS = [
     './',
     './offline.html',
     './icons/icon.svg',
     './icons/icon-maskable.svg',
+
+    // Shared modules
+    './shared/change-password.js',
+    './shared/login-guard.js',
 
     // Portal Guru
     './guru/index.html',
