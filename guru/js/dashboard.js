@@ -1048,8 +1048,9 @@ async function loadKepsekMonitoring(period = 'harian') {
         pctSiswa.textContent = d.pct_siswa_absen != null ? d.pct_siswa_absen + '%' : '—';
         pctGuru.textContent  = d.pct_guru_absen  != null ? d.pct_guru_absen  + '%' : '—';
 
-        detSiswa.textContent = d.siswa_total > 0
-            ? `${d.siswa_absen} dari ${d.siswa_total} sesi`
+        const prefixSiswa = period === 'harian' ? '' : 'rata-rata ';
+        detSiswa.textContent = d.siswa_aktif > 0
+            ? `${prefixSiswa}${d.siswa_absen_avg} dari ${d.siswa_aktif} siswa`
             : 'Belum ada data';
         detGuru.textContent  = d.guru_total > 0
             ? `${d.guru_absen} dari ${d.guru_total} sesi`
