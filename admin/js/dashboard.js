@@ -85,30 +85,46 @@ async function renderSetupPanel() {
         { count: classCount },
         { count: stafCount },
         { count: siswaCount },
-        { count: ortuCount },
+        { count: alumniCount },
         { count: dudiCount },
         { count: stakeholderCount },
         { count: jadwalCount },
+        linksRaw,
     ] = await Promise.all([
         supabase.from('programs').select('*', { count: 'exact', head: true }),
         supabase.from('classes').select('*', { count: 'exact', head: true }),
         supabase.from('users').select('*', { count: 'exact', head: true }).not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")'),
         supabase.from('students').select('*', { count: 'exact', head: true }).eq('student_status', 'AKTIF'),
-        supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'ORTU'),
+        supabase.from('students').select('*', { count: 'exact', head: true }).eq('student_status', 'LULUS'),
         supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'DUDI'),
         supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'STAKEHOLDER'),
         supabase.from('schedule_templates').select('*', { count: 'exact', head: true }),
+        fetchAllRows('student_parents', q => q.select('parent_user_id, students(student_status)')),
     ]);
 
+    // Hitung orang tua siswa aktif vs orang tua alumni
+    const parentStatuses = new Map();
+    for (const l of linksRaw) {
+        if (!parentStatuses.has(l.parent_user_id)) parentStatuses.set(l.parent_user_id, []);
+        if (l.students?.student_status) parentStatuses.get(l.parent_user_id).push(l.students.student_status);
+    }
+    let ortuSiswaCount = 0, ortuAlumniCount = 0;
+    for (const statuses of parentStatuses.values()) {
+        if (statuses.some(s => s === 'AKTIF')) ortuSiswaCount++;
+        else if (statuses.every(s => s === 'LULUS')) ortuAlumniCount++;
+    }
+
     const items = [
-        { label: 'Program Keahlian', count: programCount, panel: 'programs' },
-        { label: 'Kelas & Rombel', count: classCount, panel: 'classes' },
-        { label: 'Staf & Peran', count: stafCount, panel: 'staff' },
-        { label: 'Siswa Aktif', count: siswaCount, panel: 'students' },
-        { label: 'Orang Tua (semua)', count: ortuCount, panel: 'parents' },
-        { label: 'DUDI', count: dudiCount, panel: 'dudi' },
-        { label: 'Stakeholder', count: stakeholderCount, panel: 'stakeholders' },
-        { label: 'Jadwal', count: jadwalCount, panel: 'jadwal' },
+        { label: 'Program Keahlian',  count: programCount,   panel: 'programs' },
+        { label: 'Kelas & Rombel',    count: classCount,     panel: 'classes' },
+        { label: 'Staf & Peran',      count: stafCount,      panel: 'staff' },
+        { label: 'Siswa Aktif',       count: siswaCount,     panel: 'students' },
+        { label: 'Alumni',            count: alumniCount,    panel: 'alumni' },
+        { label: 'Orang Tua Siswa',   count: ortuSiswaCount, panel: 'parents' },
+        { label: 'Orang Tua Alumni',  count: ortuAlumniCount,panel: 'alumni' },
+        { label: 'DUDI',              count: dudiCount,      panel: 'dudi' },
+        { label: 'Stakeholder',       count: stakeholderCount, panel: 'stakeholders' },
+        { label: 'Jadwal',            count: jadwalCount,    panel: 'jadwal' },
     ];
 
     panelContent.innerHTML = `
