@@ -34,7 +34,7 @@ export async function getCurrentUserRow() {
     const { data, error } = await supabase
         .from('users')
         .select(`
-            user_id, full_name, role_type, login_identifier, teacher_code,
+            user_id, school_id, full_name, role_type, login_identifier, teacher_code,
             wali_kelas_class_id, kaprodi_program_id,
             is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, is_active
         `)
