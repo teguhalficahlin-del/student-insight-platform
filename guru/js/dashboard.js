@@ -151,7 +151,7 @@ async function init() {
 
     const defaultTab = isTeacher ? 'guru' : (jabatan[0] ?? 'kasus');
     activateTab(defaultTab);
-    if (isTeacher) await initGuruTab();
+    await loadTabContent(defaultTab);
 
     // Offline sync: tampilkan status + kirim absensi tertunda.
     await updateSyncBanner();
