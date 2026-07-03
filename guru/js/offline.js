@@ -82,6 +82,19 @@ async function idbPut(batch)       { return idbPutTo(STORE_ATT, batch); }
 async function idbGetAll()         { return idbGetAllFrom(STORE_ATT); }
 async function idbDelete(key)      { return idbDeleteFrom(STORE_ATT, key); }
 
+// Buang batch absensi tertunda untuk sesi yang SAMA (schedule_id + session_date).
+// Absensi = snapshot satu sesi utuh → simpan-ulang harus MENGGANTIKAN, bukan
+// menumpuk. Tanpa ini, dua batch sesi sama bisa flush di urutan acak (kunci =
+// UUID) dan batch basi menimpa yang terkoreksi → koreksi hilang senyap (E1-1).
+async function idbPurgeAttSession(scheduleId, sessionDate) {
+    const all = await idbGetAllFrom(STORE_ATT);
+    for (const b of all) {
+        if (b.schedule_id === scheduleId && b.session_date === sessionDate) {
+            await idbDeleteFrom(STORE_ATT, b.idempotency_key);
+        }
+    }
+}
+
 // ── Helper: ambil token JWT ────────────────────────────────────
 async function getToken() {
     const { data: sess } = await _supabase.auth.getSession();
@@ -172,6 +185,9 @@ export async function saveAttendanceBatch(batch) {
         if (r.ok) return { status: 'synced' };
         if (!r.networkError) return { status: 'error', error: r.error };
     }
+    // Supersede: hapus batch tertunda untuk sesi yang sama sebelum antre yang baru,
+    // agar hanya ada satu snapshot per sesi (cegah koreksi hilang, E1-1).
+    await idbPurgeAttSession(batch.schedule_id, batch.session_date);
     await idbPut({ ...batch, _schema_ver: OFFLINE_SCHEMA_VER });
     return { status: 'queued' };
 }
