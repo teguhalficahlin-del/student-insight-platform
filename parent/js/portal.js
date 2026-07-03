@@ -64,7 +64,7 @@ const STATUS_LABELS = {
     TIDAK_HADIR: 'Tidak Hadir',
     IZIN:        'Izin',
     SAKIT:       'Sakit',
-    EKSKUL:      'Ekskul',
+    EKSKUL:      'Hadir',   // EKSKUL dihapus dari absensi → tampil sebagai Hadir (data lama)
 };
 
 const STATUS_BADGE = {
@@ -72,7 +72,7 @@ const STATUS_BADGE = {
     TIDAK_HADIR: 'badge-tidak-hadir',
     IZIN:        'badge-izin',
     SAKIT:       'badge-sakit',
-    EKSKUL:      'badge-ekskul',
+    EKSKUL:      'badge-hadir',   // idem
 };
 
 const DIMENSION_LABELS = {
@@ -189,9 +189,11 @@ async function loadAttendance(studentId) {
     try {
         const rows = await fetchAttendance(studentId, filterStart.value, filterEnd.value);
 
-        const counts = { HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0, EKSKUL: 0 };
+        const counts = { HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0 };
         for (const r of rows) {
-            counts[r.status] = (counts[r.status] || 0) + 1;
+            // EKSKUL dihapus dari absensi → dihitung sebagai HADIR (kompat data lama)
+            const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
+            counts[st] = (counts[st] || 0) + 1;
         }
 
         attSummary.innerHTML = `

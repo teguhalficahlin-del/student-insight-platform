@@ -1114,14 +1114,17 @@ async function printAlumniRecap(studentId) {
     const s = recap.student;
     const schoolName = document.getElementById('dashboard-school-name')?.textContent?.trim() || 'Sekolah';
     const kelas = alumniClassName(s.enrollment, s.graduated_academic_year);
-    const ATT_LABEL = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Tidak Hadir', EKSKUL:'Ekskul' };
-    const totalAtt = Object.values(recap.attendance).reduce((a, b) => a + b, 0);
-    const hadir = recap.attendance.HADIR ?? 0;
+    const ATT_LABEL = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Tidak Hadir' };
+    // EKSKUL dihapus dari absensi → dilebur ke HADIR (kompat data lama)
+    const att = { ...recap.attendance };
+    if (att.EKSKUL) { att.HADIR = (att.HADIR ?? 0) + att.EKSKUL; delete att.EKSKUL; }
+    const totalAtt = Object.values(att).reduce((a, b) => a + b, 0);
+    const hadir = att.HADIR ?? 0;
     const pctHadir = totalAtt ? Math.round((hadir / totalAtt) * 100) : null;
 
     const attRows = Object.keys(ATT_LABEL)
-        .filter(k => recap.attendance[k])
-        .map(k => `<tr><td>${ATT_LABEL[k]}</td><td style="text-align:right">${recap.attendance[k]}</td></tr>`).join('')
+        .filter(k => att[k])
+        .map(k => `<tr><td>${ATT_LABEL[k]}</td><td style="text-align:right">${att[k]}</td></tr>`).join('')
         || '<tr><td colspan="2">Tidak ada data kehadiran.</td></tr>';
 
     const pklRows = recap.pkl.length

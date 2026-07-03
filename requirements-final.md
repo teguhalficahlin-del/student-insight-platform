@@ -163,7 +163,8 @@ Pemisahan ini konsisten dengan filosofi:
 ## 6. Absensi
 
 - Per pertemuan, diinput guru mapel
-- Status: Hadir / Tidak Hadir / Izin / Sakit / Ekskul
+- Status: Hadir / Tidak Hadir / Izin / Sakit
+  *(EKSKUL dihapus dari absensi per keputusan 3 Juli 2026 — lihat catatan di bawah)*
 - Selama periode PKL, absensi DuDi menggantikan absensi sekolah
 - Absensi mengikuti status siswa, bukan periode global sekolah
 
@@ -186,18 +187,18 @@ SAKIT
 → siswa tidak hadir karena sakit
 → dihitung sebagai ketidakhadiran dalam statistik kehadiran
 
-EKSKUL
-→ siswa tidak hadir karena kegiatan ekstrakurikuler resmi sekolah
-→ diinput guru berdasarkan:
-   - laporan langsung dari siswa di kelas
-   - pengumuman pembina ekskul
-→ tidak dihitung sebagai ketidakhadiran siswa
-→ tidak memicu alert ABSENCE_HIGH
-→ dikecualikan dari denominator kehadiran siswa
+EKSKUL  [DIHAPUS — keputusan 3 Juli 2026]
+→ Status EKSKUL dihapus dari absensi. Form absensi guru tidak lagi
+   menawarkannya; siswa yang mengikuti kegiatan ekstrakurikuler resmi
+   cukup ditandai HADIR.
+→ Kompatibilitas data lama: baris absensi lama berstatus EKSKUL
+   diperlakukan & ditampilkan sebagai HADIR di seluruh portal
+   (guru/wali, siswa, orang tua, rekap alumni admin).
+→ Enum DB `attendance_status` masih memuat 'EKSKUL' (nilai usang, tak
+   dipakai); opsional dibersihkan lewat migrasi data EKSKUL→HADIR.
 ```
 
 Pembina ekskul bukan aktor di platform.
-Guru adalah satu-satunya yang menginput status EKSKUL.
 
 ### Model input absensi
 
@@ -207,9 +208,8 @@ Default: semua siswa dianggap HADIR saat sesi absensi dibuka.
 Guru hanya perlu mengubah status siswa yang tidak hadir.
 
 Contoh kelas 30 siswa:
-→ 28 hadir   : tidak perlu disentuh
+→ 29 hadir   : tidak perlu disentuh (termasuk yang ikut ekskul → HADIR)
 → 1 sakit    : guru ubah ke SAKIT
-→ 1 ekskul   : guru ubah ke EKSKUL
 
 Tidak ada kewajiban tap untuk setiap siswa.
 ```

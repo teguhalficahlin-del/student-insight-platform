@@ -45,12 +45,13 @@ CREATE TYPE student_status AS ENUM (
 -- ENUM: attendance_status
 -- Applies to student attendance records.
 -- ------------------------------------------------------------
+-- EKSKUL dihapus (keputusan 3 Juli 2026, migrasi 20260703220000):
+-- siswa yang ikut ekstrakurikuler ditandai HADIR.
 CREATE TYPE attendance_status AS ENUM (
     'HADIR',
     'TIDAK_HADIR',
     'IZIN',
-    'SAKIT',
-    'EKSKUL'
+    'SAKIT'
 );
 
 

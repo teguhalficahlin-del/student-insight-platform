@@ -236,7 +236,8 @@ export async function getWaliKelasInfo(classId) {
 
 /**
  * Rekap kehadiran per siswa di kelas wali kelas (untuk dashboard wali).
- * Returns [{ student_id, full_name, nis, HADIR, TIDAK_HADIR, IZIN, SAKIT, EKSKUL, total }]
+ * Returns [{ student_id, full_name, nis, HADIR, TIDAK_HADIR, IZIN, SAKIT, total }]
+ * Catatan: EKSKUL dihapus dari absensi → data lama berstatus EKSKUL dihitung HADIR.
  */
 export async function getWaliAttendanceSummary(classId, academicYear, dateStart, dateEnd) {
     // 1. Ambil daftar siswa
@@ -257,12 +258,14 @@ export async function getWaliAttendanceSummary(classId, academicYear, dateStart,
     const { data, error } = await q;
     if (error) throw error;
 
-    const map = new Map(students.map(s => [s.student_id, { ...s, HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0, EKSKUL: 0, total: 0 }]));
+    const map = new Map(students.map(s => [s.student_id, { ...s, HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0, total: 0 }]));
     for (const sched of data ?? []) {
         for (const r of sched.attendance ?? []) {
             const agg = map.get(r.student_id);
             if (!agg) continue;
-            if (agg[r.status] !== undefined) agg[r.status]++;
+            // EKSKUL dihapus dari absensi → dihitung sebagai HADIR (kompat data lama)
+            const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
+            if (agg[st] !== undefined) agg[st]++;
             agg.total++;
         }
     }
@@ -431,11 +434,13 @@ export async function getAttendanceRecapPerClass(sessionDate) {
         if (!classId) continue;
         if (!map.has(classId)) {
             map.set(classId, { class_id: classId, name: sched.class?.name ?? '—',
-                HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0, EKSKUL: 0, total: 0 });
+                HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0, total: 0 });
         }
         const agg = map.get(classId);
         for (const r of sched.attendance ?? []) {
-            if (agg[r.status] !== undefined) agg[r.status]++;
+            // EKSKUL dihapus dari absensi → dihitung sebagai HADIR (kompat data lama)
+            const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
+            if (agg[st] !== undefined) agg[st]++;
             agg.total++;
         }
     }

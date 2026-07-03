@@ -92,7 +92,7 @@ export const ATTENDANCE_STATUS = Object.freeze({
     TIDAK_HADIR: 'TIDAK_HADIR',
     IZIN:        'IZIN',
     SAKIT:       'SAKIT',
-    EKSKUL:      'EKSKUL',
+    // EKSKUL dihapus (mig 20260703220000) — siswa ekskul ditandai HADIR
 });
 
 export const ATTENDANCE_SOURCE = Object.freeze({

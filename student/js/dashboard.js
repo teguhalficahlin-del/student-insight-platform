@@ -23,8 +23,9 @@ let obsLoaded   = false;
 let pklLoaded   = false;
 
 const DIMENSION_LABELS = { AKADEMIK:'Akademik', KEHADIRAN:'Kehadiran', PERILAKU:'Perilaku', SOSIAL:'Sosial', AFEKTIF:'Afektif', BAKAT_MINAT:'Bakat & Minat', FISIK:'Fisik', LAINNYA:'Lainnya' };
-const STATUS_LABELS    = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Tidak Hadir', EKSKUL:'Ekskul' };
-const STATUS_BADGE     = { HADIR:'badge-hadir', IZIN:'badge-izin', SAKIT:'badge-sakit', TIDAK_HADIR:'badge-tidak-hadir', EKSKUL:'badge-ekskul' };
+// EKSKUL dihapus dari absensi → dipetakan ke Hadir (kompat data lama)
+const STATUS_LABELS    = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Tidak Hadir', EKSKUL:'Hadir' };
+const STATUS_BADGE     = { HADIR:'badge-hadir', IZIN:'badge-izin', SAKIT:'badge-sakit', TIDAK_HADIR:'badge-tidak-hadir', EKSKUL:'badge-hadir' };
 
 // ─── Read cache (LF-2) ───────────────────────────────────────
 const LC = {
@@ -253,9 +254,11 @@ async function loadAttendance() {
 
     try {
         const rows = await getMyAttendance(student.student_id, start, end);
-        const agg = { HADIR:0, IZIN:0, SAKIT:0, TIDAK_HADIR:0, EKSKUL:0, total:0 };
+        const agg = { HADIR:0, IZIN:0, SAKIT:0, TIDAK_HADIR:0, total:0 };
         for (const r of rows) {
-            if (agg[r.status] !== undefined) agg[r.status]++;
+            // EKSKUL dihapus dari absensi → dihitung sebagai HADIR (kompat data lama)
+            const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
+            if (agg[st] !== undefined) agg[st]++;
             agg.total++;
         }
         const pct = agg.total > 0 ? Math.round(agg.HADIR / agg.total * 100) : 0;

@@ -90,7 +90,7 @@ Mengisi absensi untuk satu sesi mengajar penuh. Satu request = satu sesi, bukan 
   "records": [
     {
       "student_id": "uuid *",
-      "status":     "HADIR | TIDAK_HADIR | IZIN | SAKIT | EKSKUL *",
+      "status":     "HADIR | TIDAK_HADIR | IZIN | SAKIT *",
       "source":     "AUTO_DETECTED | MANUAL_OVERRIDE | TEACHER_DECLARED *"
     }
   ],
