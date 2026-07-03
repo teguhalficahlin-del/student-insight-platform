@@ -112,6 +112,74 @@
                 <p id="obs-history-empty" class="hint" style="display:none">Belum ada catatan observasi.</p>
             </section>
 
+            <!-- Laporan Kasus PKL -->
+            <section class="section" id="kasus-section">
+                <div class="section-header">
+                    <h3>Laporan Masalah PKL</h3>
+                    <button id="kasus-new-btn" class="btn btn-primary btn-sm">+ Laporan Baru</button>
+                </div>
+                <p class="hint" style="margin-bottom:12px">Laporan yang Anda buat bersifat <strong>privat</strong> — hanya Anda dan Ka. Prodi yang melihat. Anda dapat meneruskan ke Ka. Prodi untuk penanganan lebih lanjut.</p>
+
+                <!-- Form buat kasus (tersembunyi default) -->
+                <div id="kasus-create-form-wrap" style="display:none; border:1px solid var(--color-border); border-radius:var(--radius); padding:16px; margin-bottom:16px">
+                    <h4 style="margin:0 0 12px">Laporan Baru</h4>
+                    <div class="field">
+                        <label for="kasus-c-student">Siswa yang Dilaporkan</label>
+                        <select id="kasus-c-student" class="input" required>
+                            <option value="">-- Pilih siswa --</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="kasus-c-title">Judul Laporan</label>
+                        <input type="text" id="kasus-c-title" class="input" placeholder="Ringkasan singkat masalah…" maxlength="200">
+                    </div>
+                    <div class="field">
+                        <label for="kasus-c-desc">Keterangan <span style="font-weight:400;color:var(--color-text-muted)">(min. 20 karakter)</span></label>
+                        <textarea id="kasus-c-desc" class="input" rows="4" placeholder="Jelaskan situasi secara lengkap…"></textarea>
+                    </div>
+                    <div id="kasus-c-msg" style="display:none; margin-bottom:10px; font-size:13px"></div>
+                    <div style="display:flex; gap:8px">
+                        <button class="btn btn-primary btn-sm" id="kasus-c-submit">Kirim Laporan</button>
+                        <button class="btn btn-secondary btn-sm" id="kasus-c-cancel">Batal</button>
+                    </div>
+                </div>
+
+                <!-- Daftar kasus DUDI -->
+                <div id="kasus-list-wrap">
+                    <p class="hint" id="kasus-loading">Memuat laporan…</p>
+                </div>
+
+                <!-- Detail kasus -->
+                <div id="kasus-detail-wrap" style="display:none">
+                    <button class="btn btn-secondary btn-sm" id="kasus-back-btn" style="margin-bottom:12px">← Kembali</button>
+                    <div id="kasus-detail-header"></div>
+                    <div id="kasus-events-wrap" style="margin:16px 0"></div>
+                    <!-- Actions -->
+                    <div id="kasus-actions-wrap" style="border:1px solid var(--color-border); border-radius:var(--radius); padding:16px">
+                        <h4 style="margin:0 0 12px">Tindakan</h4>
+                        <!-- Komentar -->
+                        <div style="margin-bottom:16px">
+                            <label for="kasus-comment-text">Tambah Komentar</label>
+                            <textarea id="kasus-comment-text" class="input" rows="3" placeholder="Tulis komentar…" style="margin-bottom:8px"></textarea>
+                            <button class="btn btn-secondary btn-sm" id="kasus-comment-btn">Kirim</button>
+                            <span id="kasus-comment-msg" style="font-size:13px; margin-left:8px"></span>
+                        </div>
+                        <!-- Teruskan ke Kaprodi -->
+                        <div id="kasus-escalate-wrap" style="margin-bottom:16px">
+                            <label>Teruskan ke Ka. Prodi</label>
+                            <textarea id="kasus-escalate-note" class="input" rows="2" placeholder="Catatan untuk Ka. Prodi (opsional)…" style="margin-bottom:8px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="kasus-escalate-btn">Teruskan ke Ka. Prodi</button>
+                            <span id="kasus-escalate-msg" style="font-size:13px; margin-left:8px"></span>
+                        </div>
+                        <!-- Tutup -->
+                        <div>
+                            <button class="btn btn-danger btn-sm" id="kasus-close-btn">Tutup Laporan</button>
+                            <span id="kasus-close-msg" style="font-size:13px; margin-left:8px"></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Riwayat Absensi -->
             <section class="section">
                 <h3>Riwayat Absensi (14 Hari Terakhir)</h3>

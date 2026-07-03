@@ -17,7 +17,8 @@ import { ok, badRequest,
          checkSchemaVersion }          from '../_shared/response.ts';
 import { resolveAuth, isAuthError }    from '../_shared/auth.ts';
 import { validatePayload,
-         CASE_CREATE_SCHEMA }          from '../_shared/validate.ts';
+         CASE_CREATE_SCHEMA,
+         validateAudienceForRole }     from '../_shared/validate.ts';
 import { getAdminClient }              from '../_shared/db.ts';
 
 // 6 peran internal + DUDI boleh buat kasus; WAKA_KURIKULUM & TU dikecualikan
@@ -70,6 +71,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const audience = user.role_type === 'DUDI'
             ? 'PRIVATE'
             : (body['audience'] as string | undefined) ?? 'PRIVATE';
+
+        const audErr = validateAudienceForRole(user.role_type, audience);
+        if (audErr) return badRequest(audErr);
 
         const { error: rpcError } = await admin.rpc('fn_sync_case', {
             p_idempotency_key:    idempotencyKey,

@@ -133,6 +133,42 @@ export const ROLE_TYPE          = ['GURU','BK','WALI_KELAS','KAPRODI','KEPSEK','
 export const CASE_STATUS        = ['OPEN','UNDER_REVIEW','INTERVENTION','MONITORING','CLOSED'] as const;
 export const CASE_TRACK         = ['SEKOLAH','PKL'] as const;
 export const CASE_AUDIENCE      = ['PRIVATE','RESTRICTED','PUBLIC'] as const;
+
+// Peran yang boleh jadi target eskalasi (6 aktor internal kasus)
+export const INTERNAL_CASE_ROLES = ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK'] as const;
+
+/**
+ * Validasi aturan eskalasi di lapisan edge (pertahanan berlapis).
+ * - Target harus peran internal kasus
+ * - DUDI hanya boleh ke KAPRODI
+ * Returns error string atau null jika valid.
+ */
+export function validateEscalationTarget(
+    authorRole: string,
+    newHandlerRole: string,
+): string | null {
+    if (!(INTERNAL_CASE_ROLES as readonly string[]).includes(newHandlerRole)) {
+        return `Target eskalasi tidak valid: ${newHandlerRole}. Harus salah satu dari [${INTERNAL_CASE_ROLES.join(', ')}]`;
+    }
+    if (authorRole === 'DUDI' && newHandlerRole !== 'KAPRODI') {
+        return 'DUDI hanya dapat meneruskan kasus ke KAPRODI';
+    }
+    return null;
+}
+
+/**
+ * Validasi aturan audiens di lapisan edge.
+ * DUDI selalu PRIVATE, tidak boleh ubah ke lain.
+ */
+export function validateAudienceForRole(
+    authorRole: string,
+    audience: string,
+): string | null {
+    if (authorRole === 'DUDI' && audience !== 'PRIVATE') {
+        return 'DUDI hanya dapat membuat kasus dengan audiens PRIVATE';
+    }
+    return null;
+}
 export const VISIBILITY_LEVEL   = ['PRIVATE','INTERNAL_SCHOOL','STUDENT_VISIBLE'] as const;
 export const OBSERVATION_SENTIMENT  = ['POSITIF','NEGATIF'] as const;
 export const OBSERVATION_DIMENSION  = ['AKADEMIK','KEHADIRAN','PERILAKU','SOSIAL','AFEKTIF','BAKAT_MINAT','FISIK','LAINNYA'] as const;

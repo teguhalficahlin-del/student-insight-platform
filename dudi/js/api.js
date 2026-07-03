@@ -172,6 +172,106 @@ export async function fetchMyObservations(studentIds) {
  * Simpan observasi baru.
  * Visibility ditentukan trigger DB: POSITIF→STUDENT_VISIBLE, NEGATIF→INTERNAL_SCHOOL.
  */
+// ─── KASUS PKL ───────────────────────────────────────────────
+// DUDI hanya boleh: buat (PRIVATE, track=PKL), eskalasi ke KAPRODI, tutup, komentar.
+
+async function _getToken() {
+    const { data } = await supabase.auth.getSession();
+    return data?.session?.access_token ?? null;
+}
+
+export async function createDudiCase({ studentId, title, description, authorUserId, authorRole }) {
+    const token = await _getToken();
+    if (!token) throw new Error('Sesi tidak valid');
+    const payload = {
+        idempotency_key:    crypto.randomUUID(),
+        case_id:            crypto.randomUUID(),
+        student_id:         studentId,
+        created_by_user_id: authorUserId,
+        initiated_by_role:  authorRole,  // DUDI
+        track:              'PKL',
+        title,
+        description,
+        audience:           'PRIVATE',   // DUDI selalu PRIVATE
+    };
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/sync-case`, {
+        method:  'POST',
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.error?.message ?? `HTTP ${res.status}`);
+    return { case_id: payload.case_id };
+}
+
+export async function getDudiCases() {
+    const { data, error } = await supabase
+        .from('cases')
+        .select('case_id, title, status, current_handler_role, created_at, student:students!cases_student_id_fkey(full_name, nis)')
+        .eq('track', 'PKL')
+        .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function getDudiCaseEvents(caseId) {
+    const { data, error } = await supabase
+        .from('case_events')
+        .select('event_id, event_type, author_role_at_time, new_handler_role, previous_status, new_status, payload, created_at, author:users!case_events_author_user_id_fkey(full_name)')
+        .eq('case_id', caseId)
+        .order('created_at', { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function addDudiCaseComment({ caseId, text, authorUserId, authorRole }) {
+    const { error } = await supabase
+        .from('case_events')
+        .insert({
+            case_id:             caseId,
+            event_type:          'COMMENT_ADDED',
+            author_user_id:      authorUserId,
+            author_role_at_time: authorRole,
+            privacy_level:       'INTERNAL_SCHOOL',
+            payload:             { text },
+        });
+    if (error) throw error;
+}
+
+// Eskalasi DUDI hanya ke KAPRODI — ditegakkan trigger server
+export async function escalateDudiCase({ caseId, note, authorUserId, authorRole }) {
+    const { error } = await supabase
+        .from('case_events')
+        .insert({
+            case_id:              caseId,
+            event_type:           'DECISION_ESCALATE',
+            author_user_id:       authorUserId,
+            author_role_at_time:  authorRole,
+            previous_handler_role: 'DUDI',
+            new_handler_role:     'KAPRODI',
+            previous_status:      'OPEN',
+            new_status:           'UNDER_REVIEW',
+            payload:              note ? { text: note } : {},
+        });
+    if (error) throw error;
+}
+
+export async function closeDudiCase({ caseId, note, authorUserId, authorRole }) {
+    const { error } = await supabase
+        .from('case_events')
+        .insert({
+            case_id:             caseId,
+            event_type:          'DECISION_CLOSE',
+            author_user_id:      authorUserId,
+            author_role_at_time: authorRole,
+            previous_status:     null,
+            new_status:          'CLOSED',
+            payload:             note ? { text: note } : {},
+        });
+    if (error) throw error;
+}
+
+// ─── OBSERVASI ───────────────────────────────────────────────
 export async function saveObservation({ studentId, sentiment, dimension, content, userId }) {
     const visibility = sentiment === 'POSITIF' ? 'STUDENT_VISIBLE' : 'INTERNAL_SCHOOL';
 

@@ -18,6 +18,12 @@ import {
     fetchMyObservations,
     saveAttendance,
     saveObservation,
+    createDudiCase,
+    getDudiCases,
+    getDudiCaseEvents,
+    addDudiCaseComment,
+    escalateDudiCase,
+    closeDudiCase,
 } from './api.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
@@ -145,6 +151,9 @@ async function init() {
             loadObservationHistory(),
         ]);
     }
+
+    // Inisialisasi section kasus PKL
+    await initKasusSection(user, students);
 }
 
 // ── Attendance ────────────────────────────────────────────────
@@ -422,6 +431,237 @@ function fe(err, ctx = 'muat') {
     if (m.includes('jwt') || m.includes('expired')) return 'Sesi habis. Silakan login ulang.';
     if (m.includes('fetch') || m.includes('network') || m.includes('failed to fetch')) return 'Tidak ada koneksi. Periksa jaringan.';
     return ctx === 's' ? 'Gagal menyimpan. Silakan coba lagi.' : 'Gagal memuat data. Silakan coba lagi.';
+}
+
+// ── KASUS PKL ────────────────────────────────────────────────
+
+const CASE_STATUS_LABEL = { OPEN: 'Buka', UNDER_REVIEW: 'Ditinjau', INTERVENTION: 'Intervensi', MONITORING: 'Monitoring', CLOSED: 'Tutup' };
+const EVENT_LABEL = { COMMENT_ADDED: 'Komentar', DECISION_ESCALATE: 'Diteruskan ke Ka. Prodi', DECISION_CLOSE: 'Laporan Ditutup', STATUS_CHANGED: 'Status Berubah' };
+
+let _currentUser = null;
+let _myStudents  = [];
+let _currentCaseId = null;
+
+async function initKasusSection(user, students) {
+    _currentUser = user;
+    _myStudents  = students;
+
+    // Isi dropdown siswa di form buat kasus
+    const sel = document.getElementById('kasus-c-student');
+    sel.innerHTML = '<option value="">-- Pilih siswa --</option>' +
+        students.map(s => `<option value="${s.student_id}">${esc(s.full_name)} (${esc(s.nis)})</option>`).join('');
+
+    document.getElementById('kasus-new-btn').addEventListener('click', () => {
+        document.getElementById('kasus-create-form-wrap').style.display = 'block';
+        document.getElementById('kasus-c-msg').style.display = 'none';
+        document.getElementById('kasus-c-title').value = '';
+        document.getElementById('kasus-c-desc').value  = '';
+        sel.value = '';
+    });
+    document.getElementById('kasus-c-cancel').addEventListener('click', () => {
+        document.getElementById('kasus-create-form-wrap').style.display = 'none';
+    });
+    document.getElementById('kasus-c-submit').addEventListener('click', async () => {
+        const studentId = sel.value;
+        const title     = document.getElementById('kasus-c-title').value.trim();
+        const desc      = document.getElementById('kasus-c-desc').value.trim();
+        const msgEl     = document.getElementById('kasus-c-msg');
+        const btn       = document.getElementById('kasus-c-submit');
+        if (!studentId)        { showKasusMsg(msgEl, 'Pilih siswa terlebih dahulu.', true); return; }
+        if (!title)            { showKasusMsg(msgEl, 'Judul tidak boleh kosong.', true); return; }
+        if (desc.length < 20)  { showKasusMsg(msgEl, 'Keterangan minimal 20 karakter.', true); return; }
+        btn.disabled = true; btn.textContent = 'Mengirim…';
+        try {
+            await createDudiCase({ studentId, title, description: desc, authorUserId: _currentUser.user_id, authorRole: 'DUDI' });
+            document.getElementById('kasus-create-form-wrap').style.display = 'none';
+            await loadKasusList();
+        } catch (err) {
+            showKasusMsg(msgEl, fe(err, 's'), true);
+        } finally {
+            btn.disabled = false; btn.textContent = 'Kirim Laporan';
+        }
+    });
+    document.getElementById('kasus-back-btn').addEventListener('click', () => {
+        document.getElementById('kasus-detail-wrap').style.display = 'none';
+        document.getElementById('kasus-list-wrap').style.display   = 'block';
+        document.getElementById('kasus-new-btn').style.display     = 'inline-flex';
+        _currentCaseId = null;
+    });
+
+    await loadKasusList();
+}
+
+async function loadKasusList() {
+    const listEl = document.getElementById('kasus-list-wrap');
+    listEl.innerHTML = '<p class="hint">Memuat laporan…</p>';
+    try {
+        const cases = await getDudiCases();
+        if (!cases.length) {
+            listEl.innerHTML = '<p class="hint">Belum ada laporan. Klik "+ Laporan Baru" untuk membuat.</p>';
+            return;
+        }
+        listEl.innerHTML = cases.map(c => `
+            <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:12px;margin-bottom:10px;cursor:pointer" data-id="${c.case_id}">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+                    <strong style="font-size:14px">${esc(c.title)}</strong>
+                    <span style="font-size:12px;padding:2px 8px;border-radius:20px;border:1px solid var(--color-border);white-space:nowrap">${esc(CASE_STATUS_LABEL[c.status] ?? c.status)}</span>
+                </div>
+                <div style="font-size:12px;color:var(--color-text-muted);margin-top:4px">
+                    Siswa: ${esc(c.student?.full_name ?? '—')} · Handler: ${esc(c.current_handler_role === 'KAPRODI' ? 'Ka. Prodi' : c.current_handler_role === 'DUDI' ? 'Anda' : c.current_handler_role)}
+                    · ${formatDate(c.created_at)}
+                </div>
+            </div>`).join('');
+        listEl.querySelectorAll('[data-id]').forEach(el => {
+            el.addEventListener('click', () => openKasusDetail(el.dataset.id));
+            el.addEventListener('mouseenter', () => { el.style.background = 'var(--color-bg)'; });
+            el.addEventListener('mouseleave', () => { el.style.background = ''; });
+        });
+    } catch (err) {
+        listEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">${esc(fe(err))}</p>`;
+    }
+}
+
+async function openKasusDetail(caseId) {
+    _currentCaseId = caseId;
+    document.getElementById('kasus-list-wrap').style.display   = 'none';
+    document.getElementById('kasus-create-form-wrap').style.display = 'none';
+    document.getElementById('kasus-new-btn').style.display     = 'none';
+    document.getElementById('kasus-detail-wrap').style.display = 'block';
+    document.getElementById('kasus-detail-header').innerHTML   = '<p class="hint">Memuat…</p>';
+    try {
+        const [cases, events] = await Promise.all([getDudiCases(), getDudiCaseEvents(caseId)]);
+        const kasus = cases.find(c => c.case_id === caseId);
+        if (!kasus) { document.getElementById('kasus-detail-header').innerHTML = '<p class="hint">Laporan tidak ditemukan.</p>'; return; }
+        renderKasusDetail(kasus);
+        renderKasusEvents(events);
+        renderKasusActions(kasus);
+    } catch (err) {
+        document.getElementById('kasus-detail-header').innerHTML = `<p class="hint" style="color:var(--color-danger)">${esc(fe(err))}</p>`;
+    }
+}
+
+function renderKasusDetail(k) {
+    document.getElementById('kasus-detail-header').innerHTML = `
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <h4 style="margin:0;flex:1">${esc(k.title)}</h4>
+            <span style="font-size:12px;padding:2px 8px;border-radius:20px;border:1px solid var(--color-border)">${esc(CASE_STATUS_LABEL[k.status] ?? k.status)}</span>
+        </div>
+        <div style="font-size:13px;color:var(--color-text-muted);margin-bottom:8px">
+            Siswa: <strong>${esc(k.student?.full_name ?? '—')}</strong> (${esc(k.student?.nis ?? '—')})
+            · Handler: <strong>${k.current_handler_role === 'KAPRODI' ? 'Ka. Prodi' : 'Anda (DUDI)'}</strong>
+            · 🔒 Privat
+        </div>`;
+}
+
+function renderKasusEvents(events) {
+    const el = document.getElementById('kasus-events-wrap');
+    if (!events.length) { el.innerHTML = '<p class="hint">Belum ada aktivitas.</p>'; return; }
+    el.innerHTML = events.map(ev => {
+        const label = EVENT_LABEL[ev.event_type] ?? ev.event_type;
+        const text  = ev.payload?.text ?? '';
+        return `<div style="border-left:3px solid var(--color-border);padding:8px 12px;margin-bottom:8px">
+            <div style="font-size:12px;color:var(--color-text-muted);margin-bottom:3px">
+                <strong>${esc(label)}</strong> · ${esc(ev.author?.full_name ?? '—')} · ${formatDate(ev.created_at)}
+            </div>
+            ${text ? `<p style="font-size:13px;margin:0">${esc(text)}</p>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function renderKasusActions(kasus) {
+    const wrap = document.getElementById('kasus-actions-wrap');
+    if (kasus.status === 'CLOSED') { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+
+    const escWrap = document.getElementById('kasus-escalate-wrap');
+    // Tampilkan eskalasi hanya jika handler masih DUDI (belum diteruskan)
+    escWrap.style.display = kasus.current_handler_role === 'DUDI' ? 'block' : 'none';
+
+    // Wire buttons (clone untuk hapus listener lama)
+    const newCommentBtn  = cloneEl('kasus-comment-btn');
+    const newEscBtn      = cloneEl('kasus-escalate-btn');
+    const newCloseBtn    = cloneEl('kasus-close-btn');
+
+    newCommentBtn.addEventListener('click', async () => {
+        const text  = document.getElementById('kasus-comment-text').value.trim();
+        const msgEl = document.getElementById('kasus-comment-msg');
+        if (!text) { msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = 'Komentar kosong.'; return; }
+        newCommentBtn.disabled = true; newCommentBtn.textContent = 'Mengirim…';
+        try {
+            await addDudiCaseComment({ caseId: kasus.case_id, text, authorUserId: _currentUser.user_id, authorRole: 'DUDI' });
+            document.getElementById('kasus-comment-text').value = '';
+            msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Terkirim.';
+            await refreshKasusDetail();
+        } catch (err) {
+            msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
+        } finally {
+            newCommentBtn.disabled = false; newCommentBtn.textContent = 'Kirim';
+        }
+    });
+
+    newEscBtn.addEventListener('click', async () => {
+        const note  = document.getElementById('kasus-escalate-note').value.trim();
+        const msgEl = document.getElementById('kasus-escalate-msg');
+        newEscBtn.disabled = true; newEscBtn.textContent = 'Meneruskan…';
+        try {
+            await escalateDudiCase({ caseId: kasus.case_id, note, authorUserId: _currentUser.user_id, authorRole: 'DUDI' });
+            msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Laporan diteruskan ke Ka. Prodi.';
+            await refreshKasusDetail();
+        } catch (err) {
+            msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
+        } finally {
+            newEscBtn.disabled = false; newEscBtn.textContent = 'Teruskan ke Ka. Prodi';
+        }
+    });
+
+    newCloseBtn.addEventListener('click', async () => {
+        const msgEl = document.getElementById('kasus-close-msg');
+        if (newCloseBtn.dataset.confirming !== 'yes') {
+            newCloseBtn.dataset.confirming = 'yes';
+            msgEl.style.color   = 'var(--color-warning)';
+            msgEl.textContent   = 'Klik sekali lagi untuk konfirmasi penutupan laporan.';
+            newCloseBtn.textContent = 'Konfirmasi Tutup';
+            setTimeout(() => {
+                if (newCloseBtn.dataset.confirming === 'yes') {
+                    newCloseBtn.dataset.confirming = '';
+                    newCloseBtn.textContent = 'Tutup Laporan';
+                    msgEl.textContent = '';
+                }
+            }, 6000);
+            return;
+        }
+        newCloseBtn.dataset.confirming = '';
+        newCloseBtn.disabled = true; newCloseBtn.textContent = 'Menutup…';
+        try {
+            await closeDudiCase({ caseId: kasus.case_id, note: '', authorUserId: _currentUser.user_id, authorRole: 'DUDI' });
+            msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Laporan ditutup.';
+            await refreshKasusDetail();
+        } catch (err) {
+            msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
+        } finally {
+            newCloseBtn.disabled = false; newCloseBtn.textContent = 'Tutup Laporan';
+        }
+    });
+}
+
+async function refreshKasusDetail() {
+    if (!_currentCaseId) return;
+    const [cases, events] = await Promise.all([getDudiCases(), getDudiCaseEvents(_currentCaseId)]);
+    const kasus = cases.find(c => c.case_id === _currentCaseId);
+    if (kasus) { renderKasusDetail(kasus); renderKasusEvents(events); renderKasusActions(kasus); }
+}
+
+function cloneEl(id) {
+    const old = document.getElementById(id);
+    const neu = old.cloneNode(true);
+    old.parentNode.replaceChild(neu, old);
+    return neu;
+}
+
+function showKasusMsg(el, msg, isErr) {
+    el.style.display = 'block';
+    el.style.color   = isErr ? 'var(--color-danger)' : 'var(--color-success)';
+    el.textContent   = msg;
 }
 
 init();
