@@ -107,14 +107,12 @@
         </div>
     </div>
 <script>
-  /* SW DINONAKTIFKAN SEMENTARA u2014 lihat commit 8745e4c (fix v8 stuck cache).
-     Uncomment blok di bawah untuk reaktivasi service worker.
+  /* SW dinonaktifkan — commit 8745e4c. Unregister SW lama agar tidak cache JS. */
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('../sw.js', { updateViaCache: 'none' });
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(r => r.unregister());
     });
   }
-  */
 </script>
 </body>
 </html>
