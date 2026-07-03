@@ -23,47 +23,105 @@ import {
     getJournalEntries, insertJournalEntry, deleteJournalEntry,
     getCases, getCase, getCaseEvents, createCase,
     addCaseComment, escalateCase, changeCaseStatus, closeCase,
-    countNewCaseEvents,
     updateCaseAudience, getCaseAudienceMembers,
     addCaseAudienceMember, removeCaseAudienceMember, searchInternalUsers,
+    getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 
-// ─── Kasus badge ─────────────────────────────────────────────
-// Tampilkan angka di tab Kasus jika ada escalasi baru ke role user.
-// last_seen disimpan di localStorage; di-update saat tab Kasus dibuka.
+// ─── Notifikasi lonceng ───────────────────────────────────────
+// Menggantikan badge localStorage. Sumber kebenaran = tabel notifications.
 
-function _kasusBadgeKey() { return `kasus-seen-${currentUser?.user_id}`; }
+let _notifPollTimer = null;
 
-function setKasusBadge(n) {
-    document.querySelectorAll('[data-tab="kasus"]').forEach(btn => {
-        let badge = btn.querySelector('.kasus-notif-badge');
-        if (n > 0) {
-            if (!badge) {
-                badge = document.createElement('span');
-                badge.className = 'kasus-notif-badge';
-                badge.style.cssText = 'display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--color-danger,#dc2626);color:#fff;font-size:11px;font-weight:700;text-align:center;padding:0 4px;margin-left:5px;vertical-align:middle';
-                btn.appendChild(badge);
-            }
-            badge.textContent = n > 99 ? '99+' : String(n);
-        } else {
-            badge?.remove();
+function _setBellBadge(n) {
+    const btn = document.getElementById('notif-bell-btn');
+    if (!btn) return;
+    let badge = btn.querySelector('.notif-badge-count');
+    if (n > 0) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'notif-badge-count';
+            badge.style.cssText = 'position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--color-danger,#dc2626);color:#fff;font-size:11px;font-weight:700;text-align:center;padding:0 3px;pointer-events:none';
+            btn.style.position = 'relative';
+            btn.appendChild(badge);
         }
-    });
+        badge.textContent = n > 99 ? '99+' : String(n);
+        // Badge kecil di tab Kasus juga (backward compat)
+        document.querySelectorAll('[data-tab="kasus"]').forEach(t => {
+            let b = t.querySelector('.kasus-notif-badge');
+            if (!b) { b = document.createElement('span'); b.className = 'kasus-notif-badge'; b.style.cssText = 'display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--color-danger,#dc2626);color:#fff;font-size:11px;font-weight:700;text-align:center;padding:0 4px;margin-left:5px;vertical-align:middle'; t.appendChild(b); }
+            b.textContent = n > 99 ? '99+' : String(n);
+        });
+    } else {
+        badge?.remove();
+        document.querySelectorAll('.kasus-notif-badge').forEach(b => b.remove());
+    }
 }
 
-async function refreshKasusBadge() {
-    if (!currentUser?.role_type) return;
-    const since = LC.get(_kasusBadgeKey()) ?? '2000-01-01T00:00:00Z';
+async function refreshNotifBadge() {
+    if (!currentUser) return;
     try {
-        const n = await countNewCaseEvents(currentUser.role_type, since);
-        setKasusBadge(n);
-    } catch { /* tidak kritis — badge hilang saja */ }
+        const n = await getUnreadNotifCount();
+        _setBellBadge(n);
+    } catch { /* tidak kritis */ }
+}
+
+function startNotifPolling() {
+    clearInterval(_notifPollTimer);
+    _notifPollTimer = setInterval(refreshNotifBadge, 60_000); // poll tiap 1 menit
+}
+
+async function openNotifDropdown() {
+    const panel = document.getElementById('notif-dropdown');
+    if (!panel) return;
+    const isOpen = panel.style.display !== 'none';
+    if (isOpen) { panel.style.display = 'none'; return; }
+
+    panel.style.display = 'block';
+    panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-text-muted)">Memuat…</p>';
+    try {
+        const notifs = await getRecentNotifications(15);
+        if (!notifs.length) {
+            panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-text-muted)">Tidak ada notifikasi baru.</p>';
+            return;
+        }
+        panel.innerHTML = notifs.map(n => `
+            <div class="notif-item" data-id="${n.notification_id}" data-case="${n.case_id ?? ''}"
+                 style="padding:10px 14px;border-bottom:1px solid var(--color-border);cursor:pointer;font-size:13px">
+                <div style="font-weight:600;margin-bottom:2px">${esc(n.title)}</div>
+                <div style="color:var(--color-text-muted);font-size:12px">${esc(n.body)}</div>
+                <div style="color:var(--color-text-muted);font-size:11px;margin-top:3px">${fmt(n.created_at)}</div>
+            </div>`).join('') +
+            `<div style="padding:8px 14px;text-align:center">
+                <button id="notif-mark-all-btn" class="btn btn-secondary btn-sm" style="font-size:12px">Tandai semua dibaca</button>
+            </div>`;
+
+        panel.querySelectorAll('.notif-item').forEach(el => {
+            el.addEventListener('mouseenter', () => { el.style.background = 'var(--color-bg)'; });
+            el.addEventListener('mouseleave', () => { el.style.background = ''; });
+            el.addEventListener('click', async () => {
+                panel.style.display = 'none';
+                await markNotificationsRead([el.dataset.id]).catch(() => {});
+                await refreshNotifBadge();
+                if (el.dataset.case) openKasusDetail(el.dataset.case);
+            });
+        });
+
+        document.getElementById('notif-mark-all-btn')?.addEventListener('click', async () => {
+            const ids = notifs.map(n => n.notification_id);
+            await markNotificationsRead(ids).catch(() => {});
+            panel.style.display = 'none';
+            _setBellBadge(0);
+        });
+    } catch {
+        panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-danger)">Gagal memuat notifikasi.</p>';
+    }
 }
 
 function markKasusAsSeen() {
-    LC.set(_kasusBadgeKey(), new Date().toISOString());
-    setKasusBadge(0);
+    // Tidak lagi pakai localStorage — mark read via DB saat buka kasus
+    _setBellBadge(0);
 }
 
 // ─── State ───────────────────────────────────────────────────
@@ -161,8 +219,9 @@ async function init() {
     window.addEventListener('offline', updateSyncBanner);
     runFlush();
 
-    // Badge kasus: cek eskalasi baru ke role user ini di background.
-    refreshKasusBadge();
+    // Notifikasi: cek unread count lalu poll tiap 1 menit.
+    refreshNotifBadge();
+    startNotifPolling();
 }
 
 // ─── Tab navigation ──────────────────────────────────────────
@@ -1947,6 +2006,18 @@ async function loadJurnalList() {
 }
 
 // ─── Logout ──────────────────────────────────────────────────
+
+// ── Lonceng notifikasi ────────────────────────────────────────
+document.getElementById('notif-bell-btn')?.addEventListener('click', openNotifDropdown);
+
+// Tutup dropdown jika klik di luar
+document.addEventListener('click', (e) => {
+    const panel = document.getElementById('notif-dropdown');
+    if (!panel || panel.style.display === 'none') return;
+    if (!e.target.closest('#notif-bell-btn') && !e.target.closest('#notif-dropdown')) {
+        panel.style.display = 'none';
+    }
+});
 
 document.getElementById('logout-btn')?.addEventListener('click', async () => {
     // Cek antrian tertunda — peringatkan jika ada yang belum tersinkron
