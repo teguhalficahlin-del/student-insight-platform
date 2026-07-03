@@ -1548,8 +1548,11 @@ async function renderExportPanel() {
 
     applyBrandingById(userRow.school_id, supabase);
     initIdleTimeout({ onIdle: async () => { await logout(); window.location.href = 'index.html'; } });
-    const config = await getSchoolConfig();
-    document.getElementById('dashboard-school-name').textContent = config?.school_name ?? 'Sekolah';
+    // TEMUAN-1: nama sekolah = SATU sumber (schools.name), bukan salinan
+    // school_config.school_name yang tidak ikut ter-update saat rename via Branding.
+    let schoolName = 'Sekolah';
+    try { schoolName = (await getSchoolBranding())?.name || schoolName; } catch { /* fallback */ }
+    document.getElementById('dashboard-school-name').textContent = schoolName;
     document.getElementById('dashboard-user-name').textContent = `Masuk sebagai ${userRow.full_name}`;
 
     renderSetupPanel();
