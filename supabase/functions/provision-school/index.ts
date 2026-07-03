@@ -31,6 +31,7 @@
 import { handleCors, corsHeaders } from '../_shared/cors.ts';
 import { internalError }           from '../_shared/response.ts';
 import { getAdminClient }          from '../_shared/db.ts';
+import { toInternalEmail, generateSlug } from '../_shared/identifier.ts';
 
 function json(data: unknown, status = 200): Response {
     return new Response(JSON.stringify(data), {
@@ -81,6 +82,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }
 
         // ── 2. Buat record schools ────────────────────────────
+        const resolvedSlug = slug || generateSlug(school_name);
         const { data: school, error: schoolErr } = await admin
             .from('schools')
             .insert({
@@ -88,7 +90,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 npsn:            npsn            || null,
                 address:         address         || null,
                 phone:           phone           || null,
-                slug:            slug            || null,
+                slug:            resolvedSlug,
                 logo_url:        logo_url        || null,
                 primary_color:   primary_color   || '#1a56db',
                 secondary_color: secondary_color || '#1e40af',
@@ -115,7 +117,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (configErr) throw configErr;
 
         // ── 4. Buat Auth user untuk admin ─────────────────────
-        const adminEmail    = `${admin_identifier}@staff.internal`;
+        const adminEmail    = toInternalEmail(admin_identifier, 'NIK', schoolId);
         const adminPassword = randomPassword();
 
         const { data: authData, error: authErr } = await admin.auth.admin.createUser({
@@ -157,8 +159,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
             success:          true,
             school_id:        schoolId,
             school_name,
+            slug:             resolvedSlug,
             admin_identifier,
             admin_password:   adminPassword,
+            login_url:        `https://teguhalficahlin-del.github.io/student-insight-platform/admin/?school=${resolvedSlug}`,
             note:             'Simpan password ini — tidak bisa dilihat lagi.',
         });
 
