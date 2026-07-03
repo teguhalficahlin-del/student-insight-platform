@@ -132,6 +132,7 @@ export const MEETING_STATUS     = ['NORMAL','KEGIATAN_SEKOLAH','GURU_TIDAK_HADIR
 export const ROLE_TYPE          = ['GURU','BK','WALI_KELAS','KAPRODI','KEPSEK','WAKA_KURIKULUM','WAKA_KESISWAAN','STAKEHOLDER','DUDI','SISWA','ORTU','ADMINISTRATIVE'] as const;
 export const CASE_STATUS        = ['OPEN','UNDER_REVIEW','INTERVENTION','MONITORING','CLOSED'] as const;
 export const CASE_TRACK         = ['SEKOLAH','PKL'] as const;
+export const CASE_AUDIENCE      = ['PRIVATE','RESTRICTED','PUBLIC'] as const;
 export const VISIBILITY_LEVEL   = ['PRIVATE','INTERNAL_SCHOOL','STUDENT_VISIBLE'] as const;
 export const OBSERVATION_SENTIMENT  = ['POSITIF','NEGATIF'] as const;
 export const OBSERVATION_DIMENSION  = ['AKADEMIK','KEHADIRAN','PERILAKU','SOSIAL','AFEKTIF','BAKAT_MINAT','FISIK','LAINNYA'] as const;
@@ -215,14 +216,16 @@ export const JOURNAL_SCHEMA: FieldDef[] = [
 // ─────────────────────────────────────────────────────────────
 
 export const CASE_CREATE_SCHEMA: FieldDef[] = [
-    ['idempotency_key',    V.uuid,              true],
-    ['case_id',            V.uuid,              true],
-    ['student_id',         V.uuid,              true],
-    ['created_by_user_id', V.uuid,              true],
-    ['initiated_by_role',  V.enum(ROLE_TYPE),   true],
-    ['track',              V.enum(CASE_TRACK),  true],
-    ['title',              V.str(5, 200),       true],
-    ['description',        V.str(20, 5000),     true],
+    ['idempotency_key',    V.uuid,                   true],
+    ['case_id',            V.uuid,                   true],
+    ['student_id',         V.uuid,                   true],
+    ['created_by_user_id', V.uuid,                   true],
+    ['initiated_by_role',  V.enum(ROLE_TYPE),        true],
+    ['track',              V.enum(CASE_TRACK),       true],
+    ['title',              V.str(5, 200),            true],
+    ['description',        V.str(20, 5000),          true],
+    // Optional — default PRIVATE jika tidak dikirim
+    ['audience',           V.enum(CASE_AUDIENCE),    false],
 ];
 
 

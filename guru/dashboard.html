@@ -469,11 +469,33 @@
                     </div>
                     <!-- Escalate -->
                     <div id="kasus-escalate-block" style="margin-bottom:16px; display:none">
-                        <label for="kasus-escalate-to">Eskalasi ke</label>
-                        <select id="kasus-escalate-to" class="input" style="margin-bottom:8px; width:auto"></select>
-                        <textarea id="kasus-escalate-note" class="input" rows="2" placeholder="Catatan eskalasi (opsional)…" style="margin-bottom:8px"></textarea>
-                        <button class="btn btn-primary btn-sm" id="kasus-escalate-btn">Eskalasi</button>
+                        <label for="kasus-escalate-to">Teruskan kasus ke</label>
+                        <select id="kasus-escalate-to" class="input" style="margin-bottom:6px; width:auto"></select>
+                        <div id="kasus-escalate-warn" style="display:none; font-size:12px; color:var(--color-warning); margin-bottom:6px; padding:6px 8px; background:rgba(var(--color-warning-rgb,255,165,0),.1); border-radius:var(--radius)"></div>
+                        <textarea id="kasus-escalate-note" class="input" rows="2" placeholder="Catatan (opsional)…" style="margin-bottom:8px"></textarea>
+                        <button class="btn btn-primary btn-sm" id="kasus-escalate-btn">Teruskan</button>
                         <span id="kasus-escalate-msg" style="font-size:13px; margin-left:8px"></span>
+                    </div>
+                    <!-- Audience management -->
+                    <div id="kasus-audience-block" style="margin-bottom:16px; display:none; padding:12px; border:1px solid var(--color-border); border-radius:var(--radius)">
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px">
+                            <strong style="font-size:13px">Siapa yang boleh melihat kasus ini?</strong>
+                            <span id="kasus-audience-badge" style="font-size:12px; padding:2px 8px; border-radius:20px; font-weight:600"></span>
+                        </div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px">
+                            <button class="btn btn-sm" id="kasus-aud-private-btn" title="Hanya pihak terlibat">🔒 Privat</button>
+                            <button class="btn btn-sm" id="kasus-aud-restricted-btn" title="Orang tertentu yang dipilih">👥 Orang Tertentu</button>
+                            <button class="btn btn-sm" id="kasus-aud-public-btn" title="Semua staf internal">🌐 Semua Internal</button>
+                        </div>
+                        <!-- Restricted: member list + add -->
+                        <div id="kasus-aud-restricted-panel" style="display:none">
+                            <div id="kasus-aud-members-list" style="font-size:13px; margin-bottom:8px"></div>
+                            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
+                                <input type="text" id="kasus-aud-member-search" class="input" placeholder="Cari nama staf…" style="flex:1; min-width:160px" autocomplete="off">
+                                <div id="kasus-aud-member-list" style="display:none; border:1px solid var(--color-border); border-radius:var(--radius); background:var(--color-surface); max-height:120px; overflow-y:auto; position:absolute; z-index:100; min-width:200px"></div>
+                            </div>
+                        </div>
+                        <span id="kasus-audience-msg" style="font-size:12px; display:block; margin-top:6px"></span>
                     </div>
                     <!-- Status change / close -->
                     <div id="kasus-status-block" style="display:none">
@@ -507,6 +529,14 @@
                             <select id="kasus-c-track" class="input">
                                 <option value="SEKOLAH">Sekolah</option>
                                 <option value="PKL">PKL</option>
+                            </select>
+                        </div>
+                        <div class="field" id="kasus-c-audience-field">
+                            <label for="kasus-c-audience">Siapa yang boleh melihat kasus ini?</label>
+                            <select id="kasus-c-audience" class="input">
+                                <option value="PRIVATE">🔒 Privat — hanya pihak terlibat</option>
+                                <option value="RESTRICTED">👥 Orang Tertentu — pilih setelah disimpan</option>
+                                <option value="PUBLIC">🌐 Semua Internal — seluruh staf sekolah</option>
                             </select>
                         </div>
                         <div class="field">

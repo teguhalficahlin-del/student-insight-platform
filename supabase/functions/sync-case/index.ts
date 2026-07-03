@@ -20,7 +20,8 @@ import { validatePayload,
          CASE_CREATE_SCHEMA }          from '../_shared/validate.ts';
 import { getAdminClient }              from '../_shared/db.ts';
 
-const ALLOWED_ROLES = ['GURU','WALI_KELAS','BK','KAPRODI','KEPSEK','WAKA_KURIKULUM','WAKA_KESISWAAN'];
+// 6 peran internal + DUDI boleh buat kasus; WAKA_KURIKULUM & TU dikecualikan
+const ALLOWED_ROLES = ['GURU','WALI_KELAS','BK','KAPRODI','KEPSEK','WAKA_KESISWAAN','DUDI'];
 
 Deno.serve(async (req: Request): Promise<Response> => {
     if (req.method === 'OPTIONS') return handleCors();
@@ -65,6 +66,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return forbidden('created_by_user_id harus sesuai dengan akun yang login');
         }
 
+        // DUDI selalu PRIVATE; internal boleh pilih; default PRIVATE jika tidak dikirim
+        const audience = user.role_type === 'DUDI'
+            ? 'PRIVATE'
+            : (body['audience'] as string | undefined) ?? 'PRIVATE';
+
         const { error: rpcError } = await admin.rpc('fn_sync_case', {
             p_idempotency_key:    idempotencyKey,
             p_case_id:            body['case_id']            as string,
@@ -74,6 +80,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             p_track:              body['track']               as string,
             p_title:              body['title']               as string,
             p_description:        body['description']         as string,
+            p_audience:           audience,
         });
 
         if (rpcError) {

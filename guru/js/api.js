@@ -552,7 +552,7 @@ export async function getCaseEvents(caseId) {
     return data ?? [];
 }
 
-export async function createCase({ studentId, title, description, track, authorUserId, authorRole }) {
+export async function createCase({ studentId, title, description, track, audience = 'PRIVATE', authorUserId, authorRole }) {
     const payload = {
         idempotency_key:    crypto.randomUUID(),
         case_id:            crypto.randomUUID(),
@@ -562,10 +562,57 @@ export async function createCase({ studentId, title, description, track, authorU
         track,
         title,
         description,
+        audience,
     };
     const r = await saveCase(payload);
     if (r.status === 'error') throw new Error(r.error);
     return { case_id: payload.case_id, _queued: r.status === 'queued' };
+}
+
+export async function updateCaseAudience({ caseId, audience }) {
+    const { error } = await supabase
+        .from('cases')
+        .update({ audience })
+        .eq('case_id', caseId);
+    if (error) throw error;
+}
+
+export async function getCaseAudienceMembers(caseId) {
+    const { data, error } = await supabase
+        .from('case_audience_members')
+        .select('user_id, users:user_id(full_name, role_type)')
+        .eq('case_id', caseId);
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function addCaseAudienceMember({ caseId, userId, schoolId }) {
+    const { error } = await supabase
+        .from('case_audience_members')
+        .insert({ case_id: caseId, user_id: userId, school_id: schoolId });
+    if (error) throw error;
+}
+
+export async function removeCaseAudienceMember({ caseId, userId }) {
+    const { error } = await supabase
+        .from('case_audience_members')
+        .delete()
+        .eq('case_id', caseId)
+        .eq('user_id', userId);
+    if (error) throw error;
+}
+
+export async function searchInternalUsers(query) {
+    const INTERNAL_ROLES = ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK'];
+    const { data, error } = await supabase
+        .from('users')
+        .select('user_id, full_name, role_type')
+        .in('role_type', INTERNAL_ROLES)
+        .ilike('full_name', `%${query}%`)
+        .eq('is_active', true)
+        .limit(10);
+    if (error) throw error;
+    return data ?? [];
 }
 
 export async function addCaseComment({ caseId, text, authorUserId, authorRole, privacyLevel = 'INTERNAL_SCHOOL' }) {
