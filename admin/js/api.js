@@ -587,7 +587,7 @@ async function callBulkImport(functionName, csvText) {
     let body;
     const rawText = await res.text();
     try { body = JSON.parse(rawText); } catch { body = null; }
-    console.debug('[callBulkImport] status:', res.status, 'body:', rawText.slice(0, 500));
+    console.log('[callBulkImport] status:', res.status, 'body:', rawText.slice(0, 500));
     if (!res.ok) {
         const message = body?.error?.message ?? `HTTP ${res.status}: ${rawText.slice(0, 200)}`;
         const details = body?.error?.details ?? [];
