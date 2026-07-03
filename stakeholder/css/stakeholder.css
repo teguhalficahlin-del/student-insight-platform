@@ -45,7 +45,7 @@ p { margin: 0 0 8px; color: var(--color-text-muted); }
 .btn-primary:disabled { background: #b79df0; cursor: not-allowed; }
 .btn-secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
 .btn-secondary:hover { background: var(--color-bg); }
-.btn-sm { padding: 6px 12px; font-size: 13px; }
+.btn-sm { padding: 6px 12px; font-size: 13px; min-height: 44px; }
 
 /* ── Form ────────────────────────────────────────────────── */
 label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }

@@ -1071,7 +1071,7 @@ label {
     .login-logo h1 { font-size: 18px; }
 
     /* Button touch target */
-    .btn-sm { min-height: 36px; padding: 6px 14px; }
+    .btn-sm { min-height: 44px; padding: 6px 14px; }
 
     /* Wizard form grid → 1 kolom */
     .wz-grid-2 { grid-template-columns: 1fr !important; }

@@ -43,7 +43,7 @@ p { margin: 0 0 8px; }
 .btn-secondary:hover { background: var(--color-border); }
 .btn-ghost { background: transparent; color: var(--color-text-muted); border-color: var(--color-border); }
 .btn-ghost:hover { background: var(--color-surface); color: var(--color-text); }
-.btn-sm { padding: 7px 12px; font-size: 13px; min-height: 36px; }
+.btn-sm { padding: 7px 12px; font-size: 13px; min-height: 44px; }
 .btn-block { display: flex; width: 100%; }
 
 /* ── Form ────────────────────────────────────────────────── */
