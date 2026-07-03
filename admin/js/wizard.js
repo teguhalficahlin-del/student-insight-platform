@@ -198,27 +198,44 @@ async function renderStep2() {
         period = data;
     }
 
-    const academicYear = state.data.academicYear || period?.academic_year || config?.current_academic_year || '';
-    const semester     = state.data.semester     || period?.semester      || config?.current_semester      || '1';
-    const startDate    = state.data.startDate    || period?.start_date    || '';
-    const endDate      = state.data.endDate      || period?.end_date      || '';
+    const academicYear = state.data.academicYear || config?.current_academic_year || '';
+    const semester     = state.data.semester     || config?.current_semester      || '1';
+
+    // Generate pilihan tahun ajaran: 2 tahun lalu s/d 3 tahun ke depan
+    const thisYear = new Date().getFullYear();
+    const yearOptions = [];
+    for (let y = thisYear - 2; y <= thisYear + 3; y++) {
+        const val = `${y}/${y + 1}`;
+        yearOptions.push(`<option value="${val}" ${val === academicYear ? 'selected' : ''}>${val}</option>`);
+    }
+
+    // Fungsi bantu: hitung tanggal default dari tahun ajaran + semester
+    function defaultDates(ay, sem) {
+        if (!ay) return { start: '', end: '' };
+        const [startY, endY] = ay.split('/').map(Number);
+        if (sem === '1') return { start: `${startY}-07-01`, end: `${startY}-12-31` };
+        return { start: `${endY}-01-01`, end: `${endY}-06-30` };
+    }
+
+    // Prioritas tanggal: state.data (diisi manual user) → default dari tahun+semester
+    const def = defaultDates(academicYear, semester);
+    const startDate = state.data.startDate || def.start;
+    const endDate   = state.data.endDate   || def.end;
 
     contentEl.innerHTML = `
         <div class="step-label">Langkah 2 dari ${TOTAL_STEPS}</div>
         <h3>Tahun Ajaran</h3>
         <div class="field">
             <label for="wz-academic-year">Tahun Ajaran</label>
-            <input type="text" id="wz-academic-year" class="input"
-                placeholder="contoh: 2026/2027" value="${escapeAttr(academicYear)}" />
-            <p class="hint">Format: YYYY/YYYY</p>
+            <select id="wz-academic-year" class="input">${yearOptions.join('')}</select>
         </div>
         <div class="field">
             <label>Semester</label>
             <label style="font-weight:400; display:inline-flex; gap:6px; margin-right:18px;">
-                <input type="radio" name="wz-semester" value="1" ${semester === '1' ? 'checked' : ''} /> Ganjil
+                <input type="radio" name="wz-semester" value="1" ${semester === '1' ? 'checked' : ''} /> Ganjil (Juli–Des)
             </label>
             <label style="font-weight:400; display:inline-flex; gap:6px;">
-                <input type="radio" name="wz-semester" value="2" ${semester === '2' ? 'checked' : ''} /> Genap
+                <input type="radio" name="wz-semester" value="2" ${semester === '2' ? 'checked' : ''} /> Genap (Jan–Jun)
             </label>
         </div>
         <div class="field">
@@ -230,6 +247,24 @@ async function renderStep2() {
             <input type="date" id="wz-end-date" class="input" value="${escapeAttr(endDate)}" />
         </div>
     `;
+
+    // Auto-update tanggal saat tahun ajaran atau semester berubah
+    function updateDates() {
+        const ay  = document.getElementById('wz-academic-year').value;
+        const sem = document.querySelector('input[name="wz-semester"]:checked')?.value || '1';
+        const d   = defaultDates(ay, sem);
+        document.getElementById('wz-start-date').value = d.start;
+        document.getElementById('wz-end-date').value   = d.end;
+        // Reset state.data tanggal agar tidak mengunci ke nilai lama
+        state.data.startDate = '';
+        state.data.endDate   = '';
+    }
+
+    document.getElementById('wz-academic-year').addEventListener('change', updateDates);
+    document.querySelectorAll('input[name="wz-semester"]').forEach(r =>
+        r.addEventListener('change', updateDates)
+    );
+
     nextBtn.disabled = false;
 }
 

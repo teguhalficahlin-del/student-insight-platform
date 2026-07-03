@@ -41,7 +41,20 @@
                 </div>
                 <div class="field">
                     <label for="academic-year">Tahun Ajaran Aktif</label>
-                    <input id="academic-year" class="input" type="text" placeholder="2024/2025" required />
+                    <select id="academic-year" class="input" required></select>
+                    <script>
+                        (function() {
+                            const sel = document.getElementById('academic-year');
+                            const y = new Date().getFullYear();
+                            for (let i = y - 1; i <= y + 2; i++) {
+                                const opt = document.createElement('option');
+                                opt.value = `${i}/${i+1}`;
+                                opt.textContent = `${i}/${i+1}`;
+                                if (i === y) opt.selected = true;
+                                sel.appendChild(opt);
+                            }
+                        })();
+                    </script>
                 </div>
                 <div class="field">
                     <label for="active-semester">Semester Aktif</label>
