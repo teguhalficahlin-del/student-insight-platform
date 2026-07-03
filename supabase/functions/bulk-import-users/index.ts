@@ -502,12 +502,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const internalEmail  = row.email ?? (
                 row.role_type === 'STAKEHOLDER'
                     ? `${row.nip_atau_nik.trim().toLowerCase()}@${schoolPrefix}.stakeholder`
-                    : identifierType === 'NIP'
-                        ? `${row.nip_atau_nik.trim().toLowerCase()}@${schoolPrefix}.staff.internal`
-                        : toInternalEmail(
-                            identifierType === 'NAMA_USAHA' ? row.nama : row.nip_atau_nik,
-                            identifierType,
-                        )
+                    : toInternalEmail(
+                        identifierType === 'NAMA_USAHA' ? row.nama : row.nip_atau_nik,
+                        identifierType,
+                        user.school_id,
+                    )
             );
             // Semua role termasuk STAKEHOLDER: password acak terpisah dari kode login.
             // Kode (login_identifier) = identitas, password = rahasia yang berbeda.

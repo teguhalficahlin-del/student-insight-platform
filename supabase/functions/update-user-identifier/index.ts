@@ -19,6 +19,7 @@ import { ok, badRequest, forbidden,
          checkSchemaVersion }        from '../_shared/response.ts';
 import { resolveAuth, isAuthError }  from '../_shared/auth.ts';
 import { getAdminClient }            from '../_shared/db.ts';
+import { toInternalEmail, IdentifierType } from '../_shared/identifier.ts';
 
 Deno.serve(async (req: Request): Promise<Response> => {
 
@@ -72,16 +73,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (login_identifier && login_identifier !== targetUser.login_identifier) {
             patch.login_identifier = login_identifier;
 
-            // Rebuild internal email
-            const domainMap: Record<string, string> = {
-                GURU: 'guru.internal', WALI_KELAS: 'guru.internal',
-                BK: 'guru.internal', KAPRODI: 'guru.internal', KEPSEK: 'guru.internal',
-                ORTU: 'ortu.internal',
-                DUDI: 'dudi.internal',
-                SISWA: 'siswa.internal',
-            };
-            const domain = domainMap[targetUser.role_type] ?? 'user.internal';
-            const newEmail = `${login_identifier}@${domain}`;
+            // Rebuild internal email — namespace per sekolah wajib agar tidak
+            // collision di Supabase Auth global (NIS/NIK sama di dua sekolah berbeda)
+            const newEmail = toInternalEmail(
+                login_identifier,
+                targetUser.identifier_type as IdentifierType,
+                targetUser.school_id,
+            );
             patch.email = newEmail;
 
             // Update auth email
