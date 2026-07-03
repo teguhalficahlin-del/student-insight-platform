@@ -47,10 +47,20 @@ export function generateSlug(name: string): string {
  * Converts an identifier + its type into the internal email used
  * for Supabase Auth sign-in. NAMA_USAHA is slugified first; other
  * types are used as-is (digits only by convention).
+ *
+ * schoolId (opsional): bila diberikan, domain di-namespace dengan prefix
+ * school_id (8 hex pertama). WAJIB dipakai untuk identitas yang TIDAK unik
+ * lintas-sekolah (NIS lokal per-sekolah; NIK/NIP bisa dipakai orang yang
+ * sama di dua sekolah). Auth Supabase bersifat GLOBAL, jadi tanpa prefix,
+ * createUser sekolah kedua gagal "email already registered" dan akun itu
+ * senyap tak terbuat. Login tetap aman: fn_resolve_login_email membaca
+ * email dari baris users by (login_identifier, school_id), tidak merangkai
+ * ulang di klien. Akun lama (email tanpa prefix) tetap berfungsi — skema
+ * campur aman karena email dibaca per baris.
  */
-export function toInternalEmail(identifier: string, type: IdentifierType): string {
-    const domain = DOMAIN_BY_TYPE[type];
-    if (!domain) {
+export function toInternalEmail(identifier: string, type: IdentifierType, schoolId?: string): string {
+    const baseDomain = DOMAIN_BY_TYPE[type];
+    if (!baseDomain) {
         throw new Error(`Tipe identifier tidak dikenal: ${type}`);
     }
 
@@ -61,6 +71,10 @@ export function toInternalEmail(identifier: string, type: IdentifierType): strin
     if (!local) {
         throw new Error(`Identifier kosong setelah normalisasi (type=${type})`);
     }
+
+    const domain = schoolId
+        ? `${schoolId.replace(/-/g, '').substring(0, 8)}.${baseDomain}`
+        : baseDomain;
 
     return `${local}@${domain}`;
 }

@@ -211,7 +211,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }
 
         for (const [nik, namaOrtu] of newNikToName) {
-            const internalEmail = toInternalEmail(nik, 'NIK');
+            // Namespace per sekolah: NIK bisa dipakai orang tua yang sama di dua
+            // sekolah (anak di sekolah berbeda). Auth global → tanpa prefix,
+            // createUser sekolah kedua gagal "email already registered".
+            const internalEmail = toInternalEmail(nik, 'NIK', user.school_id);
             const password      = `${nik}!SMK`;
 
             const { data: authUser, error: authErr } = await admin.auth.admin.createUser({

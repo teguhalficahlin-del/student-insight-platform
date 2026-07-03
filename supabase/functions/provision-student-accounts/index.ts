@@ -110,7 +110,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { data: existingUsers, error: euErr } = await admin
                 .from('users')
                 .select('user_id, login_identifier')
-                .in('login_identifier', nisList);
+                .eq('school_id', user.school_id)   // WAJIB: NIS lokal per-sekolah,
+                .in('login_identifier', nisList);  // tanpa ini bisa tertaut akun sekolah lain
             if (euErr) return internalError(euErr);
 
             const nisToUserId = new Map<string, string>(
@@ -131,7 +132,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 if (!userId) {
                     let internalEmail: string;
                     try {
-                        internalEmail = toInternalEmail(s.nis, 'NIS');
+                        internalEmail = toInternalEmail(s.nis, 'NIS', user.school_id);
                     } catch (e) {
                         errors.push({ nis: s.nis, message: `NIS tidak valid: ${(e as Error).message}` });
                         continue;
