@@ -599,6 +599,79 @@ CREATE TRIGGER trg_case_guard_denormalized
 
 
 -- ============================================================
+-- AUDIENS KASUS + KUNCI ESKALASI (mig 20260703250000, Langkah A)
+-- ============================================================
+
+-- "Aktor internal kasus" = 6 peran (via role_type ATAU jabatan-flag).
+CREATE OR REPLACE FUNCTION fn_is_internal_case_actor()
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
+AS $$
+    SELECT fn_current_user_role() = ANY (ARRAY['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK']::role_type[])
+        OR fn_is_bk() OR fn_is_kepsek() OR fn_is_waka_kesiswaan();
+$$;
+
+-- Apakah user (by id) aktor internal kasus — untuk validasi anggota audiens.
+CREATE OR REPLACE FUNCTION fn_user_is_internal_case_actor(p_user_id uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM users u
+        WHERE u.user_id = p_user_id
+          AND ( u.role_type = ANY (ARRAY['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK']::role_type[])
+                OR u.is_bk OR u.is_kepsek OR u.is_waka_kesiswaan )
+    );
+$$;
+
+-- Boleh-lihat-kasus TERPADU (dipakai baca cases & case_events → konsisten).
+-- Sertakan fn_matches_case_handler agar penangan yang BARU dieskalasi (belum
+-- menulis event) tetap bisa melihat kasus PRIVAT-nya.
+CREATE OR REPLACE FUNCTION fn_can_see_case(p_case_id uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM cases c
+        WHERE c.case_id   = p_case_id
+          AND c.school_id = fn_current_school_id()
+          AND (
+                fn_involved_in_case(p_case_id)
+             OR fn_matches_case_handler(c.current_handler_role, c.student_id)
+             OR (c.audience = 'PUBLIC'     AND fn_is_internal_case_actor())
+             OR (c.audience = 'RESTRICTED' AND EXISTS (
+                    SELECT 1 FROM case_audience_members m
+                    WHERE m.case_id = p_case_id AND m.user_id = fn_current_user_id()))
+             OR (fn_current_user_role() = 'DUDI' AND fn_dudi_supervises_student(c.student_id))
+          )
+    );
+$$;
+
+-- Kunci KERAS eskalasi: target wajib peran internal; DUDI hanya -> KAPRODI.
+-- (Eskalasi antar-internal tetap BEBAS — tak ada penegakan urutan rantai.)
+CREATE OR REPLACE FUNCTION fn_case_validate_escalate()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.event_type = 'DECISION_ESCALATE' THEN
+        IF NEW.new_handler_role IS NULL
+           OR NOT (NEW.new_handler_role = ANY (ARRAY['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK']::role_type[]))
+        THEN
+            RAISE EXCEPTION 'escalate_target_invalid: % bukan peran internal penangan kasus', NEW.new_handler_role
+                USING ERRCODE = 'check_violation';
+        END IF;
+        IF NEW.author_role_at_time = 'DUDI' AND NEW.new_handler_role <> 'KAPRODI' THEN
+            RAISE EXCEPTION 'escalate_dudi_only_kaprodi: DUDI hanya boleh eskalasi ke KAPRODI'
+                USING ERRCODE = 'check_violation';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_case_validate_escalate
+    BEFORE INSERT ON case_events
+    FOR EACH ROW
+    EXECUTE FUNCTION fn_case_validate_escalate();
+
+
+-- ============================================================
 -- PERIOD LOCKING
 -- Locks period-bound data (attendance, observations, journals)
 -- by event date, not by record FK. See contracts/01 academic_periods

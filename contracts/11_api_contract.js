@@ -616,7 +616,8 @@ const PROVISION_USER_FIELDS = [
                             ? null : 'email must be a valid email address'],
     ['full_name', (v) => FT.str(v, 'full_name', 2, 150)],
     ['role_type', (v) => FT.enum(v, 'role_type',
-                    ['GURU','BK','WALI_KELAS','KAPRODI','KEPSEK','DUDI','SISWA','ORTU'])],
+                    ['GURU','BK','WALI_KELAS','KAPRODI','KEPSEK','DUDI','SISWA','ORTU',
+                     'ADMINISTRATIVE','STAKEHOLDER','WAKA_KURIKULUM','WAKA_KESISWAAN'])],
 ];
 
 const PROVISION_USER_OPTIONAL = [

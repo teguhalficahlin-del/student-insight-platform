@@ -218,8 +218,10 @@ function isAssignedTeacher(userCtx, scheduleCtx) {
 }
 
 /**
- * Returns the next valid handler role in the escalation chain.
- * Returns null if current handler is already at the end.
+ * PENUNTUN (advisory): peran "berikutnya yang disarankan" di rantai — untuk
+ * saran UI saja. Sejak desain Langkah A (mig 20260703250000) eskalasi antar-
+ * internal BEBAS (tak dibatasi urutan ini); penegakan sesungguhnya di server
+ * (target wajib peran internal; DUDI hanya -> KAPRODI). Null bila di ujung.
  */
 function nextEscalationStep(track, currentHandlerRole) {
     const chain = ESCALATION_CHAIN[track];

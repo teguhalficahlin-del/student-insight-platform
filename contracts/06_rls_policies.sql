@@ -376,17 +376,28 @@ CREATE POLICY rls_achievements_void ON achievements
 
 -- ============================================================
 -- CASES
--- Read access (permission matrix):
---   GURU †: assignment active + ever involved in case
---   BK, WALI_KELAS, KAPRODI, KEPSEK: all cases
---   DUDI ‡: only their supervised PKL students
---   SISWA §: own cases, STUDENT_VISIBLE events only (handled in case_events)
---   ORTU: blocked
+-- ⚠️ MODEL AUDIENS (mig 20260703250000, Langkah A) — file ini kontrak LOGIS
+--    era-lama; kebenaran = live + migrasi + memory project-case-escalation-design.
+--    Sejak audiens per-kasus, baca kasus AUDIENS-AWARE via fn_can_see_case
+--    (konsisten cases + case_events), MENGGANTIKAN matriks "BK/Waka lihat semua":
+--
+-- Read access (audiens-aware, fn_can_see_case):
+--   terlibat/penangan → SELALU (fn_involved_in_case / fn_matches_case_handler)
+--   audience=PUBLIC     → semua 6 aktor internal kasus (fn_is_internal_case_actor)
+--   audience=RESTRICTED → hanya anggota case_audience_members ("orang tertentu")
+--   audience=PRIVATE    → hanya terlibat/penangan (default; kasus lahir privat)
+--   DUDI ‡: hanya siswa PKL binaannya
+--   SISWA §: own cases, STUDENT_VISIBLE events only (case_events)
+--   ORTU / WAKA_KURIKULUM / TU: bukan aktor kasus
 --
 -- Write (CREATE case):
---   GURU, KEPSEK, DUDI
+--   6 aktor internal (GURU, BK, WALI_KELAS, KAPRODI, WAKA_KESISWAAN, KEPSEK)
+--   + DUDI (siswa binaannya; audiens DUDI selalu PRIVATE).
 --
--- Status/handler updates: handled via case_events INSERT only.
+-- Escalation: BEBAS antar-internal; kunci server (trg_case_validate_escalate):
+--   target wajib peran internal; DUDI hanya -> KAPRODI.
+-- Status/handler updates: via case_events INSERT only. Audiens: UPDATE via
+--   rls_cases_update_audience (aktor internal yang bisa lihat kasus).
 -- ============================================================
 
 CREATE POLICY rls_cases_read_admin ON cases
@@ -424,10 +435,16 @@ CREATE POLICY rls_cases_read_student ON cases
         )
     );
 
+-- Semua 6 aktor internal + DUDI boleh buat kasus (mig 20260703250000).
+-- DUDI: hanya siswa binaannya, audiens wajib PRIVATE (tak boleh publikasi).
 CREATE POLICY rls_cases_insert ON cases
     FOR INSERT WITH CHECK (
-        fn_current_user_role() IN ('GURU', 'KEPSEK', 'DUDI')
+        (
+            fn_current_user_role() IN ('GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK')
+            OR (fn_current_user_role() = 'DUDI' AND fn_dudi_supervises_student(student_id))
+        )
         AND created_by_user_id = fn_current_user_id()
+        AND (fn_current_user_role() <> 'DUDI' OR audience = 'PRIVATE')
     );
 
 -- UPDATE on cases is restricted to the sync trigger path only

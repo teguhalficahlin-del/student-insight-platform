@@ -24,9 +24,10 @@ const CASE_STATUS = {
 const VISIBILITY_LEVEL = {
     PRIVATE: 'PRIVATE', INTERNAL_SCHOOL: 'INTERNAL_SCHOOL', STUDENT_VISIBLE: 'STUDENT_VISIBLE',
 };
+// Chain = PENUNTUN advisory (bukan penegakan) sejak mig 20260703250000.
 const ESCALATION_CHAIN = {
-    SEKOLAH: ['GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK'],
-    PKL:     ['DUDI', 'KAPRODI', 'KEPSEK'],
+    SEKOLAH: ['GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'WAKA_KESISWAAN', 'KEPSEK'],
+    PKL:     ['DUDI', 'KAPRODI', 'WAKA_KESISWAAN', 'KEPSEK'],
 };
 
 // ─── Inline the engine (copy logic for standalone test) ───────────────
@@ -511,8 +512,11 @@ console.log('\n▸ Escalation chain boundaries');
 test('nextEscalationStep: GURU → BK (SEKOLAH)', () => {
     expect(nextEscalationStep('SEKOLAH', 'GURU')).toBe('BK');
 });
-test('nextEscalationStep: KAPRODI → KEPSEK (SEKOLAH)', () => {
-    expect(nextEscalationStep('SEKOLAH', 'KAPRODI')).toBe('KEPSEK');
+test('nextEscalationStep: KAPRODI → WAKA_KESISWAAN (SEKOLAH)', () => {
+    expect(nextEscalationStep('SEKOLAH', 'KAPRODI')).toBe('WAKA_KESISWAAN');
+});
+test('nextEscalationStep: WAKA_KESISWAAN → KEPSEK (SEKOLAH)', () => {
+    expect(nextEscalationStep('SEKOLAH', 'WAKA_KESISWAAN')).toBe('KEPSEK');
 });
 test('nextEscalationStep: KEPSEK → null (end of chain)', () => {
     expect(nextEscalationStep('SEKOLAH', 'KEPSEK')).toBe(null);
@@ -520,8 +524,8 @@ test('nextEscalationStep: KEPSEK → null (end of chain)', () => {
 test('nextEscalationStep: DUDI → KAPRODI (PKL)', () => {
     expect(nextEscalationStep('PKL', 'DUDI')).toBe('KAPRODI');
 });
-test('nextEscalationStep: KAPRODI → KEPSEK (PKL)', () => {
-    expect(nextEscalationStep('PKL', 'KAPRODI')).toBe('KEPSEK');
+test('nextEscalationStep: KAPRODI → WAKA_KESISWAAN (PKL)', () => {
+    expect(nextEscalationStep('PKL', 'KAPRODI')).toBe('WAKA_KESISWAAN');
 });
 test('nextEscalationStep: role not in chain returns null', () => {
     expect(nextEscalationStep('SEKOLAH', 'DUDI')).toBe(null);

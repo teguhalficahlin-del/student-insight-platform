@@ -117,11 +117,21 @@ export const OBSERVATION_DIMENSION = Object.freeze({
     LAINNYA:    'LAINNYA',
 });
 
-// Escalation chains — authoritative order for application-layer enforcement (TN-05)
+// Escalation chains — PENUNTUN (advisory) untuk urutan yang DIHARAPKAN, bukan
+// gembok. Sejak desain kasus Langkah A (mig 20260703250000) eskalasi antar-
+// aktor-internal BEBAS (arah mana pun, boleh lompat). Server hanya mengunci:
+//   (a) target wajib salah satu 6 peran internal kasus (bukan SISWA/ORTU/dst),
+//   (b) DUDI hanya boleh -> KAPRODI.
+// TN-05 lama ("maju tepat satu langkah") SUDAH DIBATALKAN.
 export const ESCALATION_CHAIN = Object.freeze({
-    SEKOLAH: ['GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK'],
-    PKL:     ['DUDI', 'KAPRODI', 'KEPSEK'],
+    SEKOLAH: ['GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'WAKA_KESISWAAN', 'KEPSEK'],
+    PKL:     ['DUDI', 'KAPRODI', 'WAKA_KESISWAAN', 'KEPSEK'],
 });
+
+// Peran internal yang boleh menjadi PENANGAN/target eskalasi kasus (6 peran).
+export const INTERNAL_CASE_ROLES = Object.freeze(
+    ['GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'WAKA_KESISWAAN', 'KEPSEK']
+);
 
 
 // ─────────────────────────────────────────────────────────────
@@ -674,7 +684,13 @@ export function buildCaseEventEnvelope({
         }
     }
 
-    // 7. Cross-field invariant: DECISION_ESCALATE chain order (TN-05, INV-2)
+    // 7. Cross-field invariant: DECISION_ESCALATE (INV-2 + kunci target)
+    //    Desain Langkah A (mig 20260703250000): eskalasi BEBAS arah/lompat.
+    //    Yang divalidasi hanya BATAS, bukan urutan rantai (TN-05 dibatalkan):
+    //      - INV-2: new_handler_role != previous_handler_role
+    //      - target wajib salah satu 6 peran internal kasus (INTERNAL_CASE_ROLES)
+    //    Kunci DUDI->KAPRODI ditegakkan server (trigger trg_case_validate_escalate)
+    //    karena butuh peran author; tak selalu tersedia di validator klien ini.
     if (event_type === CASE_EVENT_TYPES.DECISION_ESCALATE && !errors.length) {
         const { previous_handler_role, new_handler_role } = envelope_extra;
 
@@ -686,22 +702,12 @@ export function buildCaseEventEnvelope({
             );
         }
 
-        // TN-05: must be next step in chain
-        if (case_track && ESCALATION_CHAIN[case_track]) {
-            const chain = ESCALATION_CHAIN[case_track];
-            const prevIdx = chain.indexOf(previous_handler_role);
-            const newIdx  = chain.indexOf(new_handler_role);
-            if (prevIdx === -1) {
-                errors.push(
-                    `previous_handler_role '${previous_handler_role}' is not in escalation chain for track '${case_track}'`
-                );
-            } else if (newIdx !== prevIdx + 1) {
-                errors.push(
-                    `TN-05 violation: escalation must advance exactly one step. ` +
-                    `Expected '${chain[prevIdx + 1] ?? 'end-of-chain'}' after '${previous_handler_role}', ` +
-                    `got '${new_handler_role}'`
-                );
-            }
+        // Kunci target: hanya peran internal kasus yang boleh jadi penangan.
+        if (!INTERNAL_CASE_ROLES.includes(new_handler_role)) {
+            errors.push(
+                `escalate_target_invalid: new_handler_role '${new_handler_role}' ` +
+                `bukan peran internal penangan kasus (${INTERNAL_CASE_ROLES.join(', ')})`
+            );
         }
     }
 
