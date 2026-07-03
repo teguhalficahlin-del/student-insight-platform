@@ -584,15 +584,18 @@ async function callBulkImport(functionName, csvText) {
         body: csvText,
     });
 
-    const body = await res.json();
+    let body;
+    const rawText = await res.text();
+    try { body = JSON.parse(rawText); } catch { body = null; }
+    console.debug('[callBulkImport] status:', res.status, 'body:', rawText.slice(0, 500));
     if (!res.ok) {
-        const message = body?.error?.message ?? 'Impor gagal';
+        const message = body?.error?.message ?? `HTTP ${res.status}: ${rawText.slice(0, 200)}`;
         const details = body?.error?.details ?? [];
         const err = new Error(message);
         err.details = details;
         throw err;
     }
-    return body.data;
+    return body?.data ?? body;
 }
 
 export function importUsers(csvText)     { return callBulkImport('bulk-import-users', csvText); }
