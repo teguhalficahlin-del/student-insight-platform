@@ -17,6 +17,10 @@
  *   3. Anon read baseline— anon tak boleh membaca baris tabel inti (RLS).
  *   4. RPC regression    — RPC privileged spesifik (yang pernah bocor) wajib
  *                          has_function_privilege('anon', ...) = false.
+ *   5. Cross-tenant      — admin Sekolah A TIDAK dapat membaca data Sekolah B.
+ *                          Simulasi konteks RLS pengguna nyata via SET ROLE
+ *                          authenticated + request.jwt.claims (cara auth.uid()
+ *                          dievaluasi) — tanpa membuat user/login palsu.
  *
  * CARA JALANKAN:
  *   SUPABASE_ACCESS_TOKEN=sbp_xxx node tests/tenant-isolation.mjs
@@ -161,6 +165,60 @@ async function main() {
                  || String(probe.body.message || '').includes('permission denied'));
     if (denied) log.pass(`probe live fn_batalkan_tahun_ajaran ditolak (code ${probe.body.code})`);
     else log.fail(`probe live fn_batalkan_tahun_ajaran TIDAK ditolak (code ${probe.body?.code})`);
+
+    // ── CHECK 5: Cross-Tenant Test (A3) ──────────────────────────
+    // Simulasikan konteks RLS admin tiap sekolah (SET ROLE authenticated +
+    // request.jwt.claims.sub = auth_user_id) lalu buktikan ia melihat 0 baris
+    // milik sekolah lain, TAPI tetap melihat data sekolahnya (uji tak vacuous).
+    log.head('CHECK 5 — Cross-Tenant: admin Sekolah A tidak dapat membaca data Sekolah B');
+    const schools = await mgmtQuery(`
+        select s.school_id, s.name,
+               (select u.auth_user_id from users u
+                 where u.school_id = s.school_id and u.role_type = 'ADMINISTRATIVE' and u.is_active
+                 limit 1) as admin_auid,
+               (select count(*) from students st where st.school_id = s.school_id) as n_students
+        from schools s
+        where exists (select 1 from users u where u.school_id = s.school_id
+                        and u.role_type = 'ADMINISTRATIVE' and u.is_active)
+          and exists (select 1 from students st where st.school_id = s.school_id)
+        order by n_students desc
+        limit 2;`);
+
+    if (schools.length < 2) {
+        log.pass(`SKIP — hanya ${schools.length} sekolah berdata; cross-tenant butuh ≥2 (tidak menggagalkan)`);
+    } else {
+        const [A, B] = schools;
+        for (const [viewer, other] of [[A, B], [B, A]]) {
+            const claims = `{"sub":"${viewer.admin_auid}","role":"authenticated"}`;
+            const rows = await mgmtQuery(
+                `begin; set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $claims$${claims}$claims$, true);` +
+                ` select` +
+                `  (select count(*) from students     where school_id='${other.school_id}')::int as students_other,` +
+                `  (select count(*) from users        where school_id='${other.school_id}')::int as users_other,` +
+                `  (select count(*) from cases        where school_id='${other.school_id}')::int as cases_other,` +
+                `  (select count(*) from observations where school_id='${other.school_id}')::int as obs_other,` +
+                `  (select count(*) from attendance   where school_id='${other.school_id}')::int as att_other,` +
+                `  (select count(*) from students     where school_id='${viewer.school_id}')::int as students_own,` +
+                `  fn_current_school_id()::text as resolved;` +
+                ` commit;`);
+            const r = rows[0] || {};
+            const leakCols = ['students_other', 'users_other', 'cases_other', 'obs_other', 'att_other']
+                .filter((c) => (r[c] ?? -1) !== 0);
+            if (leakCols.length === 0)
+                log.pass(`admin ${viewer.name} → 0 baris milik ${other.name} (students/users/cases/obs/attendance)`);
+            else
+                leakCols.forEach((c) => log.fail(`BOCOR: admin ${viewer.name} melihat ${r[c]} baris ${other.name} (${c})`));
+
+            if ((r.students_own ?? 0) > 0)
+                log.pass(`admin ${viewer.name} tetap melihat sekolahnya (${r.students_own} siswa) — uji tidak vacuous`);
+            else
+                log.fail(`admin ${viewer.name}: students_own=0 — uji vacuous / akun tak punya visibilitas`);
+
+            if (r.resolved === viewer.school_id) log.pass(`fn_current_school_id() = ${viewer.name} (benar)`);
+            else log.fail(`fn_current_school_id() salah: ${r.resolved} ≠ ${viewer.school_id}`);
+        }
+    }
 
     // ── Ringkasan ────────────────────────────────────────────────
     console.log(`\n${'='.repeat(52)}`);
