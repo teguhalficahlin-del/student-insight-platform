@@ -505,10 +505,21 @@ async function saveStep2() {
     if (periodErr) throw new Error(periodErr.message);
 
     // UPDATE school_config: tandai periode aktif
+    const prevConfig = await getSchoolConfig().catch(() => null);
+    const prevYear   = prevConfig?.current_academic_year;
+
     await upsertSchoolConfig({
         current_academic_year: academicYear,
         current_semester:      semester,
     });
+
+    // Sinkronkan classes jika tahun ajaran berubah
+    if (prevYear && prevYear !== academicYear) {
+        await supabase
+            .from('classes')
+            .update({ academic_year: academicYear })
+            .eq('academic_year', prevYear);
+    }
 
     state.data.academicYear = academicYear;
     state.data.semester     = semester;
