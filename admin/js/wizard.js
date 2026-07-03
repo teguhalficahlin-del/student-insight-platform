@@ -544,6 +544,9 @@ async function saveStep1() {
 }
 
 async function saveStep2() {
+    // Mode read-only: tidak ada form DOM, data sudah diisi oleh renderStep2
+    if (!document.getElementById('wz-academic-year')) return;
+
     const academicYear = document.getElementById('wz-academic-year').value.trim();
     const semesterEl   = document.querySelector('input[name="wz-semester"]:checked');
     const startDate    = document.getElementById('wz-start-date').value;
