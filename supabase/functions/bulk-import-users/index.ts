@@ -444,16 +444,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
             const identifierType: IdentifierType = row.role_type === 'DUDI' ? 'NAMA_USAHA'
                 : row.role_type === 'STAKEHOLDER' ? 'KODE_KHUSUS' : 'NIP';
-            // STAKEHOLDER: namespace email dengan school_id prefix agar unik
-            // antar-sekolah (Auth bersifat global, kode khusus tidak unik global).
+            // Email internal HARUS di-namespace dengan school_id prefix: Auth Supabase
+            // bersifat GLOBAL antar-sekolah, sedangkan NIP tidak unik lintas-sekolah
+            // (dua sekolah bisa punya guru ber-NIP sama, mis. mengajar di dua tempat,
+            // atau NIP placeholder). Tanpa prefix, createUser sekolah kedua gagal
+            // "email already registered" dan guru itu senyap tak terbuat. Login tetap
+            // aman karena fn_resolve_login_email membaca email dari baris users
+            // berdasarkan (login_identifier, school_id) — bukan merangkai ulang di klien.
             const schoolPrefix  = user.school_id.replace(/-/g, '').substring(0, 8);
             const internalEmail  = row.email ?? (
                 row.role_type === 'STAKEHOLDER'
                     ? `${row.nip_atau_nik.trim().toLowerCase()}@${schoolPrefix}.stakeholder`
-                    : toInternalEmail(
-                        identifierType === 'NAMA_USAHA' ? row.nama : row.nip_atau_nik,
-                        identifierType,
-                    )
+                    : identifierType === 'NIP'
+                        ? `${row.nip_atau_nik.trim().toLowerCase()}@${schoolPrefix}.staff.internal`
+                        : toInternalEmail(
+                            identifierType === 'NAMA_USAHA' ? row.nama : row.nip_atau_nik,
+                            identifierType,
+                        )
             );
             // Semua role termasuk STAKEHOLDER: password acak terpisah dari kode login.
             // Kode (login_identifier) = identitas, password = rahasia yang berbeda.
