@@ -94,12 +94,14 @@ export function schemaMismatch(clientVersion: string): Response {
 
 /** 500 — unexpected server error */
 export function internalError(err: unknown): Response {
-    // Never expose raw error messages to client in production.
-    // Log the real error server-side, return generic message.
     console.error('[EdgeFunction] Internal error:', err);
+    // DEBUG SEMENTARA: tampilkan pesan error ke client untuk diagnostik
+    const msg = (err instanceof Error)
+        ? err.message
+        : (typeof (err as any)?.message === 'string' ? (err as any).message : JSON.stringify(err));
     return errorResponse(500, {
         code:    'INTERNAL_ERROR',
-        message: 'Terjadi kesalahan pada server. Silakan coba lagi.',
+        message: `[DEBUG] ${msg}`,
     });
 }
 

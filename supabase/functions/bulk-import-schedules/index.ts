@@ -344,20 +344,29 @@ Deno.serve(async (req: Request): Promise<Response> => {
             }
             for (const row of conflicted) validRows.splice(validRows.indexOf(row), 1);
 
-            // (ii) Bentrok dengan jadwal yang sudah tersimpan di DB
-            for (const row of [...validRows]) {
-                const { data: existing, error: exErr } = await admin
-                    .from('schedule_templates')
-                    .select('start_time, end_time, class_id')
-                    .eq('school_id', user.school_id)
-                    .eq('academic_year', academicYear)
-                    .eq('semester', semester)
-                    .eq('day_of_week', row.hari)
-                    .eq('teacher_id', row.teacher_id);
-                if (exErr) { console.error('[bulk-import-schedules] conflict check failed:', exErr); return internalError(exErr); }
+            // (ii) Bentrok dengan jadwal tersimpan di DB — fetch SEKALI, cek in-memory
+            const teacherIds = [...new Set(validRows.map(r => r.teacher_id))];
+            const { data: dbTemplates, error: exErr } = await admin
+                .from('schedule_templates')
+                .select('teacher_id, day_of_week, start_time, end_time, class_id')
+                .eq('school_id', user.school_id)
+                .eq('academic_year', academicYear)
+                .eq('semester', semester)
+                .in('teacher_id', teacherIds);
+            if (exErr) { console.error('[bulk-import-schedules] conflict check failed:', exErr); return internalError(exErr); }
 
+            // Group db templates by teacher|day
+            const dbByTeacherDay = new Map<string, { start_time: string; end_time: string; class_id: string }[]>();
+            for (const t of dbTemplates ?? []) {
+                const key = `${t.teacher_id}|${t.day_of_week}`;
+                const arr = dbByTeacherDay.get(key) ?? [];
+                arr.push(t);
+                dbByTeacherDay.set(key, arr);
+            }
+            for (const row of [...validRows]) {
+                const existing = dbByTeacherDay.get(`${row.teacher_id}|${row.hari}`) ?? [];
                 const rS = parseTimeMinutes(row.start_time), rE = parseTimeMinutes(row.end_time);
-                const clash = (existing ?? []).find((e: { start_time: string; end_time: string; class_id: string }) =>
+                const clash = existing.find(e =>
                     e.class_id !== row.class_id &&
                     overlaps(rS, rE, parseTimeMinutes(e.start_time.slice(0, 5)), parseTimeMinutes(e.end_time.slice(0, 5))),
                 );
@@ -375,44 +384,39 @@ Deno.serve(async (req: Request): Promise<Response> => {
         //       20250624000001_schedule_templates_unique.sql) ───────────
         let totalTemplates   = 0;
         let templatesUpdated = 0;
-        const resolvedRows: ImportRow[] = [];
+        const resolvedRows: ImportRow[] = [...validRows];
 
-        for (const row of validRows) {
-            // Upsert via ON CONFLICT — replaces select-then-branch.
-            // Requires uq_schedule_template_slot UNIQUE constraint
-            // (migration 20250624000001_schedule_templates_unique.sql).
+        if (validRows.length > 0) {
+            // Batch upsert semua template sekaligus — jauh lebih efisien dari loop.
+            // Dedup dulu berdasarkan kunci konflik: dua baris CSV identik akan memicu
+            // "ON CONFLICT DO UPDATE cannot affect row a second time" jika dikirim bersama.
+            const templateMap = new Map<string, object>();
+            for (const row of validRows) {
+                // Baris terakhir menang (end_time terbaru) — konsisten dengan DO UPDATE.
+                templateMap.set(`${row.hari}|${row.start_time}|${row.class_id}|${row.teacher_id}`, {
+                    academic_year: academicYear,
+                    semester:      semester,
+                    day_of_week:   row.hari,
+                    start_time:    row.start_time,
+                    end_time:      row.end_time,
+                    class_id:      row.class_id,
+                    teacher_id:    row.teacher_id,
+                    subject_id:    row.subject_id,
+                });
+            }
+            const templatePayload = [...templateMap.values()];
             const { error: upsertErr } = await admin
                 .from('schedule_templates')
-                .upsert(
-                    {
-                        academic_year: academicYear,
-                        semester:      semester,
-                        day_of_week:   row.hari,
-                        start_time:    row.start_time,
-                        end_time:      row.end_time,
-                        class_id:      row.class_id,
-                        teacher_id:    row.teacher_id,
-                        subject_id:    row.subject_id,
-                    },
-                    {
-                        onConflict:       'academic_year,semester,day_of_week,start_time,class_id,teacher_id',
-                        ignoreDuplicates: false,
-                    }
-                );
-
-            if (upsertErr) {
-                errors.push({
-                    row:     row.rowNumber,
-                    message: `Gagal menyimpan jadwal template: ${upsertErr.message}`,
+                .upsert(templatePayload, {
+                    onConflict:       'academic_year,semester,day_of_week,start_time,class_id,teacher_id',
+                    ignoreDuplicates: false,
                 });
-                continue;
+            if (upsertErr) {
+                console.error('[bulk-import-schedules] schedule_templates batch upsert failed:', upsertErr);
+                return internalError(upsertErr);
             }
-
-            resolvedRows.push(row);
         }
         totalTemplates   = resolvedRows.length;
-        // upsert tidak membedakan insert vs update — semua baris yang
-        // berhasil disimpan dihitung sebagai "templates_updated"
         templatesUpdated = resolvedRows.length;
 
         // ── 10b. Upsert teaching_assignments per resolved row ────
@@ -420,14 +424,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const assignmentMap = new Map<string, string>(); // key: teacherId|classId|subjectId -> assignment_id
 
         if (resolvedRows.length > 0) {
-            const assignmentRows = resolvedRows.map(row => ({
-                user_id:       row.teacher_id,
-                class_id:      row.class_id,
-                subject_id:    row.subject_id,
-                academic_year: academicYear,
-                semester:      semester,
-                is_active:     true,
-            }));
+            // Deduplikasi: 1 guru bisa mengajar banyak sesi di kelas yang sama
+            // → hanya 1 teaching_assignment per (user_id, class_id, subject_id)
+            const assignmentMap2 = new Map<string, object>();
+            for (const row of resolvedRows) {
+                const key = `${row.teacher_id}|${row.class_id}|${row.subject_id}`;
+                if (!assignmentMap2.has(key)) {
+                    assignmentMap2.set(key, {
+                        user_id:       row.teacher_id,
+                        class_id:      row.class_id,
+                        subject_id:    row.subject_id,
+                        academic_year: academicYear,
+                        semester:      semester,
+                        is_active:     true,
+                    });
+                }
+            }
+            const assignmentRows = [...assignmentMap2.values()];
 
             const { data: upsertedAssignments, error: assignErr } = await admin
                 .from('teaching_assignments')
@@ -477,10 +490,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 }
             }
 
-            if (generatedRows.length > 0) {
+            // Pecah insert menjadi chunk agar tidak membebani worker: 600 template
+            // × ~26 tanggal/semester bisa menghasilkan belasan ribu baris. Satu
+            // statement raksasa (bangun array + serialize + terima balik semua id)
+            // memicu WORKER_RESOURCE_LIMIT. Chunk kecil menjaga memori & waktu tetap rendah.
+            const CHUNK_SIZE = 500;
+            for (let i = 0; i < generatedRows.length; i += CHUNK_SIZE) {
+                const chunk = generatedRows.slice(i, i + CHUNK_SIZE);
                 const { data: inserted, error: genErr } = await admin
                     .from('teaching_schedules')
-                    .upsert(generatedRows, {
+                    .upsert(chunk, {
                         onConflict:       'class_id,scheduled_teacher_id,session_date,session_start',
                         ignoreDuplicates: true,
                     })
@@ -490,7 +509,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     console.error('[bulk-import-schedules] teaching_schedules generation failed:', genErr);
                     return internalError(genErr);
                 }
-                schedulesGenerated = inserted?.length ?? 0;
+                schedulesGenerated += inserted?.length ?? 0;
             }
         }
 
