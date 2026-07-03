@@ -120,6 +120,17 @@ async function renderByState(container, period, config) {
 // ─────────────────────────────────────────────────────────────
 
 function renderClosePanel(container, period, config, summary) {
+    const today   = new Date().toISOString().slice(0, 10);
+    const earlyWarning = today < period.end_date
+        ? `<div class="alert alert-danger" style="margin-bottom:1rem;">
+               ⚠ <strong>Semester belum selesai.</strong>
+               Jadwal berakhir pada <strong>${period.end_date}</strong>,
+               tapi hari ini baru <strong>${today}</strong>.
+               Menutup sekarang akan mengunci absensi dan jurnal secara permanen
+               sebelum waktunya.
+           </div>`
+        : '';
+
     container.innerHTML = `
         <h3>Tutup Semester</h3>
         <p class="hint">
@@ -143,6 +154,7 @@ function renderClosePanel(container, period, config, summary) {
                 <div class="label">Kasus Terbuka</div>
             </div>
         </div>
+        ${earlyWarning}
         <div class="alert alert-warning">
             Menutup semester akan mengunci absensi, observasi, dan jurnal pada
             periode ini — tidak dapat ditambah atau diubah lagi. Kasus BK,
