@@ -268,6 +268,15 @@ async function onOpenNextSemester(container, closedPeriod, config) {
         resultArea.innerHTML = `<div class="alert alert-danger">Tanggal mulai harus sebelum tanggal selesai.</div>`;
         return;
     }
+    const today = new Date().toISOString().slice(0, 10);
+    if (startDate < today) {
+        resultArea.innerHTML = `<div class="alert alert-danger">Tanggal mulai tidak boleh di masa lalu.</div>`;
+        return;
+    }
+    if (closedPeriod.end_date && startDate < closedPeriod.end_date) {
+        resultArea.innerHTML = `<div class="alert alert-danger">Tanggal mulai S2 tidak boleh sebelum tanggal selesai S1 (${closedPeriod.end_date}).</div>`;
+        return;
+    }
 
     const confirmed = window.confirm(
         `Buka Semester 2 (${closedPeriod.academic_year})?\n\n` +

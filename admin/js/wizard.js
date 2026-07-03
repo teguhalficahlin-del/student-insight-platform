@@ -444,7 +444,8 @@ async function renderScheduleStep() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 10 dari ${TOTAL_STEPS}</div>
         <h3>Jadwal</h3>
-        <p class="hint">Susun jadwal mengajar secara visual, atau impor dari file CSV. Staf (langkah 5) dan kelas (langkah 4) harus sudah ada. Langkah ini bisa dilewati dan disusun nanti.</p>
+        <p class="hint">Susun jadwal mengajar secara visual, atau impor dari file CSV. Staf (langkah 5) dan kelas (langkah 4) harus sudah ada.</p>
+        <p class="hint" style="color:var(--color-success);font-weight:600">✓ Langkah ini opsional — bisa dilewati dan disusun nanti setelah wizard selesai.</p>
         <button type="button" class="btn btn-primary" id="wz-open-schedule" style="margin-bottom:16px;padding:10px 20px;font-size:14px">Susun Jadwal Visual</button>
 
         <hr style="margin:16px 0;border-color:var(--color-border)">
@@ -1312,7 +1313,7 @@ const STEP_LIST = {
         title: 'Jadwal terdaftar',
         headers: ['Tanggal', 'Waktu', 'Kelas', 'Guru'],
         deleteTable: 'teaching_schedules',
-        emptyHint: 'Klik "Susun Jadwal Visual" di atas untuk menyusun jadwal.',
+        emptyHint: 'Jadwal belum perlu diisi sekarang. Setelah wizard selesai, susun jadwal via menu Jadwal Pelajaran di dashboard, atau impor file CSV di atas.',
         fetch: async () => {
             const data = await fetchAllRows('teaching_schedules',
                 q => q.select(`
