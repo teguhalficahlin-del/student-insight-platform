@@ -7,7 +7,7 @@
  * mencegah terulangnya kelas bug audit 3 Juli 2026
  * (RPC SECURITY DEFINER ber-GRANT PUBLIC bocor ke anon).
  *
- * Menjalankan 4 pemeriksaan terhadap DB LIVE:
+ * Menjalankan 6 pemeriksaan terhadap DB LIVE:
  *   1. RLS coverage      — SEMUA tabel public wajib RLS enabled.
  *   2. RPC exposure      — TIDAK boleh ada fungsi SECURITY DEFINER `fn_*`
  *                          VOLATILE (menulis, non-trigger) yang EXECUTE-nya
@@ -21,6 +21,9 @@
  *                          Simulasi konteks RLS pengguna nyata via SET ROLE
  *                          authenticated + request.jwt.claims (cara auth.uid()
  *                          dievaluasi) — tanpa membuat user/login palsu.
+ *   6. View exposure     — SEMUA view public wajib security_invoker=true
+ *                          (menegakkan RLS penanya) DAN anon tak boleh membaca
+ *                          barisnya. Menutup SEC-1 (view bypass RLS ke anon).
  *
  * CARA JALANKAN:
  *   SUPABASE_ACCESS_TOKEN=sbp_xxx node tests/tenant-isolation.mjs
@@ -45,6 +48,10 @@ const ANON_RPC_ALLOWLIST = new Set([
 
 // Tabel inti yang anon TIDAK boleh baca satu baris pun.
 const CORE_TABLES = ['students', 'users', 'cases', 'observations', 'attendance'];
+
+// View public yang MEMANG sengaja anon-readable pra-login (kosongkan bila tak ada).
+// Semua view lain WAJIB security_invoker=true agar RLS ditegakkan (SEC-1).
+const VIEW_ANON_ALLOWLIST = new Set([]);
 
 // RPC privileged yang pernah bocor — regresi test: anon HARUS tak punya EXECUTE.
 const PRIVILEGED_RPCS = [
@@ -218,6 +225,31 @@ async function main() {
             if (r.resolved === viewer.school_id) log.pass(`fn_current_school_id() = ${viewer.name} (benar)`);
             else log.fail(`fn_current_school_id() salah: ${r.resolved} ≠ ${viewer.school_id}`);
         }
+    }
+
+    // ── CHECK 6: View publik bypass RLS ke anon (SEC-1) ──────────
+    // Root cause SEC-1: view public tanpa security_invoker berjalan sebagai
+    // owner (postgres) → MELEWATI RLS; anon punya SELECT → baca lintas-tenant.
+    // Invarian: SEMUA view public wajib security_invoker=true (struktural),
+    // dan anon harus dapat [] dari tiap view (bukti perilaku).
+    log.head('CHECK 6 — semua view public security_invoker & tak terbaca anon (SEC-1)');
+    const views = await mgmtQuery(`
+        select c.relname,
+               ('security_invoker=true' = ANY(c.reloptions)) as si_on
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'v'
+        order by c.relname;`);
+    for (const v of views) {
+        if (VIEW_ANON_ALLOWLIST.has(v.relname)) { log.pass(`${v.relname}: di allowlist anon (dilewati)`); continue; }
+        // (a) struktural: security_invoker wajib menyala
+        if (v.si_on === true) log.pass(`${v.relname}: security_invoker=true`);
+        else log.fail(`${v.relname}: security_invoker TIDAK menyala — view bypass RLS (ALTER VIEW ... SET (security_invoker=true))`);
+        // (b) perilaku: anon tak boleh dapat baris
+        const { status, body } = await anonGet(anon, `${v.relname}?select=*&limit=1`);
+        if (Array.isArray(body) && body.length === 0) log.pass(`${v.relname}: anon dapat [] (RLS ditegakkan)`);
+        else if (!Array.isArray(body)) log.pass(`${v.relname}: anon ditolak (status ${status})`);
+        else log.fail(`${v.relname}: anon BOCOR ${body.length} baris (status ${status})`);
     }
 
     // ── Ringkasan ────────────────────────────────────────────────

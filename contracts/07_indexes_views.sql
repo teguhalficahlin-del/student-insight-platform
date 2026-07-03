@@ -64,7 +64,12 @@ CREATE INDEX idx_journals_owner_date
 -- RLS applies to the underlying tables — this view inherits it.
 -- ============================================================
 
-CREATE OR REPLACE VIEW v_attendance_daily_summary AS
+-- CATATAN KEAMANAN (SEC-1, mig 20260703230000): SEMUA view di bawah WAJIB
+-- `WITH (security_invoker = true)` agar menegakkan RLS PENANYA. Tanpa itu view
+-- berjalan sebagai owner (postgres) → bypass RLS → anon/lintas-tenant bocor.
+-- Dijaga oleh tests/tenant-isolation.mjs CHECK 6.
+CREATE OR REPLACE VIEW v_attendance_daily_summary
+    WITH (security_invoker = true) AS
 SELECT
     ts.schedule_id,
     ts.session_date,
@@ -84,8 +89,6 @@ SELECT
         FILTER (WHERE a.status = 'IZIN'    AND a.is_void = FALSE) AS izin,
     COUNT(a.attendance_id)
         FILTER (WHERE a.status = 'SAKIT'   AND a.is_void = FALSE) AS sakit,
-    COUNT(a.attendance_id)
-        FILTER (WHERE a.status = 'EKSKUL'  AND a.is_void = FALSE) AS ekskul,
     ROUND(
         COUNT(a.attendance_id) FILTER (WHERE a.status = 'HADIR' AND a.is_void = FALSE)::NUMERIC
         / NULLIF(COUNT(a.attendance_id) FILTER (WHERE a.is_void = FALSE), 0) * 100,
@@ -113,7 +116,8 @@ COMMENT ON VIEW v_attendance_daily_summary IS
 --   - Teachers with TIDAK_HADIR indicator (no substitute)
 -- ============================================================
 
-CREATE OR REPLACE VIEW v_kepsek_exception_dashboard AS
+CREATE OR REPLACE VIEW v_kepsek_exception_dashboard
+    WITH (security_invoker = true) AS
 
 -- Exception 1: Low attendance classes (today)
 SELECT
@@ -173,7 +177,8 @@ COMMENT ON VIEW v_kepsek_exception_dashboard IS
 -- Only STUDENT_VISIBLE POSITIF observations.
 -- ============================================================
 
-CREATE OR REPLACE VIEW v_student_portal_positif AS
+CREATE OR REPLACE VIEW v_student_portal_positif
+    WITH (security_invoker = true) AS
 SELECT
     o.observation_id,
     o.student_id,
@@ -198,7 +203,8 @@ COMMENT ON VIEW v_student_portal_positif IS
 -- Powers "Prestasi & Penghargaan" section of student portal.
 -- ============================================================
 
-CREATE OR REPLACE VIEW v_student_portal_achievements AS
+CREATE OR REPLACE VIEW v_student_portal_achievements
+    WITH (security_invoker = true) AS
 SELECT
     a.achievement_id,
     a.student_id,
@@ -225,7 +231,8 @@ COMMENT ON VIEW v_student_portal_achievements IS
 -- or add WHERE privacy_level != 'PRIVATE' for non-KEPSEK roles.
 -- ============================================================
 
-CREATE OR REPLACE VIEW v_case_timeline AS
+CREATE OR REPLACE VIEW v_case_timeline
+    WITH (security_invoker = true) AS
 SELECT
     ce.event_id,
     ce.case_id,
@@ -263,7 +270,8 @@ COMMENT ON VIEW v_case_timeline IS
 -- Returns rows per schedule with nested JSON for students.
 -- ============================================================
 
-CREATE OR REPLACE VIEW v_offline_sync_manifest_guru AS
+CREATE OR REPLACE VIEW v_offline_sync_manifest_guru
+    WITH (security_invoker = true) AS
 SELECT
     ts.schedule_id,
     ts.session_date,
@@ -318,7 +326,8 @@ COMMENT ON VIEW v_offline_sync_manifest_guru IS
 -- for the current user with a non-expired token.
 -- ============================================================
 
-CREATE OR REPLACE VIEW v_offline_sync_manifest_substitute AS
+CREATE OR REPLACE VIEW v_offline_sync_manifest_substitute
+    WITH (security_invoker = true) AS
 SELECT
     ts.schedule_id,
     ts.session_date,
