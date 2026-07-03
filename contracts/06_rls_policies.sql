@@ -471,32 +471,34 @@ CREATE POLICY rls_case_events_read_student ON case_events
         )
     );
 
--- INSERT: general staff can insert if they are the current handler
+-- CATATAN: Disinkronkan ke kondisi LIVE (mig 330000/340000 + 20260703240000).
+-- Perbedaan dari versi awal: (a) row di-scope school_id = fn_current_school_id();
+-- (b) handler-match kini FLAG-AWARE via fn_matches_case_handler (GURU dgn is_bk,
+-- wali/kaprodi student-spesifik, dst.); (c) authorship diverifikasi
+-- (author_user_id & author_role_at_time = user login) di KEDUA policy (E3-2).
+-- INV-1 (no event on CLOSED) dijaga trigger trg_case_events_no_closed.
+
+-- INSERT: staf dapat insert bila mereka handler kasus saat ini (flag-aware)
 CREATE POLICY rls_case_events_insert_handler ON case_events
     FOR INSERT WITH CHECK (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'DUDI')
-        AND author_user_id = fn_current_user_id()
-        -- Must be current handler for this case
-        AND EXISTS (
-            SELECT 1 FROM cases c
-            WHERE c.case_id              = case_events.case_id
-              AND c.current_handler_role = fn_current_user_role()
-              AND c.status              != 'CLOSED'
-        )
-        -- FINAL_DECISION_MADE is Kepsek-only; block it here
-        AND event_type != 'FINAL_DECISION_MADE'
-    );
-
--- INSERT: KEPSEK — any event type, including FINAL_DECISION_MADE
-CREATE POLICY rls_case_events_insert_kepsek ON case_events
-    FOR INSERT WITH CHECK (
-        fn_current_user_role() = 'KEPSEK'
-        AND author_user_id = fn_current_user_id()
+        school_id = fn_current_school_id()
+        AND author_user_id      = fn_current_user_id()
+        AND author_role_at_time = fn_current_user_role()
         AND EXISTS (
             SELECT 1 FROM cases c
             WHERE c.case_id = case_events.case_id
-              AND c.status != 'CLOSED'
+              AND fn_matches_case_handler(c.current_handler_role, c.student_id)
+              AND c.status <> 'CLOSED'
         )
+    );
+
+-- INSERT: KEPSEK — semua event type (termasuk FINAL_DECISION_MADE)
+CREATE POLICY rls_case_events_insert_kepsek ON case_events
+    FOR INSERT WITH CHECK (
+        school_id = fn_current_school_id()
+        AND fn_is_kepsek()
+        AND author_user_id      = fn_current_user_id()
+        AND author_role_at_time = fn_current_user_role()
     );
 
 
