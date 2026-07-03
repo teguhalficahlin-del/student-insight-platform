@@ -26,7 +26,10 @@ CREATE TYPE role_type AS ENUM (
     'DUDI',
     'SISWA',
     'ORTU',
-    'ADMINISTRATIVE'
+    'ADMINISTRATIVE',
+    'STAKEHOLDER',
+    'WAKA_KURIKULUM',
+    'WAKA_KESISWAAN'
 );
 
 
@@ -122,6 +125,22 @@ CREATE TYPE visibility_level AS ENUM (
     'PRIVATE',
     'INTERNAL_SCHOOL',
     'STUDENT_VISIBLE'
+);
+
+
+-- ------------------------------------------------------------
+-- ENUM: case_audience
+-- Audiens per-KASUS (ala-Facebook), diatur pembuat/penangan.
+-- Beda sumbu dari visibility_level (yg per-EVENT: internal vs siswa).
+--   PRIVATE    — hanya yang terlibat/penangan (default; kasus lahir privat)
+--   RESTRICTED — + penonton pilihan di case_audience_members ("orang tertentu")
+--   PUBLIC     — semua aktor internal kasus (6 peran)
+-- DUDI selalu PRIVATE (tak boleh publikasi).
+-- ------------------------------------------------------------
+CREATE TYPE case_audience AS ENUM (
+    'PRIVATE',
+    'RESTRICTED',
+    'PUBLIC'
 );
 
 

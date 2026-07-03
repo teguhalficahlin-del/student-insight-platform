@@ -7,7 +7,7 @@
  * mencegah terulangnya kelas bug audit 3 Juli 2026
  * (RPC SECURITY DEFINER ber-GRANT PUBLIC bocor ke anon).
  *
- * Menjalankan 6 pemeriksaan terhadap DB LIVE:
+ * Menjalankan 7 pemeriksaan terhadap DB LIVE:
  *   1. RLS coverage      — SEMUA tabel public wajib RLS enabled.
  *   2. RPC exposure      — TIDAK boleh ada fungsi SECURITY DEFINER `fn_*`
  *                          VOLATILE (menulis, non-trigger) yang EXECUTE-nya
@@ -24,6 +24,10 @@
  *   6. View exposure     — SEMUA view public wajib security_invoker=true
  *                          (menegakkan RLS penanya) DAN anon tak boleh membaca
  *                          barisnya. Menutup SEC-1 (view bypass RLS ke anon).
+ *   7. Kunci eskalasi    — target DECISION_ESCALATE wajib salah satu 6 peran
+ *                          internal kasus (tolak SISWA/ORTU/STAKEHOLDER/dst),
+ *                          dan DUDI hanya boleh eskalasi ke KAPRODI (E3-1 /
+ *                          desain kasus Langkah A).
  *
  * CARA JALANKAN:
  *   SUPABASE_ACCESS_TOKEN=sbp_xxx node tests/tenant-isolation.mjs
@@ -250,6 +254,57 @@ async function main() {
         if (Array.isArray(body) && body.length === 0) log.pass(`${v.relname}: anon dapat [] (RLS ditegakkan)`);
         else if (!Array.isArray(body)) log.pass(`${v.relname}: anon ditolak (status ${status})`);
         else log.fail(`${v.relname}: anon BOCOR ${body.length} baris (status ${status})`);
+    }
+
+    // ── CHECK 7: Kunci eskalasi kasus (E3-1 / Langkah A) ─────────
+    // Bukti PERILAKU trigger trg_case_validate_escalate: target eskalasi
+    // wajib salah satu 6 peran internal kasus; DUDI hanya boleh → KAPRODI.
+    // Uji via INSERT DECISION_ESCALATE dalam transaksi yang di-ROLLBACK
+    // (as postgres → RLS dilewati, jadi yang teruji murni triggernya).
+    log.head('CHECK 7 — kunci eskalasi: target internal-only & DUDI→Kaprodi');
+    const c7 = await mgmtQuery(
+        `select case_id::text, school_id::text, created_by_user_id::text
+           from cases where status <> 'CLOSED' limit 1;`);
+    if (c7.length === 0) {
+        log.pass('SKIP — tak ada kasus non-closed untuk uji perilaku (tidak menggagalkan)');
+    } else {
+        const { case_id, school_id, created_by_user_id } = c7[0];
+        // previous='WALI_KELAS' → tak pernah sama dgn target yg diuji (hindari
+        // chk_escalate_handler_differs jadi noise di jalur positif).
+        const esc = async (authorRole, target) => {
+            const sql = `begin;`
+                + ` insert into case_events (case_id, event_type, author_user_id, author_role_at_time,`
+                + ` school_id, previous_handler_role, new_handler_role)`
+                + ` values ('${case_id}','DECISION_ESCALATE','${created_by_user_id}','${authorRole}',`
+                + ` '${school_id}','WALI_KELAS','${target}');`
+                + ` rollback;`;
+            try { await mgmtQuery(sql); return null; }
+            catch (e) { return e.message; }
+        };
+        // Ditolak HANYA jika oleh kunci kita (bukan constraint lain).
+        const blockedBy = (msg, marker) => !!msg && msg.includes(marker);
+        const notOurBlock = (msg) => !msg
+            || (!msg.includes('escalate_target_invalid') && !msg.includes('escalate_dudi_only_kaprodi'));
+        // 7a: target eksternal (SISWA) → HARUS ditolak
+        const e7a = await esc('GURU', 'SISWA');
+        if (blockedBy(e7a, 'escalate_target_invalid'))
+            log.pass('eskalasi ke SISWA ditolak (escalate_target_invalid)');
+        else log.fail(`eskalasi ke SISWA TIDAK ditolak: ${e7a}`);
+        // 7b: DUDI → KEPSEK (bukan Kaprodi) → HARUS ditolak
+        const e7b = await esc('DUDI', 'KEPSEK');
+        if (blockedBy(e7b, 'escalate_dudi_only_kaprodi'))
+            log.pass('DUDI→KEPSEK ditolak (escalate_dudi_only_kaprodi)');
+        else log.fail(`DUDI→KEPSEK TIDAK ditolak: ${e7b}`);
+        // 7c: target internal sah (WAKA_KESISWAAN) → TIDAK ditolak oleh kunci ini
+        const e7c = await esc('GURU', 'WAKA_KESISWAAN');
+        if (notOurBlock(e7c))
+            log.pass('eskalasi ke WAKA_KESISWAAN lolos kunci target (valid internal)');
+        else log.fail(`eskalasi ke WAKA_KESISWAAN salah ditolak: ${e7c}`);
+        // 7d: DUDI → KAPRODI → TIDAK ditolak oleh kunci DUDI
+        const e7d = await esc('DUDI', 'KAPRODI');
+        if (notOurBlock(e7d))
+            log.pass('DUDI→KAPRODI lolos kunci (sesuai aturan)');
+        else log.fail(`DUDI→KAPRODI salah ditolak: ${e7d}`);
     }
 
     // ── Ringkasan ────────────────────────────────────────────────

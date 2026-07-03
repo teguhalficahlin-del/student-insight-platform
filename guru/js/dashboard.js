@@ -1262,9 +1262,12 @@ const ROLE_LABEL = {
     KAPRODI: 'Ka. Prodi', KEPSEK: 'Kepala Sekolah',
     DUDI: 'DUDI', WAKA_KESISWAAN: 'Waka Kesiswaan', WAKA_KURIKULUM: 'Waka Kurikulum',
 };
+// Rantai = PENUNTUN saja (referensi untuk peringatan), BUKAN batasan.
+// Eskalasi antar-internal bebas; server hanya mengunci: target wajib peran
+// internal kasus, & DUDI hanya → KAPRODI (mig 20260703250000).
 const ESCALATION_CHAIN = {
-    SEKOLAH: ['GURU','BK','WALI_KELAS','KAPRODI','KEPSEK'],
-    PKL:     ['DUDI','KAPRODI','KEPSEK'],
+    SEKOLAH: ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK'],
+    PKL:     ['DUDI','KAPRODI','WAKA_KESISWAAN','KEPSEK'],
 };
 const STATUS_AFTER_CURRENT = {
     OPEN:         ['UNDER_REVIEW','INTERVENTION','MONITORING'],

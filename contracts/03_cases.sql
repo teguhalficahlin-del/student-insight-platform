@@ -55,6 +55,11 @@ CREATE TABLE cases (
     title                   VARCHAR(200) NOT NULL,
     description             TEXT         NOT NULL CHECK (length(description) >= 20),
 
+    -- Audiens per-kasus (ala-FB), diatur pembuat/penangan (mig 20260703250000).
+    -- PRIVATE (default; lahir privat) / RESTRICTED (case_audience_members) /
+    -- PUBLIC (semua aktor internal kasus). DUDI selalu PRIVATE.
+    audience                case_audience NOT NULL DEFAULT 'PRIVATE',
+
     -- Closed metadata (populated by DECISION_CLOSE or FINAL_DECISION_MADE)
     closed_at               TIMESTAMPTZ,
     closed_by_user_id       UUID         REFERENCES users(user_id) ON DELETE RESTRICT,
@@ -167,3 +172,21 @@ COMMENT ON TABLE case_events IS
     'INV-2: chk_escalate_handler_differs enforces handler change on DECISION_ESCALATE. '
     'STUDENT_UPDATE_ADDED is always STUDENT_VISIBLE (constraint). '
     'payload is JSONB — schema validated at application layer.';
+
+
+-- ------------------------------------------------------------
+-- TABLE: case_audience_members  (mig 20260703250000)
+-- Penonton pilihan untuk kasus beraudiens RESTRICTED ("orang tertentu").
+-- Hanya aktor internal kasus yang boleh jadi anggota
+-- (dijaga RLS via fn_user_is_internal_case_actor).
+-- ------------------------------------------------------------
+CREATE TABLE case_audience_members (
+    case_id          UUID        NOT NULL REFERENCES cases(case_id) ON DELETE CASCADE,
+    user_id          UUID        NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    school_id        UUID        NOT NULL,
+    added_by_user_id UUID        REFERENCES users(user_id) ON DELETE SET NULL,
+    added_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (case_id, user_id)
+);
+CREATE INDEX idx_case_audience_user ON case_audience_members(user_id);
+CREATE INDEX idx_case_audience_case ON case_audience_members(case_id);

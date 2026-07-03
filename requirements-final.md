@@ -328,20 +328,29 @@ Sumber kebenaran tetap tunggal.
 
 ## 8. Alur Eskalasi
 
-### Dua jalur terpisah
+### Dua jalur terpisah (rantai = PENUNTUN, bukan gembok)
 
 ```
 Jalur sekolah:
-GURU → BK → WALI → KAPRODI → KEPSEK
+GURU → BK → WALI_KELAS → KAPRODI → WAKA_KESISWAAN → KEPSEK
 
 Jalur PKL:
-DUDI → KAPRODI → KEPSEK
+DUDI → KAPRODI → WAKA_KESISWAAN → KEPSEK
 ```
 
-### Aturan eskalasi
+### Aturan eskalasi (desain Langkah A — mig 20260703250000)
 
-- Setiap level memilih: ubah status, Close, atau Escalate ke level berikutnya
-- Saat kasus naik, level penerima mendapat notifikasi
+- Eskalasi antar-aktor-internal **BEBAS** (arah mana pun, boleh lompat) — rantai
+  di atas hanya penuntun untuk *peringatan* di UI, bukan batasan server.
+- Kunci KERAS server: (a) target eskalasi wajib salah satu 6 peran internal
+  kasus (GURU, BK, WALI_KELAS, KAPRODI, WAKA_KESISWAAN, KEPSEK) — tolak
+  SISWA/ORTU/STAKEHOLDER/DUDI/WAKA_KURIKULUM/TU; (b) **DUDI hanya boleh
+  eskalasi ke KAPRODI**.
+- Audiens kasus (ala-FB) diatur pembuat: PRIVATE (default) / RESTRICTED
+  (orang tertentu) / PUBLIC (semua internal). Notifikasi: japri eskalasi ke
+  yang dituju (selalu); siaran hanya kasus publik; privat = senyap.
+- Setiap aktor internal boleh: buat, tutup, eskalasi, atur audiens.
+- Setiap level memilih: ubah status, Close, atau Escalate
 - Semua event dari level bawah tetap bisa dilihat oleh level yang lebih tinggi
 - Decision hanya bisa dibuat oleh current_level aktif
 - Comment bisa ditambahkan oleh siapa pun yang memiliki akses lihat kasus
