@@ -363,6 +363,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
             existingSet = new Set((existing as string[] | null) ?? []);
         }
 
+        // ── 9a. Deteksi identifier yang sedang di Recycle Bin (soft-deleted) ──
+        // Re-impor / tambah-ulang identifier yang masih ada di DB tapi terhapus
+        // sementara HARUS memulihkannya (undelete + unban Auth), bukan sekadar
+        // update senyap yang meninggalkannya tetap tersembunyi. Peta ini dipakai
+        // di step 10 untuk membangkitkan baris + membatalkan ban akun Auth.
+        const revivedAuthByIdentifier = new Map<string, string | null>();
+        if (existingSet.size > 0) {
+            const { data: softDeleted, error: sdErr } = await admin
+                .from('users')
+                .select('login_identifier, auth_user_id')
+                .eq('school_id', user.school_id)
+                .in('login_identifier', [...existingSet])
+                .not('deleted_at', 'is', null);
+            if (sdErr) {
+                console.error('[bulk-import-users] soft-deleted lookup failed:', sdErr);
+                return internalError(sdErr);
+            }
+            for (const r of (softDeleted ?? []) as { login_identifier: string; auth_user_id: string | null }[]) {
+                revivedAuthByIdentifier.set(r.login_identifier, r.auth_user_id);
+            }
+        }
+
         // ── 9b. Resolve teacher_code untuk baris GURU ───────────
         const usedTeacherCodes = new Set<string>();
         for (const row of validRows) {
@@ -425,6 +447,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 updatePatch.is_waka_kurikulum = row.is_waka_kurikulum ?? false;
                 updatePatch.is_waka_kesiswaan = row.is_waka_kesiswaan ?? false;
 
+                // Bangkitkan baris yang ada di Recycle Bin: undelete + reaktifkan.
+                // Tanpa ini, re-impor/tambah-ulang hanya meng-update baris terhapus
+                // secara senyap dan datanya tetap tak muncul (bug yang membingungkan).
+                // Hanya berlaku untuk baris SOFT-DELETED — yang sekadar dinonaktifkan
+                // sengaja (is_active=false tanpa deleted_at) tidak disentuh.
+                const isRevived = revivedAuthByIdentifier.has(row.nip_atau_nik);
+                if (isRevived) {
+                    updatePatch.deleted_at = null;
+                    updatePatch.is_active  = true;
+                }
+
                 const { error: updateErr } = await admin
                     .from('users')
                     .update(updatePatch)
@@ -437,6 +470,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
                         message: `Gagal memperbarui data pengguna: ${updateErr.message}`,
                     });
                     continue;
+                }
+
+                // Un-ban akun Auth yang di-ban saat soft-delete, agar bisa login lagi.
+                if (isRevived) {
+                    const authId = revivedAuthByIdentifier.get(row.nip_atau_nik);
+                    if (authId) {
+                        const { error: unbanErr } = await admin.auth.admin
+                            .updateUserById(authId, { ban_duration: 'none' });
+                        if (unbanErr && !unbanErr.message?.includes('not found') && !unbanErr.message?.includes('User not found')) {
+                            // Baris DB sudah dipulihkan; kegagalan unban tidak fatal
+                            // (admin bisa reset dari Recycle Bin). Catat saja.
+                            console.error(`[bulk-import-users] unban saat revive gagal untuk ${row.nip_atau_nik}:`, unbanErr);
+                        }
+                    }
                 }
                 updated++;
                 continue;
