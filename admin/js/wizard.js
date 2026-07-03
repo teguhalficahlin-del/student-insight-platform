@@ -183,33 +183,74 @@ async function renderStep1() {
 }
 
 async function renderStep2() {
-    // Pre-fill: ambil periode aktif dari school_config + academic_periods
     let config = null;
     try { config = await getSchoolConfig(); } catch { /* abaikan */ }
 
-    let period = null;
-    if (config?.current_academic_year && config?.current_semester) {
+    // Cek apakah sudah ada academic_periods (sekolah sudah beroperasi)
+    let existingPeriods = [];
+    if (config) {
         const { data } = await supabase
             .from('academic_periods')
-            .select('academic_year, semester, start_date, end_date')
-            .eq('academic_year', config.current_academic_year)
-            .eq('semester', config.current_semester)
-            .maybeSingle();
-        period = data;
+            .select('academic_year, semester, start_date, end_date, status')
+            .order('academic_year', { ascending: false })
+            .order('semester',      { ascending: false })
+            .limit(4);
+        existingPeriods = data ?? [];
     }
 
+    const isOperational = existingPeriods.length > 0;
+
+    if (isOperational) {
+        // Sekolah sudah beroperasi — tampil info saja, tidak bisa diedit.
+        // Tahun ajaran hanya berubah melalui Tutup Semester → Tutup Tahun.
+        const active = existingPeriods.find(p => p.status === 'ACTIVE') ?? existingPeriods[0];
+        const semLabel = active.semester === '1' ? 'Ganjil' : 'Genap';
+        const rows = existingPeriods.map(p => `
+            <tr>
+                <td>${p.academic_year}</td>
+                <td>Semester ${p.semester} (${p.semester === '1' ? 'Ganjil' : 'Genap'})</td>
+                <td>${p.start_date} – ${p.end_date}</td>
+                <td><span class="badge ${p.status === 'ACTIVE' ? 'badge-success' : 'badge-muted'}">${p.status === 'ACTIVE' ? 'Aktif' : 'Ditutup'}</span></td>
+            </tr>`).join('');
+
+        contentEl.innerHTML = `
+            <div class="step-label">Langkah 2 dari ${TOTAL_STEPS}</div>
+            <h3>Tahun Ajaran</h3>
+            <div class="alert" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:8px;padding:14px 16px;margin-bottom:20px">
+                <strong>Periode akademik dikelola otomatis.</strong><br>
+                Tahun ajaran berubah melalui <strong>Tutup Semester</strong> dan
+                <strong>Tutup Tahun Ajaran</strong> di dashboard — bukan di sini.
+            </div>
+            <p class="hint">Periode yang tercatat untuk sekolah ini:</p>
+            <table class="table">
+                <thead><tr><th>Tahun Ajaran</th><th>Semester</th><th>Periode</th><th>Status</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+            <p style="margin-top:16px">
+                Periode aktif saat ini: <strong>${active.academic_year} — Semester ${active.semester} (${semLabel})</strong>
+            </p>
+        `;
+
+        // Simpan ke state agar saveStep2 tetap bisa jalan tanpa error
+        state.data.academicYear = active.academic_year;
+        state.data.semester     = active.semester;
+        state.data.startDate    = active.start_date;
+        state.data.endDate      = active.end_date;
+        nextBtn.disabled = false;
+        return;
+    }
+
+    // Belum ada periode — setup pertama kali, tampil form
     const academicYear = state.data.academicYear || config?.current_academic_year || '';
     const semester     = state.data.semester     || config?.current_semester      || '1';
 
-    // Generate pilihan tahun ajaran: 2 tahun lalu s/d 3 tahun ke depan
     const thisYear = new Date().getFullYear();
     const yearOptions = [];
-    for (let y = thisYear - 2; y <= thisYear + 3; y++) {
+    for (let y = thisYear - 1; y <= thisYear + 2; y++) {
         const val = `${y}/${y + 1}`;
         yearOptions.push(`<option value="${val}" ${val === academicYear ? 'selected' : ''}>${val}</option>`);
     }
 
-    // Fungsi bantu: hitung tanggal default dari tahun ajaran + semester
     function defaultDates(ay, sem) {
         if (!ay) return { start: '', end: '' };
         const [startY, endY] = ay.split('/').map(Number);
@@ -217,7 +258,6 @@ async function renderStep2() {
         return { start: `${endY}-01-01`, end: `${endY}-06-30` };
     }
 
-    // Prioritas tanggal: state.data (diisi manual user) → default dari tahun+semester
     const def = defaultDates(academicYear, semester);
     const startDate = state.data.startDate || def.start;
     const endDate   = state.data.endDate   || def.end;
@@ -248,14 +288,12 @@ async function renderStep2() {
         </div>
     `;
 
-    // Auto-update tanggal saat tahun ajaran atau semester berubah
     function updateDates() {
         const ay  = document.getElementById('wz-academic-year').value;
         const sem = document.querySelector('input[name="wz-semester"]:checked')?.value || '1';
         const d   = defaultDates(ay, sem);
         document.getElementById('wz-start-date').value = d.start;
         document.getElementById('wz-end-date').value   = d.end;
-        // Reset state.data tanggal agar tidak mengunci ke nilai lama
         state.data.startDate = '';
         state.data.endDate   = '';
     }
