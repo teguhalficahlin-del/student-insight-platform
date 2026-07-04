@@ -297,10 +297,13 @@ CREATE POLICY rls_attendance_read_parent ON attendance
 --   DUDI: blocked entirely.
 -- ============================================================
 
-CREATE POLICY rls_observations_write ON observations
+-- Pagar ketat PKL: guru tidak boleh observasi siswa yang sedang aktif PKL.
+-- Siswa PKL aktif hanya bisa diobservasi via jalur DUDI → PKL track.
+CREATE POLICY rls_observations_write_guru ON observations
     FOR INSERT WITH CHECK (
-        fn_current_user_role() IN ('GURU', 'WALI_KELAS', 'BK', 'KAPRODI', 'KEPSEK')
+        fn_current_user_role() IN ('GURU', 'WALI_KELAS', 'BK', 'KAPRODI')
         AND author_user_id = fn_current_user_id()
+        AND NOT fn_student_is_on_pkl(student_id)
     );
 
 CREATE POLICY rls_observations_read_staff ON observations
@@ -435,13 +438,21 @@ CREATE POLICY rls_cases_read_student ON cases
         )
     );
 
--- Semua 6 aktor internal + DUDI boleh buat kasus (mig 20260703250000).
--- DUDI: hanya siswa binaannya, audiens wajib PRIVATE (tak boleh publikasi).
+-- Semua 7 aktor internal + DUDI boleh buat kasus.
+-- DUDI: hanya siswa binaannya, audiens wajib PRIVATE.
+-- Pagar ketat PKL: aktor sekolah tidak boleh buat kasus untuk siswa aktif PKL
+-- (hanya DUDI yang boleh — kasus PKL masuk track PKL via DUDI).
 CREATE POLICY rls_cases_insert ON cases
     FOR INSERT WITH CHECK (
         (
-            fn_current_user_role() IN ('GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK')
-            OR (fn_current_user_role() = 'DUDI' AND fn_dudi_supervises_student(student_id))
+            fn_current_user_role() = 'DUDI'
+            OR (
+                fn_current_user_role() IN ('GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','WAKA_HUMAS','KEPSEK')
+                AND NOT fn_student_is_on_pkl(student_id)
+            )
+            OR (fn_is_bk()             AND NOT fn_student_is_on_pkl(student_id))
+            OR (fn_is_kepsek()         AND NOT fn_student_is_on_pkl(student_id))
+            OR (fn_is_waka_kesiswaan() AND NOT fn_student_is_on_pkl(student_id))
         )
         AND created_by_user_id = fn_current_user_id()
         AND (fn_current_user_role() <> 'DUDI' OR audience = 'PRIVATE')
@@ -645,9 +656,11 @@ CREATE POLICY rls_teacher_att_log_read_own ON teacher_attendance_log
 -- Write: KAPRODI, KEPSEK.
 -- ============================================================
 
+-- WAKA_HUMAS: akses detail PKL/DUDI lintas program (setara Kepsek di domain PKL).
+-- WAKA_KESISWAAN: tidak punya akses PKL (pagar ketat — PKL hanya domain DUDI/Kaprodi/Waka Humas/Kepsek).
 CREATE POLICY rls_pkl_read_staff ON pkl_placements
     FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK')
+        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK', 'WAKA_HUMAS')
     );
 
 CREATE POLICY rls_pkl_read_dudi ON pkl_placements
@@ -657,7 +670,7 @@ CREATE POLICY rls_pkl_read_dudi ON pkl_placements
     );
 
 CREATE POLICY rls_pkl_write_admin ON pkl_placements
-    FOR ALL USING (fn_current_user_role() IN ('KAPRODI', 'KEPSEK'));
+    FOR ALL USING (fn_current_user_role() IN ('KAPRODI', 'KEPSEK', 'WAKA_HUMAS'));
 
 CREATE POLICY rls_enrollments_read_staff ON class_enrollments
     FOR SELECT USING (
