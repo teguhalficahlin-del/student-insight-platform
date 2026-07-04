@@ -271,6 +271,33 @@ export async function closeDudiCase({ caseId, note, authorUserId, authorRole }) 
     if (error) throw error;
 }
 
+// ─── NOTIFIKASI ──────────────────────────────────────────────
+export async function getUnreadNotifCount() {
+    const { data, error } = await supabase.rpc('fn_count_unread_notifications');
+    if (error) throw error;
+    return Number(data ?? 0);
+}
+
+export async function getRecentNotifications(limit = 20) {
+    const { data, error } = await supabase
+        .from('notifications')
+        .select('notification_id, type, title, body, is_read, case_id, created_at')
+        .eq('is_read', false)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function markNotificationsRead(ids) {
+    if (!ids?.length) return;
+    const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .in('notification_id', ids);
+    if (error) throw error;
+}
+
 // ─── OBSERVASI ───────────────────────────────────────────────
 export async function saveObservation({ studentId, sentiment, dimension, content, userId }) {
     const visibility = sentiment === 'POSITIF' ? 'STUDENT_VISIBLE' : 'INTERNAL_SCHOOL';

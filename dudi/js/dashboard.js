@@ -24,6 +24,9 @@ import {
     addDudiCaseComment,
     escalateDudiCase,
     closeDudiCase,
+    getUnreadNotifCount,
+    getRecentNotifications,
+    markNotificationsRead,
 } from './api.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
@@ -91,6 +94,95 @@ const STATUS_LABELS = {
     TIDAK_HADIR: 'Tidak Hadir',
 };
 
+// ── Notifikasi lonceng ────────────────────────────────────────
+let _notifPollTimer = null;
+
+function _setBellBadge(n) {
+    const btn = document.getElementById('notif-bell-btn');
+    if (!btn) return;
+    let badge = btn.querySelector('.notif-badge');
+    if (n > 0) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'notif-badge';
+            badge.style.cssText = 'position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;text-align:center;padding:0 3px;pointer-events:none';
+            btn.style.position = 'relative';
+            btn.appendChild(badge);
+        }
+        badge.textContent = n > 99 ? '99+' : String(n);
+    } else {
+        badge?.remove();
+    }
+}
+
+async function refreshNotifBadge() {
+    try { _setBellBadge(await getUnreadNotifCount()); } catch { /* tidak kritis */ }
+}
+
+function startNotifPolling() {
+    clearInterval(_notifPollTimer);
+    _notifPollTimer = setInterval(refreshNotifBadge, 60_000);
+}
+
+async function openNotifDropdown() {
+    const panel = document.getElementById('notif-dropdown');
+    if (!panel) return;
+    if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+
+    panel.style.display = 'block';
+    panel.innerHTML = '<p style="padding:12px;font-size:13px;color:#6b7280">Memuat…</p>';
+    try {
+        const notifs = await getRecentNotifications(15);
+        if (!notifs.length) {
+            panel.innerHTML = '<p style="padding:12px;font-size:13px;color:#6b7280">Tidak ada notifikasi baru.</p>';
+            return;
+        }
+        const fmt = s => s ? new Date(s).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+        const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        panel.innerHTML = notifs.map(n => `
+            <div class="notif-item" data-id="${n.notification_id}" data-case="${n.case_id ?? ''}"
+                 style="padding:10px 14px;border-bottom:1px solid #e5e7eb;cursor:pointer;font-size:13px">
+                <div style="font-weight:600;margin-bottom:2px">${esc(n.title)}</div>
+                <div style="color:#6b7280;font-size:12px">${esc(n.body)}</div>
+                <div style="color:#9ca3af;font-size:11px;margin-top:3px">${fmt(n.created_at)}</div>
+            </div>`).join('') +
+            `<div style="padding:8px 14px;text-align:center">
+                <button id="notif-mark-all-btn" style="font-size:12px;padding:4px 10px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer">Tandai semua dibaca</button>
+            </div>`;
+
+        panel.querySelectorAll('.notif-item').forEach(el => {
+            el.addEventListener('mouseenter', () => { el.style.background = '#f9fafb'; });
+            el.addEventListener('mouseleave', () => { el.style.background = ''; });
+            el.addEventListener('click', async () => {
+                panel.style.display = 'none';
+                await markNotificationsRead([el.dataset.id]).catch(() => {});
+                await refreshNotifBadge();
+                if (el.dataset.case) scrollToKasus(el.dataset.case);
+            });
+        });
+        document.getElementById('notif-mark-all-btn')?.addEventListener('click', async () => {
+            await markNotificationsRead(notifs.map(n => n.notification_id)).catch(() => {});
+            panel.style.display = 'none';
+            _setBellBadge(0);
+        });
+    } catch {
+        panel.innerHTML = '<p style="padding:12px;font-size:13px;color:#dc2626">Gagal memuat notifikasi.</p>';
+    }
+}
+
+function scrollToKasus(caseId) {
+    const el = document.querySelector(`[data-case-id="${caseId}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+document.getElementById('notif-bell-btn')?.addEventListener('click', openNotifDropdown);
+document.addEventListener('click', e => {
+    const panel = document.getElementById('notif-dropdown');
+    if (panel && !panel.contains(e.target) && e.target.id !== 'notif-bell-btn') {
+        panel.style.display = 'none';
+    }
+});
+
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
     const { data: authData } = await supabase.auth.getUser();
@@ -106,6 +198,10 @@ async function init() {
     await initLoginGuard(supabase, userRow);
     orgNameEl.textContent  = userRow.dudi_org_name ?? userRow.full_name;
     userNameEl.textContent = 'PJ: ' + userRow.full_name;
+
+    // Notifikasi: cek unread count, poll tiap 1 menit
+    refreshNotifBadge();
+    startNotifPolling();
 
     const uid = currentUser.user_id;
 
