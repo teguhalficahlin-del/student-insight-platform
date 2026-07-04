@@ -27,6 +27,7 @@ import {
     updateCaseAudience, getCaseAudienceMembers,
     addCaseAudienceMember, removeCaseAudienceMember, searchInternalUsers,
     getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
+    registerLoginDevice,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 
@@ -219,6 +220,11 @@ async function init() {
     window.addEventListener('online',  runFlush);
     window.addEventListener('offline', updateSyncBanner);
     runFlush();
+
+    // Peringatan login dari perangkat baru: daftarkan perangkat ini.
+    // Jika belum pernah dipakai (bukan yg pertama), server menaruh notif
+    // di lonceng. Non-blocking; kegagalan tak mengganggu dashboard.
+    await registerLoginDevice();
 
     // Notifikasi: cek unread count lalu poll tiap 1 menit.
     refreshNotifBadge();

@@ -36,6 +36,49 @@ export async function logout() {
     await supabase.auth.signOut();
 }
 
+// ── Peringatan login dari perangkat baru (Item 5, Opsi A) ─────
+// Menghitung "sidik jari" perangkat stabil (id acak persisten di
+// localStorage + userAgent) lalu mendaftarkannya lewat RPC. Bila
+// perangkat belum pernah dipakai (dan bukan yang pertama), server
+// menaruh notifikasi "Login dari perangkat baru" di lonceng.
+// Non-blocking & fail-safe: kegagalan tidak pernah menghalangi login.
+function parseDeviceLabel(ua) {
+    ua = ua || '';
+    let browser = 'Browser';
+    if (/Edg\//.test(ua))            browser = 'Edge';
+    else if (/OPR\/|Opera/.test(ua)) browser = 'Opera';
+    else if (/Chrome\//.test(ua))    browser = 'Chrome';
+    else if (/Firefox\//.test(ua))   browser = 'Firefox';
+    else if (/Safari\//.test(ua))    browser = 'Safari';
+    let os = 'perangkat';
+    if (/Windows/.test(ua))                 os = 'Windows';
+    else if (/Android/.test(ua))            os = 'Android';
+    else if (/iPhone|iPad|iOS/.test(ua))    os = 'iOS';
+    else if (/Mac OS X|Macintosh/.test(ua)) os = 'Mac';
+    else if (/Linux/.test(ua))              os = 'Linux';
+    return `${browser} di ${os}`;
+}
+
+export async function registerLoginDevice() {
+    try {
+        let devId = localStorage.getItem('sip_device_id');
+        if (!devId) { devId = crypto.randomUUID(); localStorage.setItem('sip_device_id', devId); }
+        const ua  = navigator.userAgent || '';
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(devId + '|' + ua));
+        const hash = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        const { data, error } = await supabase.rpc('fn_register_login_device', {
+            p_device_hash: hash,
+            p_user_agent:  ua.slice(0, 400),
+            p_label:       parseDeviceLabel(ua),
+        });
+        if (error) { console.warn('[login-device]', error.message); return null; }
+        return data; // 'known' | 'first' | 'new'
+    } catch (e) {
+        console.warn('[login-device]', e);
+        return null;
+    }
+}
+
 export async function getCurrentUserRow() {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) return null;
