@@ -12,7 +12,7 @@
  * Tidak memakai Background Sync API (butuh SW) demi keandalan v1.
  */
 
-import { supabase as _supabase } from './api.js';
+import { supabase as _supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './api.js';
 
 const DB_NAME    = 'smkhr-guru-offline';
 const STORE_ATT  = 'att_queue';
