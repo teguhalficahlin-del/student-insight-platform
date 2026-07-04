@@ -196,7 +196,7 @@ async function init() {
 
     config  = await getSchoolConfig();
     jabatan   = getJabatan(currentUser);
-    isTeacher = ['GURU', 'WALI_KELAS'].includes(currentUser.role_type);
+    isTeacher = !!currentUser.teacher_code;
 
     // Header
     document.getElementById('hdr-name').textContent = currentUser.full_name;
