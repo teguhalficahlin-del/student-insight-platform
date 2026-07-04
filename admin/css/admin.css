@@ -347,11 +347,12 @@ label {
 .sched-input:focus {
     border-color: var(--color-primary);
     background: #fff;
+    color: #111;
     outline: none;
 }
 
 .sched-cell-mapel { background: var(--color-surface); padding: 2px !important; }
-.sched-cell-kg { background: #f8fafc; padding: 2px !important; }
+.sched-cell-kg { background: #f8fafc; padding: 2px !important; color: #1e293b; }
 
 .sched-kg.sched-conflict {
     background: var(--color-danger-bg) !important;
