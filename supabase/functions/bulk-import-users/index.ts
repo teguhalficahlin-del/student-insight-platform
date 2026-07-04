@@ -115,9 +115,9 @@ const STAFF_ROLES = ROLE_TYPE.filter(
 );
 
 function generateTempPassword(): string {
-    // 12 random alphanumeric chars — admin must force a password
-    // reset / share via secure channel. Never logged.
-    return crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+    // Password sementara seragam — pengguna WAJIB ganti saat login pertama
+    // (must_change_password=true). Admin cukup bagikan NIP/NIS/NIK saja.
+    return '12345678';
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -552,6 +552,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 is_waka_kurikulum:   row.is_waka_kurikulum ?? false,
                 is_waka_kesiswaan:   row.is_waka_kesiswaan ?? false,
                 is_waka_humas:       row.is_waka_humas ?? false,
+                must_change_password: true,
             });
 
             if (insertErr) {
