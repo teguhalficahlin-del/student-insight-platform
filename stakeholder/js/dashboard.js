@@ -3,7 +3,7 @@
  * Dashboard Portal Stakeholder — ringkasan agregat sekolah (view-only).
  */
 
-import { applyBrandingById } from '../../shared/branding.js';
+import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { checkMustChangePassword } from '../../shared/change-password.js';
 import { initLoginGuard } from '../../shared/login-guard.js';
 import {
@@ -20,12 +20,12 @@ function fmtTime(d) {
 
 async function init() {
     const { data: auth } = await supabase.auth.getUser();
-    if (!auth?.user) { window.location.href = 'index.html'; return; }
+    if (!auth?.user) { window.location.href = getLoginUrl(); return; }
 
     const user = await getCurrentUserRow();
     if (!user || !STAKEHOLDER_ROLES.includes(user.role_type)) {
         await supabase.auth.signOut();
-        window.location.href = 'index.html';
+        window.location.href = getLoginUrl();
         return;
     }
 
@@ -69,7 +69,7 @@ async function loadSummary() {
 
 document.getElementById('logout-btn')?.addEventListener('click', async () => {
     await logout();
-    window.location.href = 'index.html';
+    window.location.href = getLoginUrl();
 });
 
 init();

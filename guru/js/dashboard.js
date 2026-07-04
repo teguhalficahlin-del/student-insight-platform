@@ -3,7 +3,7 @@
  * Dashboard utama Portal Guru — 1 login, tab Guru + tab Jabatan.
  */
 
-import { applyBrandingById } from '../../shared/branding.js';
+import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { checkMustChangePassword, initChangePassword } from '../../shared/change-password.js';
 import { initLoginGuard } from '../../shared/login-guard.js';
 import {
@@ -178,12 +178,12 @@ function fmtTime(t) { return t ? t.slice(0, 5) : '—'; }
 // ─── Boot ────────────────────────────────────────────────────
 async function init() {
     const { data: auth } = await supabase.auth.getUser();
-    if (!auth?.user) { window.location.href = 'index.html'; return; }
+    if (!auth?.user) { window.location.href = getLoginUrl(); return; }
 
     currentUser = await getCurrentUserRow();
     if (!currentUser || !GURU_ROLES.includes(currentUser.role_type) || currentUser.is_active === false) {
         await supabase.auth.signOut();
-        window.location.href = 'index.html';
+        window.location.href = getLoginUrl();
         return;
     }
 
@@ -2184,7 +2184,7 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
     await clearOfflineQueue();
     LC.clear('');   // hapus semua cache smkhr:* dari localStorage
     await logout();
-    window.location.href = 'index.html';
+    window.location.href = getLoginUrl();
 });
 
 // ─── Start ───────────────────────────────────────────────────

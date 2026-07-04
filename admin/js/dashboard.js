@@ -5,7 +5,7 @@
  * Tidak ada edit, insert, delete. Untuk mengubah data, kembali ke wizard.
  */
 
-import { applyBrandingById } from '../../shared/branding.js';
+import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
@@ -46,7 +46,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
 
 document.getElementById('logout-btn').addEventListener('click', async () => {
     await logout();
-    window.location.href = 'index.html';
+    window.location.href = getLoginUrl();
 });
 
 // Hamburger menu toggle (mobile)
@@ -1615,7 +1615,7 @@ async function renderExportPanel() {
 
 (async () => {
     const { data: authData } = await supabase.auth.getUser();
-    if (!authData?.user) { window.location.href = 'index.html'; return; }
+    if (!authData?.user) { window.location.href = getLoginUrl(); return; }
 
     const userRow = await getCurrentUserRow();
     if (!requireAdministrativeOrRedirect(userRow)) return;

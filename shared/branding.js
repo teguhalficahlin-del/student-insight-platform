@@ -35,9 +35,21 @@ function adjustColor(hex, amount) {
  * @param {string|null} slug - jika null, baca dari URL/subdomain
  * @returns {object|null} branding data atau null jika tidak ditemukan
  */
+/**
+ * Kembalikan URL halaman login dengan slug sekolah yang tersimpan di sessionStorage.
+ * Dipakai semua portal untuk redirect logout / sesi habis.
+ */
+export function getLoginUrl(page = 'index.html') {
+    try {
+        const slug = sessionStorage.getItem('school_slug');
+        return slug ? `${page}?school=${encodeURIComponent(slug)}` : page;
+    } catch { return page; }
+}
+
 export async function applyBranding(slug = null) {
     const resolvedSlug = slug ?? getSlugFromURL();
     if (!resolvedSlug) return null;
+    try { sessionStorage.setItem('school_slug', resolvedSlug); } catch { /* private mode */ }
 
     let branding = null;
     try {

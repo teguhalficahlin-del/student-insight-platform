@@ -5,7 +5,7 @@
  * Loads children, lets parent pick one, shows attendance + observations.
  */
 
-import { applyBrandingById } from '../../shared/branding.js';
+import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { checkMustChangePassword } from '../../shared/change-password.js';
 import { initLoginGuard } from '../../shared/login-guard.js';
 import {
@@ -88,13 +88,13 @@ const DIMENSION_LABELS = {
 async function init() {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData?.user) {
-        window.location.href = 'index.html';
+        window.location.href = getLoginUrl();
         return;
     }
 
     currentUser = await getCurrentUserRow();
     if (!currentUser || currentUser.role_type !== 'ORTU') {
-        window.location.href = 'index.html';
+        window.location.href = getLoginUrl();
         return;
     }
 
@@ -321,7 +321,7 @@ btnSchedule.addEventListener('click', async () => {
 logoutBtn.addEventListener('click', async () => {
     LC.clear();
     await logout();
-    window.location.href = 'index.html';
+    window.location.href = getLoginUrl();
 });
 
 init();

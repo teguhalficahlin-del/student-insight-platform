@@ -3,7 +3,7 @@
  * Dashboard DUDI: input absensi harian PKL + tulis observasi siswa.
  */
 
-import { applyBrandingById } from '../../shared/branding.js';
+import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { checkMustChangePassword } from '../../shared/change-password.js';
 import { initLoginGuard } from '../../shared/login-guard.js';
 import {
@@ -209,10 +209,10 @@ document.addEventListener('click', e => {
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
     const { data: authData } = await supabase.auth.getUser();
-    if (!authData?.user) { window.location.href = 'index.html'; return; }
+    if (!authData?.user) { window.location.href = getLoginUrl(); return; }
 
     const userRow = await getCurrentUserRow();
-    if (!isDudi(userRow)) { window.location.href = 'index.html'; return; }
+    if (!isDudi(userRow)) { window.location.href = getLoginUrl(); return; }
 
     currentUser = userRow;
     applyBrandingById(userRow.school_id, supabase);
@@ -538,7 +538,7 @@ logoutBtn.addEventListener('click', async () => {
     LC.clear();
     await clearOfflineQueue();
     await logout();
-    window.location.href = 'index.html';
+    window.location.href = getLoginUrl();
 });
 
 // ── Helpers ───────────────────────────────────────────────────

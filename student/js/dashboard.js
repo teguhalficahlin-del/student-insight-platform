@@ -3,7 +3,7 @@
  * Dashboard Portal Siswa — jadwal, kehadiran diri, observasi, status PKL.
  */
 
-import { applyBrandingById } from '../../shared/branding.js';
+import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { checkMustChangePassword } from '../../shared/change-password.js';
 import { initLoginGuard } from '../../shared/login-guard.js';
 import {
@@ -62,12 +62,12 @@ function fmtTime(t) { return t ? t.slice(0, 5) : '—'; }
 // ─── Boot ────────────────────────────────────────────────────
 async function init() {
     const { data: auth } = await supabase.auth.getUser();
-    if (!auth?.user) { window.location.href = 'index.html'; return; }
+    if (!auth?.user) { window.location.href = getLoginUrl(); return; }
 
     currentUser = await getCurrentUserRow();
     if (!currentUser || !STUDENT_ROLES.includes(currentUser.role_type)) {
         await supabase.auth.signOut();
-        window.location.href = 'index.html';
+        window.location.href = getLoginUrl();
         return;
     }
 
@@ -87,7 +87,7 @@ async function init() {
     // Alumni (LULUS) / mutasi (KELUAR) tidak boleh lagi mengakses portal
     if (!ACTIVE_STUDENT_STATUSES.includes(student.student_status)) {
         await logout();
-        window.location.href = 'index.html';
+        window.location.href = getLoginUrl();
         return;
     }
 
@@ -390,7 +390,7 @@ async function loadPkl() {
 document.getElementById('logout-btn')?.addEventListener('click', async () => {
     LC.clear();
     await logout();
-    window.location.href = 'index.html';
+    window.location.href = getLoginUrl();
 });
 
 // ─── Start ───────────────────────────────────────────────────
