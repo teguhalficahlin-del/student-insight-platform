@@ -99,6 +99,8 @@ async function loadSchools() {
               <div class="school-detail">
                 <dl class="school-meta">
                   ${s.npsn ? `<div class="meta-row"><dt>NPSN</dt><dd>${esc(s.npsn)}</dd></div>` : ''}
+                  <div class="meta-row"><dt>Admin</dt><dd>${esc(s.admin_name)}</dd></div>
+                  <div class="meta-row"><dt>Login Admin</dt><dd><code class="slug-code">${esc(s.admin_identifier)}</code></dd></div>
                   ${adminUrl ? `<div class="meta-row"><dt>Link Login</dt><dd>
                     <code class="slug-code">?school=${esc(s.slug)}</code>
                     <div class="meta-actions">
