@@ -21,8 +21,8 @@ import { validatePayload,
          validateAudienceForRole }     from '../_shared/validate.ts';
 import { getAdminClient }              from '../_shared/db.ts';
 
-// 6 peran internal + DUDI boleh buat kasus; WAKA_KURIKULUM & TU dikecualikan
-const ALLOWED_ROLES = ['GURU','WALI_KELAS','BK','KAPRODI','KEPSEK','WAKA_KESISWAAN','DUDI'];
+// peran internal + DUDI boleh buat kasus; WAKA_KURIKULUM & TU dikecualikan
+const ALLOWED_ROLES = ['GURU','WALI_KELAS','BK','KAPRODI','KEPSEK','WAKA_KESISWAAN','WAKA_HUMAS','DUDI'];
 
 Deno.serve(async (req: Request): Promise<Response> => {
     if (req.method === 'OPTIONS') return handleCors();

@@ -129,13 +129,13 @@ export function validatePayload(
 export const ATTENDANCE_STATUS  = ['HADIR','TIDAK_HADIR','IZIN','SAKIT'] as const;  // EKSKUL dihapus (mig 20260703220000)
 export const ATTENDANCE_SOURCE  = ['AUTO_DETECTED','MANUAL_OVERRIDE','TEACHER_DECLARED'] as const;
 export const MEETING_STATUS     = ['NORMAL','KEGIATAN_SEKOLAH','GURU_TIDAK_HADIR'] as const;
-export const ROLE_TYPE          = ['GURU','BK','WALI_KELAS','KAPRODI','KEPSEK','WAKA_KURIKULUM','WAKA_KESISWAAN','STAKEHOLDER','DUDI','SISWA','ORTU','ADMINISTRATIVE'] as const;
+export const ROLE_TYPE          = ['GURU','BK','WALI_KELAS','KAPRODI','KEPSEK','WAKA_KURIKULUM','WAKA_KESISWAAN','WAKA_HUMAS','STAKEHOLDER','DUDI','SISWA','ORTU','ADMINISTRATIVE'] as const;
 export const CASE_STATUS        = ['OPEN','UNDER_REVIEW','INTERVENTION','MONITORING','CLOSED'] as const;
 export const CASE_TRACK         = ['SEKOLAH','PKL'] as const;
 export const CASE_AUDIENCE      = ['PRIVATE','RESTRICTED','PUBLIC'] as const;
 
-// Peran yang boleh jadi target eskalasi (6 aktor internal kasus)
-export const INTERNAL_CASE_ROLES = ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK'] as const;
+// Peran yang boleh jadi target eskalasi (internal kasus + WAKA_HUMAS untuk jalur PKL)
+export const INTERNAL_CASE_ROLES = ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','WAKA_HUMAS','KEPSEK'] as const;
 
 /**
  * Validasi aturan eskalasi di lapisan edge (pertahanan berlapis).
@@ -146,12 +146,21 @@ export const INTERNAL_CASE_ROLES = ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KES
 export function validateEscalationTarget(
     authorRole: string,
     newHandlerRole: string,
+    caseTrack?: string,
 ): string | null {
     if (!(INTERNAL_CASE_ROLES as readonly string[]).includes(newHandlerRole)) {
         return `Target eskalasi tidak valid: ${newHandlerRole}. Harus salah satu dari [${INTERNAL_CASE_ROLES.join(', ')}]`;
     }
     if (authorRole === 'DUDI' && newHandlerRole !== 'KAPRODI') {
         return 'DUDI hanya dapat meneruskan kasus ke KAPRODI';
+    }
+    // KAPRODI hanya bisa eskalasi ke WAKA_HUMAS jika kasus PKL
+    if (authorRole === 'KAPRODI' && newHandlerRole === 'WAKA_HUMAS' && caseTrack !== 'PKL') {
+        return 'Eskalasi ke WAKA_HUMAS hanya untuk kasus jalur PKL';
+    }
+    // WAKA_HUMAS tidak bisa jadi target eskalasi kasus non-PKL
+    if (newHandlerRole === 'WAKA_HUMAS' && caseTrack !== 'PKL') {
+        return 'WAKA_HUMAS hanya menangani kasus jalur PKL';
     }
     return null;
 }

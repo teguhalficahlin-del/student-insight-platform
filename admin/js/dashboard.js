@@ -433,16 +433,18 @@ function buildJabatan(u) {
     if (u.is_kepsek) j.push('Kepsek');
     if (u.is_waka_kurikulum) j.push('Waka Kurikulum');
     if (u.is_waka_kesiswaan) j.push('Waka Kesiswaan');
+    if (u.is_waka_humas) j.push('Waka Humas');
     if (u.role_type === 'KEPSEK' && !j.length) j.push('Kepsek');
     if (u.role_type === 'BK' && !j.includes('BK')) j.push('BK');
     if (u.role_type === 'WAKA_KURIKULUM' && !j.includes('Waka Kurikulum')) j.push('Waka Kurikulum');
     if (u.role_type === 'WAKA_KESISWAAN' && !j.includes('Waka Kesiswaan')) j.push('Waka Kesiswaan');
+    if (u.role_type === 'WAKA_HUMAS' && !j.includes('Waka Humas')) j.push('Waka Humas');
     return j.join(', ') || u.role_type;
 }
 
 async function renderStaffPanel() {
     const users = await fetchAllRows('users',
-        q => q.select('user_id, full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, wali_kelas_class_id, kaprodi_program_id, is_active')
+        q => q.select('user_id, full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, is_waka_humas, wali_kelas_class_id, kaprodi_program_id, is_active')
               .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")')
               .is('deleted_at', null)
               .order('full_name'));
@@ -1459,7 +1461,7 @@ const EXPORT_DEFS = [
         filename: 'export_staf.xlsx',
         async fetch() {
             return fetchAllRows('users',
-                q => q.select('full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, wali_kelas_class_id, kaprodi_program_id')
+                q => q.select('full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, is_waka_humas, wali_kelas_class_id, kaprodi_program_id')
                       .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")')
                       .order('full_name'));
         },

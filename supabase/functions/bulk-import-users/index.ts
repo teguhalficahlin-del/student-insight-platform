@@ -89,11 +89,12 @@ interface ImportRow {
     wali_kelas?:       string;    // nama kelas walian
     program_kaprodi?:  string;    // kode program untuk kaprodi
     kaprodi_program_id?: string;  // resolved
-    jabatan?:          string;    // comma-separated: BK, KEPSEK, WAKA_KURIKULUM, WAKA_KESISWAAN
+    jabatan?:          string;    // comma-separated: BK, KEPSEK, WAKA_KURIKULUM, WAKA_KESISWAAN, WAKA_HUMAS
     is_bk?:            boolean;
     is_kepsek?:        boolean;
     is_waka_kurikulum?: boolean;
     is_waka_kesiswaan?: boolean;
+    is_waka_humas?:    boolean;
 }
 
 interface ImportError {
@@ -164,6 +165,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 else if (jabatan.includes('KEPSEK')) roleType = 'KEPSEK';
                 else if (jabatan.includes('WAKA_KURIKULUM')) roleType = 'WAKA_KURIKULUM';
                 else if (jabatan.includes('WAKA_KESISWAAN')) roleType = 'WAKA_KESISWAAN';
+                else if (jabatan.includes('WAKA_HUMAS')) roleType = 'WAKA_HUMAS';
                 else if (jabatan.includes('BK')) roleType = 'BK';
                 else roleType = 'GURU';
             }
@@ -183,6 +185,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 is_kepsek:        jabatan.includes('KEPSEK'),
                 is_waka_kurikulum: jabatan.includes('WAKA_KURIKULUM'),
                 is_waka_kesiswaan: jabatan.includes('WAKA_KESISWAAN'),
+                is_waka_humas:     jabatan.includes('WAKA_HUMAS'),
             };
         });
 
@@ -449,6 +452,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 updatePatch.is_kepsek = row.is_kepsek ?? false;
                 updatePatch.is_waka_kurikulum = row.is_waka_kurikulum ?? false;
                 updatePatch.is_waka_kesiswaan = row.is_waka_kesiswaan ?? false;
+                updatePatch.is_waka_humas = row.is_waka_humas ?? false;
 
                 // Bangkitkan baris yang ada di Recycle Bin: undelete + reaktifkan.
                 // Tanpa ini, re-impor/tambah-ulang hanya meng-update baris terhapus
@@ -547,6 +551,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 is_kepsek:           row.is_kepsek ?? false,
                 is_waka_kurikulum:   row.is_waka_kurikulum ?? false,
                 is_waka_kesiswaan:   row.is_waka_kesiswaan ?? false,
+                is_waka_humas:       row.is_waka_humas ?? false,
             });
 
             if (insertErr) {

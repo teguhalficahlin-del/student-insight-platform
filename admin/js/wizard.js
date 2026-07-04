@@ -752,7 +752,7 @@ const EXCEL_TEMPLATES = {
              ['teacher_code', 'Opsional', 'Kode singkat guru untuk jadwal (contoh: BSS, RRN). Jika mengajar=YA tapi kolom ini kosong, sistem akan buatkan kode otomatis.'],
              ['wali_kelas', 'Opsional', 'Isi nama kelas jika staf ini wali kelas. Contoh: XII TKJ 1. Nama kelas harus sudah ada di langkah Kelas.'],
              ['program_kaprodi', 'Opsional', 'Isi kode program jika staf ini Kepala Program (Kaprodi). Contoh: TKJ. Kode harus sudah ada di langkah Program.'],
-             ['jabatan', 'Opsional', 'Jabatan tambahan. Jika lebih dari satu, pisahkan dengan koma. Pilihan: BK, KEPSEK, WAKA_KURIKULUM, WAKA_KESISWAAN'],
+             ['jabatan', 'Opsional', 'Jabatan tambahan. Jika lebih dari satu, pisahkan dengan koma. Pilihan: BK, KEPSEK, WAKA_KURIKULUM, WAKA_KESISWAAN, WAKA_HUMAS'],
              ['', '', ''],
              ['PENTING', '', ''],
              ['•', '', 'Staf yang mengajar (mengajar=YA) akan muncul di jadwal dan bisa diassign ke kelas.'],
@@ -1141,7 +1141,7 @@ const STEP_LIST = {
         save: (id, vals) => updateUserIdentifier(id, vals),
         fetch: async () => {
             const data = await fetchAllRows('users',
-                q => q.select('user_id, full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, wali_kelas_class_id, kaprodi_program_id')
+                q => q.select('user_id, full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, is_waka_humas, wali_kelas_class_id, kaprodi_program_id')
                       .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE")')
                       .is('deleted_at', null)
                       .order('full_name'));
@@ -1154,6 +1154,7 @@ const STEP_LIST = {
                 if (u.is_kepsek) jabatan.push('Kepsek');
                 if (u.is_waka_kurikulum) jabatan.push('Waka Kurikulum');
                 if (u.is_waka_kesiswaan) jabatan.push('Waka Kesiswaan');
+                if (u.is_waka_humas) jabatan.push('Waka Humas');
                 if (u.role_type === 'STAKEHOLDER') jabatan.push('Stakeholder');
                 return {
                     id: u.user_id,
