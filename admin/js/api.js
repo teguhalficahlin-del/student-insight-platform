@@ -1053,6 +1053,30 @@ export async function deactivateStaleStaff() {
     return data ?? 0;
 }
 
+/**
+ * Ambil daftar guru pengganti aktif (token belum kedaluwarsa).
+ * Dipakai di panel Jadwal agar admin bisa menyalin & mengirim token via WA.
+ */
+export async function getActiveSubstitutes() {
+    const { data, error } = await supabase
+        .from('substitute_schedules')
+        .select(`
+            substitute_id,
+            sync_token,
+            sync_token_expires_at,
+            substitute:users!substitute_schedules_substitute_user_id_fkey ( full_name ),
+            schedule:teaching_schedules!substitute_schedules_schedule_id_fkey (
+                session_date,
+                class:classes ( name ),
+                subject:subjects ( name )
+            )
+        `)
+        .gt('sync_token_expires_at', new Date().toISOString())
+        .order('sync_token_expires_at', { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+}
+
 /** Toggle status aktif/nonaktif mata pelajaran. */
 export async function toggleSubjectActive(subject_id, is_active) {
     const { data, error } = await supabase

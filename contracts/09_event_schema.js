@@ -35,14 +35,16 @@ export const SCHEMA_VERSION = '1.0.0';
 // ─────────────────────────────────────────────────────────────
 
 export const ROLE_TYPE = Object.freeze({
-    GURU:        'GURU',
-    BK:          'BK',
-    WALI_KELAS:  'WALI_KELAS',
-    KAPRODI:     'KAPRODI',
-    KEPSEK:      'KEPSEK',
-    DUDI:        'DUDI',
-    SISWA:       'SISWA',
-    ORTU:        'ORTU',
+    GURU:           'GURU',
+    BK:             'BK',
+    WALI_KELAS:     'WALI_KELAS',
+    KAPRODI:        'KAPRODI',
+    KEPSEK:         'KEPSEK',
+    WAKA_KESISWAAN: 'WAKA_KESISWAAN',
+    WAKA_HUMAS:     'WAKA_HUMAS',
+    DUDI:           'DUDI',
+    SISWA:          'SISWA',
+    ORTU:           'ORTU',
     ADMINISTRATIVE: 'ADMINISTRATIVE',
 });
 

@@ -30,7 +30,7 @@
 }
 
 * { box-sizing: border-box; }
-::placeholder { color: rgba(255, 255, 255, 0.30); opacity: 1; }
+::placeholder { color: rgba(255, 255, 255, 0.50); opacity: 1; }
 
 html, body {
     min-width: 1024px;
@@ -1086,4 +1086,22 @@ label {
 
     /* Section head stack vertical */
     .section-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+
+
+/* ── Print styles (P5-A) ─────────────────────────────────── */
+@media print {
+    .app-header, nav, .sidebar, #logout-btn,
+    .btn, button, .nav-link, .notif-bell-btn,
+    #offline-banner, .hint { display: none !important; }
+
+    body { background: #fff !important; color: #000 !important; }
+    * { box-shadow: none !important; border-color: #ccc !important; }
+
+    table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+    tr { page-break-inside: avoid; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; }
+
+    .section-card, .card { box-shadow: none; border: 1px solid #ccc; }
+    @page { margin: 15mm; }
 }

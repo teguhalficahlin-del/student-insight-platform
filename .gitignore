@@ -6,3 +6,5 @@ node_modules/
 Thumbs.db
 docs/*
 !docs/service-worker-status.md
+!docs/konsep
+!docs/konsep/**

@@ -7,7 +7,7 @@
 
 import { applyBrandingById } from '../../shared/branding.js';
 import { initIdleTimeout } from '../../shared/idle-timeout.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -1250,15 +1250,55 @@ async function renderStakeholdersPanel() {
 }
 
 async function renderJadwalPanel() {
-    const [{ count: tmplCount }, { count: schedCount }] = await Promise.all([
+    panelContent.innerHTML = '<p class="hint">Memuat…</p>';
+    const [{ count: tmplCount }, { count: schedCount }, substitutes] = await Promise.all([
         supabase.from('schedule_templates').select('*', { count: 'exact', head: true }),
         supabase.from('teaching_schedules').select('*', { count: 'exact', head: true }),
+        getActiveSubstitutes().catch(() => []),
     ]);
+
+    const subsHtml = substitutes.length === 0
+        ? '<p class="hint">Tidak ada guru pengganti aktif saat ini.</p>'
+        : `<table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="text-align:left;border-bottom:1px solid var(--color-border,#dde3e9)">
+                <th style="padding:6px 8px">Guru Pengganti</th>
+                <th style="padding:6px 8px">Kelas / Mata Pelajaran</th>
+                <th style="padding:6px 8px">Tanggal Sesi</th>
+                <th style="padding:6px 8px">Berlaku sampai</th>
+                <th style="padding:6px 8px">Token</th>
+            </tr></thead>
+            <tbody>${substitutes.map(s => {
+                const expire = new Date(s.sync_token_expires_at).toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+                const sessionDate = s.schedule?.session_date ?? '—';
+                const kelas   = s.schedule?.class?.name   ?? '—';
+                const mapel   = s.schedule?.subject?.name ?? '—';
+                const name    = s.substitute?.full_name    ?? '—';
+                const token   = s.sync_token;
+                return `<tr style="border-bottom:1px solid var(--color-border,#eee)">
+                    <td style="padding:6px 8px">${esc(name)}</td>
+                    <td style="padding:6px 8px">${esc(kelas)} / ${esc(mapel)}</td>
+                    <td style="padding:6px 8px">${esc(sessionDate)}</td>
+                    <td style="padding:6px 8px">${esc(expire)}</td>
+                    <td style="padding:6px 8px">
+                        <code style="font-size:11px;background:var(--color-input-bg,#1e293b);padding:2px 6px;border-radius:4px;user-select:all">${esc(token)}</code>
+                        <button onclick="navigator.clipboard.writeText('${token}').then(()=>{this.textContent='✓ Disalin';setTimeout(()=>this.textContent='Salin',2000)})"
+                            style="margin-left:6px;font-size:11px;padding:2px 8px;cursor:pointer;border:1px solid var(--color-border,#dde3e9);border-radius:4px;background:transparent;color:inherit">
+                            Salin
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table>`;
+
     panelContent.innerHTML = `
         <h3>Jadwal</h3>
         <p class="hint">Template slot tersusun: <strong>${tmplCount ?? 0} slot</strong>.</p>
         <p class="hint">Sesi jadwal ter-generate (teaching_schedules): <strong>${(schedCount ?? 0).toLocaleString('id-ID')} sesi</strong>.</p>
         <p class="hint">Untuk menyusun atau mengubah jadwal, buka <a href="wizard.html">Setup Wizard</a> langkah 10.</p>
+
+        <h4 style="margin:20px 0 8px">Token Guru Pengganti Aktif</h4>
+        <p class="hint" style="margin-bottom:10px">Salin token lalu kirim ke HP guru pengganti (mis. via WhatsApp). Token otomatis kedaluwarsa saat sesi selesai.</p>
+        ${subsHtml}
     `;
 }
 
@@ -1395,7 +1435,7 @@ async function renderActivityLogPanel() {
                 <tr style="${o.is_void ? 'opacity:.55' : ''}">
                     <td style="white-space:nowrap">${fmtTs(o.created_at)}</td>
                     <td${o.is_void ? ' style="text-decoration:line-through"' : ''}>${DIMENSION_LABELS_ADMIN[o.dimension] ?? o.dimension}</td>
-                    <td>${o.sentiment === 'POSITIF' ? '✅ Positif' : '⚠ Perhatian'}</td>
+                    <td>${o.sentiment === 'POSITIF' ? '✅ Positif' : '⚠ Perlu Perhatian'}</td>
                     <td>${esc(o.student?.full_name ?? '—')}</td>
                     <td>${esc(o.author?.full_name ?? '—')}</td>
                     <td>${o.is_void

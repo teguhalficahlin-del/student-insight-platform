@@ -29,7 +29,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; font-family: var(--font-sans); color: var(--color-text); background: var(--color-bg); }
-::placeholder { color: rgba(255, 255, 255, 0.30); opacity: 1; }
+::placeholder { color: rgba(255, 255, 255, 0.50); opacity: 1; }
 h1,h2,h3,h4 { margin: 0 0 8px; font-weight: 600; }
 p { margin: 0 0 8px; color: var(--color-text-muted); }
 
@@ -181,11 +181,16 @@ details[open] .att-accordion-summary::before { transform: rotate(90deg); }
 .att-accordion .att-row:last-child { border-bottom: none; }
 .att-save-btn { margin-top: 12px; }
 
-/* ── Status message ──────────────────────────────────────── */
+/* ── Status message & alert (P5-C: seragam dengan dudi/admin/parent) ── */
 .status-msg { font-size: 13px; padding: 8px 12px; border-radius: var(--radius); margin-top: 8px; }
 .status-ok  { background: var(--color-success-bg); color: var(--color-success); }
 .status-err { background: var(--color-danger-bg);  color: var(--color-danger); }
 .status-warn { background: var(--color-warning-bg); color: var(--color-warning); }
+
+.alert { padding: 12px 16px; border-radius: var(--radius); font-size: 13px; margin-bottom: 16px; border: 1px solid transparent; }
+.alert-danger  { background: var(--color-danger-bg);  color: var(--color-danger);  border-color: #fecaca; }
+.alert-success { background: var(--color-success-bg); color: var(--color-success); border-color: #bbf7d0; }
+.alert-warning { background: var(--color-warning-bg); color: var(--color-warning); border-color: #fde68a; }
 
 /* ── Loading ─────────────────────────────────────────────── */
 #loading { padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 14px; }
@@ -348,3 +353,21 @@ details[open] .att-accordion-summary::before { transform: rotate(90deg); }
 .kasus-badge-intervention { background: var(--color-danger-bg); color: var(--color-danger); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
 .kasus-badge-monitoring   { background: #f5f3ff; color: #6d28d9; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
 .kasus-badge-closed       { background: var(--color-bg); color: var(--color-text-muted); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
+
+
+/* ── Print styles (P5-A) ─────────────────────────────────── */
+@media print {
+    .app-header, nav, .sidebar, #logout-btn,
+    .btn, button, .nav-link, .notif-bell-btn,
+    #offline-banner, .hint { display: none !important; }
+
+    body { background: #fff !important; color: #000 !important; }
+    * { box-shadow: none !important; border-color: #ccc !important; }
+
+    table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+    tr { page-break-inside: avoid; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; }
+
+    .section-card, .card { box-shadow: none; border: 1px solid #ccc; }
+    @page { margin: 15mm; }
+}

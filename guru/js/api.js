@@ -741,7 +741,19 @@ export async function addCaseComment({ caseId, text, authorUserId, authorRole, p
     if (error) throw error;
 }
 
-export async function escalateCase({ caseId, previousHandlerRole, newHandlerRole, note, authorUserId, authorRole, newStatus = 'UNDER_REVIEW' }) {
+export async function escalateCase({ caseId, previousHandlerRole, newHandlerRole, note, authorUserId, authorRole, previousStatus, newStatus = 'UNDER_REVIEW' }) {
+    // Bila pemanggil tidak kirim previousStatus, baca dari server agar tidak hardcode
+    let prevSt = previousStatus;
+    if (!prevSt) {
+        const { data, error: fetchErr } = await supabase
+            .from('cases')
+            .select('status')
+            .eq('case_id', caseId)
+            .single();
+        if (fetchErr) throw fetchErr;
+        prevSt = data.status;
+    }
+
     const { error } = await supabase
         .from('case_events')
         .insert({
@@ -751,7 +763,7 @@ export async function escalateCase({ caseId, previousHandlerRole, newHandlerRole
             author_role_at_time:  authorRole,
             previous_handler_role: previousHandlerRole,
             new_handler_role:     newHandlerRole,
-            previous_status:      'OPEN',
+            previous_status:      prevSt,
             new_status:           newStatus,
             payload:              note ? { text: note } : {},
         });

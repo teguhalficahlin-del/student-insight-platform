@@ -585,6 +585,11 @@ async function initObsForm() {
     const form       = document.getElementById('obs-form');
     const submitBtn  = document.getElementById('obs-submit');
     const statusEl   = document.getElementById('obs-status');
+    const obsContentEl  = document.getElementById('obs-content');
+    const obsCharCountEl = document.getElementById('obs-char-count');
+    obsContentEl.addEventListener('input', () => {
+        obsCharCountEl.textContent = obsContentEl.value.length;
+    });
 
     // Observer berjangkauan luas (BK/Kaprodi/Waka Kesiswaan/Kepsek) bisa
     // mengamati siswa di luar kelas yang ia ajar — bahkan saat tak mengajar
@@ -1847,8 +1852,9 @@ function renderKasusActions(kasus) {
                 previousHandlerRole: kasus.current_handler_role,
                 newHandlerRole: to,
                 note,
-                authorUserId: currentUser.user_id,
-                authorRole:   currentUser.role_type,
+                authorUserId:   currentUser.user_id,
+                authorRole:     currentUser.role_type,
+                previousStatus: kasus.status,
             });
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = `Diteruskan ke ${ROLE_LABEL[to] ?? to}.`;
             await refreshKasusDetail();

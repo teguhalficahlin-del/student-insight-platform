@@ -1,12 +1,19 @@
 # Offline Sync Contract Reference
 **Version:** 1.1.0
 
+> **Status implementasi (4 Juli 2026):**
+> - ✅ **Category A** — diimplementasi dengan pola online-first + IndexedDB per-store per portal (bukan `offline_queue` generik). Tidak memakai Service Worker / Background Sync API.
+> - ✅ **Category B** — diimplementasi via `localStorage` stale-while-revalidate di tiap `dashboard.js`.
+> - `[PLANNED]` — bagian-bagian bertanda ini **belum diimplementasi** dan menggambarkan arsitektur target masa depan. Jangan asumsikan sudah ada di kode.
+
 ---
 
 ## Kategori Operasi Offline
 
 ### Category A — Tulis Operasional (Queue + Background Sync)
-Operasi tulis yang harus sampai ke server. Ditangani oleh `offline.js` + IndexedDB `offline_queue` + Service Worker Background Sync.
+Operasi tulis yang harus sampai ke server. Ditangani oleh `offline.js` + IndexedDB per portal + flush saat `online` event (tanpa Service Worker).
+
+> **Implementasi aktual:** Setiap portal punya `offline.js` sendiri dengan store IndexedDB terpisah (`att_queue`, `obs_queue`, `pkl_att_queue`, dll). Flush dilakukan di main thread saat `navigator.onLine` atau event `online` — **bukan** via Background Sync API / Service Worker.
 
 | Operasi | Queue Type | Portal |
 |---|---|---|
@@ -49,7 +56,9 @@ try {
 
 ---
 
-## Arsitektur Offline
+## Arsitektur Offline `[PLANNED]`
+
+> Diagram berikut menggambarkan arsitektur **target** dengan Service Worker. Implementasi saat ini lebih sederhana: flush dilakukan di main thread, tanpa SW, tanpa `postMessage`.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -79,7 +88,9 @@ try {
 
 ## IndexedDB Stores
 
-### `offline_queue`
+### `offline_queue` `[PLANNED]`
+
+> **Belum diimplementasi.** Implementasi aktual memakai store terpisah per portal (`att_queue`, `obs_queue`, `pkl_att_queue`, dll) dengan struktur yang lebih sederhana — tidak ada `_status`, `retry_count`, atau `max_retries`.
 
 Item Category A yang menunggu dikirim ke server.
 
@@ -138,7 +149,9 @@ Data read-only untuk offline rendering.
 
 ---
 
-### `conflict_queue`
+### `conflict_queue` `[PLANNED]`
+
+> **Belum diimplementasi.** Penolakan server saat ini langsung dibuang (tidak diantrikan ke conflict_queue).
 
 Item yang ditolak server karena `CONFLICT_CASE_STATE` (HTTP 409).
 
@@ -165,7 +178,9 @@ Item yang ditolak server karena `CONFLICT_CASE_STATE` (HTTP 409).
 
 ---
 
-### `dead_letter`
+### `dead_letter` `[PLANNED]`
+
+> **Belum diimplementasi.** Item yang gagal permanen saat ini langsung dibuang dari IndexedDB.
 
 Item yang exhausted `max_retries` atau schema mismatch. Disimpan untuk debugging.
 
@@ -178,7 +193,9 @@ Item yang exhausted `max_retries` atau schema mismatch. Disimpan untuk debugging
 
 ---
 
-## Lifecycle Item
+## Lifecycle Item `[PLANNED]`
+
+> **Belum diimplementasi sepenuhnya.** Lifecycle aktual: coba kirim online-first → jika gagal jaringan, antrikan ke IndexedDB → flush saat `online` event. Tidak ada PROCESSING state, tidak ada retry_count, tidak ada dead_letter.
 
 ```
 User Action (offline)
@@ -226,7 +243,9 @@ _processItem(item, api, queue)
 
 ---
 
-## Processing Priority Order
+## Processing Priority Order `[PLANNED]`
+
+> **Belum diimplementasi.** Flush aktual memproses semua store secara paralel tanpa prioritas antar-tipe.
 
 Item diproses dalam urutan berikut (dalam satu batch):
 
@@ -240,7 +259,9 @@ Dalam satu tipe, urutan FIFO berdasarkan `created_offline_at`.
 
 ---
 
-## Conflict Resolution Flow
+## Conflict Resolution Flow `[PLANNED]`
+
+> **Belum diimplementasi.** Saat ini HTTP 409 dianggap "penolakan server" dan item langsung dibuang — tidak ada dialog resolusi konflik ke user.
 
 Saat item `CASE_EVENT_CREATE` menerima respons 409:
 
@@ -274,7 +295,9 @@ User choices:
 
 ---
 
-## Data Pull Scope
+## Data Pull Scope `[PLANNED]`
+
+> **Belum diimplementasi.** `SyncEngine` dan `sync_cache` belum ada. Data offline saat ini hanya dari localStorage (Category B).
 
 `SyncEngine.pullData()` menarik data berikut ke `sync_cache`:
 
@@ -294,7 +317,9 @@ User choices:
 
 ---
 
-## Service Worker Setup
+## Service Worker Setup `[PLANNED]`
+
+> **Belum diimplementasi.** Service Worker saat ini dinonaktifkan secara sengaja (self-destruct untuk cegah stale deploy). Semua kode di bagian ini adalah target arsitektur masa depan.
 
 ### Registrasi di `service_worker.js`
 
@@ -359,7 +384,9 @@ await SyncEngine.requestSync(); // register background sync tag
 
 ---
 
-## Schema Version Migration
+## Schema Version Migration `[PLANNED]`
+
+> **Belum diimplementasi.** Saat ini schema version dicek per-store (`_schema_ver` di tiap item IDB) dan item lama di-discard — bukan via mekanisme `OfflineQueue.checkSchemaVersion()` generik ini.
 
 Saat app diupdate dengan perubahan breaking (major version bump):
 
@@ -381,7 +408,9 @@ App harus menampilkan pesan ke user: *"Aplikasi telah diperbarui. Data offline y
 
 ---
 
-## Storage Guard
+## Storage Guard `[PLANNED]`
+
+> **Belum diimplementasi.** Tidak ada batas kapasitas atau eviction otomatis pada implementasi saat ini.
 
 | Threshold | Aksi |
 |---|---|
@@ -398,7 +427,9 @@ const estimate = await OfflineQueue.storageEstimate();
 
 ---
 
-## Main Thread: Mendengarkan Pesan dari SW
+## Main Thread: Mendengarkan Pesan dari SW `[PLANNED]`
+
+> **Belum diimplementasi.** Tidak ada komunikasi SW → main thread karena SW belum aktif. Status sync saat ini ditangani langsung via return value `flushPending()`.
 
 ```javascript
 navigator.serviceWorker.addEventListener('message', (event) => {

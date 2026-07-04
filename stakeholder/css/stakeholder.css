@@ -29,7 +29,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; font-family: var(--font-sans); color: var(--color-text); background: var(--color-bg); }
-::placeholder { color: rgba(255, 255, 255, 0.30); opacity: 1; }
+::placeholder { color: rgba(255, 255, 255, 0.50); opacity: 1; }
 h1,h2,h3,h4 { margin: 0 0 8px; font-weight: 600; }
 p { margin: 0 0 8px; color: var(--color-text-muted); }
 
@@ -143,4 +143,22 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 
     /* Section compact */
     .section-card { padding: 12px 10px; margin-bottom: 12px; }
+}
+
+
+/* ── Print styles (P5-A) ─────────────────────────────────── */
+@media print {
+    .app-header, nav, .sidebar, #logout-btn,
+    .btn, button, .nav-link, .notif-bell-btn,
+    #offline-banner, .hint { display: none !important; }
+
+    body { background: #fff !important; color: #000 !important; }
+    * { box-shadow: none !important; border-color: #ccc !important; }
+
+    table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+    tr { page-break-inside: avoid; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; }
+
+    .section-card, .card { box-shadow: none; border: 1px solid #ccc; }
+    @page { margin: 15mm; }
 }

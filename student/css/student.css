@@ -29,7 +29,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; font-family: var(--font-sans); color: var(--color-text); background: var(--color-bg); }
-::placeholder { color: rgba(255, 255, 255, 0.30); opacity: 1; }
+::placeholder { color: rgba(255, 255, 255, 0.50); opacity: 1; }
 h1,h2,h3,h4 { margin: 0 0 8px; font-weight: 600; }
 p { margin: 0 0 8px; color: var(--color-text-muted); }
 
@@ -130,10 +130,14 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .badge-sakit       { background: var(--color-warning-bg); color: var(--color-warning); }
 .badge-ekskul      { background: #f5f3ff; color: #6d28d9; }
 
-/* ── Status message ──────────────────────────────────────── */
+/* ── Status message & alert (P5-C: seragam dengan dudi/admin/parent) ── */
 .status-msg { font-size: 13px; padding: 8px 12px; border-radius: var(--radius); margin-top: 8px; }
 .status-ok  { background: var(--color-success-bg); color: var(--color-success); }
 .status-err { background: var(--color-danger-bg);  color: var(--color-danger); }
+
+.alert { padding: 12px 16px; border-radius: var(--radius); font-size: 13px; margin-bottom: 16px; border: 1px solid transparent; }
+.alert-danger  { background: var(--color-danger-bg);  color: var(--color-danger);  border-color: #fecaca; }
+.alert-success { background: var(--color-success-bg); color: var(--color-success); border-color: #bbf7d0; }
 
 /* ── Loading ─────────────────────────────────────────────── */
 #loading { padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 14px; }
@@ -248,4 +252,49 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 
     /* Section card lebih compact */
     .section-card { padding: 12px 10px; }
+}
+
+
+/* ── Print styles (P5-A) ─────────────────────────────────── */
+@media print {
+    .app-header, nav, .sidebar, #logout-btn,
+    .btn, button, .nav-link, .notif-bell-btn,
+    #offline-banner, .hint { display: none !important; }
+
+    body { background: #fff !important; color: #000 !important; }
+    * { box-shadow: none !important; border-color: #ccc !important; }
+
+    table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+    tr { page-break-inside: avoid; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; }
+
+    .section-card, .card { box-shadow: none; border: 1px solid #ccc; }
+    @page { margin: 15mm; }
+}
+/* ── Light mode (P5-E) ───────────────────────────────────── */
+@media (prefers-color-scheme: light) {
+    :root {
+        --color-bg:          #f8fafc;
+        --color-surface:     #ffffff;
+        --color-border:      rgba(0, 0, 0, 0.12);
+        --color-text:        rgba(0, 0, 0, 0.85);
+        --color-text-muted:  rgba(0, 0, 0, 0.45);
+        --color-primary:     #0d9488;
+        --color-primary-dark:#0f766e;
+        --color-primary-bg:  rgba(13, 148, 136, 0.10);
+        --color-success:     #16a34a;
+        --color-success-bg:  rgba(21, 128, 61, 0.10);
+        --color-danger:      #dc2626;
+        --color-danger-bg:   rgba(220, 38, 38, 0.10);
+        --color-warning:     #d97706;
+        --color-warning-bg:  rgba(180, 83, 9, 0.10);
+        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.10);
+        --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+    }
+    ::placeholder { color: rgba(0, 0, 0, 0.35); }
+    .input, select.input, textarea.input {
+        background: #f1f5f9;
+        color: rgba(0, 0, 0, 0.85);
+        border-color: rgba(0, 0, 0, 0.15);
+    }
 }

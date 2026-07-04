@@ -16,7 +16,6 @@ import {
     fetchAttendanceForDate,
     fetchRecentAttendance,
     fetchMyObservations,
-    saveAttendance,
     saveObservation,
     createDudiCase,
     getDudiCases,
@@ -28,8 +27,17 @@ import {
     getRecentNotifications,
     markNotificationsRead,
 } from './api.js';
+import {
+    saveAttendanceOffline,
+    flushPending,
+    pendingCount,
+    clearOfflineQueue,
+} from './offline.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
+const offlineBannerEl   = document.getElementById('offline-banner');
+const offlineBannerText = document.getElementById('offline-banner-text');
+
 const orgNameEl     = document.getElementById('dash-org-name');
 const userNameEl    = document.getElementById('dash-user-name');
 const logoutBtn     = document.getElementById('logout-btn');
@@ -93,6 +101,22 @@ const STATUS_LABELS = {
     SAKIT:       'Sakit',
     TIDAK_HADIR: 'Tidak Hadir',
 };
+
+// ── Offline banner ────────────────────────────────────────────
+async function updateOfflineBanner() {
+    const n = await pendingCount();
+    if (n > 0) {
+        offlineBannerText.textContent = `${n} absensi menunggu sinkron — akan terkirim otomatis saat koneksi kembali.`;
+        offlineBannerEl.style.display = 'block';
+    } else {
+        offlineBannerEl.style.display = 'none';
+    }
+}
+
+window.addEventListener('online', async () => {
+    const result = await flushPending();
+    if (result.synced > 0) await updateOfflineBanner();
+});
 
 // ── Notifikasi lonceng ────────────────────────────────────────
 let _notifPollTimer = null;
@@ -198,6 +222,9 @@ async function init() {
     await initLoginGuard(supabase, userRow);
     orgNameEl.textContent  = userRow.dudi_org_name ?? userRow.full_name;
     userNameEl.textContent = 'PJ: ' + userRow.full_name;
+
+    // Flush antrian offline + tampilkan banner bila ada sisa
+    flushPending().then(updateOfflineBanner);
 
     // Notifikasi: cek unread count, poll tiap 1 menit
     refreshNotifBadge();
@@ -345,19 +372,28 @@ async function handleSaveAttendance(btn, date) {
     saveStatusEl.style.color = 'var(--color-text-muted)';
 
     try {
-        await saveAttendance({
+        const result = await saveAttendanceOffline({
             placementId,
             studentId,
             date,
             status: statusEl.value,
             userId: currentUser.user_id,
         });
-        saveStatusEl.textContent = '✓ Tersimpan';
-        saveStatusEl.style.color = 'var(--color-success)';
-        // Update summary
-        const ids = students.map(s => s.student_id);
-        const updated = await fetchAttendanceForDate(ids, date);
-        updateSummary(updated);
+        if (result.status === 'queued') {
+            saveStatusEl.textContent = '⏳ Disimpan offline';
+            saveStatusEl.style.color = 'var(--color-warning,#92400e)';
+            await updateOfflineBanner();
+        } else if (result.status === 'error') {
+            saveStatusEl.textContent = '✗ ' + (result.error ?? 'Gagal menyimpan');
+            saveStatusEl.style.color = 'var(--color-danger)';
+        } else {
+            saveStatusEl.textContent = '✓ Tersimpan';
+            saveStatusEl.style.color = 'var(--color-success)';
+            // Update summary
+            const ids = students.map(s => s.student_id);
+            const updated = await fetchAttendanceForDate(ids, date);
+            updateSummary(updated);
+        }
     } catch (err) {
         saveStatusEl.textContent = '✗ ' + fe(err, 's');
         saveStatusEl.style.color = 'var(--color-danger)';
@@ -502,6 +538,7 @@ btnNextDay.addEventListener('click', () => {
 // ── Logout ────────────────────────────────────────────────────
 logoutBtn.addEventListener('click', async () => {
     LC.clear();
+    await clearOfflineQueue();
     await logout();
     window.location.href = 'index.html';
 });

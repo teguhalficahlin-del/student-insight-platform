@@ -86,7 +86,7 @@
                             <select id="obs-sentiment" class="input">
                                 <option value="POSITIF">Positif</option>
                                 <option value="NETRAL">Netral</option>
-                                <option value="NEGATIF">Negatif</option>
+                                <option value="NEGATIF">Perlu Perhatian</option>
                             </select>
                         </div>
                         <div class="field" style="flex:1; min-width:140px">
@@ -99,7 +99,8 @@
                     </div>
                     <div class="field">
                         <label for="obs-content">Catatan</label>
-                        <textarea id="obs-content" class="input" rows="3" placeholder="Tuliskan observasi…" required></textarea>
+                        <textarea id="obs-content" class="input" rows="3" placeholder="Tuliskan observasi…" maxlength="1000" required></textarea>
+                        <p class="hint" style="text-align:right; margin:2px 0 0"><span id="obs-char-count">0</span>/1000 karakter</p>
                     </div>
                     <button type="submit" class="btn btn-primary" id="obs-submit">Simpan Observasi</button>
                     <div id="obs-status" class="status-msg" style="display:none; margin-top:8px"></div>
