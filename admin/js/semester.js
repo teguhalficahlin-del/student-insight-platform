@@ -208,11 +208,25 @@ async function onCloseClick(container, period, config, summary) {
 // ─────────────────────────────────────────────────────────────
 
 async function renderOpenNextSemester(container, closedPeriod, config) {
-    // Hitung default tanggal: mulai 1 Januari tahun berikutnya,
-    // selesai 30 Juni tahun yang sama
+    // Hitung default tanggal (format ISO YYYY-MM-DD → perbandingan string = kronologis).
+    // Mulai: 1 Januari tahun berikutnya, TAPI tidak boleh di masa lalu atau sebelum
+    // S1 selesai — ambil yang paling akhir agar default selalu lolos validasi
+    // onOpenNextSemester (tidak pernah menolak nilai bawaannya sendiri).
     const closedYear  = parseInt(closedPeriod.academic_year.split('/')[0], 10);
-    const defaultStart = `${closedYear + 1}-01-01`;
-    const defaultEnd   = `${closedYear + 1}-06-30`;
+    const today        = new Date().toISOString().slice(0, 10);
+    const defaultStart = [`${closedYear + 1}-01-01`, today, closedPeriod.end_date]
+        .filter(Boolean)
+        .sort()
+        .pop();
+    // Selesai: 30 Juni tahun berikutnya, tapi jaga selalu setelah tanggal mulai
+    // (kasus langka: S2 dibuka lewat pertengahan tahun → geser ke mulai + 6 bulan).
+    const juneEnd    = `${closedYear + 1}-06-30`;
+    let   defaultEnd = juneEnd;
+    if (juneEnd <= defaultStart) {
+        const d = new Date(`${defaultStart}T00:00:00`);
+        d.setMonth(d.getMonth() + 6);
+        defaultEnd = d.toISOString().slice(0, 10);
+    }
 
     container.innerHTML = `
         <h3>Tutup Semester</h3>
