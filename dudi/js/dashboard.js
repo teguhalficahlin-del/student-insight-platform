@@ -98,7 +98,7 @@ const STATUS_LABELS = {
     HADIR:       'Hadir',
     IZIN:        'Izin',
     SAKIT:       'Sakit',
-    TIDAK_HADIR: 'Tidak Hadir',
+    TIDAK_HADIR: 'Alpa',
 };
 
 // ── Offline banner ────────────────────────────────────────────

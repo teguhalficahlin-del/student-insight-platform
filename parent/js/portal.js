@@ -60,7 +60,7 @@ let children    = [];
 
 const STATUS_LABELS = {
     HADIR:       'Hadir',
-    TIDAK_HADIR: 'Tidak Hadir',
+    TIDAK_HADIR: 'Alpa',
     IZIN:        'Izin',
     SAKIT:       'Sakit',
     EKSKUL:      'Hadir',   // EKSKUL dihapus dari absensi → tampil sebagai Hadir (data lama)
@@ -209,7 +209,7 @@ async function loadAttendance(studentId) {
             </div>
             <div class="summary-card card-alpha">
                 <span class="count">${counts.TIDAK_HADIR}</span>
-                <span class="label">Tidak Hadir</span>
+                <span class="label">Alpa</span>
             </div>
         `;
 

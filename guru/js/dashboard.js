@@ -402,7 +402,7 @@ async function toggleAttPanel(btn) {
         }
 
         const statuses = ['HADIR','IZIN','SAKIT','TIDAK_HADIR'];
-        const statusLabel = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Tidak Hadir' };
+        const statusLabel = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Alpa' };
 
         function renderStudentRow(s) {
             const cur      = existing.get(s.student_id)?.status ?? 'HADIR';
