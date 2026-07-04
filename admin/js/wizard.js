@@ -14,6 +14,8 @@
  * createClient kedua di sini.
  */
 
+import { checkMustChangePassword } from '../../shared/change-password.js';
+
 import {
     supabase,
     getCurrentUserRow, requireAdministrativeOrRedirect,
@@ -2104,6 +2106,10 @@ window.addEventListener('beforeunload', (e) => {
     if (!requireAdministrativeOrRedirect(userRow)) return;
     state.schoolId = userRow.school_id;
 
+    // Paksa ganti password jika di-reset superadmin (must_change_password)
+    // — dicek di sini juga agar berlaku saat wizard dibuka langsung (bookmark).
+    await checkMustChangePassword(supabase, userRow);
+
     // Tombol logout di header — di-wire lebih awal agar tetap berfungsi
     // bahkan saat wizard terblokir oleh modal ganti password.
     const logoutBtn = document.getElementById('wizard-logout-btn');
@@ -2140,7 +2146,17 @@ window.addEventListener('beforeunload', (e) => {
 
     // Cek apakah password default sudah diganti
     let config = null;
-    try { config = await getSchoolConfig(); } catch (_) { config = null; }
+    let configLoadFailed = false;
+    try { config = await getSchoolConfig(); } catch (_) { configLoadFailed = true; }
+
+    if (configLoadFailed) {
+        contentEl.innerHTML = `<div class="alert alert-danger" style="margin-top:2rem">
+            <strong>Gagal memuat konfigurasi sekolah.</strong><br>
+            Periksa koneksi internet Anda lalu
+            <a href="" style="color:inherit;text-decoration:underline">muat ulang halaman</a>.
+        </div>`;
+        return;
+    }
 
     if (!config?.password_changed) {
         showPasswordModal(true);
