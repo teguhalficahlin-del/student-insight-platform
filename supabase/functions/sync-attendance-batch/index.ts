@@ -225,6 +225,25 @@ Deno.serve(async (req: Request): Promise<Response> => {
             );
         }
 
+        // DROPOUT-1 (Tema I): tolak siswa non-AKTIF (KELUAR/LULUS/PKL). Roster
+        // online+offline sudah menyaringnya, tetapi klien offline yang basi bisa
+        // saja masih menyimpan siswa yang keluar — cegah di sini.
+        const { data: statusRows } = await admin
+            .from('students')
+            .select('student_id, student_status')
+            .in('student_id', payload.records.map(r => r.student_id));
+
+        const nonAktif = (statusRows ?? [])
+            .filter((s: { student_status: string }) => s.student_status !== 'AKTIF')
+            .map((s: { student_id: string }) => s.student_id);
+
+        if (nonAktif.length > 0) {
+            return badRequest(
+                `${nonAktif.length} siswa tidak berstatus AKTIF (mis. sudah keluar/PKL) — tidak diabsen di kelas`,
+                nonAktif.map(id => `student_id non-aktif: ${id}`)
+            );
+        }
+
         // ── 9. DB Transaction ─────────────────────────────────
         // Supabase JS does not support multi-statement transactions.
         // We use a Postgres RPC function to atomically:

@@ -115,7 +115,11 @@ export async function getEnrolledStudents(classId, academicYear) {
         .is('withdrawn_at', null)
         .order('student(full_name)');
     if (error) throw error;
-    return (data ?? []).map(r => r.student).filter(Boolean)
+    // DROPOUT-1 (Tema I): roster kelas hanya siswa AKTIF — siswa KELUAR/LULUS/PKL
+    // tak ikut diabsen di kelas (PKL diabsen via pkl_attendance). Riwayat mereka
+    // tetap terlihat di tampilan lain; ini hanya menyaring daftar absen harian.
+    return (data ?? []).map(r => r.student)
+        .filter(s => s && s.student_status === 'AKTIF')
         .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
 }
 
