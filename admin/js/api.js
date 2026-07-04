@@ -948,18 +948,41 @@ export async function checkTeacherScheduleDependencies(user_id) {
  */
 export async function releaseTeacherFromSchedules(user_id) {
     const today = new Date().toISOString().slice(0, 10);
+
+    // Ambil schedule_id sesi mendatang (> hari ini) milik guru ini
+    const { data: futureSessions, error: fetchErr } = await supabase
+        .from('teaching_schedules')
+        .select('schedule_id')
+        .eq('scheduled_teacher_id', user_id)
+        .gt('session_date', today);
+    if (fetchErr) throw fetchErr;
+
+    const ids = (futureSessions ?? []).map(s => s.schedule_id);
+
+    // Hapus substitute_schedules dulu (FK RESTRICT ke teaching_schedules)
+    if (ids.length > 0) {
+        const { error: e0 } = await supabase
+            .from('substitute_schedules')
+            .delete()
+            .in('schedule_id', ids);
+        if (e0) throw e0;
+    }
+
+    // Hapus template jadwal mingguan
     const { error: e1 } = await supabase
         .from('schedule_templates')
         .delete()
         .eq('teacher_id', user_id);
     if (e1) throw e1;
 
-    const { error: e2 } = await supabase
-        .from('teaching_schedules')
-        .delete()
-        .eq('scheduled_teacher_id', user_id)
-        .gte('session_date', today);
-    if (e2) throw e2;
+    // Hapus sesi mendatang (> hari ini) — sesi hari ini & lampau dibiarkan
+    if (ids.length > 0) {
+        const { error: e2 } = await supabase
+            .from('teaching_schedules')
+            .delete()
+            .in('schedule_id', ids);
+        if (e2) throw e2;
+    }
 }
 
 /** Kembalikan daftar GURU aktif tanpa teaching_assignment di tahun ajaran aktif. */

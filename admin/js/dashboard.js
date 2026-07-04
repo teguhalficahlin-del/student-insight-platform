@@ -690,8 +690,8 @@ async function renderStaffPanel() {
                 <td colspan="5" style="padding:10px 12px;background:#fef9c3;border-left:3px solid #ca8a04">
                     <strong style="color:#92400e">⚠ ${nama} masih punya ${warnParts.join(' dan ')}.</strong><br>
                     <span style="font-size:12px;color:#78350f">
-                        Jika dinonaktifkan, semua template jadwal dan sesi yang belum berlangsung akan dihapus otomatis.
-                        Data absensi yang sudah tercatat <em>tidak</em> ikut terhapus.
+                        Jika dinonaktifkan, semua template jadwal dan sesi mulai <em>besok</em> akan dihapus otomatis.
+                        Sesi hari ini dan data absensi yang sudah tercatat <em>tidak</em> ikut terhapus.
                     </span>
                     <div style="margin-top:8px;display:flex;gap:8px">
                         <button class="btn btn-sm staff-confirm-deactivate"
