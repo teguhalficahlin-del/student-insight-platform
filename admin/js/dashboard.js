@@ -598,44 +598,16 @@ async function renderStaffPanel() {
         if (resetBtn) {
             const userId = resetBtn.dataset.userId;
             const nama   = resetBtn.dataset.nama;
-            const modal  = document.createElement('div');
-            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
-            modal.innerHTML = `
-                <div style="background:var(--color-surface);border-radius:12px;padding:24px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
-                    <h4 style="margin:0 0 4px">Reset Password</h4>
-                    <p class="hint" style="margin:0 0 16px">Set password sementara untuk <strong>${esc(nama)}</strong>. User akan diminta ganti saat login berikutnya.</p>
-                    <div class="field" style="margin-bottom:12px">
-                        <label class="label">Password Baru (min. 8 karakter)</label>
-                        <input id="reset-pw-input" type="text" class="input" placeholder="Masukkan password sementara" autocomplete="off">
-                    </div>
-                    <div style="display:flex;gap:8px;justify-content:flex-end">
-                        <button id="reset-pw-cancel" class="btn btn-secondary btn-sm">Batal</button>
-                        <button id="reset-pw-confirm" class="btn btn-sm" style="background:var(--color-primary);color:#fff">Set Password</button>
-                    </div>
-                    <p id="reset-pw-status" style="margin:8px 0 0;font-size:13px;display:none"></p>
-                </div>`;
-            document.body.appendChild(modal);
-            document.getElementById('reset-pw-cancel').addEventListener('click', () => modal.remove());
-            document.getElementById('reset-pw-confirm').addEventListener('click', async () => {
-                const pw  = document.getElementById('reset-pw-input').value.trim();
-                const btn = document.getElementById('reset-pw-confirm');
-                const st  = document.getElementById('reset-pw-status');
-                if (pw.length < 8) { st.textContent = 'Password minimal 8 karakter.'; st.style.color = 'var(--color-danger)'; st.style.display = 'block'; return; }
-                btn.disabled = true; btn.textContent = 'Memproses…';
-                try {
-                    await adminResetUserPassword(userId, pw);
-                    st.textContent = '✓ Password berhasil direset. User akan diminta ganti saat login.';
-                    st.style.color = 'var(--color-success)';
-                    st.style.display = 'block';
-                    btn.style.display = 'none';
-                    document.getElementById('reset-pw-cancel').textContent = 'Tutup';
-                } catch (err) {
-                    st.textContent = `Gagal: ${esc(err.message)}`;
-                    st.style.color = 'var(--color-danger)';
-                    st.style.display = 'block';
-                    btn.disabled = false; btn.textContent = 'Set Password';
-                }
-            });
+            if (!confirm(`Reset password ${nama}?\n\nPassword akan diset ke "12345678". Pengguna wajib ganti saat login berikutnya.`)) return;
+            resetBtn.disabled = true; resetBtn.textContent = '…';
+            try {
+                await adminResetUserPassword(userId, '12345678');
+                resetBtn.textContent = '✓ Reset';
+                setTimeout(() => { resetBtn.disabled = false; resetBtn.textContent = 'Reset PW'; }, 2000);
+            } catch (err) {
+                alert(`Gagal reset: ${err.message}`);
+                resetBtn.disabled = false; resetBtn.textContent = 'Reset PW';
+            }
             return;
         }
 
