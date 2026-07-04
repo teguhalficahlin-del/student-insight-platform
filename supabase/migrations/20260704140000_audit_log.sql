@@ -33,7 +33,7 @@ ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS rls_audit_log_read ON audit_log;
 CREATE POLICY rls_audit_log_read ON audit_log FOR SELECT
-    USING (school_id = fn_current_school_id()
+    USING (school_id = fn_current_school_id()::text
         AND fn_current_user_role() = ANY (
             ARRAY['KEPSEK','WAKA_KESISWAAN','WAKA_HUMAS','KAPRODI','ADMINISTRATIVE']::role_type[]
         ));
