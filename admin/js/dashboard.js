@@ -1631,15 +1631,6 @@ async function renderExportPanel() {
     } catch { /* fallback */ }
     document.getElementById('dashboard-school-name').textContent = schoolName;
     document.getElementById('dashboard-user-name').textContent = `Masuk sebagai ${userRow.full_name}`;
-    if (schoolSlug) {
-        const base = window.location.href.replace(/\/admin\/.*$/, '');
-        const anchor = document.getElementById('dashboard-guru-portal-anchor');
-        const url = `${base}/guru/index.html?school=${encodeURIComponent(schoolSlug)}`;
-        anchor.href = url;
-        anchor.textContent = url;
-        document.getElementById('dashboard-guru-portal-link').style.display = '';
-    }
-
     // Delegasi klik Reset PW untuk semua panel non-staf (siswa, ortu, dudi, stakeholder)
     panelContent.addEventListener('click', async e => {
         const btn = e.target.closest('.user-reset-pw-btn');
