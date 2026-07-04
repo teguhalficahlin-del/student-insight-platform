@@ -178,7 +178,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return forbidden('Hanya akun ADMINISTRATIVE yang dapat melakukan impor jadwal massal');
         }
 
-        // ── 5. Fetch school_config (active academic_year + semester) ──
+        // ── 5. Fetch active academic_year + semester ──────────────
+        // academic_year: fn_current_academic_year = SSoT (academic_periods ACTIVE,
+        //   fallback school_config). semester tetap dari school_config.
         const { data: schoolConfig, error: configErr } = await admin
             .from('school_config')
             .select('current_academic_year, current_semester')
@@ -190,7 +192,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return internalError(configErr ?? new Error('school_config tidak ditemukan'));
         }
 
-        const academicYear = schoolConfig.current_academic_year;
+        const { data: authYear } = await admin.rpc('fn_current_academic_year', { p_school_id: user.school_id });
+        const academicYear = (authYear as string) || schoolConfig.current_academic_year;
         const semester      = schoolConfig.current_semester;
 
         // ── 6. Fetch academic_periods for the active period ───────

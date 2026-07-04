@@ -309,12 +309,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     );
                 }
 
+                const { data: authYear } = await admin.rpc('fn_current_academic_year', { p_school_id: user.school_id });
+                const resolvedAcademicYear = (authYear as string) || schoolConfig.current_academic_year;
+
                 // Fetch semua kelas lalu normalize name untuk perbandingan
                 const { data: classes, error: classErr } = await admin
                     .from('classes')
                     .select('class_id, name')
                     .eq('school_id', user.school_id)
-                    .eq('academic_year', schoolConfig.current_academic_year);
+                    .eq('academic_year', resolvedAcademicYear);
 
                 if (classErr) {
                     console.error('[bulk-import-users] class lookup failed:', classErr);
@@ -336,7 +339,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     if (!classId) {
                         errors.push({
                             row: row.rowNumber,
-                            message: `Kelas "${row.nama_kelas}" tidak ditemukan untuk tahun ajaran ${schoolConfig.current_academic_year}. ` +
+                            message: `Kelas "${row.nama_kelas}" tidak ditemukan untuk tahun ajaran ${resolvedAcademicYear}. ` +
                                      `Pastikan nama kelas sesuai dengan data di Tahap 3.`,
                         });
                         validRows.splice(validRows.indexOf(row), 1);

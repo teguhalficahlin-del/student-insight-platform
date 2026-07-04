@@ -43,7 +43,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return forbidden('Hanya akun ADMINISTRATIVE yang dapat menerapkan jadwal');
         }
 
-        // Periode aktif dari school_config
+        // Periode aktif: academic_year dari fn_current_academic_year (SSoT),
+        // semester dari school_config.
         const { data: config, error: configErr } = await admin
             .from('school_config')
             .select('current_academic_year, current_semester')
@@ -54,7 +55,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return internalError(configErr ?? new Error('school_config tidak ditemukan'));
         }
 
-        const { current_academic_year: academicYear, current_semester: semester } = config;
+        const { data: authYear } = await admin.rpc('fn_current_academic_year', { p_school_id: user.school_id });
+        const academicYear = (authYear as string) || config.current_academic_year;
+        const semester     = config.current_semester;
 
         // Generasi set-based di DB (discope ke sekolah pemanggil).
         const { data: result, error: rpcErr } = await admin.rpc('fn_apply_schedule_templates', {
