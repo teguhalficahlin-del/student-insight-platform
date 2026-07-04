@@ -56,6 +56,38 @@ document.getElementById('logout-btn').addEventListener('click', () => {
     window.location.href = 'index.html';
 });
 
+// ── Health badges per sekolah ─────────────────────────────────
+function renderHealthBadges(h) {
+    if (!h) return '';
+
+    function jabatanBadge(label, count) {
+        if (count === 0) return `<span class="hbadge hbadge-missing">✗ ${label}</span>`;
+        if (count === 1) return `<span class="hbadge hbadge-ok">✓ ${label}</span>`;
+        return `<span class="hbadge hbadge-dup">⚠ ${label} (${count}×!)</span>`;
+    }
+
+    const provRatio = h.student_count > 0
+        ? Math.round((h.provisioned_count / h.student_count) * 100)
+        : null;
+
+    return `
+    <div class="health-panel">
+      <div class="health-row health-jabatan">
+        ${jabatanBadge('Kepsek', h.kepsek_count)}
+        ${jabatanBadge('Waka Kur.', h.waka_kurikulum_count)}
+        ${jabatanBadge('Waka Kes.', h.waka_kesiswaan_count)}
+        ${jabatanBadge('Waka Humas', h.waka_humas_count)}
+      </div>
+      <div class="health-row health-counts">
+        <span class="hstat"><strong>${h.staff_count}</strong> staf</span>
+        <span class="hstat"><strong>${h.student_count}</strong> siswa</span>
+        ${provRatio !== null
+            ? `<span class="hstat ${provRatio < 100 ? 'hstat-warn' : ''}"><strong>${h.provisioned_count}</strong>/${h.student_count} punya akun (${provRatio}%)</span>`
+            : ''}
+      </div>
+    </div>`;
+}
+
 // ── Load daftar sekolah ───────────────────────────────────────
 async function loadSchools() {
     const hintEl  = document.getElementById('schools-hint');
@@ -112,6 +144,7 @@ async function loadSchools() {
                   <div class="meta-row"><dt>Warna</dt><dd style="display:flex;align-items:center;gap:6px">${colorSwatch}</dd></div>
                   <div class="meta-row"><dt>Terdaftar</dt><dd>${fmt(s.created_at)}</dd></div>
                 </dl>
+                ${renderHealthBadges(s.health)}
                 <div class="school-actions">
                   <button class="btn btn-sm btn-secondary reset-pw-btn"
                       data-school-id="${esc(s.school_id)}"

@@ -369,6 +369,81 @@ Deno.serve(async (req: Request): Promise<Response> => {
             existingSet = new Set((existing as string[] | null) ?? []);
         }
 
+        // ── 9c. Singleton jabatan check ────────────────────────
+        // Jabatan KEPSEK/WAKA_* hanya boleh 1 orang aktif per sekolah.
+        // Dilakukan SETELAH existingSet terisi agar baris re-impor
+        // (identifier sudah ada di DB) tidak dihitung sebagai "baru".
+        if (validRows.length > 0) {
+            type SFEntry = { fileRows: ImportRow[] };
+            const singletonFlags: Record<string, SFEntry> = {
+                KEPSEK:         { fileRows: [] },
+                WAKA_KURIKULUM: { fileRows: [] },
+                WAKA_KESISWAAN: { fileRows: [] },
+                WAKA_HUMAS:     { fileRows: [] },
+            };
+            for (const row of validRows) {
+                if (row.role_type === 'KEPSEK'         || row.is_kepsek)         singletonFlags['KEPSEK'].fileRows.push(row);
+                if (row.role_type === 'WAKA_KURIKULUM' || row.is_waka_kurikulum) singletonFlags['WAKA_KURIKULUM'].fileRows.push(row);
+                if (row.role_type === 'WAKA_KESISWAAN' || row.is_waka_kesiswaan) singletonFlags['WAKA_KESISWAAN'].fileRows.push(row);
+                if (row.role_type === 'WAKA_HUMAS'     || row.is_waka_humas)     singletonFlags['WAKA_HUMAS'].fileRows.push(row);
+            }
+
+            // Apakah ada jabatan singleton yang memiliki baris BARU (bukan re-impor)?
+            const hasSingletonNew = Object.values(singletonFlags)
+                .some(({ fileRows }) => fileRows.some(r => !existingSet.has(r.nip_atau_nik)));
+
+            if (hasSingletonNew) {
+                // Ambil semua user aktif & tidak terhapus, filter di app (satu query)
+                const { data: activeUsers, error: singletonErr } = await admin
+                    .from('users')
+                    .select('full_name, role_type, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, is_waka_humas')
+                    .eq('school_id', user.school_id)
+                    .eq('is_active', true)
+                    .is('deleted_at', null);
+                if (singletonErr) {
+                    console.error('[bulk-import-users] singleton check failed:', singletonErr);
+                    return internalError(singletonErr);
+                }
+
+                type UserRow = { full_name: string; role_type: string; is_kepsek: boolean; is_waka_kurikulum: boolean; is_waka_kesiswaan: boolean; is_waka_humas: boolean };
+                const au = (activeUsers ?? []) as UserRow[];
+
+                const dbWho: Record<string, string | null> = {
+                    KEPSEK:         au.find(u => u.role_type === 'KEPSEK'         || u.is_kepsek)?.full_name         ?? null,
+                    WAKA_KURIKULUM: au.find(u => u.role_type === 'WAKA_KURIKULUM' || u.is_waka_kurikulum)?.full_name ?? null,
+                    WAKA_KESISWAAN: au.find(u => u.role_type === 'WAKA_KESISWAAN' || u.is_waka_kesiswaan)?.full_name ?? null,
+                    WAKA_HUMAS:     au.find(u => u.role_type === 'WAKA_HUMAS'     || u.is_waka_humas)?.full_name     ?? null,
+                };
+
+                for (const [jabatan, { fileRows }] of Object.entries(singletonFlags)) {
+                    const newRows = fileRows.filter(r => !existingSet.has(r.nip_atau_nik));
+                    if (newRows.length === 0) continue;
+
+                    // Duplikat dalam file itu sendiri (>1 baris baru untuk jabatan ini)
+                    if (newRows.length > 1) {
+                        for (const r of newRows.slice(1)) {
+                            errors.push({
+                                row: r.rowNumber,
+                                message: `Duplikat ${jabatan} dalam file: baris ${newRows[0].rowNumber} (${newRows[0].nama}) sudah menjadi ${jabatan}. Setiap sekolah hanya boleh memiliki satu pemegang jabatan ini.`,
+                            });
+                            validRows.splice(validRows.indexOf(r), 1);
+                        }
+                    }
+
+                    // Konflik dengan DB: jabatan sudah dipegang orang lain
+                    if (dbWho[jabatan]) {
+                        for (const r of newRows.slice(0, 1)) {
+                            errors.push({
+                                row: r.rowNumber,
+                                message: `Konflik ${jabatan}: sekolah ini sudah memiliki "${dbWho[jabatan]}" sebagai ${jabatan}. Nonaktifkan atau hapus pemegang lama sebelum mengimpor pengganti.`,
+                            });
+                            validRows.splice(validRows.indexOf(r), 1);
+                        }
+                    }
+                }
+            }
+        }
+
         // ── 9a. Deteksi identifier yang sedang di Recycle Bin (soft-deleted) ──
         // Re-impor / tambah-ulang identifier yang masih ada di DB tapi terhapus
         // sementara HARUS memulihkannya (undelete + unban Auth), bukan sekadar

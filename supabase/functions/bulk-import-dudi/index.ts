@@ -230,7 +230,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             // Sertakan school_id prefix agar email unik antar-sekolah (Auth bersifat global)
             const schoolPrefix  = user.school_id.replace(/-/g, '').substring(0, 8);
             const internalEmail = `${row.slug}@${schoolPrefix}.dudi`;
-            const password      = `${row.slug}!SMK`;
+            const password      = '12345678';
 
             const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                 email:         internalEmail,
@@ -247,15 +247,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { data: insertedUser, error: insertErr } = await admin
                 .from('users')
                 .insert({
-                    auth_user_id:     authUser.user.id,
-                    full_name:        row.nama_penanggung_jawab,
-                    email:            internalEmail,
-                    login_identifier: row.slug,
-                    identifier_type:  'NAMA_USAHA',
-                    role_type:        'DUDI',
-                    dudi_org_name:    row.nama_usaha,
-                    program_id:       row.programId,
-                    school_id:        user.school_id,
+                    auth_user_id:         authUser.user.id,
+                    full_name:            row.nama_penanggung_jawab,
+                    email:                internalEmail,
+                    login_identifier:     row.slug,
+                    identifier_type:      'NAMA_USAHA',
+                    role_type:            'DUDI',
+                    dudi_org_name:        row.nama_usaha,
+                    program_id:           row.programId,
+                    school_id:            user.school_id,
+                    must_change_password: true,
                 })
                 .select('user_id')
                 .single();

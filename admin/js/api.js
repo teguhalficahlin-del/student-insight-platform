@@ -45,15 +45,13 @@ export async function loginWithIdentifier(identifier, password, schoolId = null)
     const { data: email, error: resolveErr } = await supabase
         .rpc('fn_resolve_login_email', { p_identifier: identifier, p_school_id: schoolId });
 
-    if (resolveErr || !email) {
-        throw new Error('Identifier atau password salah');
-    }
-
+    if (resolveErr) throw new Error('Gagal menghubungi server. Coba lagi.');
+    if (!email) throw new Error('Identifier tidak ditemukan di sekolah ini. Hubungi superadmin jika akun belum dibuat.');
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
         if (error.status === 429 || /rate limit|too many/i.test(error.message || ''))
             throw new Error('Terlalu banyak percobaan login. Tunggu ±15 menit lalu coba lagi.');
-        throw new Error('Identifier atau password salah');
+        throw new Error('Password salah. Jika baru pertama login, gunakan password sementara dari superadmin.');
     }
 
     return data.user;

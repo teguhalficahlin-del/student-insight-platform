@@ -140,7 +140,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
                     const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                         email:         internalEmail,
-                        password:      `${s.nis}!SMK`,
+                        password:      '12345678',
                         email_confirm: true,
                     });
                     if (authErr || !authUser?.user) {
@@ -151,13 +151,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     const { data: insertedUser, error: insErr } = await admin
                         .from('users')
                         .insert({
-                            auth_user_id:     authUser.user.id,
-                            full_name:        s.full_name,
-                            email:            internalEmail,
-                            login_identifier: s.nis,
-                            identifier_type:  'NIS',
-                            role_type:        'SISWA',
-                            school_id:        user.school_id,
+                            auth_user_id:      authUser.user.id,
+                            full_name:         s.full_name,
+                            email:             internalEmail,
+                            login_identifier:  s.nis,
+                            identifier_type:   'NIS',
+                            role_type:         'SISWA',
+                            school_id:         user.school_id,
+                            must_change_password: true,
                         })
                         .select('user_id')
                         .single();

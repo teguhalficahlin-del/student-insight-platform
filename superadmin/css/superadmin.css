@@ -217,6 +217,21 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; c
 .meta-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .color-swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
 
+/* ── Health panel ────────────────────────────────────────────── */
+.health-panel { margin: 10px 0 8px; display: flex; flex-direction: column; gap: 6px; }
+.health-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.hbadge {
+    display: inline-flex; align-items: center;
+    padding: 2px 9px; border-radius: 20px;
+    font-size: 11px; font-weight: 600; letter-spacing: .02em;
+}
+.hbadge-ok      { background: var(--color-success-bg); color: var(--color-success); }
+.hbadge-missing { background: #3b0a0a; color: #f87171; }
+.hbadge-dup     { background: #451a03; color: #fb923c; }
+.hstat { font-size: 11px; color: var(--color-text-muted); }
+.hstat strong { color: var(--color-text); }
+.hstat.hstat-warn strong { color: #fb923c; }
+
 /* Aksi buttons */
 .school-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .school-actions .btn { flex: 1; min-width: 120px; }

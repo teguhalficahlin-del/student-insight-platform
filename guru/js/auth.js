@@ -52,8 +52,7 @@ form.addEventListener('submit', async (e) => {
         await checkMustChangePassword(supabase, row);
         window.location.href = 'dashboard.html';
     } catch (err) {
-        const isOurMsg = err.message?.startsWith('Akun ini');
-        errEl.textContent    = isOurMsg ? err.message : 'Login gagal. Periksa NIP/NIK dan password Anda.';
+        errEl.textContent    = err.message ?? 'Login gagal. Periksa NIP/NIK dan password Anda.';
         errEl.style.display  = 'block';
         loginBtn.disabled    = false;
         loginBtn.textContent = 'Masuk';

@@ -215,7 +215,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             // sekolah (anak di sekolah berbeda). Auth global → tanpa prefix,
             // createUser sekolah kedua gagal "email already registered".
             const internalEmail = toInternalEmail(nik, 'NIK', user.school_id);
-            const password      = `${nik}!SMK`;
+            const password      = '12345678';
 
             const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                 email:         internalEmail,
@@ -231,13 +231,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { data: insertedUser, error: insertErr } = await admin
                 .from('users')
                 .insert({
-                    auth_user_id:     authUser.user.id,
-                    full_name:        namaOrtu,
-                    email:            internalEmail,
-                    login_identifier: nik,
-                    identifier_type:  'NIK',
-                    role_type:        'ORTU',
-                    school_id:        user.school_id,
+                    auth_user_id:         authUser.user.id,
+                    full_name:            namaOrtu,
+                    email:                internalEmail,
+                    login_identifier:     nik,
+                    identifier_type:      'NIK',
+                    role_type:            'ORTU',
+                    school_id:            user.school_id,
+                    must_change_password: true,
                 })
                 .select('user_id')
                 .single();

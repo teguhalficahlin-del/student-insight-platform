@@ -29,12 +29,13 @@ export const GURU_ROLES = ['GURU','WALI_KELAS','BK','KAPRODI','KEPSEK','WAKA_KUR
 export async function loginWithIdentifier(identifier, password, schoolId = null) {
     const { data: email, error: resolveErr } = await supabase
         .rpc('fn_resolve_login_email', { p_identifier: identifier, p_school_id: schoolId });
-    if (resolveErr || !email) throw new Error('NIP/NIK atau password salah');
+    if (resolveErr) throw new Error('Gagal menghubungi server. Coba lagi.');
+    if (!email) throw new Error('NIP/NIK tidak ditemukan di sekolah ini. Hubungi admin untuk memastikan akun sudah dibuat.');
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
         if (error.status === 429 || /rate limit|too many/i.test(error.message || ''))
             throw new Error('Terlalu banyak percobaan login. Tunggu ±15 menit lalu coba lagi.');
-        throw new Error('NIP/NIK atau password salah');
+        throw new Error('Password salah. Jika baru pertama login, gunakan password default dari admin.');
     }
 }
 
