@@ -717,7 +717,7 @@ async function renderStudentsPanel() {
         supabase.from('classes').select('class_id, name, grade_level')
             .order('grade_level').order('name'),
         supabase.from('class_enrollments')
-            .select('class_id, student:students!inner(student_id, full_name, nis)')
+            .select('class_id, student:students!inner(student_id, full_name, nis, user_id)')
             .eq('academic_year', config?.current_academic_year ?? '')
             .is('withdrawn_at', null)
             .eq('students.student_status', 'AKTIF'),
@@ -735,8 +735,10 @@ async function renderStudentsPanel() {
     const aktifHtml  = renderClassAccordion(
         allClasses ?? [],
         classMap,
-        ['Nama', 'NIS'],
-        s => `<tr><td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td></tr>`,
+        ['Nama', 'NIS', 'Aksi'],
+        s => `<tr><td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td><td>${s.user_id
+            ? `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${s.user_id}" data-nama="${esc(s.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button>`
+            : '<span class="hint" style="font-size:11px">belum ada akun</span>'}</td></tr>`,
     );
 
     const provisionHtml = `
@@ -845,14 +847,14 @@ async function renderParentsPanel() {
     let aktifHtml = renderClassAccordion(
         allClasses ?? [],
         classMap,
-        ['Nama', 'NIK'],
-        u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td></tr>`,
+        ['Nama', 'NIK', 'Aksi'],
+        u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td><button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button></td></tr>`,
     );
     if (tanpaKelas.length > 0) {
         aktifHtml += `<details style="margin-bottom:8px">
             <summary style="cursor:pointer;font-weight:600">Tanpa Kelas (${tanpaKelas.length})</summary>
-            <table class="table" style="margin-top:4px"><thead><tr><th>Nama</th><th>NIK</th></tr></thead>
-            <tbody>${tanpaKelas.map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td></tr>`).join('')}</tbody>
+            <table class="table" style="margin-top:4px"><thead><tr><th>Nama</th><th>NIK</th><th>Aksi</th></tr></thead>
+            <tbody>${tanpaKelas.map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td><button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button></td></tr>`).join('')}</tbody>
             </table></details>`;
     }
 
@@ -1194,15 +1196,15 @@ async function printAlumniRecap(studentId) {
 
 async function renderDudiPanel() {
     const [{ data: users }, programs] = await Promise.all([
-        supabase.from('users').select('full_name, dudi_org_name, program_id').eq('role_type', 'DUDI').is('deleted_at', null).order('dudi_org_name'),
+        supabase.from('users').select('user_id, full_name, dudi_org_name, program_id').eq('role_type', 'DUDI').is('deleted_at', null).order('dudi_org_name'),
         getPrograms(),
     ]);
     const pn = new Map(programs.map(p => [p.program_id, p.name]));
     const grouped = renderGroupedTable(
         users ?? [],
         u => u.program_id ? (pn.get(u.program_id) ?? '—') : 'Tanpa Program / Lintas Program',
-        ['Nama Usaha', 'Penanggung Jawab'],
-        u => `<tr><td>${u.dudi_org_name ?? '—'}</td><td>${u.full_name}</td></tr>`,
+        ['Nama Usaha', 'Penanggung Jawab', 'Aksi'],
+        u => `<tr><td>${u.dudi_org_name ?? '—'}</td><td>${u.full_name}</td><td><button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button></td></tr>`,
     );
     panelContent.innerHTML = `
         <h3>DUDI (${(users ?? []).length})</h3>
@@ -1211,12 +1213,12 @@ async function renderDudiPanel() {
 }
 
 async function renderStakeholdersPanel() {
-    const { data: users } = await supabase.from('users').select('full_name, login_identifier').eq('role_type', 'STAKEHOLDER').is('deleted_at', null).order('full_name');
+    const { data: users } = await supabase.from('users').select('user_id, full_name, login_identifier').eq('role_type', 'STAKEHOLDER').is('deleted_at', null).order('full_name');
     panelContent.innerHTML = `
         <h3>Stakeholder (${(users ?? []).length})</h3>
         <table class="table">
-            <thead><tr><th>Nama</th><th>Kode Login</th></tr></thead>
-            <tbody>${(users ?? []).map(u => `<tr><td>${u.full_name}</td><td>${u.login_identifier}</td></tr>`).join('')}</tbody>
+            <thead><tr><th>Nama</th><th>Kode Login</th><th>Aksi</th></tr></thead>
+            <tbody>${(users ?? []).map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td><button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button></td></tr>`).join('')}</tbody>
         </table>
     `;
 }
@@ -1623,6 +1625,24 @@ async function renderExportPanel() {
         anchor.textContent = url;
         document.getElementById('dashboard-guru-portal-link').style.display = '';
     }
+
+    // Delegasi klik Reset PW untuk semua panel non-staf (siswa, ortu, dudi, stakeholder)
+    panelContent.addEventListener('click', async e => {
+        const btn = e.target.closest('.user-reset-pw-btn');
+        if (!btn) return;
+        const userId = btn.dataset.userId;
+        const nama   = btn.dataset.nama;
+        if (!confirm(`Reset password ${nama}?\n\nPassword akan diset ke "12345678". Pengguna wajib ganti saat login berikutnya.`)) return;
+        btn.disabled = true; btn.textContent = '…';
+        try {
+            await adminResetUserPassword(userId, '12345678');
+            btn.textContent = '✓ Reset';
+            setTimeout(() => { btn.disabled = false; btn.textContent = 'Reset PW'; }, 2000);
+        } catch (err) {
+            alert(`Gagal reset: ${err.message}`);
+            btn.disabled = false; btn.textContent = 'Reset PW';
+        }
+    });
 
     renderSetupPanel();
 })();
