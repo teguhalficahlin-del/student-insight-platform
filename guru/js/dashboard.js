@@ -12,7 +12,7 @@ import {
     listSchoolAdmins, addSchoolAdmin, removeSchoolAdmin,
     getJabatan, jabatanLabel, getSchoolConfig,
     getMyScheduleForDate, getEnrolledStudents,
-    getAttendanceForSession, upsertAttendance,
+    getAttendanceForSession,
     getMyStudents, searchStudents, insertObservation,
     getWaliKelasInfo, getWaliAttendanceSummary,
     getProgram, fetchPklStudents, fetchNonPklStudents,

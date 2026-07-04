@@ -134,23 +134,11 @@ export async function getAttendanceForSession(scheduleId) {
     return map;
 }
 
-/**
- * Simpan kehadiran satu sesi. rows = [{ student_id, status, notes? }].
- * Upsert on (schedule_id, student_id).
- */
-export async function upsertAttendance(scheduleId, rows) {
-    const payload = rows.map(r => ({
-        schedule_id: scheduleId,
-        student_id:  r.student_id,
-        status:      r.status,
-        source:      'TEACHER_DECLARED',
-        notes:       r.notes ?? null,
-    }));
-    const { error } = await supabase
-        .from('attendance')
-        .upsert(payload, { onConflict: 'schedule_id,student_id', ignoreDuplicates: false });
-    if (error) throw error;
-}
+// Catatan (ABS-5, audit absensi 2026-07-04): fungsi upsertAttendance dihapus.
+// Ia menulis langsung ke tabel attendance tanpa validasi enrolmen (yang hanya
+// ada di jalur edge sync-attendance-batch) dan sudah tidak dipakai — semua
+// penyimpanan absensi lewat saveAttendanceBatch → edge. Jangan hidupkan kembali
+// jalur tulis langsung tanpa validasi siswa-terdaftar setara jalur edge.
 
 // ─── OBSERVASI ───────────────────────────────────────────────
 
