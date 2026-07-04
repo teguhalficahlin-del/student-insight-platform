@@ -1,22 +1,24 @@
 /**
  * @file apply-schedule-templates/index.ts
  *
- * Tombol "Terapkan Jadwal" di visual schedule builder: men-generate
- * teaching_schedules dari schedule_templates untuk periode aktif.
+ * Tombol "Terapkan Jadwal" dan "Terapkan Ulang Jadwal" di visual schedule builder.
  *
- * Generasi sebenarnya dilakukan SET-BASED di DB lewat RPC
- * fn_apply_schedule_templates (lihat migrasi
- * 20260630230000_fix_apply_schedule.sql) — jauh lebih cepat & atomik
- * daripada membangun ~34k baris di klien lalu di-upsert per-chunk
- * (yang sebelumnya rawan timeout). Edge function ini hanya meng-auth
- * dan meneruskan periode aktif ke RPC.
+ * Mode default (tanpa ?mode):
+ *   Panggil fn_apply_schedule_templates — generate sesi dari template,
+ *   ON CONFLICT DO NOTHING (tidak sentuh sesi yang sudah ada).
+ *   Cocok untuk awal semester.
+ *
+ * Mode reapply (?mode=reapply):
+ *   Panggil fn_reapply_schedule_templates — hapus sesi masa depan tanpa
+ *   absensi lalu generate ulang dari template terkini.
+ *   Cocok setelah perubahan template mid-semester (ganti guru, ganti slot).
  *
  * CONTRACT:
- *   POST /functions/v1/apply-schedule-templates
+ *   POST /functions/v1/apply-schedule-templates[?mode=reapply]
  *   Body: kosong
  *   Auth: ADMINISTRATIVE
  *   Response: { templates_found, assignments_upserted,
- *               schedules_total, schedules_generated }
+ *               schedules_total, schedules_generated, sessions_deleted? }
  */
 
 import { handleCors, corsHeaders } from '../_shared/cors.ts';
@@ -43,6 +45,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return forbidden('Hanya akun ADMINISTRATIVE yang dapat menerapkan jadwal');
         }
 
+        const url      = new URL(req.url);
+        const isReapply = url.searchParams.get('mode') === 'reapply';
+
         // Periode aktif: academic_year dari fn_current_academic_year (SSoT),
         // semester dari school_config.
         const { data: config, error: configErr } = await admin
@@ -59,8 +64,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const academicYear = (authYear as string) || config.current_academic_year;
         const semester     = config.current_semester;
 
-        // Generasi set-based di DB (discope ke sekolah pemanggil).
-        const { data: result, error: rpcErr } = await admin.rpc('fn_apply_schedule_templates', {
+        const rpcName = isReapply ? 'fn_reapply_schedule_templates' : 'fn_apply_schedule_templates';
+        const { data: result, error: rpcErr } = await admin.rpc(rpcName, {
             p_academic_year: academicYear,
             p_semester:      semester,
             p_school_id:     user.school_id,
@@ -77,6 +82,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             assignments_upserted: result.assignments_upserted,
             schedules_total:      result.schedules_generated,
             schedules_generated:  result.schedules_generated,
+            ...(isReapply && { sessions_deleted: result.sessions_deleted }),
         });
 
     } catch (err) {

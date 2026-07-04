@@ -12,7 +12,7 @@ import {
     getSchoolConfig, getClasses, getTeacherList,
     getTimeSlots, saveTimeSlots,
     getScheduleTemplates, saveScheduleTemplates,
-    applyScheduleTemplates,
+    applyScheduleTemplates, reapplyScheduleTemplates,
 } from './api.js';
 
 const DAYS = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
@@ -74,7 +74,8 @@ function createOverlay() {
                 <button type="button" class="btn btn-secondary" id="sched-add-break" style="padding:6px 12px">+ Istirahat/Kegiatan</button>
                 <span class="sched-conflict-count" id="sched-conflict-count"></span>
                 <button type="button" class="btn btn-primary" id="sched-save" style="padding:6px 16px;margin-left:auto">Simpan</button>
-                <button type="button" class="btn btn-success" id="sched-apply" style="padding:6px 16px" title="Generate jadwal harian dari template yang sudah disimpan">Terapkan Jadwal</button>
+                <button type="button" class="btn btn-success" id="sched-apply" style="padding:6px 16px" title="Generate jadwal harian dari template yang sudah disimpan. Tidak mengubah sesi yang sudah ada.">Terapkan Jadwal</button>
+                <button type="button" class="btn btn-warning" id="sched-reapply" style="padding:6px 16px" title="Hapus sesi masa depan (tanpa absensi) lalu generate ulang dari template terkini. Gunakan setelah ganti guru atau ubah slot jadwal.">Terapkan Ulang</button>
             </div>
 
             <div class="sched-body">
@@ -100,6 +101,7 @@ function createOverlay() {
     overlayEl.querySelector('#sched-add-break').addEventListener('click', () => addRow(true));
     overlayEl.querySelector('#sched-save').addEventListener('click', save);
     overlayEl.querySelector('#sched-apply').addEventListener('click', applyTemplates);
+    overlayEl.querySelector('#sched-reapply').addEventListener('click', reapplyTemplates);
 
     overlayEl.querySelector('#sched-day-tabs').addEventListener('click', async (e) => {
         const day = e.target.dataset?.day;
@@ -531,6 +533,51 @@ async function applyTemplates() {
         applyBtn.disabled = false;
         applyBtn.textContent = 'Terapkan Jadwal';
         applyBtn.style.background = '';
+    }
+}
+
+async function reapplyTemplates() {
+    if (state.dirty) {
+        if (!confirm('Ada perubahan yang belum disimpan. Simpan dulu sebelum menerapkan ulang?')) return;
+        await save();
+        if (state.dirty) return;
+    }
+
+    const statusEl   = overlayEl.querySelector('#sched-status');
+    const reapplyBtn = overlayEl.querySelector('#sched-reapply');
+    const applyBtn   = overlayEl.querySelector('#sched-apply');
+
+    const confirmed = confirm(
+        'Terapkan Ulang Jadwal akan menghapus semua sesi mulai besok yang belum punya absensi, ' +
+        'lalu men-generate ulang dari template terkini.\n\n' +
+        'Sesi hari ini dan sesi yang sudah ada absensinya tidak akan terganggu.\n\n' +
+        'Lanjutkan?'
+    );
+    if (!confirmed) return;
+
+    reapplyBtn.disabled = true;
+    applyBtn.disabled   = true;
+    reapplyBtn.textContent = 'Menerapkan ulang...';
+    statusEl.textContent   = '';
+
+    try {
+        const result = await reapplyScheduleTemplates();
+        const deleted   = result.sessions_deleted   ?? 0;
+        const generated = result.schedules_generated ?? 0;
+        statusEl.textContent =
+            `✓ Jadwal diperbarui — ${deleted} sesi lama dihapus, ` +
+            `${result.templates_found} template, ${generated} sesi baru dibuat.`;
+        statusEl.style.color    = 'var(--color-success)';
+        reapplyBtn.textContent  = '✓ Jadwal Diperbarui';
+        reapplyBtn.style.background = 'var(--color-success)';
+    } catch (err) {
+        statusEl.textContent = `✗ Gagal: ${err.message}`;
+        statusEl.style.color = 'var(--color-danger)';
+        reapplyBtn.textContent = 'Terapkan Ulang';
+        reapplyBtn.style.background = '';
+    } finally {
+        reapplyBtn.disabled = false;
+        applyBtn.disabled   = false;
     }
 }
 

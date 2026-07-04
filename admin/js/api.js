@@ -647,6 +647,24 @@ export async function provisionStudentAccounts(limit = 150) {
  * Terapkan template jadwal yang sudah tersimpan menjadi teaching_schedules
  * untuk seluruh rentang academic_periods aktif.
  */
+export async function reapplyScheduleTemplates() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) throw new Error('Sesi login tidak ditemukan. Silakan login ulang.');
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/apply-schedule-templates?mode=reapply`, {
+        method:  'POST',
+        headers: {
+            'Authorization':    `Bearer ${token}`,
+            'x-schema-version': '1.0.0',
+        },
+    });
+
+    const body = await res.json();
+    if (!res.ok) throw new Error(body?.error?.message ?? 'Gagal menerapkan ulang jadwal');
+    return body.data;
+}
+
 export async function applyScheduleTemplates() {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
