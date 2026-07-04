@@ -444,7 +444,7 @@ function buildJabatan(u) {
 
 async function renderStaffPanel() {
     const users = await fetchAllRows('users',
-        q => q.select('user_id, full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, is_waka_humas, wali_kelas_class_id, kaprodi_program_id, is_active')
+        q => q.select('user_id, full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, is_waka_humas, wali_kelas_class_id, kaprodi_program_id, is_active, must_change_password')
               .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")')
               .is('deleted_at', null)
               .order('full_name'));
@@ -459,7 +459,9 @@ async function renderStaffPanel() {
         const btn = u.is_active === false
             ? `<button class="btn btn-sm btn-secondary staff-toggle-btn" data-user-id="${u.user_id}" data-active="false" style="font-size:11px;padding:3px 8px">Aktifkan</button>`
             : `<button class="btn btn-sm staff-toggle-btn" data-user-id="${u.user_id}" data-active="true" style="font-size:11px;padding:3px 8px;background:#b45309;color:#fff;border-color:#b45309">Nonaktifkan</button>`;
-        const resetBtn = `<button class="btn btn-sm btn-secondary staff-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px;margin-left:4px">Reset PW</button>`;
+        const resetBtn = u.must_change_password
+            ? `<button class="btn btn-sm btn-secondary" disabled style="font-size:11px;padding:3px 8px;margin-left:4px;opacity:0.6" title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
+            : `<button class="btn btn-sm btn-secondary staff-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px;margin-left:4px">Reset PW</button>`;
         return `<tr style="${rowStyle}">
             <td>${esc(u.full_name)}${badge}</td>
             <td>${esc(u.login_identifier)}</td>
@@ -602,8 +604,10 @@ async function renderStaffPanel() {
             resetBtn.disabled = true; resetBtn.textContent = '…';
             try {
                 await adminResetUserPassword(userId, '12345678');
-                resetBtn.textContent = '✓ Reset';
-                setTimeout(() => { resetBtn.disabled = false; resetBtn.textContent = 'Reset PW'; }, 2000);
+                resetBtn.classList.remove('staff-reset-pw-btn');
+                resetBtn.textContent = 'Menunggu ganti PW';
+                resetBtn.title = 'Menunggu pengguna ganti password';
+                resetBtn.style.opacity = '0.6';
             } catch (err) {
                 alert(`Gagal reset: ${err.message}`);
                 resetBtn.disabled = false; resetBtn.textContent = 'Reset PW';
@@ -713,7 +717,7 @@ async function renderStudentsPanel() {
     ]);
 
     // Fetch semua kelas + enrollment tahun ajaran aktif sekaligus
-    const [{ data: allClasses }, { data: enrollments }] = await Promise.all([
+    const [{ data: allClasses }, { data: enrollments }, { data: pendingPwUsers }] = await Promise.all([
         supabase.from('classes').select('class_id, name, grade_level')
             .order('grade_level').order('name'),
         supabase.from('class_enrollments')
@@ -721,7 +725,9 @@ async function renderStudentsPanel() {
             .eq('academic_year', config?.current_academic_year ?? '')
             .is('withdrawn_at', null)
             .eq('students.student_status', 'AKTIF'),
+        supabase.from('users').select('user_id').eq('role_type', 'SISWA').eq('must_change_password', true),
     ]);
+    const pendingPwSet = new Set((pendingPwUsers ?? []).map(u => u.user_id));
 
     // classId → [siswa aktif] terurut per nama
     const classMap = new Map((allClasses ?? []).map(c => [c.class_id, []]));
@@ -737,7 +743,9 @@ async function renderStudentsPanel() {
         classMap,
         ['Nama', 'NIS', 'Aksi'],
         s => `<tr><td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td><td>${s.user_id
-            ? `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${s.user_id}" data-nama="${esc(s.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button>`
+            ? (pendingPwSet.has(s.user_id)
+                ? `<button class="btn btn-sm btn-secondary" disabled style="font-size:11px;padding:3px 8px;opacity:0.6" title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
+                : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${s.user_id}" data-nama="${esc(s.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button>`)
             : '<span class="hint" style="font-size:11px">belum ada akun</span>'}</td></tr>`,
     );
 
@@ -800,7 +808,7 @@ async function runProvisionStudents() {
 
 async function renderParentsPanel() {
     const [parents, links, config] = await Promise.all([
-        fetchAllRows('users', q => q.select('user_id, full_name, login_identifier').eq('role_type', 'ORTU').order('full_name')),
+        fetchAllRows('users', q => q.select('user_id, full_name, login_identifier, must_change_password').eq('role_type', 'ORTU').order('full_name')),
         fetchAllRows('student_parents', q => q.select('parent_user_id, students ( student_id, student_status )')),
         getSchoolConfig(),
     ]);
@@ -848,13 +856,17 @@ async function renderParentsPanel() {
         allClasses ?? [],
         classMap,
         ['Nama', 'NIK', 'Aksi'],
-        u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td><button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button></td></tr>`,
+        u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td>${u.must_change_password
+            ? `<button class="btn btn-sm btn-secondary" disabled style="font-size:11px;padding:3px 8px;opacity:0.6" title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
+            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button>`}</td></tr>`,
     );
     if (tanpaKelas.length > 0) {
         aktifHtml += `<details style="margin-bottom:8px">
             <summary style="cursor:pointer;font-weight:600">Tanpa Kelas (${tanpaKelas.length})</summary>
             <table class="table" style="margin-top:4px"><thead><tr><th>Nama</th><th>NIK</th><th>Aksi</th></tr></thead>
-            <tbody>${tanpaKelas.map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td><button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button></td></tr>`).join('')}</tbody>
+            <tbody>${tanpaKelas.map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td>${u.must_change_password
+            ? `<button class="btn btn-sm btn-secondary" disabled style="font-size:11px;padding:3px 8px;opacity:0.6" title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
+            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button>`}</td></tr>`).join('')}</tbody>
             </table></details>`;
     }
 
@@ -1196,7 +1208,7 @@ async function printAlumniRecap(studentId) {
 
 async function renderDudiPanel() {
     const [{ data: users }, programs] = await Promise.all([
-        supabase.from('users').select('user_id, full_name, dudi_org_name, program_id').eq('role_type', 'DUDI').is('deleted_at', null).order('dudi_org_name'),
+        supabase.from('users').select('user_id, full_name, dudi_org_name, program_id, must_change_password').eq('role_type', 'DUDI').is('deleted_at', null).order('dudi_org_name'),
         getPrograms(),
     ]);
     const pn = new Map(programs.map(p => [p.program_id, p.name]));
@@ -1204,7 +1216,9 @@ async function renderDudiPanel() {
         users ?? [],
         u => u.program_id ? (pn.get(u.program_id) ?? '—') : 'Tanpa Program / Lintas Program',
         ['Nama Usaha', 'Penanggung Jawab', 'Aksi'],
-        u => `<tr><td>${u.dudi_org_name ?? '—'}</td><td>${u.full_name}</td><td><button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button></td></tr>`,
+        u => `<tr><td>${u.dudi_org_name ?? '—'}</td><td>${u.full_name}</td><td>${u.must_change_password
+            ? `<button class="btn btn-sm btn-secondary" disabled style="font-size:11px;padding:3px 8px;opacity:0.6" title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
+            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button>`}</td></tr>`,
     );
     panelContent.innerHTML = `
         <h3>DUDI (${(users ?? []).length})</h3>
@@ -1213,12 +1227,14 @@ async function renderDudiPanel() {
 }
 
 async function renderStakeholdersPanel() {
-    const { data: users } = await supabase.from('users').select('user_id, full_name, login_identifier').eq('role_type', 'STAKEHOLDER').is('deleted_at', null).order('full_name');
+    const { data: users } = await supabase.from('users').select('user_id, full_name, login_identifier, must_change_password').eq('role_type', 'STAKEHOLDER').is('deleted_at', null).order('full_name');
     panelContent.innerHTML = `
         <h3>Stakeholder (${(users ?? []).length})</h3>
         <table class="table">
             <thead><tr><th>Nama</th><th>Kode Login</th><th>Aksi</th></tr></thead>
-            <tbody>${(users ?? []).map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td><button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button></td></tr>`).join('')}</tbody>
+            <tbody>${(users ?? []).map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td>${u.must_change_password
+            ? `<button class="btn btn-sm btn-secondary" disabled style="font-size:11px;padding:3px 8px;opacity:0.6" title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
+            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button>`}</td></tr>`).join('')}</tbody>
         </table>
     `;
 }
@@ -1636,8 +1652,10 @@ async function renderExportPanel() {
         btn.disabled = true; btn.textContent = '…';
         try {
             await adminResetUserPassword(userId, '12345678');
-            btn.textContent = '✓ Reset';
-            setTimeout(() => { btn.disabled = false; btn.textContent = 'Reset PW'; }, 2000);
+            btn.classList.remove('user-reset-pw-btn');
+            btn.textContent = 'Menunggu ganti PW';
+            btn.title = 'Menunggu pengguna ganti password';
+            btn.style.opacity = '0.6';
         } catch (err) {
             alert(`Gagal reset: ${err.message}`);
             btn.disabled = false; btn.textContent = 'Reset PW';
