@@ -945,6 +945,26 @@ export async function setUserActive(user_id, is_active) {
 }
 
 /**
+ * Nonaktifkan staf + cabut semua jabatan struktural.
+ * Riwayat (jurnal, absensi, jadwal masa lalu) tetap ada.
+ */
+export async function deactivateStaff(user_id) {
+    const { error } = await supabase
+        .from('users')
+        .update({
+            is_active:          false,
+            is_bk:              false,
+            is_kepsek:          false,
+            is_waka_kurikulum:  false,
+            is_waka_kesiswaan:  false,
+            wali_kelas_class_id: null,
+            kaprodi_program_id:  null,
+        })
+        .eq('user_id', user_id);
+    if (error) throw error;
+}
+
+/**
  * Cek apakah guru masih punya penugasan jadwal aktif.
  * Kembalikan { templates, sessions } — jumlah baris per tabel.
  */

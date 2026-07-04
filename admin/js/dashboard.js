@@ -7,7 +7,7 @@
 
 import { applyBrandingById } from '../../shared/branding.js';
 import { initIdleTimeout } from '../../shared/idle-timeout.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, anonymizeAlumnus } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, anonymizeAlumnus } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -666,11 +666,11 @@ async function renderStaffPanel() {
             const hasSchedule = dep.templates > 0 || dep.sessions > 0;
 
             if (!hasSchedule) {
-                // Bersih — langsung nonaktifkan
-                if (!confirm(`Nonaktifkan ${nama}?\n\nStaf ini tidak bisa login sampai diaktifkan kembali.`)) {
+                // Bersih — langsung nonaktifkan + cabut jabatan
+                if (!confirm(`Nonaktifkan ${nama}?\n\nSemua jabatan struktural (wali kelas, kaprodi, BK, dll) akan dicabut. Staf ini tidak bisa login sampai diaktifkan kembali.`)) {
                     btn.disabled = false; btn.textContent = 'Nonaktifkan'; return;
                 }
-                await setUserActive(userId, false);
+                await deactivateStaff(userId);
                 await renderStaffPanel();
                 return;
             }
@@ -713,7 +713,7 @@ async function renderStaffPanel() {
                 confirmBtn.disabled = true; confirmBtn.textContent = 'Memproses…';
                 try {
                     await releaseTeacherFromSchedules(userId);
-                    await setUserActive(userId, false);
+                    await deactivateStaff(userId);
                     await renderStaffPanel();
                 } catch (err) {
                     alert(`Gagal nonaktifkan: ${err.message}`);
