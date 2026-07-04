@@ -1607,9 +1607,22 @@ async function renderExportPanel() {
     // TEMUAN-1: nama sekolah = SATU sumber (schools.name), bukan salinan
     // school_config.school_name yang tidak ikut ter-update saat rename via Branding.
     let schoolName = 'Sekolah';
-    try { schoolName = (await getSchoolBranding())?.name || schoolName; } catch { /* fallback */ }
+    let schoolSlug = null;
+    try {
+        const branding = await getSchoolBranding();
+        schoolName = branding?.name || schoolName;
+        schoolSlug = branding?.slug || null;
+    } catch { /* fallback */ }
     document.getElementById('dashboard-school-name').textContent = schoolName;
     document.getElementById('dashboard-user-name').textContent = `Masuk sebagai ${userRow.full_name}`;
+    if (schoolSlug) {
+        const base = window.location.href.replace(/\/admin\/.*$/, '');
+        const anchor = document.getElementById('dashboard-guru-portal-anchor');
+        const url = `${base}/guru/index.html?school=${encodeURIComponent(schoolSlug)}`;
+        anchor.href = url;
+        anchor.textContent = url;
+        document.getElementById('dashboard-guru-portal-link').style.display = '';
+    }
 
     renderSetupPanel();
 })();

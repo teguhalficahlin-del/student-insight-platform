@@ -315,7 +315,7 @@ export async function updateSchoolBranding({ name, npsn, address, phone, logo_ur
 export async function getSchoolBranding() {
     const { data, error } = await supabase
         .from('schools')
-        .select('name, npsn, address, phone, logo_url, primary_color, secondary_color')
+        .select('name, npsn, address, phone, logo_url, primary_color, secondary_color, slug')
         .single();
     if (error) throw error;
     return data;
