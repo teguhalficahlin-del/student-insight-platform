@@ -18,7 +18,7 @@ import {
     supabase,
     getCurrentUserRow, requireAdministrativeOrRedirect,
     getSchoolConfig, upsertSchoolConfig, markSetupCompleted,
-    getPrograms, getClasses, deleteBulk, changePassword,
+    getPrograms, getClasses, getTeacherList, deleteBulk, changePassword,
     fetchAllRows,
     updateProgram, updateClass, updateStudent, updateUserIdentifier,
     importPrograms, importClasses, importUsers, importStudents, importSchedules,
@@ -449,12 +449,13 @@ async function renderScheduleStep() {
         <button type="button" class="btn btn-primary" id="wz-open-schedule" style="margin-bottom:16px;padding:10px 20px;font-size:14px">Susun Jadwal Visual</button>
 
         <hr style="margin:16px 0;border-color:var(--color-border)">
-        <h4 style="margin:0 0 6px">Impor dari file CSV</h4>
-        <p class="hint" style="margin:0 0 8px">Kolom yang diharapkan: <code>nama_guru, nama_kelas, hari, start_time, end_time</code><br>
-        Hari: SENIN/SELASA/RABU/KAMIS/JUMAT/SABTU &nbsp;|&nbsp; Waktu: HH:MM (contoh: 07:00)</p>
-        <button type="button" class="btn btn-secondary" id="wz-schedule-template-dl" style="padding:6px 14px;font-size:13px;margin-bottom:12px">⬇ Unduh Template CSV</button>
+        <h4 style="margin:0 0 6px">Impor dari file CSV / Excel</h4>
+        <p class="hint" style="margin:0 0 8px">Kolom yang diharapkan: <code>kode_guru, nama_mapel, nama_kelas, hari, start_time, end_time</code><br>
+        Hari: SENIN/SELASA/RABU/KAMIS/JUMAT/SABTU &nbsp;|&nbsp; Waktu: HH:MM (contoh: 07:00)<br>
+        <em>kode_guru</em> = kode singkat guru dari daftar staf (contoh: BSS, ADF). <em>nama_mapel</em> = nama mata pelajaran.</p>
+        <button type="button" class="btn btn-secondary" id="wz-schedule-template-dl" style="padding:6px 14px;font-size:13px;margin-bottom:12px">⬇ Unduh Template Excel</button>
         <div class="field" style="margin-bottom:8px">
-            <input type="file" id="wz-schedule-file" accept=".csv" class="input" style="padding:6px">
+            <input type="file" id="wz-schedule-file" accept=".csv,.xlsx" class="input" style="padding:6px">
         </div>
         <button type="button" class="btn btn-secondary" id="wz-schedule-import" style="padding:8px 18px">Unggah &amp; Impor</button>
         <div id="wz-schedule-import-status" style="margin-top:10px"></div>
@@ -464,49 +465,62 @@ async function renderScheduleStep() {
 
     document.getElementById('wz-open-schedule').addEventListener('click', () => openScheduleBuilder());
 
-    document.getElementById('wz-schedule-template-dl').addEventListener('click', () => {
-        // Contoh mencerminkan struktur nyata:
-        // - Nama dengan gelar/koma harus dikutip ("...")
-        // - 8 slot per hari, ada 2 jeda (09:00-09:15 dan 11:15-11:30)
-        // - Banyak baris per slot = banyak kelas paralel
-        // - Hari: SENIN SELASA RABU KAMIS JUMAT SABTU
-        const rows = [
-            'nama_guru,nama_kelas,hari,start_time,end_time',
-            '# Slot 1',
-            'Budi Santoso S.Pd,X TKJ 1,SENIN,07:00,07:40',
-            'Ayu Lestari S.Pd,X RPL 1,SENIN,07:00,07:40',
-            'Dewi Lestari S.Pd,XI AKL 1,SENIN,07:00,07:40',
-            '# Slot 2',
-            'Budi Santoso S.Pd,XI TKJ 1,SENIN,07:40,08:20',
-            'Ayu Lestari S.Pd,XI RPL 1,SENIN,07:40,08:20',
-            '# Slot 3',
-            'Budi Santoso S.Pd,XII TKJ 1,SENIN,08:20,09:00',
-            '# (Istirahat 09:00-09:15)',
-            '# Slot 4',
-            'Ayu Lestari S.Pd,XII RPL 1,SENIN,09:15,09:55',
-            '# Slot 5',
-            'Dewi Lestari S.Pd,X TKJ 1,SENIN,09:55,10:35',
-            '# Slot 6',
-            'Budi Santoso S.Pd,X AKL 1,SENIN,10:35,11:15',
-            '# (Istirahat 11:15-11:30)',
-            '# Slot 7',
-            'Ayu Lestari S.Pd,X TKJ 1,SENIN,11:30,12:10',
-            '# Slot 8',
-            'Dewi Lestari S.Pd,XI RPL 1,SENIN,12:10,12:50',
-            '# --- Hari lain ---',
-            'Budi Santoso S.Pd,X TKJ 1,SELASA,07:00,07:40',
-            'Ayu Lestari S.Pd,X RPL 1,RABU,07:00,07:40',
-            'Dewi Lestari S.Pd,X TKJ 1,KAMIS,07:00,07:40',
-            'Budi Santoso S.Pd,XI AKL 1,JUMAT,07:00,07:40',
-        ];
-        // Hapus baris komentar (diawali #) sebelum diunduh
-        const csv = rows.filter(r => !r.startsWith('#')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'template_jadwal.csv';
-        a.click();
-        URL.revokeObjectURL(a.href);
+    document.getElementById('wz-schedule-template-dl').addEventListener('click', async () => {
+        const btn = document.getElementById('wz-schedule-template-dl');
+        btn.disabled = true;
+        btn.textContent = 'Memuat data…';
+        try {
+            const [teachers, config] = await Promise.all([getTeacherList(), getSchoolConfig()]);
+            const ay = config?.current_academic_year;
+            const classes = ay ? await getClasses(ay) : await getClasses();
+
+            const teachersWithCode = teachers.filter(t => t.teacher_code);
+
+            // Sheet 1: Template jadwal
+            const templateRows = [
+                ['kode_guru', 'nama_mapel', 'nama_kelas', 'hari', 'start_time', 'end_time'],
+            ];
+            // Contoh baris menggunakan kode guru nyata (ambil 3 pertama) dan kelas nyata (ambil 3 pertama)
+            const sampleTeachers = teachersWithCode.slice(0, 3);
+            const sampleClasses  = classes.slice(0, 3);
+            const slots = [['SENIN','07:00','07:40'],['SENIN','07:40','08:20'],['SENIN','09:15','09:55'],
+                           ['SELASA','07:00','07:40'],['RABU','07:00','07:40'],['KAMIS','07:00','07:40'],['JUMAT','07:00','07:40']];
+            for (let i = 0; i < Math.min(sampleTeachers.length * 2, 7); i++) {
+                const t  = sampleTeachers[i % sampleTeachers.length];
+                const cl = sampleClasses[i % Math.max(sampleClasses.length, 1)];
+                const [hari, start, end] = slots[i % slots.length];
+                templateRows.push([t.teacher_code, 'Matematika', cl?.name ?? 'X TKJ 1', hari, start, end]);
+            }
+            // Baris kosong + penanda untuk TU mengisi sendiri
+            templateRows.push(['', '', '', '', '', '']);
+            templateRows.push(['← isi kode_guru dari sheet Daftar Guru', '', '', '', '', '']);
+
+            // Sheet 2: Daftar Guru
+            const guruRows = [['kode_guru', 'nama_guru']];
+            for (const t of teachersWithCode) {
+                guruRows.push([t.teacher_code, t.full_name]);
+            }
+            if (guruRows.length === 1) guruRows.push(['(belum ada guru)', '(import guru dulu di langkah 5)']);
+
+            // Sheet 3: Daftar Kelas
+            const kelasRows = [['nama_kelas', 'tahun_ajaran']];
+            for (const c of classes) {
+                kelasRows.push([c.name, c.academic_year ?? ay ?? '']);
+            }
+            if (kelasRows.length === 1) kelasRows.push(['(belum ada kelas)', '(buat kelas dulu di langkah 4)']);
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(templateRows), 'Template Jadwal');
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(guruRows),     'Daftar Guru');
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kelasRows),    'Daftar Kelas');
+            XLSX.writeFile(wb, 'template_jadwal.xlsx');
+        } catch (e) {
+            console.error('Gagal generate template:', e);
+            alert('Gagal mengunduh template: ' + (e.message ?? e));
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '⬇ Unduh Template Excel';
+        }
     });
 
     document.getElementById('wz-schedule-import').addEventListener('click', async () => {
@@ -514,14 +528,23 @@ async function renderScheduleStep() {
         const statusEl   = document.getElementById('wz-schedule-import-status');
         const btn        = document.getElementById('wz-schedule-import');
         const file       = fileInput.files?.[0];
-        if (!file) { statusEl.innerHTML = '<p class="hint" style="color:var(--color-danger)">Pilih file CSV terlebih dahulu.</p>'; return; }
+        if (!file) { statusEl.innerHTML = '<p class="hint" style="color:var(--color-danger)">Pilih file CSV atau Excel terlebih dahulu.</p>'; return; }
 
         btn.disabled = true;
         btn.textContent = 'Mengimpor…';
         statusEl.innerHTML = '<p class="hint">Memproses file…</p>';
 
         try {
-            const csvText = await file.text();
+            let csvText;
+            if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                // Parse Excel: ambil sheet pertama ("Template Jadwal" atau apapun), konversi ke CSV
+                const ab  = await file.arrayBuffer();
+                const wb  = XLSX.read(ab, { type: 'array' });
+                const ws  = wb.Sheets[wb.SheetNames[0]];
+                csvText   = XLSX.utils.sheet_to_csv(ws);
+            } else {
+                csvText = await file.text();
+            }
             const result  = await importSchedules(csvText);
             const { total_templates = 0, schedules_generated = 0, failed = 0, errors = [] } = result ?? {};
             if (failed > 0) {

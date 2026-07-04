@@ -15,10 +15,9 @@
  * CONTRACT:
  *   POST /functions/v1/bulk-import-schedules
  *   Body: text/csv (raw CSV text), columns:
- *     nama_guru, nama_kelas, hari, start_time, end_time
- *   Guru diidentifikasi dari nama (users.full_name). Mata pelajaran tidak
- *   diminta — semua sesi memakai subject default "KBM" (dibuat otomatis),
- *   karena platform memantau KEHADIRAN guru, bukan mapel. 1 guru tidak
+ *     kode_guru, nama_mapel, nama_kelas, hari, start_time, end_time
+ *   Guru diidentifikasi dari kode singkat (users.teacher_code). Mata pelajaran
+ *   dari nama (subjects.name) — get-or-create per sekolah. 1 guru tidak
  *   boleh mengajar di kelas berbeda pada waktu yang tumpang-tindih.
  *   academic_year and semester are NOT read from the CSV — they come
  *   from school_config.current_academic_year / current_semester.
@@ -35,10 +34,10 @@
  *       to generate dates) — error if not found
  *   7.  Parse CSV body
  *   8.  Validate each row (hari valid, start_time < end_time,
- *       nama_guru/nama_kelas present)
+ *       kode_guru/nama_kelas/nama_mapel present)
  *   9.  Resolve nama_kelas -> class_id (classes.name + academic_year),
- *       nama_guru -> teacher_id (users.full_name; tolak bila nama ganda),
- *       subject_id -> default "KBM" (get-or-create)
+ *       kode_guru -> teacher_id (users.teacher_code; unik per sekolah),
+ *       nama_mapel -> subject_id (subjects.name; get-or-create)
  *   9b. Deteksi bentrok: 1 guru tak boleh mengajar di kelas berbeda pada
  *       hari & jam yang tumpang-tindih (cek antar baris + vs DB)
  *  10.  Upsert schedule_templates via native ON CONFLICT on
@@ -86,7 +85,8 @@ interface ImportRow {
     start_time:  string;
     end_time:    string;
     nama_kelas:  string;
-    nama_guru:   string;
+    kode_guru:   string;
+    nama_mapel:  string;
     class_id?:   string;
     teacher_id?: string;
     subject_id?: string;
@@ -130,28 +130,6 @@ function* eachDateInRange(startDate: string, endDate: string): Generator<{ iso: 
 /** Dua interval [aS,aE) dan [bS,bE) (menit) tumpang-tindih? */
 function overlaps(aS: number, aE: number, bS: number, bE: number): boolean {
     return aS < bE && bS < aE;
-}
-
-/** Ambil (atau buat) subject default "KBM" yang dipakai semua sesi jadwal.
- *  teaching_assignments.subject_id NOT NULL, jadi tetap butuh satu subject;
- *  "KBM" disembunyikan dari TU (tidak ada di template jadwal). */
-async function getOrCreateDefaultSubject(admin: ReturnType<typeof getAdminClient>, schoolId: string): Promise<string> {
-    const { data: existing, error: selErr } = await admin
-        .from('subjects')
-        .select('subject_id')
-        .eq('school_id', schoolId)
-        .eq('code', 'KBM')
-        .maybeSingle();
-    if (selErr) throw selErr;
-    if (existing) return existing.subject_id;
-
-    const { data: created, error: insErr } = await admin
-        .from('subjects')
-        .insert({ code: 'KBM', name: 'Kegiatan Belajar Mengajar', is_active: true, school_id: schoolId })
-        .select('subject_id')
-        .single();
-    if (insErr) throw insErr;
-    return created.subject_id;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -233,7 +211,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
             start_time: r.start_time ?? '',
             end_time:   r.end_time ?? '',
             nama_kelas: r.nama_kelas ?? '',
-            nama_guru:  r.nama_guru ?? '',
+            kode_guru:  (r.kode_guru ?? '').trim().toUpperCase(),
+            nama_mapel: (r.nama_mapel ?? '').trim(),
         }));
 
         // ── 8. Structural validation ────────────────────────────
@@ -259,8 +238,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 errors.push({ row: row.rowNumber, message: `start_time (${row.start_time}) harus lebih kecil dari end_time (${row.end_time})` });
                 continue;
             }
-            if (!row.nama_kelas.trim() || !row.nama_guru.trim()) {
-                errors.push({ row: row.rowNumber, message: 'Kolom nama_guru dan nama_kelas wajib diisi' });
+            if (!row.nama_kelas.trim() || !row.kode_guru || !row.nama_mapel) {
+                errors.push({ row: row.rowNumber, message: 'Kolom kode_guru, nama_mapel, dan nama_kelas wajib diisi' });
                 continue;
             }
             validRows.push(row);
@@ -269,30 +248,40 @@ Deno.serve(async (req: Request): Promise<Response> => {
         // ── 9. Resolve nama_kelas -> class_id, nama_guru -> teacher_id,
         //       subject = default "KBM" ─────────────────────────────
         if (validRows.length > 0) {
-            const classNames = [...new Set(validRows.map(r => r.nama_kelas.trim()))];
+            const classNames  = [...new Set(validRows.map(r => r.nama_kelas.trim()))];
+            const teacherCodes = [...new Set(validRows.map(r => r.kode_guru))];
+            const subjectNames = [...new Set(validRows.map(r => r.nama_mapel))];
 
             const [{ data: classes, error: classErr }, { data: teachers, error: teacherErr }] = await Promise.all([
                 admin.from('classes').select('class_id, name').eq('school_id', user.school_id).eq('academic_year', academicYear).in('name', classNames),
-                admin.from('users').select('user_id, full_name')
+                admin.from('users').select('user_id, teacher_code')
                     .eq('school_id', user.school_id)
-                    .in('role_type', ['GURU', 'WALI_KELAS', 'KAPRODI', 'KEPSEK', 'BK']),
+                    .not('teacher_code', 'is', null)
+                    .in('teacher_code', teacherCodes),
             ]);
 
-            if (classErr) { console.error('[bulk-import-schedules] class lookup failed:', classErr); return internalError(classErr); }
+            if (classErr)   { console.error('[bulk-import-schedules] class lookup failed:', classErr);   return internalError(classErr); }
             if (teacherErr) { console.error('[bulk-import-schedules] teacher lookup failed:', teacherErr); return internalError(teacherErr); }
 
-            const classMap = new Map((classes ?? []).map((c: { class_id: string; name: string }) => [c.name, c.class_id]));
+            const classMap   = new Map((classes  ?? []).map((c: { class_id: string; name: string }) => [c.name, c.class_id]));
+            const teacherMap = new Map((teachers ?? []).map((t: { user_id: string; teacher_code: string }) => [t.teacher_code.toUpperCase(), t.user_id]));
 
-            // Nama (uppercase + trim) -> daftar user_id, untuk deteksi nama ganda.
-            const teacherByName = new Map<string, string[]>();
-            for (const t of (teachers ?? []) as { user_id: string; full_name: string }[]) {
-                const key = t.full_name.trim().toUpperCase();
-                const arr = teacherByName.get(key) ?? [];
-                arr.push(t.user_id);
-                teacherByName.set(key, arr);
+            // Resolve semua nama_mapel sekaligus (get-or-create per sekolah)
+            const subjectMap = new Map<string, string>();
+            for (const subName of subjectNames) {
+                const key = subName.trim().toUpperCase();
+                const { data: existing } = await admin.from('subjects').select('subject_id').eq('school_id', user.school_id).ilike('name', subName).maybeSingle();
+                if (existing) {
+                    subjectMap.set(key, existing.subject_id);
+                } else {
+                    const code = subName.replace(/\s+/g, '_').toUpperCase().slice(0, 20);
+                    const { data: created, error: subErr } = await admin.from('subjects')
+                        .insert({ name: subName, code, is_active: true, school_id: user.school_id })
+                        .select('subject_id').single();
+                    if (subErr) { console.error('[bulk-import-schedules] subject create failed:', subErr); return internalError(subErr); }
+                    subjectMap.set(key, created.subject_id);
+                }
             }
-
-            const defaultSubjectId = await getOrCreateDefaultSubject(admin, user.school_id);
 
             for (const row of [...validRows]) {
                 const classId = classMap.get(row.nama_kelas.trim());
@@ -301,20 +290,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     validRows.splice(validRows.indexOf(row), 1);
                     continue;
                 }
-                const matches = teacherByName.get(row.nama_guru.trim().toUpperCase());
-                if (!matches || matches.length === 0) {
-                    errors.push({ row: row.rowNumber, message: `Guru bernama "${row.nama_guru}" tidak ditemukan` });
+                const teacherId = teacherMap.get(row.kode_guru);
+                if (!teacherId) {
+                    errors.push({ row: row.rowNumber, message: `Kode guru "${row.kode_guru}" tidak ditemukan. Pastikan kode sesuai daftar staf.` });
                     validRows.splice(validRows.indexOf(row), 1);
                     continue;
                 }
-                if (matches.length > 1) {
-                    errors.push({ row: row.rowNumber, message: `Nama guru "${row.nama_guru}" ganda (${matches.length} akun). Bedakan namanya agar unik.`, code: 'AMBIGUOUS_TEACHER' });
+                const subjectId = subjectMap.get(row.nama_mapel.trim().toUpperCase());
+                if (!subjectId) {
+                    errors.push({ row: row.rowNumber, message: `Mata pelajaran "${row.nama_mapel}" gagal dibuat.` });
                     validRows.splice(validRows.indexOf(row), 1);
                     continue;
                 }
                 row.class_id   = classId;
-                row.teacher_id = matches[0];
-                row.subject_id = defaultSubjectId;
+                row.teacher_id = teacherId;
+                row.subject_id = subjectId;
             }
         }
 
@@ -340,7 +330,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                             overlaps(parseTimeMinutes(a.start_time), parseTimeMinutes(a.end_time),
                                      parseTimeMinutes(b.start_time), parseTimeMinutes(b.end_time))) {
                             conflicted.add(b); // baris yang belakangan ditolak
-                            errors.push({ row: b.rowNumber, message: `Bentrok: ${b.nama_guru} sudah dijadwalkan di kelas lain pada ${b.hari} ${a.start_time}-${a.end_time} (baris ${a.rowNumber})`, code: 'SCHEDULE_CONFLICT' });
+                            errors.push({ row: b.rowNumber, message: `Bentrok: ${b.kode_guru} sudah dijadwalkan di kelas lain pada ${b.hari} ${a.start_time}-${a.end_time} (baris ${a.rowNumber})`, code: 'SCHEDULE_CONFLICT' });
                         }
                     }
                 }
@@ -374,7 +364,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     overlaps(rS, rE, parseTimeMinutes(e.start_time.slice(0, 5)), parseTimeMinutes(e.end_time.slice(0, 5))),
                 );
                 if (clash) {
-                    errors.push({ row: row.rowNumber, message: `Bentrok dengan jadwal tersimpan: ${row.nama_guru} sudah mengajar di kelas lain pada ${row.hari} ${clash.start_time.slice(0, 5)}-${clash.end_time.slice(0, 5)}`, code: 'SCHEDULE_CONFLICT' });
+                    errors.push({ row: row.rowNumber, message: `Bentrok dengan jadwal tersimpan: ${row.kode_guru} sudah mengajar di kelas lain pada ${row.hari} ${clash.start_time.slice(0, 5)}-${clash.end_time.slice(0, 5)}`, code: 'SCHEDULE_CONFLICT' });
                     validRows.splice(validRows.indexOf(row), 1);
                 }
             }
