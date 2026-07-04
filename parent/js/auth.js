@@ -5,8 +5,9 @@
  * Only allows ORTU role — others are rejected.
  */
 
-import { loginWithIdentifier, getCurrentUserRow } from './api.js';
+import { supabase, loginWithIdentifier, getCurrentUserRow } from './api.js';
 import { applyBranding } from '../../shared/branding.js';
+import { checkMustChangePassword } from '../../shared/change-password.js';
 
 let _schoolId = null;
 
@@ -54,7 +55,7 @@ form.addEventListener('submit', async (e) => {
             submitBtn.textContent = 'Masuk';
             return;
         }
-
+        await checkMustChangePassword(supabase, userRow);
         window.location.href = 'portal.html';
 
     } catch (err) {

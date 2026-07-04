@@ -1,5 +1,6 @@
 import { supabase, loginWithIdentifier, getCurrentUserRow, STAKEHOLDER_ROLES } from './api.js';
 import { applyBranding } from '../../shared/branding.js';
+import { checkMustChangePassword } from '../../shared/change-password.js';
 
 let _schoolId = null;
 
@@ -48,6 +49,7 @@ form.addEventListener('submit', async (e) => {
             await supabase.auth.signOut();
             throw new Error('Akun Anda telah dinonaktifkan. Hubungi admin sekolah.');
         }
+        await checkMustChangePassword(supabase, row);
         window.location.href = 'dashboard.html';
     } catch (err) {
         const isOurMsg = err.message?.startsWith('Akun ini');

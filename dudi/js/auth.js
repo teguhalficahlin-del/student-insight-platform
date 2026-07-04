@@ -4,8 +4,9 @@
  * Gate: role_type = 'DUDI'.
  */
 
-import { loginWithIdentifier, getCurrentUserRow, isDudi } from './api.js';
+import { supabase, loginWithIdentifier, getCurrentUserRow, isDudi } from './api.js';
 import { applyBranding } from '../../shared/branding.js';
+import { checkMustChangePassword } from '../../shared/change-password.js';
 
 let _schoolId = null;
 
@@ -53,7 +54,7 @@ form.addEventListener('submit', async (e) => {
             showError('Akun Anda telah dinonaktifkan. Hubungi admin sekolah.');
             return;
         }
-
+        await checkMustChangePassword(supabase, userRow);
         window.location.href = 'dashboard.html';
     } catch (err) {
         showError(err.message ?? 'Login gagal. Periksa ID login dan password Anda.');

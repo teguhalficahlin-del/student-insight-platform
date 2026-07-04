@@ -1,5 +1,6 @@
 import { supabase, loginWithIdentifier, getCurrentUserRow, getMyStudent, STUDENT_ROLES, ACTIVE_STUDENT_STATUSES } from './api.js';
 import { applyBranding } from '../../shared/branding.js';
+import { checkMustChangePassword } from '../../shared/change-password.js';
 
 let _schoolId = null;
 
@@ -57,6 +58,7 @@ form.addEventListener('submit', async (e) => {
                 ? 'Akun ini sudah berstatus alumni (lulus). Portal Siswa tidak lagi tersedia.'
                 : 'Akun siswa ini sudah tidak aktif. Hubungi admin sekolah.');
         }
+        await checkMustChangePassword(supabase, row);
         window.location.href = 'dashboard.html';
     } catch (err) {
         const isOurMsg = err.message?.startsWith('Akun ini') || err.message?.startsWith('Akun siswa');
