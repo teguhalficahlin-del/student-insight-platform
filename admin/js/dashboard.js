@@ -6,7 +6,6 @@
  */
 
 import { applyBrandingById } from '../../shared/branding.js';
-import { initIdleTimeout } from '../../shared/idle-timeout.js';
 import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
@@ -16,6 +15,7 @@ function esc(s) {
 }
 
 const panelContent = document.getElementById('panel-content');
+let schoolSlug = null; // diisi saat init, dipakai panel renderers
 
 const PANEL_RENDERERS = {
     setup:              renderSetupPanel,
@@ -151,7 +151,7 @@ async function renderSetupPanel() {
 
     panelContent.innerHTML = `
         <h3>Ringkasan Data Sekolah</h3>
-        <p class="hint">Untuk mengubah data, kembali ke <a href="wizard.html">Setup Wizard</a>.</p>
+        <p class="hint">Untuk mengubah data, kembali ke <a href="${schoolSlug ? `wizard.html?school=${encodeURIComponent(schoolSlug)}` : 'wizard.html'}">Setup Wizard</a>.</p>
         <table class="table">
             <thead><tr><th>Data</th><th>Jumlah</th></tr></thead>
             <tbody>${items.map(i => `
@@ -1284,7 +1284,7 @@ async function renderJadwalPanel() {
         <h3>Jadwal</h3>
         <p class="hint">Template slot tersusun: <strong>${tmplCount ?? 0} slot</strong>.</p>
         <p class="hint">Sesi jadwal ter-generate (teaching_schedules): <strong>${(schedCount ?? 0).toLocaleString('id-ID')} sesi</strong>.</p>
-        <p class="hint">Untuk menyusun atau mengubah jadwal, buka <a href="wizard.html">Setup Wizard</a> langkah 10.</p>
+        <p class="hint">Untuk menyusun atau mengubah jadwal, buka <a href="${schoolSlug ? `wizard.html?school=${encodeURIComponent(schoolSlug)}` : 'wizard.html'}">Setup Wizard</a> langkah 10.</p>
 
         <h4 style="margin:20px 0 8px">Token Guru Pengganti Aktif</h4>
         <p class="hint" style="margin-bottom:10px">Salin token lalu kirim ke HP guru pengganti (mis. via WhatsApp). Token otomatis kedaluwarsa saat sesi selesai.</p>
@@ -1621,11 +1621,9 @@ async function renderExportPanel() {
     if (!requireAdministrativeOrRedirect(userRow)) return;
 
     applyBrandingById(userRow.school_id, supabase);
-    initIdleTimeout({ onIdle: async () => { await logout(); window.location.href = 'index.html'; } });
     // TEMUAN-1: nama sekolah = SATU sumber (schools.name), bukan salinan
     // school_config.school_name yang tidak ikut ter-update saat rename via Branding.
     let schoolName = 'Sekolah';
-    let schoolSlug = null;
     try {
         const branding = await getSchoolBranding();
         schoolName = branding?.name || schoolName;
