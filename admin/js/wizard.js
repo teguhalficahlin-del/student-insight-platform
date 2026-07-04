@@ -450,8 +450,9 @@ async function renderScheduleStep() {
 
         <hr style="margin:16px 0;border-color:var(--color-border)">
         <h4 style="margin:0 0 6px">Impor dari file CSV</h4>
-        <p class="hint" style="margin:0 0 10px">Kolom yang diharapkan: <code>nama_guru, nama_kelas, hari, start_time, end_time</code><br>
+        <p class="hint" style="margin:0 0 8px">Kolom yang diharapkan: <code>nama_guru, nama_kelas, hari, start_time, end_time</code><br>
         Hari: SENIN/SELASA/RABU/KAMIS/JUMAT/SABTU &nbsp;|&nbsp; Waktu: HH:MM (contoh: 07:00)</p>
+        <button type="button" class="btn btn-secondary" id="wz-schedule-template-dl" style="padding:6px 14px;font-size:13px;margin-bottom:12px">⬇ Unduh Template CSV</button>
         <div class="field" style="margin-bottom:8px">
             <input type="file" id="wz-schedule-file" accept=".csv" class="input" style="padding:6px">
         </div>
@@ -462,6 +463,20 @@ async function renderScheduleStep() {
     `;
 
     document.getElementById('wz-open-schedule').addEventListener('click', () => openScheduleBuilder());
+
+    document.getElementById('wz-schedule-template-dl').addEventListener('click', () => {
+        const rows = [
+            'nama_guru,nama_kelas,hari,start_time,end_time',
+            'Budi Santoso S.Pd,X TKJ 1,SENIN,07:00,08:30',
+            'Ayu Lestari S.Pd,X RPL 1,SELASA,08:30,10:00',
+        ];
+        const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'template_jadwal.csv';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    });
 
     document.getElementById('wz-schedule-import').addEventListener('click', async () => {
         const fileInput  = document.getElementById('wz-schedule-file');
