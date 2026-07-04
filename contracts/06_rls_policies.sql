@@ -785,10 +785,10 @@ CREATE POLICY rls_enrollments_write_administrative ON class_enrollments
     FOR ALL USING (fn_current_user_role() = 'ADMINISTRATIVE');
 
 -- DELETE on transactional tables — needed for cascade delete when
--- removing students via wizard (attendance, observations, etc. must
--- be cleared before the student row can be deleted).
-CREATE POLICY rls_attendance_delete_administrative ON attendance
-    FOR DELETE USING (fn_current_user_role() = 'ADMINISTRATIVE');
+-- removing students via wizard (observations, etc. must be cleared
+-- before the student row can be deleted).
+-- NOTE: attendance DELETE policy removed (Item 8 / ABS-3) —
+--   TU tidak boleh hapus absensi; hanya void via meeting_status.
 
 CREATE POLICY rls_observations_delete_administrative ON observations
     FOR DELETE USING (fn_current_user_role() = 'ADMINISTRATIVE');
@@ -801,3 +801,24 @@ CREATE POLICY rls_case_events_delete_administrative ON case_events
 
 CREATE POLICY rls_parent_msg_delete_administrative ON parent_messages
     FOR DELETE USING (fn_current_user_role() = 'ADMINISTRATIVE');
+
+-- ============================================================
+-- NOTIFICATIONS (tabel notifikasi kasus — mig 20260703280000)
+-- ============================================================
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+-- Baca: hanya notif milik sendiri, di sekolah sendiri
+CREATE POLICY rls_notif_read ON notifications FOR SELECT
+    USING (
+        recipient_user_id = fn_current_user_id()
+        AND school_id     = fn_current_school_id()
+    );
+
+-- Update: boleh mark is_read=true saja, notif milik sendiri
+CREATE POLICY rls_notif_update_read ON notifications FOR UPDATE
+    USING  (recipient_user_id = fn_current_user_id() AND school_id = fn_current_school_id())
+    WITH CHECK (recipient_user_id = fn_current_user_id());
+
+GRANT SELECT ON notifications TO authenticated;
+GRANT UPDATE(is_read) ON notifications TO authenticated;
+GRANT ALL ON notifications TO service_role;
