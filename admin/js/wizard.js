@@ -465,12 +465,43 @@ async function renderScheduleStep() {
     document.getElementById('wz-open-schedule').addEventListener('click', () => openScheduleBuilder());
 
     document.getElementById('wz-schedule-template-dl').addEventListener('click', () => {
+        // Contoh mencerminkan struktur nyata:
+        // - Nama dengan gelar/koma harus dikutip ("...")
+        // - 8 slot per hari, ada 2 jeda (09:00-09:15 dan 11:15-11:30)
+        // - Banyak baris per slot = banyak kelas paralel
+        // - Hari: SENIN SELASA RABU KAMIS JUMAT SABTU
         const rows = [
             'nama_guru,nama_kelas,hari,start_time,end_time',
-            'Budi Santoso S.Pd,X TKJ 1,SENIN,07:00,08:30',
-            'Ayu Lestari S.Pd,X RPL 1,SELASA,08:30,10:00',
+            '# Slot 1',
+            '"Budi Santoso, S.Pd",X TKJ 1,SENIN,07:00,07:40',
+            '"Ayu Lestari, S.Pd",X RPL 1,SENIN,07:00,07:40',
+            '"Dewi Lestari, S.Pd",XI AKL 1,SENIN,07:00,07:40',
+            '# Slot 2',
+            '"Budi Santoso, S.Pd",XI TKJ 1,SENIN,07:40,08:20',
+            '"Ayu Lestari, S.Pd",XI RPL 1,SENIN,07:40,08:20',
+            '# Slot 3',
+            '"Budi Santoso, S.Pd",XII TKJ 1,SENIN,08:20,09:00',
+            '# (Istirahat 09:00-09:15)',
+            '# Slot 4',
+            '"Ayu Lestari, S.Pd",XII RPL 1,SENIN,09:15,09:55',
+            '# Slot 5',
+            '"Dewi Lestari, S.Pd",X TKJ 1,SENIN,09:55,10:35',
+            '# Slot 6',
+            '"Budi Santoso, S.Pd",X AKL 1,SENIN,10:35,11:15',
+            '# (Istirahat 11:15-11:30)',
+            '# Slot 7',
+            '"Ayu Lestari, S.Pd",X TKJ 1,SENIN,11:30,12:10',
+            '# Slot 8',
+            '"Dewi Lestari, S.Pd",XI RPL 1,SENIN,12:10,12:50',
+            '# --- Hari lain ---',
+            '"Budi Santoso, S.Pd",X TKJ 1,SELASA,07:00,07:40',
+            '"Ayu Lestari, S.Pd",X RPL 1,RABU,07:00,07:40',
+            '"Dewi Lestari, S.Pd",X TKJ 1,KAMIS,07:00,07:40',
+            '"Budi Santoso, S.Pd",XI AKL 1,JUMAT,07:00,07:40',
         ];
-        const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+        // Hapus baris komentar (diawali #) sebelum diunduh
+        const csv = rows.filter(r => !r.startsWith('#')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = 'template_jadwal.csv';
