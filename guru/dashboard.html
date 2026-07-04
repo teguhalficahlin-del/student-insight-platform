@@ -235,6 +235,75 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════════
+         TAB: WAKA HUMAS
+    ════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-waka_humas">
+        <div class="page-body">
+
+            <div class="stats-row">
+                <div class="stat-card"><span class="stat-value" id="wh-stat-total">—</span><div class="stat-label">Total Siswa PKL</div></div>
+                <div class="stat-card"><span class="stat-value" id="wh-stat-placed">—</span><div class="stat-label">Sudah Ditempatkan</div></div>
+                <div class="stat-card"><span class="stat-value" id="wh-stat-dudi">—</span><div class="stat-label">Mitra DUDI</div></div>
+            </div>
+
+            <!-- Daftar Siswa PKL (semua program) -->
+            <div class="section-card">
+                <h3>Daftar Siswa PKL</h3>
+                <div class="table-wrapper">
+                    <table class="table"><thead><tr><th>Nama</th><th>NIS</th><th>Program</th><th>Tempat PKL</th><th>Periode</th></tr></thead>
+                    <tbody id="wh-students-body"></tbody></table>
+                </div>
+                <p class="hint" id="wh-students-empty" style="display:none">Belum ada siswa yang sedang PKL.</p>
+            </div>
+
+            <!-- Rekap Absensi PKL -->
+            <div class="section-card">
+                <h3>Rekap Absensi PKL</h3>
+                <div class="date-row" style="margin-bottom:12px">
+                    <label for="wh-date-start">Dari:</label><input type="date" id="wh-date-start" class="input" style="width:auto">
+                    <label for="wh-date-end">s/d:</label><input type="date" id="wh-date-end" class="input" style="width:auto">
+                    <button class="btn btn-secondary btn-sm" id="wh-filter-btn">Filter</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="table"><thead><tr><th>Nama</th><th>Program</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Tidak Hadir</th><th>% Hadir</th></tr></thead>
+                    <tbody id="wh-recap-body"></tbody></table>
+                </div>
+                <p class="hint" id="wh-recap-empty" style="display:none">Belum ada data absensi pada rentang ini.</p>
+            </div>
+
+            <!-- Mitra DUDI (semua program) -->
+            <div class="section-card">
+                <h3>Mitra DUDI</h3>
+                <div class="table-wrapper">
+                    <table class="table"><thead><tr><th>Nama Usaha</th><th>Penanggung Jawab</th><th>Program</th></tr></thead>
+                    <tbody id="wh-dudi-body"></tbody></table>
+                </div>
+                <p class="hint" id="wh-dudi-empty" style="display:none">Belum ada mitra DUDI terdaftar.</p>
+            </div>
+
+            <!-- Observasi dari DUDI -->
+            <div class="section-card">
+                <h3>Observasi dari DUDI</h3>
+                <p class="hint" id="wh-obs-hint" style="display:none">Belum ada observasi dari DUDI.</p>
+                <div id="wh-obs-list"></div>
+            </div>
+
+            <!-- Kasus PKL -->
+            <div class="section-card">
+                <h3>Kasus PKL</h3>
+                <div class="table-wrapper">
+                    <table class="table" id="wh-cases-table">
+                        <thead><tr><th>Siswa</th><th>Judul</th><th>Tahap</th><th>Dibuka</th></tr></thead>
+                        <tbody id="wh-cases-body"></tbody>
+                    </table>
+                </div>
+                <p class="hint" id="wh-cases-empty" style="display:none">Tidak ada kasus PKL terbuka.</p>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
          TAB: WAKA KESISWAAN
     ════════════════════════════════════════════════════════ -->
     <div class="tab-panel" id="tab-waka_kesiswaan">

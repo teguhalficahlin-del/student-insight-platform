@@ -62,6 +62,7 @@ export function getJabatan(u) {
     if (u.role_type === 'WAKA_KESISWAAN' || u.is_waka_kesiswaan) j.push('waka_kesiswaan');
     if (u.role_type === 'WAKA_KURIKULUM' || u.is_waka_kurikulum) j.push('waka_kurikulum');
     if (u.role_type === 'KEPSEK'     || u.is_kepsek)            j.push('kepsek');
+    if (u.role_type === 'WAKA_HUMAS' || u.is_waka_humas)        j.push('waka_humas');
     return j;
 }
 
@@ -73,6 +74,7 @@ export function jabatanLabel(key) {
         waka_kesiswaan:'Waka Kesiswaan',
         waka_kurikulum:'Waka Kurikulum',
         kepsek:        'Kepala Sekolah',
+        waka_humas:    'Waka Humas',
     }[key] ?? key;
 }
 
@@ -345,6 +347,50 @@ export async function fetchDudiObservations(studentIds) {
         dimension: r.dimension, content: r.content,
         author: r.author?.dudi_org_name ?? r.author?.full_name ?? '—',
         date: r.observed_at ?? r.created_at,
+    }));
+}
+
+// Semua siswa PKL lintas program (untuk Waka Humas)
+export async function fetchAllPklStudents() {
+    const { data, error } = await supabase
+        .from('students')
+        .select(`
+            student_id, nis, full_name, student_status,
+            program:programs ( program_name ),
+            placements:pkl_placements (
+                placement_id, start_date, end_date, is_active,
+                dudi:users!pkl_placements_dudi_user_id_fkey ( user_id, full_name, dudi_org_name )
+            )
+        `)
+        .eq('student_status', 'PKL')
+        .order('full_name');
+    if (error) throw error;
+    return (data ?? []).map(s => {
+        const active = (s.placements ?? []).find(p => p.is_active) ?? s.placements?.[0] ?? null;
+        return {
+            student_id:   s.student_id, nis: s.nis, full_name: s.full_name,
+            program_name: s.program?.program_name ?? '—',
+            placement_id: active?.placement_id ?? null,
+            dudi_name:    active?.dudi?.dudi_org_name ?? active?.dudi?.full_name ?? '—',
+            start_date:   active?.start_date ?? null, end_date: active?.end_date ?? null,
+            has_placement: !!active,
+        };
+    });
+}
+
+// Semua mitra DUDI lintas program (untuk Waka Humas)
+export async function fetchAllDudiPartners() {
+    const { data, error } = await supabase
+        .from('users')
+        .select('user_id, full_name, dudi_org_name, program:programs ( program_name )')
+        .eq('role_type', 'DUDI')
+        .order('dudi_org_name');
+    if (error) throw error;
+    return (data ?? []).map(u => ({
+        user_id: u.user_id,
+        org_name: u.dudi_org_name ?? u.full_name,
+        pic_name: u.full_name,
+        program_name: u.program?.program_name ?? '—',
     }));
 }
 

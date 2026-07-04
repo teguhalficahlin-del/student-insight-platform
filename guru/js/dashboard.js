@@ -17,6 +17,7 @@ import {
     getWaliKelasInfo, getWaliAttendanceSummary,
     getProgram, fetchPklStudents, fetchNonPklStudents,
     fetchDudiPartners, fetchPklAttendance, fetchDudiObservations,
+    fetchAllPklStudents, fetchAllDudiPartners,
     createPlacement, bulkImportPkl,
     getSchoolStats, getKepsekMonitoring, getAbsentTeachersToday,
     getAttendanceRecapPerClass, getOpenCases,
@@ -227,12 +228,14 @@ async function init() {
 // ─── Tab navigation ──────────────────────────────────────────
 const TAB_SHORT = {
     guru: 'Beranda', wali_kelas: 'Wali', bk: 'BK', kaprodi: 'Prodi',
-    waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', kepsek: 'Monitor', ks_admin: 'Admin',
+    waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', waka_humas: 'Humas',
+    kepsek: 'Monitor', ks_admin: 'Admin',
     kasus: 'Pembinaan', jurnal: 'Jurnal',
 };
 const TAB_ICON = {
     guru: 'ti-home', wali_kelas: 'ti-users', bk: 'ti-heart-handshake', kaprodi: 'ti-building',
-    waka_kesiswaan: 'ti-school', waka_kurikulum: 'ti-book', kepsek: 'ti-chart-line', ks_admin: 'ti-shield-check',
+    waka_kesiswaan: 'ti-school', waka_kurikulum: 'ti-book', waka_humas: 'ti-briefcase',
+    kepsek: 'ti-chart-line', ks_admin: 'ti-shield-check',
     kasus: 'ti-alert-triangle', jurnal: 'ti-notebook',
 };
 
@@ -282,6 +285,7 @@ async function loadTabContent(key) {
         case 'kaprodi':     await initKaprodiTab(); break;
         case 'waka_kesiswaan': await initWakaKesiswaanTab(); break;
         case 'waka_kurikulum': await initWakaKurTab(); break;
+        case 'waka_humas':  await initWakaHumasTab(); break;
         case 'kepsek':      await initKepsekTab(); break;
         case 'ks_admin':    await initKsAdminTab(); break;
         case 'kasus':       await initKasusTab(); break;
@@ -1080,6 +1084,140 @@ async function initWakaKurTab() {
         </tr>`).join('');
     } catch (err) {
         hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
+    }
+}
+
+// ─── TAB WAKA HUMAS ──────────────────────────────────────────
+
+let whStudents = [];
+let whDudiList = [];
+let _whTabInit = false;
+
+async function initWakaHumasTab() {
+    if (_whTabInit) return;
+    _whTabInit = true;
+
+    const today    = new Date().toISOString().slice(0, 10);
+    const monthAgo = new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
+    document.getElementById('wh-date-start').value = monthAgo;
+    document.getElementById('wh-date-end').value   = today;
+    document.getElementById('wh-filter-btn').onclick = loadWhRecap;
+
+    try {
+        [whStudents, whDudiList] = await Promise.all([
+            fetchAllPklStudents(),
+            fetchAllDudiPartners(),
+        ]);
+        renderWhStats();
+        renderWhStudents();
+        renderWhDudi();
+        await Promise.all([loadWhRecap(), loadWhObs(), loadWhCases()]);
+    } catch (err) {
+        console.error('[waka_humas]', err);
+    }
+}
+
+function renderWhStats() {
+    const placed = whStudents.filter(s => s.has_placement).length;
+    document.getElementById('wh-stat-total').textContent  = whStudents.length;
+    document.getElementById('wh-stat-placed').textContent = placed;
+    document.getElementById('wh-stat-dudi').textContent   = whDudiList.length;
+}
+
+function renderWhStudents() {
+    const tbody = document.getElementById('wh-students-body');
+    const empty = document.getElementById('wh-students-empty');
+    if (whStudents.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    tbody.innerHTML = whStudents.map(s => `<tr>
+        <td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td>
+        <td>${esc(s.program_name)}</td>
+        <td>${esc(s.dudi_name)}</td>
+        <td>${s.has_placement ? `${fmt(s.start_date)} – ${fmt(s.end_date)}` : '<span class="badge badge-tidak-hadir">Belum</span>'}</td>
+    </tr>`).join('');
+}
+
+function renderWhDudi() {
+    const tbody = document.getElementById('wh-dudi-body');
+    const empty = document.getElementById('wh-dudi-empty');
+    if (whDudiList.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    tbody.innerHTML = whDudiList.map(d => `<tr>
+        <td>${esc(d.org_name)}</td><td>${esc(d.pic_name)}</td><td>${esc(d.program_name)}</td>
+    </tr>`).join('');
+}
+
+async function loadWhRecap() {
+    const ids   = whStudents.map(s => s.student_id);
+    const start = document.getElementById('wh-date-start').value;
+    const end   = document.getElementById('wh-date-end').value;
+    const tbody = document.getElementById('wh-recap-body');
+    const empty = document.getElementById('wh-recap-empty');
+    tbody.innerHTML = '<tr><td colspan="7" class="hint">Memuat…</td></tr>';
+    empty.style.display = 'none';
+
+    if (ids.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+    try {
+        const rows = await fetchPklAttendance(ids, start, end);
+        const nameMap = new Map(whStudents.map(s => [s.student_id, { name: s.full_name, prog: s.program_name }]));
+        const byStudent = new Map(whStudents.map(s => [s.student_id, { name: s.full_name, prog: s.program_name, HADIR:0, TIDAK_HADIR:0, IZIN:0, SAKIT:0, total:0 }]));
+        for (const r of rows) {
+            const a = byStudent.get(r.student_id);
+            if (!a) continue;
+            if (a[r.status] !== undefined) a[r.status]++;
+            a.total++;
+        }
+        const recap = [...byStudent.values()];
+        if (recap.every(a => a.total === 0)) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+        tbody.innerHTML = recap.map(a => {
+            const pct = a.total > 0 ? Math.round(a.HADIR / a.total * 100) : 0;
+            return `<tr><td>${esc(a.name)}</td><td>${esc(a.prog)}</td><td>${a.HADIR}</td><td>${a.SAKIT}</td><td>${a.IZIN}</td><td>${a.TIDAK_HADIR}</td><td>${a.total > 0 ? pct+'%' : '—'}</td></tr>`;
+        }).join('');
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
+    }
+}
+
+async function loadWhObs() {
+    const ids    = whStudents.map(s => s.student_id);
+    const hintEl = document.getElementById('wh-obs-hint');
+    const listEl = document.getElementById('wh-obs-list');
+    listEl.innerHTML = '';
+    if (ids.length === 0) { hintEl.style.display = 'block'; return; }
+    try {
+        const rows = await fetchDudiObservations(ids);
+        if (rows.length === 0) { hintEl.style.display = 'block'; return; }
+        hintEl.style.display = 'none';
+        const nameById = new Map(whStudents.map(s => [s.student_id, s.full_name]));
+        listEl.innerHTML = rows.map(r => `
+            <div class="obs-card obs-${r.sentiment.toLowerCase()}">
+                <div class="obs-meta"><strong>${esc(nameById.get(r.student_id) ?? '—')}</strong>
+                    &middot; ${esc(r.author)} &middot; ${DIMENSION_LABELS[r.dimension] ?? r.dimension} &middot; ${fmt(r.date)}
+                </div>
+                <p class="obs-content">${esc(r.content)}</p>
+            </div>`).join('');
+    } catch (err) {
+        listEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">${esc(fe(err))}</p>`;
+    }
+}
+
+async function loadWhCases() {
+    const tbody = document.getElementById('wh-cases-body');
+    const empty = document.getElementById('wh-cases-empty');
+    tbody.innerHTML = '<tr><td colspan="4" class="hint">Memuat…</td></tr>';
+    empty.style.display = 'none';
+    try {
+        const all = await getOpenCases();
+        const cases = all.filter(c => c.track === 'PKL');
+        if (cases.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+        tbody.innerHTML = cases.map(c => `<tr>
+            <td>${esc(c.student?.full_name ?? '—')}</td>
+            <td>${esc(c.title)}</td>
+            <td>${esc(c.current_handler_role ?? '—')}</td>
+            <td>${fmt(c.created_at)}</td>
+        </tr>`).join('');
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
 
