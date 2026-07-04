@@ -7,7 +7,7 @@
 
 import { applyBrandingById } from '../../shared/branding.js';
 import { initIdleTimeout } from '../../shared/idle-timeout.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, anonymizeAlumnus } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -983,9 +983,9 @@ async function renderAlumniPanel() {
         ${ortuHtml}
         <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
         <div id="retention-section">
-            <h3>Retensi Data Alumni</h3>
-            <p class="hint" style="margin-bottom:12px">Alumni yang lulus ≥5 tahun lalu dapat dianonimkan (nama & NIS diganti). Data absensi/observasi/PKL tetap ada untuk statistik agregat.</p>
-            <button class="btn btn-secondary" id="btn-load-retention" style="font-size:13px">Cek Kandidat Retensi…</button>
+            <h3>Hapus Permanen Data Siswa (Retensi 6 Bulan)</h3>
+            <p class="hint" style="margin-bottom:12px">Siswa berstatus <strong>LULUS</strong> atau <strong>KELUAR</strong> yang sudah lebih dari 6 bulan akan dihapus permanen beserta seluruh data terkait (absensi, observasi, kasus, akun). <strong style="color:var(--color-danger)">Tindakan ini tidak dapat dibatalkan.</strong></p>
+            <button class="btn btn-secondary" id="btn-load-retention" style="font-size:13px">Cek Kandidat Hapus…</button>
             <div id="retention-result" style="margin-top:12px"></div>
         </div>
     `;
@@ -1072,38 +1072,80 @@ async function renderAlumniPanel() {
         const resultDiv = document.getElementById('retention-result');
         btn.disabled = true; btn.textContent = 'Memuat…';
         try {
-            const candidates = await getRetentionCandidates(5);
+            const candidates = await getRetentionCandidates();
             if (!candidates.length) {
-                resultDiv.innerHTML = '<p class="hint">Tidak ada kandidat retensi (belum ada alumni ≥5 tahun lalu).</p>';
+                resultDiv.innerHTML = '<p class="hint">Tidak ada kandidat hapus. Belum ada siswa LULUS/KELUAR yang sudah lebih dari 6 bulan.</p>';
             } else {
+                const fmtDate = d => d ? new Date(d).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+                const statusLabel = { LULUS: 'Lulus', KELUAR: 'Keluar' };
                 resultDiv.innerHTML = `
-                    <p class="hint" style="margin-bottom:8px"><strong>${candidates.length} alumni</strong> lulus ≥5 tahun lalu. Data pribadi mereka dapat dianonimkan.</p>
-                    <table class="table"><thead><tr><th>Nama</th><th>NIS</th><th>Tahun Lulus</th><th>Karir</th><th></th></tr></thead>
-                    <tbody>${candidates.map(s => `<tr>
-                        <td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td>
-                        <td>${esc(s.graduated_academic_year ?? '—')}</td>
-                        <td>${esc(CAREER_LABEL[s.alumni_career_track] ?? '—')}</td>
-                        <td><button class="btn btn-sm alumni-anon-btn" data-student-id="${s.student_id}" data-name="${esc(s.full_name)}"
-                            style="font-size:11px;padding:3px 8px;background:#dc2626;color:#fff">Anonimkan</button></td>
-                    </tr>`).join('')}</tbody></table>`;
-                resultDiv.querySelectorAll('.alumni-anon-btn').forEach(ab => {
+                    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:12px;margin-bottom:12px">
+                        <strong style="color:#991b1b">⚠ ${candidates.length} siswa</strong> melewati masa retensi 6 bulan.
+                        Hapus permanen akan menghapus <em>semua</em> data terkait dan tidak dapat dipulihkan.
+                    </div>
+                    <table class="table"><thead><tr><th>Nama</th><th>NIS</th><th>Status</th><th>Tanggal</th><th></th></tr></thead>
+                    <tbody>${candidates.map(s => {
+                        const tanggal = s.student_status === 'LULUS' ? fmtDate(s.graduated_at) : fmtDate(s.keluar_at);
+                        return `<tr data-sid="${s.student_id}">
+                            <td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td>
+                            <td>${esc(statusLabel[s.student_status] ?? s.student_status)}</td>
+                            <td>${esc(tanggal)}</td>
+                            <td><button class="btn btn-sm purge-student-btn" data-student-id="${s.student_id}" data-name="${esc(s.full_name)}"
+                                style="font-size:11px;padding:3px 8px;background:#dc2626;color:#fff;border-color:#dc2626">Hapus Permanen</button></td>
+                        </tr>`;
+                    }).join('')}</tbody></table>
+                    <div style="margin-top:12px;text-align:right">
+                        <button id="purge-all-btn" class="btn btn-sm" style="background:#dc2626;color:#fff;border-color:#dc2626;font-size:12px">
+                            Hapus Semua (${candidates.length}) — Tidak Dapat Dipulihkan
+                        </button>
+                    </div>`;
+
+                // Hapus satu per satu
+                resultDiv.querySelectorAll('.purge-student-btn').forEach(ab => {
                     ab.addEventListener('click', async () => {
-                        if (!confirm(`Anonimkan data ${ab.dataset.name}? Nama dan NIS akan dihapus permanen.`)) return;
-                        ab.disabled = true; ab.textContent = 'Memproses…';
+                        const nama = ab.dataset.name;
+                        if (!confirm(
+                            `HAPUS PERMANEN: ${nama}\n\n` +
+                            'Seluruh data siswa ini akan dihapus:\n' +
+                            '• Absensi & observasi\n• Kasus & riwayat\n• Akun portal\n• Data orang tua (jika tidak punya anak lain)\n\n' +
+                            'Tindakan ini TIDAK DAPAT dibatalkan. Lanjutkan?'
+                        )) return;
+                        ab.disabled = true; ab.textContent = 'Menghapus…';
                         try {
-                            await anonymizeAlumnus(ab.dataset.studentId);
+                            await purgeExpiredStudents([ab.dataset.studentId]);
                             ab.closest('tr').remove();
+                            const remaining = resultDiv.querySelectorAll('.purge-student-btn').length;
+                            if (remaining === 0) resultDiv.innerHTML = '<p class="hint" style="color:var(--color-success)">✓ Semua kandidat telah dihapus.</p>';
                         } catch (err) {
-                            alert(err.message);
-                            ab.disabled = false; ab.textContent = 'Anonimkan';
+                            alert(`Gagal: ${err.message}`);
+                            ab.disabled = false; ab.textContent = 'Hapus Permanen';
                         }
                     });
+                });
+
+                // Hapus semua sekaligus
+                resultDiv.getElementById?.('purge-all-btn') ?? resultDiv.querySelector('#purge-all-btn')?.addEventListener('click', async () => {
+                    const n = candidates.length;
+                    const confirmText = `HAPUS PERMANEN ${n} SISWA\n\nSeluruh data (absensi, observasi, kasus, akun) akan dihapus.\nTindakan ini TIDAK DAPAT dibatalkan.\n\nKetik "HAPUS" untuk konfirmasi:`;
+                    const input = prompt(confirmText);
+                    if (input?.trim().toUpperCase() !== 'HAPUS') return;
+
+                    const allBtn = resultDiv.querySelector('#purge-all-btn');
+                    if (allBtn) { allBtn.disabled = true; allBtn.textContent = 'Menghapus…'; }
+                    try {
+                        const ids = candidates.map(c => c.student_id);
+                        const result = await purgeExpiredStudents(ids);
+                        resultDiv.innerHTML = `<p class="hint" style="color:var(--color-success)">✓ ${result.purged} siswa berhasil dihapus permanen.</p>`;
+                    } catch (err) {
+                        alert(`Gagal: ${err.message}`);
+                        if (allBtn) { allBtn.disabled = false; allBtn.textContent = `Hapus Semua (${n}) — Tidak Dapat Dipulihkan`; }
+                    }
                 });
             }
         } catch (err) {
             resultDiv.innerHTML = `<p style="color:var(--color-danger,#dc2626)">${err.message}</p>`;
         } finally {
-            btn.disabled = false; btn.textContent = 'Cek Kandidat Retensi…';
+            btn.disabled = false; btn.textContent = 'Cek Kandidat Hapus…';
         }
     });
 }

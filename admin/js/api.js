@@ -173,40 +173,55 @@ export async function reEnrollStudent(studentId) {
 }
 
 /** 10.6 — Ambil daftar alumni yang graduated_academic_year <= batas retensi */
-export async function getRetentionCandidates(retentionYears = 5) {
-    const currentYear = new Date().getFullYear();
-    const cutoffYear  = String(currentYear - retentionYears);
-    const { data, error } = await supabase
-        .from('students')
-        .select('student_id, full_name, nis, graduated_academic_year, alumni_career_track')
-        .eq('student_status', 'LULUS')
-        .is('anonymized_at', null)
-        .lte('graduated_academic_year', cutoffYear)
-        .order('graduated_academic_year');
-    if (error) throw error;
-    return data ?? [];
+/**
+ * Daftar siswa LULUS atau KELUAR yang sudah melewati masa retensi 6 bulan.
+ * Kandidat untuk penghapusan permanen (item 7).
+ */
+export async function getRetentionCandidates() {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 6);
+    const cutoffISO = cutoff.toISOString();
+
+    const [lulus, keluar] = await Promise.all([
+        supabase
+            .from('students')
+            .select('student_id, full_name, nis, graduated_at, graduated_academic_year, student_status')
+            .eq('student_status', 'LULUS')
+            .not('graduated_at', 'is', null)
+            .lt('graduated_at', cutoffISO)
+            .order('graduated_at'),
+        supabase
+            .from('students')
+            .select('student_id, full_name, nis, keluar_at, student_status')
+            .eq('student_status', 'KELUAR')
+            .not('keluar_at', 'is', null)
+            .lt('keluar_at', cutoffISO)
+            .order('keluar_at'),
+    ]);
+
+    if (lulus.error) throw lulus.error;
+    if (keluar.error) throw keluar.error;
+    return [...(lulus.data ?? []), ...(keluar.data ?? [])];
 }
 
-/** 10.6 — Anonimkan data alumnus (nama + NIS) untuk memenuhi retensi */
-export async function anonymizeAlumnus(studentId) {
-    const { data: s, error: fetchErr } = await supabase
-        .from('students')
-        .select('nis')
-        .eq('student_id', studentId)
-        .single();
-    if (fetchErr) throw fetchErr;
+/** Hapus permanen siswa yang sudah melewati masa retensi 6 bulan. */
+export async function purgeExpiredStudents(studentIds) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) throw new Error('Sesi login tidak ditemukan. Silakan login ulang.');
 
-    const { error } = await supabase
-        .from('students')
-        .update({
-            full_name:    `[Alumni-${s.nis}]`,
-            nis:          `[ANON-${studentId.slice(0, 8)}]`,
-            anonymized_at: new Date().toISOString(),
-        })
-        .eq('student_id', studentId)
-        .eq('student_status', 'LULUS')
-        .is('anonymized_at', null);
-    if (error) throw error;
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/purge-expired-students`, {
+        method:  'DELETE',
+        headers: {
+            'Authorization':    `Bearer ${token}`,
+            'Content-Type':     'application/json',
+            'x-schema-version': '1.0.0',
+        },
+        body: JSON.stringify({ student_ids: studentIds }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body?.error?.message ?? 'Gagal menghapus data siswa');
+    return body.data;
 }
 
 /**
