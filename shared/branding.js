@@ -91,10 +91,11 @@ export async function applyBrandingById(schoolId, supabaseClient) {
     try {
         const { data } = await supabaseClient
             .from('schools')
-            .select('school_id, name, logo_url, primary_color, secondary_color')
+            .select('school_id, name, logo_url, primary_color, secondary_color, slug')
             .eq('school_id', schoolId)
             .single();
         if (!data) return null;
+        if (data.slug) try { sessionStorage.setItem('school_slug', data.slug); } catch { /* private mode */ }
         return _applyToDom(data);
     } catch {
         return null;

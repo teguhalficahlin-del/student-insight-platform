@@ -13,6 +13,12 @@ import { saveObservation, saveJournalEntry, saveCase } from './offline.js';
 export const SUPABASE_URL      = 'https://xovvuuwexoweoqyltepq.supabase.co';
 export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvdnZ1dXdleG93ZW9xeWx0ZXBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDk0NzUsImV4cCI6MjA5Nzc4NTQ3NX0.mFwmVfSqYM7ITURtLC143BsurK6Yr31WFViJe5PFGN8';
 
+try {
+    const _mk = 'sb-xovvuuwexoweoqyltepq-auth-token';
+    const _lv = localStorage.getItem(_mk);
+    if (_lv && !sessionStorage.getItem(_mk)) { sessionStorage.setItem(_mk, _lv); localStorage.removeItem(_mk); }
+} catch { /* private mode */ }
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { autoRefreshToken: true, persistSession: true, storage: sessionStorage },
 });
