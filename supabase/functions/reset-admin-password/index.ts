@@ -64,11 +64,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         );
         if (updateErr) throw updateErr;
 
-        // 3. Reset flag password_changed supaya admin wajib ganti password
+        // 3. Set must_change_password supaya admin wajib ganti saat login berikutnya
         await admin
-            .from('school_config')
-            .update({ password_changed: false })
-            .eq('school_id', school_id);
+            .from('users')
+            .update({ must_change_password: true })
+            .eq('auth_user_id', user.auth_user_id);
 
         return json({
             success:          true,

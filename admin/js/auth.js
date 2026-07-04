@@ -7,8 +7,9 @@
  * finished yet, otherwise to dashboard.html.
  */
 
-import { loginWithIdentifier, getCurrentUserRow, getSchoolConfig } from './api.js';
+import { supabase, loginWithIdentifier, getCurrentUserRow, getSchoolConfig } from './api.js';
 import { applyBranding } from '../../shared/branding.js';
+import { checkMustChangePassword } from '../../shared/change-password.js';
 
 let _schoolId = null;
 
@@ -63,6 +64,9 @@ form.addEventListener('submit', async (e) => {
             submitBtn.textContent = 'Masuk';
             return;
         }
+
+        // Paksa ganti password jika di-reset oleh superadmin
+        await checkMustChangePassword(supabase, userRow);
 
         let config = null;
         try {
