@@ -16,7 +16,7 @@ import {
     getWaliKelasInfo, getWaliAttendanceSummary,
     getProgram, fetchPklStudents, fetchNonPklStudents,
     fetchDudiPartners, fetchPklAttendance, fetchDudiObservations,
-    getClassStudents, getAttendanceSummaryByStudents,
+    getAttendanceSummaryByStudents,
     fetchAllPklStudents, fetchAllDudiPartners,
     createPlacement, bulkImportPkl,
     getSchoolStats, getKepsekMonitoring, getAbsentTeachersToday,
@@ -351,7 +351,7 @@ async function loadGuruRecap() {
 
     content.innerHTML = '<p class="hint">Memuat rekap…</p>';
     try {
-        const students = await getClassStudents(classId);
+        const students = myStudents.filter(s => s.class_id === classId);
         if (students.length === 0) {
             content.innerHTML = '<p class="hint">Belum ada siswa di kelas ini.</p>';
             return;

@@ -248,7 +248,7 @@ export async function getMyStudents(userId, academicYear, semester) {
             const s = en.student;
             if (s && !seen.has(s.student_id)) {
                 seen.add(s.student_id);
-                students.push({ ...s, class_name: ta.class?.name });
+                students.push({ ...s, class_id: ta.class?.class_id, class_name: ta.class?.name });
             }
         }
     }
