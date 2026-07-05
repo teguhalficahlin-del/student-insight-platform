@@ -314,8 +314,10 @@ function renderObservations(rows, hintEl, listEl) {
 async function loadObservations() {
     const hintEl   = document.getElementById('obs-hint');
     const listEl   = document.getElementById('obs-list');
+    const casesHintEl = document.getElementById('cases-hint');
     const cacheKey = `stu-obs-${student.student_id}`;
 
+    // Loading state untuk kedua seksi
     const cached = LC.get(cacheKey);
     if (cached) {
         renderObservations(cached, hintEl, listEl);
@@ -324,18 +326,30 @@ async function loadObservations() {
         hintEl.textContent   = 'Memuat observasi…';
         listEl.innerHTML     = '';
     }
+    casesHintEl.textContent   = 'Memuat…';
+    casesHintEl.style.display = 'block';
+    document.getElementById('cases-list').innerHTML = '';
 
-    try {
-        const [rows, cases] = await Promise.all([
-            getMyObservations(student.student_id),
-            getMyCases(student.student_id),
-        ]);
+    // Jalankan paralel tapi tangani error secara independen
+    const [obsResult, casesResult] = await Promise.allSettled([
+        getMyObservations(student.student_id),
+        getMyCases(student.student_id),
+    ]);
+
+    // Observasi
+    if (obsResult.status === 'fulfilled') {
         obsLoaded = true;
-        LC.set(cacheKey, rows);
-        renderObservations(rows, hintEl, listEl);
-        renderCases(cases);
-    } catch (err) {
-        if (!cached) hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
+        LC.set(cacheKey, obsResult.value);
+        renderObservations(obsResult.value, hintEl, listEl);
+    } else if (!cached) {
+        hintEl.textContent = `Gagal memuat observasi. ${fe(obsResult.reason)}`;
+    }
+
+    // Kasus
+    if (casesResult.status === 'fulfilled') {
+        renderCases(casesResult.value);
+    } else {
+        casesHintEl.textContent = `Gagal memuat data kasus. ${fe(casesResult.reason)}`;
     }
 }
 
