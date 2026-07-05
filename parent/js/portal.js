@@ -325,7 +325,7 @@ async function loadCases(studentId) {
                     <span style="font-size:0.75rem;padding:2px 8px;border-radius:12px;background:${isClosed ? '#e5e7eb' : '#d1fae5'};color:${isClosed ? '#374151' : '#065f46'}">${CASE_STATUS_LABEL[c.status] ?? c.status}</span>
                 </div>
                 <div style="font-size:0.8rem;color:var(--color-text-muted,#6b7280);margin-top:4px">
-                    Ditangani saat ini: ${esc(ROLE_LABEL_SHORT[c.current_handler_role] ?? c.current_handler_role ?? '—')} · ${formatDate(c.created_at)}
+                    Ditindaklanjuti oleh: ${esc(ROLE_LABEL_SHORT[c.current_handler_role] ?? c.current_handler_role ?? '—')} · ${formatDate(c.created_at)}
                 </div>
                 ${eventsHtml}
             </div>`;
