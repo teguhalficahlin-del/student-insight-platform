@@ -532,10 +532,10 @@ async function renderStaffPanel() {
                   .is('deleted_at', null)
                   .order('full_name')),
         fetchAllRows('classes',       q => q.select('class_id, name')),
-        fetchAllRows('programs', q => q.select('program_id, name')),
+        fetchAllRows('programs', q => q.select('program_id, code, name')),
     ]);
     const classMap = new Map(classRows.map(c => [c.class_id, c.name]));
-    const progMap  = new Map(progRows.map(p => [p.program_id, p.name]));
+    const progMap  = new Map(progRows.map(p => [p.program_id, p.code ?? p.name]));
 
     const aktif    = users.filter(u => u.is_active !== false);
     const nonaktif = users.filter(u => u.is_active === false);
