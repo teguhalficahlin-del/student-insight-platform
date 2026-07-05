@@ -171,9 +171,13 @@ async function initTab(key) {
 
 async function initJadwalTab() {
     const dateEl = document.getElementById('sched-date');
-    if (!dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
+    if (!dateEl.value) dateEl.value = localDateStr();
     dateEl.addEventListener('change', loadSchedule);
     await loadSchedule();
+}
+
+function localDateStr(d = new Date()) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 function fmtDayLabel(dateStr) {
@@ -237,8 +241,8 @@ async function loadSchedule() {
 let attInit = false;
 async function loadAttendance() {
     if (!attInit) {
-        const today    = new Date().toISOString().slice(0, 10);
-        const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+        const today    = localDateStr();
+        const monthAgo = localDateStr(new Date(Date.now() - 30 * 86400000));
         document.getElementById('att-date-start').value = monthAgo;
         document.getElementById('att-date-end').value   = today;
         document.getElementById('att-filter-btn').onclick = loadAttendance;

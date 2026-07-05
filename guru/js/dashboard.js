@@ -308,14 +308,14 @@ async function loadTabContent(key) {
 let _guruTabInit = false;
 async function initGuruTab() {
     const dateEl = document.getElementById('sched-date');
-    if (!dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
+    if (!dateEl.value) dateEl.value = localDateStr();
 
     if (!_guruTabInit) {
         _guruTabInit = true;
         dateEl.addEventListener('change', loadSchedule);
         document.getElementById('guru-recap-btn').onclick = loadGuruRecap;
         // Default rentang: awal bulan ini s/d hari ini
-        const today = new Date().toISOString().slice(0, 10);
+        const today = localDateStr();
         const firstOfMonth = today.slice(0, 8) + '01';
         document.getElementById('guru-recap-start').value = firstOfMonth;
         document.getElementById('guru-recap-end').value   = today;
@@ -390,6 +390,10 @@ async function loadGuruRecap() {
     } catch (err) {
         content.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat rekap. ${esc(fe(err))}</p>`;
     }
+}
+
+function localDateStr(d = new Date()) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 function fmtDayLabel(dateStr) {
@@ -785,8 +789,8 @@ async function initWaliTab() {
     document.getElementById('wali-class-title').textContent =
         `Kelas Walian — ${info?.name ?? ''}`;
 
-    const today    = new Date().toISOString().slice(0, 10);
-    const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const today    = localDateStr();
+    const monthAgo = localDateStr(new Date(Date.now() - 30 * 86400000));
     document.getElementById('wali-date-start').value = monthAgo;
     document.getElementById('wali-date-end').value   = today;
 
@@ -865,7 +869,7 @@ async function initBkTab() {
 // ─── TAB WAKA KESISWAAN ──────────────────────────────────────
 
 async function initWakaKesiswaanTab() {
-    const today        = new Date().toISOString().slice(0, 10);
+    const today        = localDateStr();
     const firstOfMonth = today.slice(0, 8) + '01';
     document.getElementById('wk-att-start').value = firstOfMonth;
     document.getElementById('wk-att-end').value   = today;
@@ -1005,8 +1009,8 @@ async function initKaprodiTab() {
         renderKpStudents();
         renderKpDudi();
 
-        const today    = new Date().toISOString().slice(0, 10);
-        const monthAgo = new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
+        const today    = localDateStr();
+        const monthAgo = localDateStr(new Date(Date.now() - 30*86400000));
 
         document.getElementById('kp-date-start').value  = monthAgo;
         document.getElementById('kp-date-end').value    = today;
@@ -1315,8 +1319,8 @@ async function initWakaHumasTab() {
     if (_whTabInit) return;
     _whTabInit = true;
 
-    const today    = new Date().toISOString().slice(0, 10);
-    const monthAgo = new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
+    const today    = localDateStr();
+    const monthAgo = localDateStr(new Date(Date.now() - 30*86400000));
     document.getElementById('wh-date-start').value = monthAgo;
     document.getElementById('wh-date-end').value   = today;
     document.getElementById('wh-filter-btn').onclick = loadWhRecap;
@@ -2283,7 +2287,7 @@ async function initJurnalTab() {
 
     // Tanggal default hari ini, tersembunyi
     const dateEl = document.getElementById('journal-date');
-    dateEl.value = new Date().toISOString().slice(0, 10);
+    dateEl.value = localDateStr();
 
     document.getElementById('journal-date-toggle').addEventListener('click', () => {
         const row = document.getElementById('journal-date-row');

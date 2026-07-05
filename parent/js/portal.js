@@ -130,9 +130,9 @@ async function init() {
     const today = new Date();
     const monthAgo = new Date(today);
     monthAgo.setDate(monthAgo.getDate() - 30);
-    filterStart.value = monthAgo.toISOString().slice(0, 10);
-    filterEnd.value   = today.toISOString().slice(0, 10);
-    schedDate.value   = today.toISOString().slice(0, 10);
+    filterStart.value = localDateStr(monthAgo);
+    filterEnd.value   = localDateStr(today);
+    schedDate.value   = localDateStr(today);
 
     loadingEl.style.display = 'none';
     sectionSched.style.display = 'block';
@@ -298,6 +298,10 @@ function fe(err) {
     if (m.includes('jwt') || m.includes('expired')) return 'Sesi habis. Silakan login ulang.';
     if (m.includes('fetch') || m.includes('network') || m.includes('failed to fetch')) return 'Tidak ada koneksi. Periksa jaringan.';
     return 'Gagal memuat data. Silakan coba lagi.';
+}
+
+function localDateStr(d = new Date()) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 const CASE_STATUS_LABEL = { OPEN: 'Terbuka', CLOSED: 'Selesai' };
