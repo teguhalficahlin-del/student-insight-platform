@@ -672,6 +672,32 @@ export async function deleteJournalEntry(journalId) {
     if (error) throw error;
 }
 
+export async function updateJournalEntry(journalId, entryDate, content, userId) {
+    // Reuse saveJournalEntry (fn_sync_journal adalah UPSERT by journal_id).
+    // Dengan begitu edit jurnal ikut jalur offline-capable yang sama dengan insert.
+    return saveJournalEntry({
+        idempotency_key: crypto.randomUUID(),
+        journal_id:      journalId,
+        owner_user_id:   userId,
+        entry_date:      entryDate,
+        content,
+    });
+}
+
+export async function getMyObservations(userId) {
+    const { data, error } = await supabase
+        .from('observations')
+        .select(`
+            observation_id, dimension, sentiment, visibility, content, observed_at, created_at,
+            student:students!observations_student_id_fkey ( full_name, nis )
+        `)
+        .eq('author_user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+    if (error) throw error;
+    return data ?? [];
+}
+
 // ─── KASUS ───────────────────────────────────────────────────
 
 // Diganti oleh getUnreadNotifCount — tetap diekspor untuk kompatibilitas sementara

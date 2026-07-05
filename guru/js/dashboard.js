@@ -21,7 +21,8 @@ import {
     createPlacement, finishPlacement, bulkImportPkl,
     getSchoolStats, getKepsekMonitoring, getAbsentTeachersToday,
     getAttendanceRecapPerClass, getOpenCases,
-    getJournalEntries, insertJournalEntry, deleteJournalEntry,
+    getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
+    getMyObservations,
     getCases, getCase, getCaseEvents, createCase,
     addCaseComment, escalateCase, changeCaseStatus, closeCase,
     updateCaseAudience, getCaseAudienceMembers,
@@ -300,6 +301,7 @@ async function loadTabContent(key) {
         case 'ks_admin':    await initKsAdminTab(); break;
         case 'kasus':       await initKasusTab(); break;
         case 'jurnal':      await initJurnalTab(); break;
+        case 'observasi':   await initObsTab(); break;
     }
 }
 
@@ -320,6 +322,18 @@ async function initGuruTab() {
         document.getElementById('guru-recap-start').value = firstOfMonth;
         document.getElementById('guru-recap-end').value   = today;
         await initGuruRekapDropdown();
+
+        // Toggle hari / minggu
+        document.querySelectorAll('.sched-view-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                document.querySelectorAll('.sched-view-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const isWeek = btn.dataset.view === 'minggu';
+                document.getElementById('sched-view-hari-panel').style.display  = isWeek ? 'none' : 'block';
+                document.getElementById('sched-view-minggu-panel').style.display = isWeek ? 'block' : 'none';
+                if (isWeek) await loadWeekSchedule();
+            });
+        });
     }
 
     await loadSchedule();
@@ -373,9 +387,12 @@ async function loadGuruRecap() {
             </tr>`;
         }).join('');
         content.innerHTML = `
-            <p style="font-size:0.82rem;color:var(--color-text-muted,#9ca3af);margin-bottom:8px">
-                ${esc(className)} · ${rows.length} siswa · akumulasi ${dateStart || '—'} s/d ${dateEnd || '—'}
-            </p>
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+                <p style="font-size:0.82rem;color:var(--color-text-muted,#9ca3af);margin:0">
+                    ${esc(className)} · ${rows.length} siswa · akumulasi ${dateStart || '—'} s/d ${dateEnd || '—'}
+                </p>
+                <button class="btn btn-secondary btn-sm" id="guru-recap-export">Unduh CSV</button>
+            </div>
             <div class="table-wrapper">
             <table class="table">
                 <thead><tr>
@@ -387,6 +404,21 @@ async function loadGuruRecap() {
                 <tbody>${tbody}</tbody>
             </table>
             </div>`;
+
+        document.getElementById('guru-recap-export')?.addEventListener('click', () => {
+            const header = 'Nama,NIS,Hadir,Izin,Sakit,Alpa,Total,% Hadir';
+            const csvRows = rows.map(s => {
+                const pct = s.total > 0 ? Math.round((s.HADIR / s.total) * 100) : 0;
+                return [s.full_name, s.nis, s.HADIR, s.IZIN, s.SAKIT, s.TIDAK_HADIR, s.total, s.total > 0 ? pct + '%' : '—']
+                    .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',');
+            });
+            const blob = new Blob(['﻿' + [header, ...csvRows].join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `kehadiran_${esc(className)}_${dateStart || 'all'}_${dateEnd || 'all'}.csv`.replace(/\s+/g, '_');
+            a.click();
+            URL.revokeObjectURL(a.href);
+        });
     } catch (err) {
         content.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat rekap. ${esc(fe(err))}</p>`;
     }
@@ -407,6 +439,7 @@ function renderScheduleRows(rows, contentEl, date) {
         contentEl.innerHTML = dayLabel + '<p class="hint">Tidak ada jadwal mengajar pada tanggal ini.</p>';
         return;
     }
+    const isPast = date < localDateStr();
     contentEl.innerHTML = dayLabel + `
         <div class="table-wrapper">
         <table class="table">
@@ -417,11 +450,12 @@ function renderScheduleRows(rows, contentEl, date) {
                     <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
                     <td>${esc(r.class?.name ?? '—')}</td>
                     <td>
-                        <button class="btn btn-primary btn-xs att-open-btn"
+                        <button class="btn ${isPast ? 'btn-secondary' : 'btn-primary'} btn-xs att-open-btn"
                             data-schedule="${r.schedule_id}"
                             data-class="${r.class?.class_id}"
-                            data-classname="${esc(r.class?.name ?? '')}">
-                            Input Kehadiran
+                            data-classname="${esc(r.class?.name ?? '')}"
+                            data-ispast="${isPast}">
+                            ${isPast ? 'Koreksi Kehadiran' : 'Input Kehadiran'}
                         </button>
                     </td>
                 </tr>
@@ -441,9 +475,13 @@ function renderScheduleRows(rows, contentEl, date) {
 }
 
 function openAttModal(btn) {
-    const modal = document.getElementById('att-modal');
-    document.getElementById('att-modal-title').textContent = `Kehadiran — ${btn.dataset.classname}`;
-    document.getElementById('att-modal-body').innerHTML = '<p class="hint">Memuat daftar siswa…</p>';
+    const modal    = document.getElementById('att-modal');
+    const isPast   = btn.dataset.ispast === 'true';
+    document.getElementById('att-modal-title').textContent =
+        isPast ? `Koreksi Kehadiran — ${btn.dataset.classname}` : `Kehadiran — ${btn.dataset.classname}`;
+    document.getElementById('att-modal-body').innerHTML =
+        (isPast ? '<p class="hint" style="background:var(--color-bg-alt,#f3f4f6);padding:8px 10px;border-radius:6px;margin-bottom:12px">Data kehadiran sebelumnya sudah ditampilkan. Ubah jika perlu lalu klik Simpan.</p>' : '') +
+        '<p class="hint">Memuat daftar siswa…</p>';
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
     loadAttModalContent(btn.dataset.schedule, btn.dataset.class, btn.dataset.classname);
@@ -476,6 +514,80 @@ async function loadSchedule() {
             contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
         }
         // Jika ada cache, biarkan data lama tetap tampil — jangan overwrite dengan error
+    }
+}
+
+async function loadWeekSchedule() {
+    const contentEl = document.getElementById('sched-week-content');
+    contentEl.innerHTML = '<p class="hint">Memuat jadwal minggu ini…</p>';
+
+    // Hitung Senin s/d Jumat minggu ini
+    const today = new Date();
+    const dow   = today.getDay(); // 0=Min,1=Sen,...,6=Sab
+    const diff  = dow === 0 ? -6 : 1 - dow; // hari ke Senin
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diff);
+
+    const days = Array.from({ length: 5 }, (_, i) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        return localDateStr(d);
+    });
+
+    try {
+        const results = await Promise.all(
+            days.map(d => getMyScheduleForDate(currentUser.user_id, d)
+                .then(rows => ({ date: d, rows }))
+                .catch(() => ({ date: d, rows: [] }))
+            )
+        );
+
+        const hasAny = results.some(r => r.rows.length > 0);
+        if (!hasAny) {
+            contentEl.innerHTML = '<p class="hint">Tidak ada jadwal mengajar minggu ini.</p>';
+            return;
+        }
+
+        const DAY_NAMES = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
+        contentEl.innerHTML = results.map((r, idx) => {
+            const dayLabel = `${DAY_NAMES[idx]}, ${fmtDayLabel(r.date).split(',')[1]?.trim() ?? r.date}`;
+            if (r.rows.length === 0) {
+                return `<div style="margin-bottom:12px">
+                    <p style="font-size:0.82rem;font-weight:500;color:var(--color-text-muted);margin:0 0 4px">${esc(dayLabel)}</p>
+                    <p class="hint" style="margin:0;font-size:13px">Tidak ada jadwal</p>
+                </div>`;
+            }
+            const dayIsPast = r.date < localDateStr();
+            const rowsHtml = r.rows.map(s => `
+                <tr>
+                    <td>${fmtTime(s.session_start)} – ${fmtTime(s.session_end)}</td>
+                    <td>${esc(s.class?.name ?? '—')}</td>
+                    <td>
+                        <button class="btn ${dayIsPast ? 'btn-secondary' : 'btn-primary'} btn-xs att-open-btn"
+                            data-schedule="${s.schedule_id}"
+                            data-class="${s.class?.class_id}"
+                            data-classname="${esc(s.class?.name ?? '')}"
+                            data-ispast="${dayIsPast}">
+                            ${dayIsPast ? 'Koreksi Kehadiran' : 'Input Kehadiran'}
+                        </button>
+                    </td>
+                </tr>`).join('');
+            return `<div style="margin-bottom:14px">
+                <p style="font-size:0.82rem;font-weight:500;color:var(--color-text);margin:0 0 4px">${esc(dayLabel)}</p>
+                <div class="table-wrapper">
+                <table class="table">
+                    <thead><tr><th>Jam</th><th>Kelas</th><th>Kehadiran</th></tr></thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+                </div>
+            </div>`;
+        }).join('');
+
+        contentEl.querySelectorAll('.att-open-btn').forEach(btn => {
+            btn.addEventListener('click', () => openAttModal(btn));
+        });
+    } catch (err) {
+        contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat. ${esc(fe(err))}</p>`;
     }
 }
 
@@ -657,7 +769,10 @@ async function runFlush() {
 
 // ── Observasi ─────────────────────────────────────────────────
 
+let _obsFormInit = false;
 async function initObsForm() {
+    if (_obsFormInit) return;
+    _obsFormInit = true;
     // Load students dari cache dulu agar dropdown siap pakai walau offline
     const stuCacheKey = `mystudents-${currentUser.user_id}`;
     myStudents = LC.get(stuCacheKey) ?? [];
@@ -768,6 +883,7 @@ async function initObsForm() {
             statusEl.style.display = 'block';
             form.reset();
             hiddenEl.value = '';
+            if (r.status === 'synced') await loadObsHistory();
         } catch (err) {
             statusEl.textContent   = `✗ ${fe(err, 's')}`;
             statusEl.className     = 'status-msg status-err';
@@ -777,6 +893,60 @@ async function initObsForm() {
             submitBtn.textContent = 'Simpan Observasi';
         }
     });
+}
+
+let _obsTabInit = false;
+async function initObsTab() {
+    await initObsForm();
+    if (!_obsTabInit) {
+        _obsTabInit = true;
+    }
+    await loadObsHistory();
+}
+
+async function loadObsHistory() {
+    const listEl   = document.getElementById('obs-history-list');
+    const cacheKey = `obs-history-${currentUser.user_id}`;
+    const cached   = LC.get(cacheKey);
+    if (cached) renderObsHistory(cached, listEl);
+    else listEl.innerHTML = '<p class="hint">Memuat…</p>';
+    try {
+        const rows = await getMyObservations(currentUser.user_id);
+        LC.set(cacheKey, rows);
+        renderObsHistory(rows, listEl);
+    } catch (err) {
+        if (!cached) listEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat. ${esc(fe(err))}</p>`;
+    }
+}
+
+const DIMENSION_LABELS_OBS = { AKADEMIK:'Akademik', KEHADIRAN:'Kehadiran', PERILAKU:'Perilaku', SOSIAL:'Sosial', AFEKTIF:'Afektif', BAKAT_MINAT:'Bakat & Minat', FISIK:'Fisik', LAINNYA:'Lainnya' };
+const SENTIMENT_LABELS = { POSITIF:'Positif', NETRAL:'Netral', NEGATIF:'Perlu Perhatian' };
+const SENTIMENT_COLOR  = { POSITIF:'var(--color-success)', NETRAL:'var(--color-text-muted)', NEGATIF:'var(--color-danger)' };
+
+function renderObsHistory(rows, listEl) {
+    if (!rows.length) {
+        listEl.innerHTML = '<p class="hint">Belum ada observasi yang ditulis.</p>';
+        return;
+    }
+    listEl.innerHTML = rows.map(r => {
+        const nama = r.student?.full_name ?? '—';
+        const nis  = r.student?.nis ? ` · ${r.student.nis}` : '';
+        const dim  = DIMENSION_LABELS_OBS[r.dimension] ?? r.dimension;
+        const sent = SENTIMENT_LABELS[r.sentiment]  ?? r.sentiment;
+        const sentColor = SENTIMENT_COLOR[r.sentiment] ?? 'inherit';
+        return `
+        <div style="border-bottom:0.5px solid var(--color-border);padding:10px 0;font-size:13px">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px">
+                <strong>${esc(nama)}<span style="font-weight:400;color:var(--color-text-muted)">${esc(nis)}</span></strong>
+                <span style="font-size:11px;color:var(--color-text-muted)">${fmt(r.observed_at)}</span>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+                <span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--color-bg-alt,#f3f4f6)">${esc(dim)}</span>
+                <span style="font-size:11px;padding:2px 8px;border-radius:20px;color:${sentColor};background:var(--color-bg-alt,#f3f4f6)">${esc(sent)}</span>
+            </div>
+            <p style="margin:0;white-space:pre-wrap;color:var(--color-text)">${esc(r.content)}</p>
+        </div>`;
+    }).join('');
 }
 
 // ─── TAB WALI KELAS ──────────────────────────────────────────
@@ -2335,27 +2505,47 @@ function renderJurnalEntries(entries, listEl) {
         return;
     }
     listEl.innerHTML = entries.map(e => `
-        <div class="section-card" style="margin-bottom:8px" data-entry-id="${esc(e.journal_id)}">
+        <div class="section-card" style="margin-bottom:8px" data-entry-id="${esc(e.journal_id)}" data-entry-date="${esc(e.entry_date)}">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
                 <strong>${fmt(e.entry_date)}</strong>
-                <div class="jrn-del-confirm" style="display:none;align-items:center;gap:8px">
-                    <span style="font-size:13px;color:var(--color-text-muted)">Hapus catatan ini?</span>
-                    <button class="btn btn-danger btn-sm jrn-del-yes">Ya, Hapus</button>
-                    <button class="btn btn-secondary btn-sm jrn-del-no">Batal</button>
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                    <div class="jrn-del-confirm" style="display:none;align-items:center;gap:8px">
+                        <span style="font-size:13px;color:var(--color-text-muted)">Hapus catatan ini?</span>
+                        <button class="btn btn-danger btn-sm jrn-del-yes">Ya, Hapus</button>
+                        <button class="btn btn-secondary btn-sm jrn-del-no">Batal</button>
+                    </div>
+                    <button class="btn btn-secondary btn-sm jrn-edit-btn" data-id="${esc(e.journal_id)}">Edit</button>
+                    <button class="btn btn-secondary btn-sm jrn-del-ask" data-delete="${esc(e.journal_id)}">Hapus</button>
                 </div>
-                <button class="btn btn-secondary btn-sm jrn-del-ask" data-delete="${esc(e.journal_id)}">Hapus</button>
             </div>
-            <p style="white-space:pre-wrap;margin:0">${esc(e.content)}</p>
+            <p class="jrn-content-view" style="white-space:pre-wrap;margin:0">${esc(e.content)}</p>
+            <div class="jrn-edit-area" style="display:none">
+                <textarea class="input jrn-edit-ta" rows="4" style="width:100%;margin-bottom:6px">${esc(e.content)}</textarea>
+                <div style="display:flex;gap:6px">
+                    <button class="btn btn-primary btn-sm jrn-edit-save">Simpan</button>
+                    <button class="btn btn-secondary btn-sm jrn-edit-cancel">Batal</button>
+                </div>
+                <p class="jrn-edit-err" style="display:none;font-size:13px;color:var(--color-danger);margin:4px 0 0"></p>
+            </div>
             <p class="jrn-del-err" style="display:none;font-size:13px;color:var(--color-danger);margin:4px 0 0"></p>
         </div>
     `).join('');
 
     listEl.querySelectorAll('[data-entry-id]').forEach(card => {
+        const id        = card.dataset.entryId;
+        const entryDate = card.dataset.entryDate;
         const askBtn    = card.querySelector('.jrn-del-ask');
         const confirmEl = card.querySelector('.jrn-del-confirm');
         const yesBtn    = card.querySelector('.jrn-del-yes');
         const noBtn     = card.querySelector('.jrn-del-no');
         const errEl     = card.querySelector('.jrn-del-err');
+        const editBtn   = card.querySelector('.jrn-edit-btn');
+        const editArea  = card.querySelector('.jrn-edit-area');
+        const editTa    = card.querySelector('.jrn-edit-ta');
+        const editSave  = card.querySelector('.jrn-edit-save');
+        const editCancel= card.querySelector('.jrn-edit-cancel');
+        const editErr   = card.querySelector('.jrn-edit-err');
+        const contentP  = card.querySelector('.jrn-content-view');
 
             askBtn.addEventListener('click', () => {
                 confirmEl.style.display = 'flex';
@@ -2374,6 +2564,43 @@ function renderJurnalEntries(entries, listEl) {
                     errEl.textContent = fe(err, 'h');
                     errEl.style.display = 'block';
                     yesBtn.disabled = false; yesBtn.textContent = 'Ya, Hapus';
+                }
+            });
+
+            editBtn.addEventListener('click', () => {
+                editArea.style.display  = 'block';
+                contentP.style.display  = 'none';
+                editBtn.style.display   = 'none';
+                askBtn.style.display    = 'none';
+                editErr.style.display   = 'none';
+            });
+            editCancel.addEventListener('click', () => {
+                editArea.style.display  = 'none';
+                contentP.style.display  = '';
+                editBtn.style.display   = '';
+                askBtn.style.display    = '';
+            });
+            editSave.addEventListener('click', async () => {
+                const newContent = editTa.value.trim();
+                if (!newContent) return;
+                editSave.disabled = true; editSave.textContent = 'Menyimpan…';
+                try {
+                    const r = await updateJournalEntry(id, entryDate, newContent, currentUser.user_id);
+                    if (r.status === 'error') throw new Error(r.error);
+                    LC.clear(`jurnal-${currentUser.user_id}`);
+                    if (r.status === 'queued') {
+                        editErr.textContent = '⏳ Tersimpan di perangkat — akan dikirim saat online.';
+                        editErr.style.color = 'var(--color-warning,#b45309)';
+                        editErr.style.display = 'block';
+                        editSave.disabled = false; editSave.textContent = 'Simpan';
+                    } else {
+                        await loadJurnalList();
+                    }
+                } catch (err) {
+                    editErr.textContent = fe(err, 's');
+                    editErr.style.color = 'var(--color-danger)';
+                    editErr.style.display = 'block';
+                    editSave.disabled = false; editSave.textContent = 'Simpan';
                 }
             });
         });
