@@ -329,13 +329,7 @@ async function initGuruTab() {
 async function initGuruRekapDropdown() {
     const sel = document.getElementById('guru-recap-class');
     try {
-        let classes = await getMyClasses(currentUser.user_id, config.current_academic_year, config.current_semester);
-
-        // Fallback untuk Kaprodi yang tidak punya teaching_assignments pribadi
-        if (classes.length === 0 && jabatan.includes('kaprodi')) {
-            const programId = currentUser.kaprodi_program_id ?? currentUser.program_id ?? null;
-            if (programId) classes = await getClassesByProgram(programId);
-        }
+        const classes = await getMyClasses(currentUser.user_id, config.current_academic_year, config.current_semester);
 
         if (classes.length === 0) {
             sel.innerHTML = '<option value="">Tidak ada kelas</option>';
