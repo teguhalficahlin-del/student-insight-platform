@@ -6,7 +6,7 @@
  */
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -1328,13 +1328,83 @@ async function renderStakeholdersPanel() {
     `;
 }
 
+// ─── Jadwal panel helpers ────────────────────────────────────
+const SCHED_DAYS = ['SENIN','SELASA','RABU','KAMIS','JUMAT','SABTU'];
+const SCHED_DAY_LABELS = { SENIN:'Senin', SELASA:'Selasa', RABU:'Rabu', KAMIS:'Kamis', JUMAT:'Jumat', SABTU:'Sabtu' };
+const SCHED_GRADES = [10, 11, 12];
+const SCHED_GRADE_LABELS = { 10:'Kelas X', 11:'Kelas XI', 12:'Kelas XII' };
+
+function buildJadwalGrid(slots, templates, classes, teacherIdMap) {
+    if (slots.length === 0) return '<p class="hint">Belum ada slot waktu untuk hari ini.</p>';
+
+    const cells = new Map();
+    for (const t of templates) {
+        const slotIdx = slots.findIndex(s =>
+            !s.is_break &&
+            s.start_time?.slice(0,5) === t.start_time?.slice(0,5) &&
+            s.end_time?.slice(0,5) === t.end_time?.slice(0,5)
+        );
+        if (slotIdx >= 0) {
+            cells.set(`${slotIdx}_${t.class_id}`, {
+                mapel: t.subject_label ?? '',
+                kg: teacherIdMap.get(t.teacher_id) ?? '',
+            });
+        }
+    }
+
+    const thStyle = 'padding:6px 8px;border:1px solid var(--color-border,#334155);background:var(--color-surface,#1e293b);font-size:12px;white-space:nowrap;text-align:center';
+    const tdTime  = 'padding:5px 8px;border:1px solid var(--color-border,#334155);font-size:12px;white-space:nowrap;text-align:center;color:var(--color-muted,#94a3b8)';
+    const tdBreak = `padding:5px 8px;border:1px solid var(--color-border,#334155);font-size:12px;text-align:center;background:rgba(234,179,8,0.08);color:var(--color-warning,#f59e0b);`;
+    const tdCell  = 'padding:4px 6px;border:1px solid var(--color-border,#334155);font-size:12px;text-align:center;min-width:80px';
+
+    let html = `<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%">
+        <thead><tr>
+            <th style="${thStyle}">No</th>
+            <th style="${thStyle}">Waktu</th>
+            ${classes.map(c => `<th style="${thStyle}" colspan="2">${esc(c.name)}<br><span style="font-size:10px;font-weight:normal;color:var(--color-muted,#94a3b8)">Mapel / KG</span></th>`).join('')}
+        </tr></thead>
+        <tbody>`;
+
+    let no = 1;
+    for (let idx = 0; idx < slots.length; idx++) {
+        const s = slots[idx];
+        const timeStr = `${s.start_time?.slice(0,5)} – ${s.end_time?.slice(0,5)}`;
+        if (s.is_break) {
+            html += `<tr>
+                <td style="${tdTime}">—</td>
+                <td style="${tdTime}">${timeStr}</td>
+                <td style="${tdBreak}" colspan="${classes.length * 2}">${esc(s.break_label ?? 'Istirahat')}</td>
+            </tr>`;
+        } else {
+            html += `<tr><td style="${tdTime}">${no++}</td><td style="${tdTime}">${timeStr}</td>`;
+            for (const c of classes) {
+                const cell = cells.get(`${idx}_${c.class_id}`) ?? { mapel:'', kg:'' };
+                html += `<td style="${tdCell}">${esc(cell.mapel) || '<span style="color:var(--color-muted,#94a3b8)">—</span>'}</td>`;
+                html += `<td style="${tdCell};color:var(--color-accent,#38bdf8)">${esc(cell.kg) || '<span style="color:var(--color-muted,#94a3b8)">—</span>'}</td>`;
+            }
+            html += '</tr>';
+        }
+    }
+
+    html += '</tbody></table></div>';
+    return html;
+}
+
 async function renderJadwalPanel() {
     panelContent.innerHTML = '<p class="hint">Memuat…</p>';
-    const [{ count: tmplCount }, { count: schedCount }, substitutes] = await Promise.all([
-        supabase.from('schedule_templates').select('*', { count: 'exact', head: true }),
-        supabase.from('teaching_schedules').select('*', { count: 'exact', head: true }),
+
+    const [config, allClasses, teachers, substitutes] = await Promise.all([
+        getSchoolConfig(),
+        getClasses(),
+        getTeacherList().catch(() => []),
         getActiveSubstitutes().catch(() => []),
     ]);
+
+    const ay  = config?.current_academic_year ?? '';
+    const sem = config?.current_semester ?? 1;
+    const teacherIdMap = new Map(teachers.filter(t => t.teacher_code).map(t => [t.user_id, t.teacher_code]));
+
+    const wizardUrl = schoolSlug ? `wizard.html?school=${encodeURIComponent(schoolSlug)}` : 'wizard.html';
 
     const subsHtml = substitutes.length === 0
         ? '<p class="hint">Tidak ada guru pengganti aktif saat ini.</p>'
@@ -1369,16 +1439,69 @@ async function renderJadwalPanel() {
             }).join('')}</tbody>
         </table>`;
 
+    // Scaffold: tab hari + tab kelas, grid dimuat saat tab diklik
     panelContent.innerHTML = `
-        <h3>Jadwal</h3>
-        <p class="hint">Template slot tersusun: <strong>${tmplCount ?? 0} slot</strong>.</p>
-        <p class="hint">Sesi jadwal ter-generate (teaching_schedules): <strong>${(schedCount ?? 0).toLocaleString('id-ID')} sesi</strong>.</p>
-        <p class="hint">Untuk menyusun atau mengubah jadwal, buka <a href="${schoolSlug ? `wizard.html?school=${encodeURIComponent(schoolSlug)}` : 'wizard.html'}">Setup Wizard</a> langkah 10.</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+            <h3 style="margin:0">Jadwal ${ay ? `${ay} Sem ${sem}` : ''}</h3>
+            <a href="${wizardUrl}#step10" class="btn btn-secondary btn-sm" style="font-size:12px">✎ Edit di Wizard</a>
+        </div>
 
-        <h4 style="margin:20px 0 8px">Token Guru Pengganti Aktif</h4>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="jadwal-grade-tabs">
+            ${SCHED_GRADES.map((g, i) => `<button class="btn btn-sm ${i===0?'btn-primary':'btn-secondary'}" data-grade="${g}">${SCHED_GRADE_LABELS[g]}</button>`).join('')}
+        </div>
+
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px" id="jadwal-day-tabs">
+            ${SCHED_DAYS.map((d, i) => `<button class="btn btn-sm ${i===0?'btn-primary':'btn-secondary'}" data-day="${d}">${SCHED_DAY_LABELS[d]}</button>`).join('')}
+        </div>
+
+        <div id="jadwal-grid-area"><p class="hint">Memuat grid…</p></div>
+
+        <h4 style="margin:24px 0 8px">Token Guru Pengganti Aktif</h4>
         <p class="hint" style="margin-bottom:10px">Salin token lalu kirim ke HP guru pengganti (mis. via WhatsApp). Token otomatis kedaluwarsa saat sesi selesai.</p>
         ${subsHtml}
     `;
+
+    let activeGrade = 10;
+    let activeDay   = 'SENIN';
+
+    async function loadGrid() {
+        const gridArea = document.getElementById('jadwal-grid-area');
+        if (!gridArea) return;
+        gridArea.innerHTML = '<p class="hint">Memuat…</p>';
+        try {
+            const classes = allClasses.filter(c => c.grade_level === activeGrade).sort((a,b) => a.name.localeCompare(b.name,'id'));
+            const [slots, templates] = await Promise.all([
+                getTimeSlots(ay, sem, activeDay),
+                getScheduleTemplates(ay, sem, activeDay),
+            ]);
+            const filteredTemplates = templates.filter(t => classes.some(c => c.class_id === t.class_id));
+            gridArea.innerHTML = classes.length === 0
+                ? '<p class="hint">Tidak ada kelas untuk tingkat ini.</p>'
+                : buildJadwalGrid(slots, filteredTemplates, classes, teacherIdMap);
+        } catch(e) {
+            gridArea.innerHTML = `<p style="color:var(--color-danger,#ef4444)">Gagal memuat grid: ${esc(e.message)}</p>`;
+        }
+    }
+
+    document.getElementById('jadwal-grade-tabs').addEventListener('click', e => {
+        const grade = Number(e.target.dataset?.grade);
+        if (!grade || grade === activeGrade) return;
+        activeGrade = grade;
+        document.querySelectorAll('#jadwal-grade-tabs button').forEach(b =>
+            b.className = `btn btn-sm ${Number(b.dataset.grade) === activeGrade ? 'btn-primary' : 'btn-secondary'}`);
+        loadGrid();
+    });
+
+    document.getElementById('jadwal-day-tabs').addEventListener('click', e => {
+        const day = e.target.dataset?.day;
+        if (!day || day === activeDay) return;
+        activeDay = day;
+        document.querySelectorAll('#jadwal-day-tabs button').forEach(b =>
+            b.className = `btn btn-sm ${b.dataset.day === activeDay ? 'btn-primary' : 'btn-secondary'}`);
+        loadGrid();
+    });
+
+    loadGrid();
 }
 
 // ─────────────────────────────────────────────────────────────

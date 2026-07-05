@@ -182,6 +182,21 @@ export async function getMyClasses(userId, academicYear, semester) {
     return classes.sort((a, b) => a.name.localeCompare(b.name, 'id'));
 }
 
+/**
+ * Semua kelas aktif dalam satu program keahlian.
+ * Dipakai sebagai fallback rekap untuk Kaprodi yang tidak punya teaching_assignments.
+ */
+export async function getClassesByProgram(programId) {
+    const { data, error } = await supabase
+        .from('classes')
+        .select('class_id, name')
+        .eq('program_id', programId)
+        .eq('is_active', true)
+        .order('name');
+    if (error) throw error;
+    return data ?? [];
+}
+
 // ─── SISWA & KEHADIRAN ───────────────────────────────────────
 
 /**
@@ -579,7 +594,7 @@ export async function getClassStudents(classId) {
     return data ?? [];
 }
 
-export async function getAttendanceSummaryByStudents(students, dateStart, dateEnd) {
+export async function getAttendanceSummaryByStudents(students, dateStart, dateEnd, teacherId = null) {
     if (!students?.length) return [];
     const ids = students.map(s => s.student_id);
     let q = supabase
@@ -587,6 +602,7 @@ export async function getAttendanceSummaryByStudents(students, dateStart, dateEn
         .select('session_date, attendance!inner ( student_id, status, is_void )')
         .in('attendance.student_id', ids)
         .eq('attendance.is_void', false);
+    if (teacherId) q = q.eq('scheduled_teacher_id', teacherId);
     if (dateStart) q = q.gte('session_date', dateStart);
     if (dateEnd)   q = q.lte('session_date', dateEnd);
     const { data, error } = await q;

@@ -10,7 +10,7 @@ import {
     supabase, logout, getCurrentUserRow, GURU_ROLES,
     listSchoolAdmins, addSchoolAdmin, removeSchoolAdmin,
     getJabatan, jabatanLabel, getSchoolConfig,
-    getMyScheduleForDate, getEnrolledStudents, getMyClasses,
+    getMyScheduleForDate, getEnrolledStudents, getMyClasses, getClassesByProgram,
     getAttendanceForSession,
     getMyStudents, searchStudents, insertObservation,
     getWaliKelasInfo, getWaliAttendanceSummary,
@@ -328,7 +328,14 @@ async function initGuruTab() {
 async function initGuruRekapDropdown() {
     const sel = document.getElementById('guru-recap-class');
     try {
-        const classes = await getMyClasses(currentUser.user_id, config.current_academic_year, config.current_semester);
+        let classes = await getMyClasses(currentUser.user_id, config.current_academic_year, config.current_semester);
+
+        // Fallback untuk Kaprodi yang tidak punya teaching_assignments pribadi
+        if (classes.length === 0 && jabatan.includes('kaprodi')) {
+            const programId = currentUser.kaprodi_program_id ?? currentUser.program_id ?? null;
+            if (programId) classes = await getClassesByProgram(programId);
+        }
+
         if (classes.length === 0) {
             sel.innerHTML = '<option value="">Tidak ada kelas</option>';
             return;
@@ -351,12 +358,12 @@ async function loadGuruRecap() {
 
     content.innerHTML = '<p class="hint">Memuat rekap…</p>';
     try {
-        const students = myStudents.filter(s => s.class_id === classId);
+        const students = await getEnrolledStudents(classId, config.current_academic_year);
         if (students.length === 0) {
-            content.innerHTML = '<p class="hint">Belum ada siswa di kelas ini.</p>';
+            content.innerHTML = '<p class="hint">Belum ada siswa aktif di kelas ini untuk tahun ajaran ini.</p>';
             return;
         }
-        const rows = await getAttendanceSummaryByStudents(students, dateStart || null, dateEnd || null);
+        const rows = await getAttendanceSummaryByStudents(students, dateStart || null, dateEnd || null, currentUser.user_id);
         const tbody = rows.map(s => {
             const pct = s.total > 0 ? Math.round((s.HADIR / s.total) * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
