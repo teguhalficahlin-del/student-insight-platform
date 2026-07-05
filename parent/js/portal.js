@@ -413,7 +413,7 @@ async function loadCases(studentId) {
                     ${c.events.map(e => `
                         <div style="margin-bottom:8px;font-size:0.85rem">
                             <span style="color:var(--color-text-muted,#6b7280)">${esc(e.author?.full_name ?? '—')} · ${formatDate(e.created_at)}</span>
-                            <p style="margin:4px 0 0">${esc(e.content)}</p>
+                            <p style="margin:4px 0 0">${esc(e.payload)}</p>
                         </div>`).join('')}
                 </div>`;
             return `<div style="padding:14px;border:1px solid var(--color-border,#e5e7eb);border-radius:8px;margin-bottom:12px;border-left:3px solid ${isClosed ? '#9ca3af' : '#f59e0b'}">

@@ -168,7 +168,7 @@ export async function getMyCases(studentId) {
             case_id, title, status, audience, created_at,
             initiated_by_role, current_handler_role,
             events:case_events (
-                event_id, event_type, content, created_at, privacy_level,
+                event_id, event_type, payload, created_at, privacy_level,
                 author:users!case_events_author_user_id_fkey ( full_name )
             )
         `)

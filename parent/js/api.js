@@ -214,7 +214,7 @@ export async function fetchCases(studentId) {
         .select(`
             case_id, title, description, status, created_at, current_handler_role,
             events:case_events (
-                event_id, content, created_at, privacy_level,
+                event_id, event_type, payload, created_at, privacy_level,
                 author:users!case_events_author_user_id_fkey ( full_name )
             )
         `)

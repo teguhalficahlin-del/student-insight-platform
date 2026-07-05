@@ -385,7 +385,7 @@ function renderCases(cases) {
                 ${c.events.map(e => `
                     <div style="margin-bottom:8px;font-size:0.85rem">
                         <span style="color:var(--color-text-muted,#9ca3af)">${esc(e.author?.full_name ?? '—')} · ${fmt(e.created_at)}</span>
-                        <p style="margin:4px 0 0">${esc(e.content)}</p>
+                        <p style="margin:4px 0 0">${esc(e.payload)}</p>
                     </div>`).join('')}
             </div>`;
         return `<div class="obs-card" style="border-left:3px solid ${isClosed ? 'var(--color-text-muted,#6b7280)' : 'var(--color-warning,#f59e0b)'}">
