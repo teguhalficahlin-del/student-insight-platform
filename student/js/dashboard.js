@@ -11,6 +11,7 @@ import {
     getMyStudent, getSchoolConfig, getMyClass,
     getScheduleForDate, getMyAttendance, getMyObservations,
     getMyPklPlacement, getMyPklAttendance,
+    getMyCases,
 } from './api.js';
 
 // ─── State ───────────────────────────────────────────────────
@@ -325,13 +326,56 @@ async function loadObservations() {
     }
 
     try {
-        const rows = await getMyObservations(student.student_id);
+        const [rows, cases] = await Promise.all([
+            getMyObservations(student.student_id),
+            getMyCases(student.student_id),
+        ]);
         obsLoaded = true;
         LC.set(cacheKey, rows);
         renderObservations(rows, hintEl, listEl);
+        renderCases(cases);
     } catch (err) {
         if (!cached) hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
     }
+}
+
+const CASE_STATUS_LABEL = { OPEN: 'Terbuka', CLOSED: 'Selesai' };
+const ROLE_LABEL_SHORT  = { GURU: 'Guru', BK: 'BK', WALI_KELAS: 'Wali Kelas', KAPRODI: 'Ka. Prodi', KEPSEK: 'Kepala Sekolah', WAKA_KESISWAAN: 'Waka Kesiswaan', WAKA_HUMAS: 'Waka Humas' };
+
+function renderCases(cases) {
+    const card = document.getElementById('cases-card');
+    const listEl = document.getElementById('cases-list');
+    const hintEl = document.getElementById('cases-hint');
+    if (!card) return;
+
+    if (!cases.length) {
+        hintEl.style.display = 'block';
+        listEl.innerHTML = '';
+        return;
+    }
+    hintEl.style.display = 'none';
+    listEl.innerHTML = cases.map(c => {
+        const statusLabel = CASE_STATUS_LABEL[c.status] ?? c.status;
+        const isClosed    = c.status === 'CLOSED';
+        const eventsHtml  = c.events.length === 0 ? '' : `
+            <div style="margin-top:10px;border-top:1px solid var(--color-border,#2d3748);padding-top:10px">
+                ${c.events.map(e => `
+                    <div style="margin-bottom:8px;font-size:0.85rem">
+                        <span style="color:var(--color-text-muted,#9ca3af)">${esc(e.author?.full_name ?? '—')} · ${fmt(e.created_at)}</span>
+                        <p style="margin:4px 0 0">${esc(e.content)}</p>
+                    </div>`).join('')}
+            </div>`;
+        return `<div class="obs-card" style="border-left:3px solid ${isClosed ? 'var(--color-text-muted,#6b7280)' : 'var(--color-warning,#f59e0b)'}">
+            <div class="obs-meta" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
+                <strong>${esc(c.title)}</strong>
+                <span class="badge ${isClosed ? 'badge-izin' : 'badge-hadir'}" style="font-size:0.75rem">${statusLabel}</span>
+            </div>
+            <div style="font-size:0.8rem;color:var(--color-text-muted,#9ca3af);margin-top:4px">
+                Ditangani: ${esc(ROLE_LABEL_SHORT[c.current_handler_role] ?? c.current_handler_role ?? '—')} · ${fmt(c.created_at)}
+            </div>
+            ${eventsHtml}
+        </div>`;
+    }).join('');
 }
 
 // ─── TAB PKL ─────────────────────────────────────────────────

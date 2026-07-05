@@ -16,6 +16,7 @@ import {
     fetchSchedule,
     fetchAttendance,
     fetchObservations,
+    fetchCases,
 } from './api.js';
 
 const portalTitle    = document.getElementById('portal-title');
@@ -36,6 +37,9 @@ const attTbody       = document.querySelector('#attendance-table tbody');
 const attEmpty       = document.getElementById('attendance-empty');
 const obsListEl      = document.getElementById('observations-list');
 const obsEmpty       = document.getElementById('observations-empty');
+const sectionCases   = document.getElementById('section-cases');
+const casesListEl    = document.getElementById('cases-list');
+const casesEmpty     = document.getElementById('cases-empty');
 const filterStart    = document.getElementById('filter-date-start');
 const filterEnd      = document.getElementById('filter-date-end');
 const btnFilter      = document.getElementById('btn-filter');
@@ -133,7 +137,8 @@ async function init() {
     loadingEl.style.display = 'none';
     sectionSched.style.display = 'block';
     sectionAtt.style.display = 'block';
-    sectionObs.style.display = 'block';
+    sectionObs.style.display   = 'block';
+    sectionCases.style.display = 'block';
 
     await loadChildData(0);
 }
@@ -146,6 +151,7 @@ async function loadChildData(index) {
         loadSchedule(child.class_id),
         loadAttendance(child.student_id),
         loadObservations(child.student_id),
+        loadCases(child.student_id),
     ]);
 }
 
@@ -288,6 +294,45 @@ function fe(err) {
     if (m.includes('jwt') || m.includes('expired')) return 'Sesi habis. Silakan login ulang.';
     if (m.includes('fetch') || m.includes('network') || m.includes('failed to fetch')) return 'Tidak ada koneksi. Periksa jaringan.';
     return 'Gagal memuat data. Silakan coba lagi.';
+}
+
+const CASE_STATUS_LABEL = { OPEN: 'Terbuka', CLOSED: 'Selesai' };
+const ROLE_LABEL_SHORT  = { GURU: 'Guru', BK: 'BK', WALI_KELAS: 'Wali Kelas', KAPRODI: 'Ka. Prodi', KEPSEK: 'Kepala Sekolah', WAKA_KESISWAAN: 'Waka Kesiswaan', WAKA_HUMAS: 'Waka Humas' };
+
+async function loadCases(studentId) {
+    casesListEl.innerHTML = '<p class="hint">Memuat…</p>';
+    casesEmpty.style.display = 'none';
+    try {
+        const cases = await fetchCases(studentId);
+        if (!cases.length) {
+            casesListEl.innerHTML = '';
+            casesEmpty.style.display = 'block';
+            return;
+        }
+        casesListEl.innerHTML = cases.map(c => {
+            const isClosed = c.status === 'CLOSED';
+            const eventsHtml = c.events.length === 0 ? '' : `
+                <div style="margin-top:10px;border-top:1px solid var(--color-border,#e5e7eb);padding-top:10px">
+                    ${c.events.map(e => `
+                        <div style="margin-bottom:8px;font-size:0.85rem">
+                            <span style="color:var(--color-text-muted,#6b7280)">${esc(e.author?.full_name ?? '—')} · ${formatDate(e.created_at)}</span>
+                            <p style="margin:4px 0 0">${esc(e.content)}</p>
+                        </div>`).join('')}
+                </div>`;
+            return `<div style="padding:14px;border:1px solid var(--color-border,#e5e7eb);border-radius:8px;margin-bottom:12px;border-left:3px solid ${isClosed ? '#9ca3af' : '#f59e0b'}">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
+                    <strong>${esc(c.title)}</strong>
+                    <span style="font-size:0.75rem;padding:2px 8px;border-radius:12px;background:${isClosed ? '#e5e7eb' : '#d1fae5'};color:${isClosed ? '#374151' : '#065f46'}">${CASE_STATUS_LABEL[c.status] ?? c.status}</span>
+                </div>
+                <div style="font-size:0.8rem;color:var(--color-text-muted,#6b7280);margin-top:4px">
+                    Ditangani: ${esc(ROLE_LABEL_SHORT[c.current_handler_role] ?? c.current_handler_role ?? '—')} · ${formatDate(c.created_at)}
+                </div>
+                ${eventsHtml}
+            </div>`;
+        }).join('');
+    } catch (err) {
+        casesListEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
+    }
 }
 
 selectChild.addEventListener('change', () => loadChildData(Number(selectChild.value)));

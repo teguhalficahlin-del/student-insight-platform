@@ -203,3 +203,25 @@ export async function fetchObservations(studentId) {
         date:      r.observed_at,
     }));
 }
+
+export async function fetchCases(studentId) {
+    const { data, error } = await supabase
+        .from('cases')
+        .select(`
+            case_id, title, status, created_at, current_handler_role,
+            events:case_events (
+                event_id, content, created_at, privacy_level,
+                author:users!case_events_author_user_id_fkey ( full_name )
+            )
+        `)
+        .eq('student_id', studentId)
+        .eq('audience', 'RESTRICTED')
+        .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(c => ({
+        ...c,
+        events: (c.events ?? [])
+            .filter(e => e.privacy_level === 'STUDENT_VISIBLE')
+            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
+    }));
+}

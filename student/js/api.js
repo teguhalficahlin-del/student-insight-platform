@@ -158,6 +158,33 @@ export async function getMyAttendance(studentId, dateStart, dateEnd) {
 }
 
 /**
+ * Kasus audience=RESTRICTED yang menyangkut siswa ini.
+ * RLS rls_cases_read_student membatasi otomatis.
+ */
+export async function getMyCases(studentId) {
+    const { data, error } = await supabase
+        .from('cases')
+        .select(`
+            case_id, title, status, audience, created_at,
+            initiated_by_role, current_handler_role,
+            events:case_events (
+                event_id, event_type, content, created_at, privacy_level,
+                author:users!case_events_author_user_id_fkey ( full_name )
+            )
+        `)
+        .eq('student_id', studentId)
+        .eq('audience', 'RESTRICTED')
+        .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(c => ({
+        ...c,
+        events: (c.events ?? [])
+            .filter(e => e.privacy_level === 'STUDENT_VISIBLE')
+            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
+    }));
+}
+
+/**
  * Observasi yang boleh dilihat siswa (STUDENT_VISIBLE).
  * RLS rls_observations_read_student sudah membatasi ke student_id + visibility.
  * Filter eksplisit di sini sebagai pertahanan berlapis.
