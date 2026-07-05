@@ -1676,10 +1676,25 @@ async function initKasusTab() {
     document.getElementById('kasus-back-btn').addEventListener('click', showKasusList);
 
     // Create form
-    const createForm = document.getElementById('kasus-create-form');
-    const searchEl   = document.getElementById('kasus-c-student-search');
+    const createForm  = document.getElementById('kasus-create-form');
+    const searchEl    = document.getElementById('kasus-c-student-search');
     const studentIdEl = document.getElementById('kasus-c-student-id');
-    const listEl     = document.getElementById('kasus-c-student-list');
+    const listEl      = document.getElementById('kasus-c-student-list');
+    const trackField  = document.getElementById('kasus-c-track-field');
+    const trackEl     = document.getElementById('kasus-c-track');
+
+    // Kaprodi bisa pilih jalur; DUDI selalu PKL; semua lain selalu Sekolah
+    const isKaprodi = jabatan.includes('kaprodi');
+    const isDudi    = jabatan.includes('dudi');
+    if (isKaprodi) {
+        trackField.style.display = '';
+    } else if (isDudi) {
+        trackField.style.display = 'none';
+        trackEl.value = 'PKL';
+    } else {
+        trackField.style.display = 'none';
+        trackEl.value = 'SEKOLAH';
+    }
 
     let kasusSearchSeq = 0;
     searchEl.addEventListener('input', async () => {
