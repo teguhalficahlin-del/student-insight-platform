@@ -180,23 +180,17 @@
     <div class="tab-panel" id="tab-kaprodi">
         <div class="page-body">
 
-            <div class="stats-row">
-                <div class="stat-card"><span class="stat-value" id="kp-stat-total">—</span><div class="stat-label">Total Siswa PKL</div></div>
-                <div class="stat-card"><span class="stat-value" id="kp-stat-placed">—</span><div class="stat-label">Sudah Ditempatkan</div></div>
-                <div class="stat-card"><span class="stat-value" id="kp-stat-unplaced">—</span><div class="stat-label">Belum Ditempatkan</div></div>
-            </div>
-
-            <!-- Siswa PKL -->
+            <!-- Mitra DUDI — referensi dipilih di Form Penempatan -->
             <div class="section-card">
-                <h3>Daftar Siswa PKL</h3>
+                <h3>Mitra DUDI</h3>
                 <div class="table-wrapper">
-                    <table class="table"><thead><tr><th>Nama</th><th>NIS</th><th>Tempat PKL</th><th>Periode</th></tr></thead>
-                    <tbody id="kp-students-body"></tbody></table>
+                    <table class="table"><thead><tr><th>Nama Usaha</th><th>Penanggung Jawab</th></tr></thead>
+                    <tbody id="kp-dudi-body"></tbody></table>
                 </div>
-                <p class="hint" id="kp-students-empty" style="display:none">Belum ada siswa PKL pada program ini.</p>
+                <p class="hint" id="kp-dudi-empty" style="display:none">Belum ada mitra DUDI terdaftar untuk program ini.</p>
             </div>
 
-            <!-- Penempatan PKL -->
+            <!-- Penempatan PKL — siswa AKTIF masuk PKL -->
             <div class="section-card">
                 <h3>Penempatan PKL</h3>
                 <form id="kp-placement-form" style="display:grid; gap:12px; grid-template-columns:1fr 1fr; margin-bottom:16px">
@@ -226,7 +220,39 @@
                 </form>
             </div>
 
-            <!-- Rekap Absensi Kelas (siswa AKTIF di prodi) -->
+            <!-- Daftar Siswa PKL — monitor siapa yang sedang PKL -->
+            <div class="section-card">
+                <h3>Daftar Siswa PKL</h3>
+                <div class="table-wrapper">
+                    <table class="table"><thead><tr><th>Nama</th><th>NIS</th><th>Tempat PKL</th><th>Periode</th></tr></thead>
+                    <tbody id="kp-students-body"></tbody></table>
+                </div>
+                <p class="hint" id="kp-students-empty" style="display:none">Belum ada siswa PKL pada program ini.</p>
+            </div>
+
+            <!-- Ringkasan — agregat dari Daftar PKL -->
+            <div class="stats-row">
+                <div class="stat-card"><span class="stat-value" id="kp-stat-total">—</span><div class="stat-label">Total Siswa PKL</div></div>
+                <div class="stat-card"><span class="stat-value" id="kp-stat-placed">—</span><div class="stat-label">Sudah Ditempatkan</div></div>
+                <div class="stat-card"><span class="stat-value" id="kp-stat-unplaced">—</span><div class="stat-label">Belum Ditempatkan</div></div>
+            </div>
+
+            <!-- Rekap Absensi PKL — kehadiran harian siswa PKL di DUDI -->
+            <div class="section-card">
+                <h3>Rekap Absensi PKL</h3>
+                <div class="date-row" style="margin-bottom:12px">
+                    <label for="kp-date-start">Dari:</label><input type="date" id="kp-date-start" class="input" style="width:auto">
+                    <label for="kp-date-end">s/d:</label><input type="date" id="kp-date-end" class="input" style="width:auto">
+                    <button class="btn btn-secondary btn-sm" id="kp-filter-btn">Filter</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="table"><thead><tr><th>Nama / NIS</th><th style="text-align:center">Hadir</th><th style="text-align:center">Izin</th><th style="text-align:center">Sakit</th><th style="text-align:center">Alpa</th><th style="text-align:center">Total</th><th style="text-align:center">% Hadir</th></tr></thead>
+                    <tbody id="kp-recap-body"></tbody></table>
+                </div>
+                <p class="hint" id="kp-recap-empty" style="display:none">Belum ada data absensi pada rentang ini.</p>
+            </div>
+
+            <!-- Rekap Absensi Kelas — kehadiran sesi siswa AKTIF di sekolah -->
             <div class="section-card">
                 <h3>Rekap Absensi Kelas</h3>
                 <div class="date-row" style="margin-bottom:12px">
@@ -239,31 +265,6 @@
                     <tbody id="kp-cls-recap-body"></tbody></table>
                 </div>
                 <p class="hint" id="kp-cls-recap-empty" style="display:none">Belum ada data absensi kelas pada rentang ini.</p>
-            </div>
-
-            <!-- Rekap Absensi PKL -->
-            <div class="section-card">
-                <h3>Rekap Absensi PKL</h3>
-                <div class="date-row" style="margin-bottom:12px">
-                    <label for="kp-date-start">Dari:</label><input type="date" id="kp-date-start" class="input" style="width:auto">
-                    <label for="kp-date-end">s/d:</label><input type="date" id="kp-date-end" class="input" style="width:auto">
-                    <button class="btn btn-secondary btn-sm" id="kp-filter-btn">Filter</button>
-                </div>
-                <div class="table-wrapper">
-                    <table class="table"><thead><tr><th>Nama / NIS</th><th style="text-align:center">Hadir</th><th style="text-align:center">Izin</th><th style="text-align:center">Sakit</th><th style="text-align:center">Alpa</th><th style="text-align:center">% Hadir</th></tr></thead>
-                    <tbody id="kp-recap-body"></tbody></table>
-                </div>
-                <p class="hint" id="kp-recap-empty" style="display:none">Belum ada data absensi pada rentang ini.</p>
-            </div>
-
-            <!-- Mitra DUDI -->
-            <div class="section-card">
-                <h3>Mitra DUDI</h3>
-                <div class="table-wrapper">
-                    <table class="table"><thead><tr><th>Nama Usaha</th><th>Penanggung Jawab</th></tr></thead>
-                    <tbody id="kp-dudi-body"></tbody></table>
-                </div>
-                <p class="hint" id="kp-dudi-empty" style="display:none">Belum ada mitra DUDI terdaftar untuk program ini.</p>
             </div>
 
             <!-- Observasi DUDI -->

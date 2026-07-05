@@ -18,7 +18,7 @@ import {
     fetchDudiPartners, fetchPklAttendance, fetchDudiObservations,
     getAttendanceSummaryByStudents,
     fetchAllPklStudents, fetchAllDudiPartners,
-    createPlacement, bulkImportPkl,
+    createPlacement, finishPlacement, bulkImportPkl,
     getSchoolStats, getKepsekMonitoring, getAbsentTeachersToday,
     getAttendanceRecapPerClass, getOpenCases,
     getJournalEntries, insertJournalEntry, deleteJournalEntry,
@@ -136,6 +136,7 @@ let isBroadObserver    = false;  // BK/Waka/Kepsek — bisa cari siswa seluruh s
 let kaprodiAllStudents = [];     // PKL + aktif di prodi Kaprodi, untuk batas pencarian
 let kpStudents      = [];  // kaprodi PKL students
 let kpAktifStudents = [];  // kaprodi siswa AKTIF (kelas)
+let kpProgramId     = null;
 let kpDudiList      = [];
 
 const DIMENSION_LABELS = { AKADEMIK:'Akademik', KEHADIRAN:'Kehadiran', PERILAKU:'Perilaku', SOSIAL:'Sosial', AFEKTIF:'Afektif', BAKAT_MINAT:'Bakat & Minat', FISIK:'Fisik', LAINNYA:'Lainnya' };
@@ -978,6 +979,7 @@ async function loadWkOpenCases() {
 async function initKaprodiTab() {
     const programId = currentUser.kaprodi_program_id ??
         (currentUser.role_type === 'KAPRODI' ? currentUser.program_id : null);
+    kpProgramId = programId;
     if (!programId) {
         document.getElementById('tab-kaprodi').querySelector('.page-body').innerHTML =
             '<div class="section-card"><p class="hint">Akun ini belum terhubung ke program keahlian. Hubungi admin.</p></div>';
@@ -1013,6 +1015,12 @@ async function initKaprodiTab() {
 
         document.getElementById('kp-filter-btn').onclick     = loadKpRecap;
         document.getElementById('kp-cls-filter-btn').onclick = loadKpClsRecap;
+
+        document.getElementById('kp-students-body').addEventListener('click', e => {
+            const btn = e.target.closest('.kp-finish-btn');
+            if (btn) handleFinishPkl(btn);
+        });
+
         await Promise.all([loadKpRecap(), loadKpClsRecap(), loadKpObs(), initKpPlacementForm(programId)]);
     } catch (err) {
         console.error('[kaprodi]', err);
@@ -1028,14 +1036,59 @@ function renderKpSummary() {
 
 function renderKpStudents() {
     const tbody = document.getElementById('kp-students-body');
+    const thead = tbody.closest('table').querySelector('thead tr');
     const empty = document.getElementById('kp-students-empty');
+
+    // Pastikan kolom Aksi ada di header
+    if (!thead.querySelector('th[data-aksi]')) {
+        const th = document.createElement('th');
+        th.dataset.aksi = '1';
+        th.textContent = 'Aksi';
+        thead.appendChild(th);
+    }
+
     if (kpStudents.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
     tbody.innerHTML = kpStudents.map(s => `<tr>
         <td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td>
         <td>${esc(s.dudi_name)}</td>
         <td>${s.has_placement ? `${fmt(s.start_date)} – ${fmt(s.end_date)}` : '<span class="badge badge-tidak-hadir">Belum</span>'}</td>
+        <td>${s.has_placement
+            ? `<button class="btn btn-sm btn-secondary kp-finish-btn"
+                data-student-id="${esc(s.student_id)}"
+                data-placement-id="${esc(s.placement_id)}"
+                data-nama="${esc(s.full_name)}"
+                style="font-size:11px;padding:3px 8px">Selesaikan PKL</button>`
+            : '—'}</td>
     </tr>`).join('');
+}
+
+async function handleFinishPkl(btn) {
+    const { studentId, placementId, nama } = btn.dataset;
+    if (!confirm(`Selesaikan PKL ${nama}? Status akan kembali ke AKTIF.`)) return;
+    btn.disabled = true; btn.textContent = 'Memproses…';
+    try {
+        await finishPlacement(studentId, placementId);
+        kpStudents = await fetchPklStudents(kpProgramId);
+        const seen = new Set(kpStudents.map(s => s.student_id));
+        kpAktifStudents = [...kpAktifStudents.filter(s => !seen.has(s.student_id))];
+        renderKpSummary();
+        renderKpStudents();
+        // Reload dropdown siswa di form penempatan
+        const sel = document.getElementById('kp-pl-student');
+        if (sel) {
+            const nonPkl = await fetchNonPklStudents(kpProgramId).catch(() => []);
+            sel.innerHTML = '<option value="">-- Pilih siswa --</option>';
+            nonPkl.forEach(s => {
+                const o = document.createElement('option');
+                o.value = s.student_id; o.textContent = `${s.full_name} (${s.nis})`;
+                sel.appendChild(o);
+            });
+        }
+    } catch (err) {
+        btn.disabled = false; btn.textContent = 'Selesaikan PKL';
+        alert(`Gagal: ${fe(err)}`);
+    }
 }
 
 function renderKpDudi() {
@@ -1054,7 +1107,7 @@ async function loadKpRecap() {
     const end   = document.getElementById('kp-date-end').value;
     const tbody = document.getElementById('kp-recap-body');
     const empty = document.getElementById('kp-recap-empty');
-    tbody.innerHTML = '<tr><td colspan="6" class="hint">Memuat…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="hint">Memuat…</td></tr>';
     empty.style.display = 'none';
 
     if (ids.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
@@ -1078,11 +1131,12 @@ async function loadKpRecap() {
                 <td style="text-align:center">${a.IZIN}</td>
                 <td style="text-align:center">${a.SAKIT}</td>
                 <td style="text-align:center">${a.TIDAK_HADIR}</td>
+                <td style="text-align:center">${a.total}</td>
                 <td style="text-align:center;font-weight:600;color:${color}">${a.total > 0 ? pct+'%' : '—'}</td>
             </tr>`;
         }).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
 
