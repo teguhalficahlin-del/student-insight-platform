@@ -193,8 +193,7 @@ export async function getEnrolledStudents(classId, academicYear) {
         .select('student:students ( student_id, nis, full_name, student_status )')
         .eq('class_id', classId)
         .eq('academic_year', academicYear)
-        .is('withdrawn_at', null)
-        .order('student(full_name)');
+        .is('withdrawn_at', null);
     if (error) throw error;
     // DROPOUT-1 (Tema I): roster kelas hanya siswa AKTIF — siswa KELUAR/LULUS/PKL
     // tak ikut diabsen di kelas (PKL diabsen via pkl_attendance). Riwayat mereka
