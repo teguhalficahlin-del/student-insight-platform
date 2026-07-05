@@ -17,6 +17,11 @@ import {
     fetchAttendance,
     fetchObservations,
     fetchCases,
+    fetchPklPlacement,
+    fetchPklAttendanceSummary,
+    getUnreadNotifCount,
+    getRecentNotifications,
+    markNotificationsRead,
 } from './api.js';
 
 const portalTitle    = document.getElementById('portal-title');
@@ -43,6 +48,19 @@ const casesEmpty     = document.getElementById('cases-empty');
 const filterStart    = document.getElementById('filter-date-start');
 const filterEnd      = document.getElementById('filter-date-end');
 const btnFilter      = document.getElementById('btn-filter');
+const childStatusBadge = document.getElementById('child-status-badge');
+const sectionPkl     = document.getElementById('section-pkl');
+const pklInfo        = document.getElementById('pkl-info');
+const pklAttWrap     = document.getElementById('pkl-attendance-wrap');
+const pklSummary     = document.getElementById('pkl-summary');
+const pklTbody       = document.querySelector('#pkl-table tbody');
+const pklEmpty       = document.getElementById('pkl-empty');
+const obsDateStart   = document.getElementById('obs-date-start');
+const obsDateEnd     = document.getElementById('obs-date-end');
+const btnObsFilter   = document.getElementById('btn-obs-filter');
+const notifBellBtn   = document.getElementById('notif-bell-btn');
+const notifDropdown  = document.getElementById('notif-dropdown');
+let _notifPollTimer  = null;
 
 let currentUser = null;
 
@@ -130,29 +148,52 @@ async function init() {
     const today = new Date();
     const monthAgo = new Date(today);
     monthAgo.setDate(monthAgo.getDate() - 30);
-    filterStart.value = localDateStr(monthAgo);
-    filterEnd.value   = localDateStr(today);
-    schedDate.value   = localDateStr(today);
+    filterStart.value   = localDateStr(monthAgo);
+    filterEnd.value     = localDateStr(today);
+    schedDate.value     = localDateStr(today);
+    obsDateStart.value  = localDateStr(monthAgo);
+    obsDateEnd.value    = localDateStr(today);
 
     loadingEl.style.display = 'none';
-    sectionSched.style.display = 'block';
-    sectionAtt.style.display = 'block';
-    sectionObs.style.display   = 'block';
-    sectionCases.style.display = 'block';
 
+    initNotifBell();
     await loadChildData(0);
 }
+
+const STATUS_STUDENT_LABEL = { AKTIF: 'Aktif', PKL: 'Sedang PKL', LULUS: 'Lulus', KELUAR: 'Tidak aktif' };
+const STATUS_STUDENT_CLASS = { AKTIF: 'badge-status-aktif', PKL: 'badge-status-pkl', LULUS: 'badge-status-lulus', KELUAR: 'badge-status-keluar' };
 
 async function loadChildData(index) {
     const child = children[index];
     portalTitle.textContent = `Portal Orang Tua — ${child.full_name}`;
 
-    await Promise.all([
-        loadSchedule(child.class_id),
-        loadAttendance(child.student_id),
+    // Status badge
+    if (child.status) {
+        childStatusBadge.textContent = STATUS_STUDENT_LABEL[child.status] ?? child.status;
+        childStatusBadge.className = `child-status-badge ${STATUS_STUDENT_CLASS[child.status] ?? ''}`;
+        childStatusBadge.style.display = 'inline-block';
+    } else {
+        childStatusBadge.style.display = 'none';
+    }
+
+    const isPkl     = child.status === 'PKL';
+    const isInactive = child.status === 'LULUS' || child.status === 'KELUAR';
+
+    // Tampilkan/sembunyikan section sesuai status
+    sectionPkl.style.display    = isPkl ? 'block' : 'none';
+    sectionSched.style.display  = isPkl || isInactive ? 'none' : 'block';
+    sectionAtt.style.display    = isInactive ? 'none' : 'block';
+    sectionObs.style.display    = 'block';
+    sectionCases.style.display  = 'block';
+
+    const tasks = [
         loadObservations(child.student_id),
         loadCases(child.student_id),
-    ]);
+    ];
+    if (isPkl)     tasks.push(loadPkl(child.student_id));
+    if (!isPkl && !isInactive) tasks.push(loadSchedule(child.class_id), loadAttendance(child.student_id));
+
+    await Promise.allSettled(tasks);
 }
 
 async function loadSchedule(classId) {
@@ -262,9 +303,54 @@ function renderObsRows(rows) {
     `).join('');
 }
 
+async function loadPkl(studentId) {
+    pklInfo.innerHTML = '<p class="hint">Memuat…</p>';
+    pklAttWrap.style.display = 'none';
+    try {
+        const placement = await fetchPklPlacement(studentId);
+        if (!placement) {
+            pklInfo.innerHTML = '<p class="hint">Tidak ada data penempatan PKL aktif.</p>';
+            return;
+        }
+        pklInfo.innerHTML = `
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px;margin-bottom:4px">
+                <span style="color:var(--color-text-muted)">Tempat PKL</span>
+                <strong>${esc(placement.dudi_name)}</strong>
+                <span style="color:var(--color-text-muted)">Periode</span>
+                <span>${formatDate(placement.start_date)} – ${formatDate(placement.end_date)}</span>
+            </div>`;
+
+        const rows = await fetchPklAttendanceSummary(studentId);
+        pklAttWrap.style.display = 'block';
+        const counts = { HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0 };
+        for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1;
+        pklSummary.innerHTML = `
+            <div class="summary-card card-hadir"><span class="count">${counts.HADIR}</span><span class="label">Hadir</span></div>
+            <div class="summary-card card-sakit"><span class="count">${counts.SAKIT}</span><span class="label">Sakit</span></div>
+            <div class="summary-card card-izin"><span class="count">${counts.IZIN}</span><span class="label">Izin</span></div>
+            <div class="summary-card card-alpha"><span class="count">${counts.TIDAK_HADIR}</span><span class="label">Alpa</span></div>`;
+        if (!rows.length) {
+            pklTbody.innerHTML = '';
+            pklEmpty.style.display = 'block';
+            return;
+        }
+        pklEmpty.style.display = 'none';
+        pklTbody.innerHTML = rows.map(r => `
+            <tr>
+                <td>${formatDate(r.attendance_date)}</td>
+                <td><span class="badge ${STATUS_BADGE[r.status] || ''}">${STATUS_LABELS[r.status] || r.status}</span></td>
+                <td>${esc(r.notes || '-')}</td>
+            </tr>`).join('');
+    } catch (err) {
+        pklInfo.innerHTML = `<p class="hint">Gagal memuat data PKL. ${esc(fe(err))}</p>`;
+    }
+}
+
 async function loadObservations(studentId) {
-    const cacheKey = `ortu-obs-${studentId}`;
-    const cached   = LC.get(cacheKey);
+    const dateStart = obsDateStart.value || null;
+    const dateEnd   = obsDateEnd.value   || null;
+    const cacheKey  = `ortu-obs-${studentId}-${dateStart}-${dateEnd}`;
+    const cached    = LC.get(cacheKey);
     if (cached) {
         renderObsRows(cached);
     } else {
@@ -273,7 +359,7 @@ async function loadObservations(studentId) {
     }
 
     try {
-        const rows = await fetchObservations(studentId);
+        const rows = await fetchObservations(studentId, dateStart, dateEnd);
         LC.set(cacheKey, rows);
         renderObsRows(rows);
     } catch (err) {
@@ -319,6 +405,9 @@ async function loadCases(studentId) {
         }
         casesListEl.innerHTML = cases.map(c => {
             const isClosed = c.status === 'CLOSED';
+            const descHtml = c.description
+                ? `<p style="margin:8px 0 0;font-size:0.9rem;color:var(--color-text)">${esc(c.description)}</p>`
+                : '';
             const eventsHtml = c.events.length === 0 ? '' : `
                 <div style="margin-top:10px;border-top:1px solid var(--color-border,#e5e7eb);padding-top:10px">
                     ${c.events.map(e => `
@@ -335,6 +424,7 @@ async function loadCases(studentId) {
                 <div style="font-size:0.8rem;color:var(--color-text-muted,#6b7280);margin-top:4px">
                     Ditindaklanjuti oleh: ${esc(ROLE_LABEL_SHORT[c.current_handler_role] ?? c.current_handler_role ?? '—')} · ${formatDate(c.created_at)}
                 </div>
+                ${descHtml}
                 ${eventsHtml}
             </div>`;
         }).join('');
@@ -343,7 +433,92 @@ async function loadCases(studentId) {
     }
 }
 
+function initNotifBell() {
+    if (!notifBellBtn) return;
+    refreshNotifBadge();
+    _notifPollTimer = setInterval(refreshNotifBadge, 60_000);
+
+    notifBellBtn.addEventListener('click', openNotifDropdown);
+    document.addEventListener('click', e => {
+        if (!e.target.closest('#notif-bell-btn') && !e.target.closest('#notif-dropdown')) {
+            if (notifDropdown) notifDropdown.style.display = 'none';
+        }
+    });
+}
+
+async function refreshNotifBadge() {
+    try {
+        const n = await getUnreadNotifCount();
+        let badge = notifBellBtn?.querySelector('.notif-badge-count');
+        if (n > 0) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'notif-badge-count';
+                badge.style.cssText = 'position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--color-danger);color:#fff;font-size:11px;font-weight:700;text-align:center;padding:0 3px;pointer-events:none';
+                notifBellBtn.style.position = 'relative';
+                notifBellBtn.appendChild(badge);
+            }
+            badge.textContent = n > 99 ? '99+' : String(n);
+        } else {
+            badge?.remove();
+        }
+    } catch { /* tidak kritis */ }
+}
+
+async function openNotifDropdown() {
+    if (!notifDropdown) return;
+    const isOpen = notifDropdown.style.display !== 'none';
+    if (isOpen) { notifDropdown.style.display = 'none'; return; }
+    notifDropdown.style.display = 'block';
+    notifDropdown.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-text-muted)">Memuat…</p>';
+    try {
+        const notifs = await getRecentNotifications(15);
+        if (!notifs.length) {
+            notifDropdown.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-text-muted)">Tidak ada notifikasi baru.</p>';
+            return;
+        }
+        notifDropdown.innerHTML = notifs.map(n => `
+            <div class="notif-item" data-id="${n.notification_id}"
+                 style="padding:10px 14px;border-bottom:1px solid var(--color-border);cursor:pointer;font-size:13px">
+                <div style="font-weight:600;margin-bottom:2px">${esc(n.title)}</div>
+                <div style="color:var(--color-text-muted);font-size:12px">${esc(n.body)}</div>
+                <div style="color:var(--color-text-muted);font-size:11px;margin-top:3px">${formatDate(n.created_at)}</div>
+            </div>`).join('') +
+            `<div style="padding:8px 14px;text-align:center">
+                <button id="notif-mark-all-btn" class="btn btn-secondary" style="font-size:12px">Tandai semua dibaca</button>
+            </div>`;
+        notifDropdown.querySelectorAll('.notif-item').forEach(el => {
+            el.addEventListener('click', async () => {
+                notifDropdown.style.display = 'none';
+                await markNotificationsRead([el.dataset.id]).catch(() => {});
+                await refreshNotifBadge();
+            });
+        });
+        document.getElementById('notif-mark-all-btn')?.addEventListener('click', async () => {
+            const ids = notifs.map(n => n.notification_id);
+            await markNotificationsRead(ids).catch(() => {});
+            notifDropdown.style.display = 'none';
+            notifBellBtn?.querySelector('.notif-badge-count')?.remove();
+        });
+    } catch {
+        notifDropdown.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-text-muted)">Gagal memuat notifikasi.</p>';
+    }
+}
+
 selectChild.addEventListener('change', () => loadChildData(Number(selectChild.value)));
+
+btnObsFilter.addEventListener('click', async () => {
+    const idx = Number(selectChild.value);
+    const prev = btnObsFilter.textContent;
+    btnObsFilter.disabled = true;
+    btnObsFilter.textContent = 'Memuat…';
+    try {
+        await loadObservations(children[idx].student_id);
+    } finally {
+        btnObsFilter.disabled = false;
+        btnObsFilter.textContent = prev;
+    }
+});
 
 btnFilter.addEventListener('click', async () => {
     const idx = Number(selectChild.value);

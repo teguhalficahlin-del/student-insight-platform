@@ -176,8 +176,8 @@ export async function fetchAttendance(studentId, dateStart, dateEnd) {
     }));
 }
 
-export async function fetchObservations(studentId) {
-    const { data, error } = await supabase
+export async function fetchObservations(studentId, dateStart = null, dateEnd = null) {
+    let query = supabase
         .from('observations')
         .select(`
             observation_id,
@@ -193,6 +193,10 @@ export async function fetchObservations(studentId) {
         .order('observed_at', { ascending: false })
         .limit(50);
 
+    if (dateStart) query = query.gte('observed_at', dateStart);
+    if (dateEnd)   query = query.lte('observed_at', dateEnd + 'T23:59:59');
+
+    const { data, error } = await query;
     if (error) throw error;
     return (data || []).map(r => ({
         id:        r.observation_id,
@@ -208,7 +212,7 @@ export async function fetchCases(studentId) {
     const { data, error } = await supabase
         .from('cases')
         .select(`
-            case_id, title, status, created_at, current_handler_role,
+            case_id, title, description, status, created_at, current_handler_role,
             events:case_events (
                 event_id, content, created_at, privacy_level,
                 author:users!case_events_author_user_id_fkey ( full_name )
@@ -224,4 +228,64 @@ export async function fetchCases(studentId) {
             .filter(e => e.privacy_level === 'STUDENT_VISIBLE')
             .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
     }));
+}
+
+export async function fetchPklPlacement(studentId) {
+    const { data, error } = await supabase
+        .from('pkl_placements')
+        .select(`
+            placement_id, start_date, end_date,
+            dudi:users!pkl_placements_dudi_user_id_fkey ( full_name )
+        `)
+        .eq('student_id', studentId)
+        .eq('is_active', true)
+        .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+        placement_id: data.placement_id,
+        start_date:   data.start_date,
+        end_date:     data.end_date,
+        dudi_name:    data.dudi?.full_name ?? '-',
+    };
+}
+
+export async function fetchPklAttendanceSummary(studentId) {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    const since = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const { data, error } = await supabase
+        .from('pkl_attendance')
+        .select('pkl_attendance_id, attendance_date, status, notes')
+        .eq('student_id', studentId)
+        .gte('attendance_date', since)
+        .order('attendance_date', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function getUnreadNotifCount() {
+    const { data, error } = await supabase.rpc('fn_count_unread_notifications');
+    if (error) throw error;
+    return Number(data ?? 0);
+}
+
+export async function getRecentNotifications(limit = 15) {
+    const { data, error } = await supabase
+        .from('notifications')
+        .select('notification_id, type, title, body, is_read, case_id, created_at')
+        .eq('is_read', false)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function markNotificationsRead(ids) {
+    if (!ids?.length) return;
+    const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .in('notification_id', ids);
+    if (error) throw error;
 }

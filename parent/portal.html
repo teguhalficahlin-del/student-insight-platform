@@ -15,8 +15,15 @@
             <div>
                 <h2 id="portal-title">Portal Orang Tua</h2>
                 <p id="portal-user-name"><span data-brand="school-name"></span></p>
+                <span id="child-status-badge" class="child-status-badge" style="display:none"></span>
             </div>
-            <button id="logout-btn" type="button" class="btn btn-secondary">Keluar</button>
+            <div style="display:flex;align-items:center;gap:10px">
+                <div style="position:relative">
+                    <button id="notif-bell-btn" type="button" class="btn btn-secondary" title="Notifikasi" aria-label="Buka notifikasi" style="font-size:16px;padding:6px 10px">🔔</button>
+                    <div id="notif-dropdown" class="notif-dropdown" style="display:none"></div>
+                </div>
+                <button id="logout-btn" type="button" class="btn btn-secondary">Keluar</button>
+            </div>
         </header>
 
         <div id="child-selector" class="child-selector" style="display:none">
@@ -25,6 +32,22 @@
         </div>
 
         <div id="loading" class="loading">Memuat data...</div>
+
+        <section id="section-pkl" class="section" style="display:none">
+            <h3>Informasi PKL</h3>
+            <div id="pkl-info"></div>
+            <div id="pkl-attendance-wrap" style="display:none">
+                <h3 style="margin-top:16px;font-size:14px;margin-bottom:10px">Absensi PKL (30 hari terakhir)</h3>
+                <div class="summary-cards" id="pkl-summary"></div>
+                <table class="data-table" id="pkl-table">
+                    <thead>
+                        <tr><th>Tanggal</th><th>Status</th><th>Catatan</th></tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                <p id="pkl-empty" class="hint" style="display:none">Belum ada catatan absensi PKL dalam 30 hari terakhir.</p>
+            </div>
+        </section>
 
         <section id="section-schedule" class="section" style="display:none">
             <h3>Jadwal Pelajaran</h3>
@@ -81,6 +104,17 @@
 
         <section id="section-observations" class="section" style="display:none">
             <h3>Catatan Guru</h3>
+            <div class="filter-row" style="margin-bottom:12px">
+                <div class="field" style="margin-bottom:0">
+                    <label for="obs-date-start">Dari</label>
+                    <input id="obs-date-start" class="input" type="date" />
+                </div>
+                <div class="field" style="margin-bottom:0">
+                    <label for="obs-date-end">Sampai</label>
+                    <input id="obs-date-end" class="input" type="date" />
+                </div>
+                <button id="btn-obs-filter" class="btn btn-primary">Tampilkan</button>
+            </div>
             <div id="observations-list"></div>
             <p id="observations-empty" class="hint" style="display:none">Belum ada catatan guru untuk anak ini.</p>
         </section>

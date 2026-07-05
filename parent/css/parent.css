@@ -295,6 +295,38 @@ label {
 .badge-sakit      { background: var(--color-warning-bg); color: var(--color-warning); }
 .badge-ekskul     { background: #f3e8ff; color: #7c3aed; }
 
+/* ── Child status badge ──────────────────────────────────── */
+
+.child-status-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 999px;
+    margin-top: 4px;
+    letter-spacing: 0.3px;
+}
+.badge-status-aktif  { background: var(--color-success-bg); color: var(--color-success); }
+.badge-status-pkl    { background: var(--color-primary-bg); color: var(--color-primary); }
+.badge-status-lulus  { background: rgba(255,255,255,0.08);  color: var(--color-text-muted); }
+.badge-status-keluar { background: var(--color-danger-bg);  color: var(--color-danger); }
+
+/* ── Notification dropdown ───────────────────────────────── */
+
+.notif-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: 300px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    z-index: 100;
+    max-height: 360px;
+    overflow-y: auto;
+}
+
 /* ── Observation cards ───────────────────────────────────── */
 
 .obs-card {
