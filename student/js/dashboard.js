@@ -31,8 +31,8 @@ const LC = {
     set(key, data) {
         try { localStorage.setItem(`smkhr:${key}`, JSON.stringify({ ts: Date.now(), data })); } catch {}
     },
-    get(key) {
-        try { const r = JSON.parse(localStorage.getItem(`smkhr:${key}`)); return r?.data ?? null; }
+    get(key, ttlMs = 60 * 60 * 1000) {
+        try { const r = JSON.parse(localStorage.getItem(`smkhr:${key}`)); if (!r) return null; if (Date.now() - r.ts > ttlMs) return null; return r.data ?? null; }
         catch { return null; }
     },
     clear() {
@@ -178,7 +178,7 @@ async function initJadwalTab() {
 
 function renderScheduleRows(rows, contentEl) {
     if (rows.length === 0) {
-        contentEl.innerHTML = '<p class="hint">Tidak ada jadwal pelajaran pada tanggal ini.</p>';
+        contentEl.innerHTML = '<p class="hint">Tidak ada jadwal pada tanggal ini.</p>';
         return;
     }
     contentEl.innerHTML = `
@@ -203,7 +203,7 @@ async function loadSchedule() {
     const contentEl = document.getElementById('sched-content');
 
     if (!myClass?.class_id) {
-        contentEl.innerHTML = '<p class="hint">Kamu belum terdaftar di kelas pada tahun ajaran ini.</p>';
+        contentEl.innerHTML = '<p class="hint">Data kelas belum tersedia untuk tahun ajaran ini. Hubungi admin sekolah.</p>';
         return;
     }
 
