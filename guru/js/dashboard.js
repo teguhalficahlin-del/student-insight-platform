@@ -131,7 +131,8 @@ let currentUser  = null;
 let config       = null;   // { current_academic_year, current_semester }
 let jabatan      = [];
 let isTeacher    = false;  // hanya GURU & WALI_KELAS yang mengajar
-let myStudents   = [];     // for observation selector
+let myStudents       = [];     // for observation selector
+let isBroadObserver  = false;  // BK/Kaprodi/Waka/Kepsek — bisa cari siswa lintas kelas
 let kpStudents      = [];  // kaprodi PKL students
 let kpAktifStudents = [];  // kaprodi siswa AKTIF (kelas)
 let kpDudiList      = [];
@@ -673,7 +674,7 @@ async function initObsForm() {
     // mengamati siswa di luar kelas yang ia ajar — bahkan saat tak mengajar
     // sama sekali (myStudents kosong). Untuk mereka, lengkapi daftar dengan
     // pencarian sisi-server (cakupan dibatasi RLS).
-    const isBroadObserver = jabatan.some(j => ['bk', 'kaprodi', 'waka_kesiswaan', 'kepsek'].includes(j));
+    isBroadObserver = jabatan.some(j => ['bk', 'kaprodi', 'waka_kesiswaan', 'kepsek'].includes(j));
 
     function renderHits(hits) {
         if (hits.length === 0) { listEl.style.display = 'none'; return; }
@@ -1670,26 +1671,42 @@ async function initKasusTab() {
     const studentIdEl = document.getElementById('kasus-c-student-id');
     const listEl     = document.getElementById('kasus-c-student-list');
 
+    let kasusSearchSeq = 0;
     searchEl.addEventListener('input', async () => {
-        const q = searchEl.value.trim();
+        const raw = searchEl.value.trim();
+        const q   = raw.toLowerCase();
         if (q.length < 2) { listEl.style.display = 'none'; return; }
-        try {
-            const rows = await searchStudents(q);
-            if (!rows.length) { listEl.style.display = 'none'; return; }
-            listEl.innerHTML = rows.map(r =>
-                `<div style="padding:8px 12px; cursor:pointer; font-size:13px" data-id="${r.student_id}" data-name="${esc(r.full_name)}">${esc(r.full_name)} — ${esc(r.nis ?? '')}</div>`
-            ).join('');
-            listEl.style.display = 'block';
-            listEl.querySelectorAll('div').forEach(el => {
-                el.addEventListener('click', () => {
-                    searchEl.value = el.dataset.name;
-                    studentIdEl.value = el.dataset.id;
-                    listEl.style.display = 'none';
-                });
-                el.addEventListener('mouseenter', () => { el.style.background = 'var(--color-bg)'; });
-                el.addEventListener('mouseleave', () => { el.style.background = ''; });
+
+        const local = myStudents.filter(s =>
+            s.full_name.toLowerCase().includes(q) || s.nis?.includes(q)
+        );
+
+        let hits = local;
+        if (isBroadObserver) {
+            const seq = ++kasusSearchSeq;
+            try {
+                const remote = await searchStudents(raw);
+                if (seq !== kasusSearchSeq) return;
+                const seen = new Set(local.map(s => s.student_id));
+                hits = [...local, ...remote.filter(s => !seen.has(s.student_id))];
+            } catch { /* fallback lokal */ }
+        }
+
+        hits = hits.slice(0, 12);
+        if (!hits.length) { listEl.style.display = 'none'; return; }
+        listEl.innerHTML = hits.map(r =>
+            `<div style="padding:8px 12px; cursor:pointer; font-size:13px" data-id="${r.student_id}" data-name="${esc(r.full_name)}">${esc(r.full_name)} — ${esc(r.nis ?? '')}${r.class_name ? ' · ' + esc(r.class_name) : ''}</div>`
+        ).join('');
+        listEl.style.display = 'block';
+        listEl.querySelectorAll('div').forEach(el => {
+            el.addEventListener('click', () => {
+                searchEl.value = el.dataset.name;
+                studentIdEl.value = el.dataset.id;
+                listEl.style.display = 'none';
             });
-        } catch { listEl.style.display = 'none'; }
+            el.addEventListener('mouseenter', () => { el.style.background = 'var(--color-bg)'; });
+            el.addEventListener('mouseleave', () => { el.style.background = ''; });
+        });
     });
 
     createForm.addEventListener('submit', async (e) => {
