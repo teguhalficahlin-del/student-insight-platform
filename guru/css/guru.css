@@ -167,7 +167,7 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
     display: flex; align-items: center; gap: 10px;
     padding: 8px 12px; cursor: pointer;
     font-size: 13px; font-weight: 600;
-    background: var(--color-surface-alt, #f8fafc);
+    background: var(--color-surface-alt, var(--color-surface, #1e2533));
     user-select: none; list-style: none;
 }
 .att-accordion-summary::-webkit-details-marker { display: none; }
