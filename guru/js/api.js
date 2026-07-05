@@ -537,12 +537,14 @@ export async function getAbsentTeachersToday() {
 
 // ─── WAKA KESISWAAN ─────────────────────────────────────────
 
-export async function getAttendanceRecapPerClass(sessionDate) {
-    const { data, error } = await supabase
+export async function getAttendanceRecapPerClass(dateStart, dateEnd) {
+    let q = supabase
         .from('teaching_schedules')
         .select('class:classes(class_id, name), attendance!inner(status, is_void)')
-        .eq('session_date', sessionDate)
         .eq('attendance.is_void', false);
+    if (dateStart) q = q.gte('session_date', dateStart);
+    if (dateEnd)   q = q.lte('session_date', dateEnd);
+    const { data, error } = await q;
     if (error) throw error;
 
     const map = new Map();
@@ -555,13 +557,42 @@ export async function getAttendanceRecapPerClass(sessionDate) {
         }
         const agg = map.get(classId);
         for (const r of sched.attendance ?? []) {
-            // EKSKUL dihapus dari absensi → dihitung sebagai HADIR (kompat data lama)
             const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
             if (agg[st] !== undefined) agg[st]++;
             agg.total++;
         }
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Rekap akumulasi kehadiran kelas (tabel attendance) untuk daftar student_id tertentu.
+ * Dipakai Kaprodi untuk siswa AKTIF di programnya.
+ */
+export async function getAttendanceSummaryByStudents(students, dateStart, dateEnd) {
+    if (!students?.length) return [];
+    const ids = students.map(s => s.student_id);
+    let q = supabase
+        .from('teaching_schedules')
+        .select('session_date, attendance!inner ( student_id, status, is_void )')
+        .in('attendance.student_id', ids)
+        .eq('attendance.is_void', false);
+    if (dateStart) q = q.gte('session_date', dateStart);
+    if (dateEnd)   q = q.lte('session_date', dateEnd);
+    const { data, error } = await q;
+    if (error) throw error;
+
+    const map = new Map(students.map(s => [s.student_id, { ...s, HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0, total: 0 }]));
+    for (const sched of data ?? []) {
+        for (const r of sched.attendance ?? []) {
+            const agg = map.get(r.student_id);
+            if (!agg) continue;
+            const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
+            if (agg[st] !== undefined) agg[st]++;
+            agg.total++;
+        }
+    }
+    return [...map.values()];
 }
 
 export async function getOpenCases() {

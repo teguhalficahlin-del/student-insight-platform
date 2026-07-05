@@ -16,6 +16,7 @@ import {
     getWaliKelasInfo, getWaliAttendanceSummary,
     getProgram, fetchPklStudents, fetchNonPklStudents,
     fetchDudiPartners, fetchPklAttendance, fetchDudiObservations,
+    getAttendanceSummaryByStudents,
     fetchAllPklStudents, fetchAllDudiPartners,
     createPlacement, bulkImportPkl,
     getSchoolStats, getKepsekMonitoring, getAbsentTeachersToday,
@@ -131,8 +132,9 @@ let config       = null;   // { current_academic_year, current_semester }
 let jabatan      = [];
 let isTeacher    = false;  // hanya GURU & WALI_KELAS yang mengajar
 let myStudents   = [];     // for observation selector
-let kpStudents   = [];     // kaprodi PKL students
-let kpDudiList   = [];
+let kpStudents      = [];  // kaprodi PKL students
+let kpAktifStudents = [];  // kaprodi siswa AKTIF (kelas)
+let kpDudiList      = [];
 
 const DIMENSION_LABELS = { AKADEMIK:'Akademik', KEHADIRAN:'Kehadiran', PERILAKU:'Perilaku', SOSIAL:'Sosial', AFEKTIF:'Afektif', BAKAT_MINAT:'Bakat & Minat', FISIK:'Fisik', LAINNYA:'Lainnya' };
 
@@ -849,8 +851,10 @@ async function initBkTab() {
 // ─── TAB WAKA KESISWAAN ──────────────────────────────────────
 
 async function initWakaKesiswaanTab() {
-    const today = new Date().toISOString().slice(0, 10);
-    document.getElementById('wk-att-date').value = today;
+    const today        = new Date().toISOString().slice(0, 10);
+    const firstOfMonth = today.slice(0, 8) + '01';
+    document.getElementById('wk-att-start').value = firstOfMonth;
+    document.getElementById('wk-att-end').value   = today;
     document.getElementById('wk-att-filter-btn').onclick = loadWkAttendanceRecap;
 
     await Promise.all([
@@ -861,32 +865,35 @@ async function initWakaKesiswaanTab() {
 }
 
 async function loadWkAttendanceRecap() {
-    const date    = document.getElementById('wk-att-date').value;
-    const tbody   = document.getElementById('wk-att-body');
-    const emptyEl = document.getElementById('wk-att-empty');
-    tbody.innerHTML = '<tr><td colspan="6" class="hint">Memuat…</td></tr>';
+    const dateStart = document.getElementById('wk-att-start').value;
+    const dateEnd   = document.getElementById('wk-att-end').value;
+    const tbody     = document.getElementById('wk-att-body');
+    const emptyEl   = document.getElementById('wk-att-empty');
+    tbody.innerHTML = '<tr><td colspan="7" class="hint">Memuat…</td></tr>';
     emptyEl.style.display = 'none';
 
     try {
-        const rows = await getAttendanceRecapPerClass(date);
+        const rows = await getAttendanceRecapPerClass(dateStart || null, dateEnd || null);
         if (rows.length === 0) {
             tbody.innerHTML = '';
             emptyEl.style.display = 'block';
             return;
         }
         tbody.innerHTML = rows.map(r => {
-            const pct = r.total > 0 ? Math.round(r.HADIR / r.total * 100) : 0;
+            const pct   = r.total > 0 ? Math.round(r.HADIR / r.total * 100) : 0;
+            const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
             return `<tr>
                 <td>${esc(r.name)}</td>
-                <td>${r.HADIR}</td>
-                <td>${r.IZIN}</td>
-                <td>${r.SAKIT}</td>
-                <td>${r.TIDAK_HADIR}</td>
-                <td>${r.total > 0 ? pct + '%' : '—'}</td>
+                <td style="text-align:center">${r.HADIR}</td>
+                <td style="text-align:center">${r.IZIN}</td>
+                <td style="text-align:center">${r.SAKIT}</td>
+                <td style="text-align:center">${r.TIDAK_HADIR}</td>
+                <td style="text-align:center">${r.total}</td>
+                <td style="text-align:center;font-weight:600;color:${color}">${r.total > 0 ? pct + '%' : '—'}</td>
             </tr>`;
         }).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
 
@@ -965,13 +972,15 @@ async function initKaprodiTab() {
     }
 
     try {
-        const [program, students, dudi] = await Promise.all([
+        const [program, students, aktifStudents, dudi] = await Promise.all([
             getProgram(programId),
             fetchPklStudents(programId),
+            fetchNonPklStudents(programId),
             fetchDudiPartners(programId),
         ]);
         kpStudents = students;
         kpDudiList = dudi;
+        kpAktifStudents = aktifStudents;
 
         renderKpSummary();
         renderKpStudents();
@@ -979,11 +988,15 @@ async function initKaprodiTab() {
 
         const today    = new Date().toISOString().slice(0, 10);
         const monthAgo = new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
-        document.getElementById('kp-date-start').value = monthAgo;
-        document.getElementById('kp-date-end').value   = today;
 
-        document.getElementById('kp-filter-btn').onclick = loadKpRecap;
-        await Promise.all([loadKpRecap(), loadKpObs(), initKpPlacementForm(programId)]);
+        document.getElementById('kp-date-start').value  = monthAgo;
+        document.getElementById('kp-date-end').value    = today;
+        document.getElementById('kp-cls-start').value   = monthAgo;
+        document.getElementById('kp-cls-end').value     = today;
+
+        document.getElementById('kp-filter-btn').onclick     = loadKpRecap;
+        document.getElementById('kp-cls-filter-btn').onclick = loadKpClsRecap;
+        await Promise.all([loadKpRecap(), loadKpClsRecap(), loadKpObs(), initKpPlacementForm(programId)]);
     } catch (err) {
         console.error('[kaprodi]', err);
     }
@@ -1045,6 +1058,45 @@ async function loadKpRecap() {
         }).join('');
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
+    }
+}
+
+async function loadKpClsRecap() {
+    const start = document.getElementById('kp-cls-start').value;
+    const end   = document.getElementById('kp-cls-end').value;
+    const tbody = document.getElementById('kp-cls-recap-body');
+    const empty = document.getElementById('kp-cls-recap-empty');
+    tbody.innerHTML = '<tr><td colspan="8" class="hint">Memuat…</td></tr>';
+    empty.style.display = 'none';
+
+    if (!kpAktifStudents.length) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+    try {
+        const rows = await getAttendanceSummaryByStudents(kpAktifStudents, start || null, end || null);
+        if (rows.every(r => r.total === 0)) {
+            tbody.innerHTML = '';
+            empty.style.display = 'block';
+            return;
+        }
+        tbody.innerHTML = rows.map(s => {
+            const pct   = s.total > 0 ? Math.round(s.HADIR / s.total * 100) : 0;
+            const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+            return `<tr>
+                <td>${esc(s.full_name)}</td>
+                <td style="text-align:center">${esc(s.nis)}</td>
+                <td style="text-align:center">${s.HADIR}</td>
+                <td style="text-align:center">${s.IZIN}</td>
+                <td style="text-align:center">${s.SAKIT}</td>
+                <td style="text-align:center">${s.TIDAK_HADIR}</td>
+                <td style="text-align:center">${s.total}</td>
+                <td style="text-align:center;font-weight:600;color:${color}">${s.total > 0 ? pct + '%' : '—'}</td>
+            </tr>`;
+        }).join('');
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
 

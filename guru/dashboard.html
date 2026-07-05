@@ -227,6 +227,21 @@
                 </form>
             </div>
 
+            <!-- Rekap Absensi Kelas (siswa AKTIF di prodi) -->
+            <div class="section-card">
+                <h3>Rekap Absensi Kelas</h3>
+                <div class="date-row" style="margin-bottom:12px">
+                    <label for="kp-cls-start">Dari:</label><input type="date" id="kp-cls-start" class="input" style="width:auto">
+                    <label for="kp-cls-end">s/d:</label><input type="date" id="kp-cls-end" class="input" style="width:auto">
+                    <button class="btn btn-secondary btn-sm" id="kp-cls-filter-btn">Filter</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="table"><thead><tr><th>Nama</th><th>NIS</th><th>Hadir</th><th>Izin</th><th>Sakit</th><th>Alpa</th><th>Total</th><th>% Hadir</th></tr></thead>
+                    <tbody id="kp-cls-recap-body"></tbody></table>
+                </div>
+                <p class="hint" id="kp-cls-recap-empty" style="display:none">Belum ada data absensi kelas pada rentang ini.</p>
+            </div>
+
             <!-- Rekap Absensi PKL -->
             <div class="section-card">
                 <h3>Rekap Absensi PKL</h3>
@@ -339,17 +354,19 @@
             <div class="section-card">
                 <h3>Kehadiran Per Kelas</h3>
                 <div class="date-row" style="margin-bottom:12px">
-                    <label for="wk-att-date">Tanggal:</label>
-                    <input type="date" id="wk-att-date" class="input" style="width:auto">
+                    <label for="wk-att-start">Dari:</label>
+                    <input type="date" id="wk-att-start" class="input" style="width:auto">
+                    <label for="wk-att-end">s/d:</label>
+                    <input type="date" id="wk-att-end" class="input" style="width:auto">
                     <button class="btn btn-secondary btn-sm" id="wk-att-filter-btn">Filter</button>
                 </div>
                 <div class="table-wrapper">
                     <table class="table" id="wk-att-table">
-                        <thead><tr><th>Kelas</th><th>Hadir</th><th>Izin</th><th>Sakit</th><th>Alpa</th><th>% Hadir</th></tr></thead>
+                        <thead><tr><th>Kelas</th><th>Hadir</th><th>Izin</th><th>Sakit</th><th>Alpa</th><th>Total</th><th>% Hadir</th></tr></thead>
                         <tbody id="wk-att-body"></tbody>
                     </table>
                 </div>
-                <p class="hint" id="wk-att-empty" style="display:none">Belum ada data kehadiran pada tanggal ini.</p>
+                <p class="hint" id="wk-att-empty" style="display:none">Belum ada data kehadiran pada rentang ini.</p>
             </div>
 
             <div class="section-card">
