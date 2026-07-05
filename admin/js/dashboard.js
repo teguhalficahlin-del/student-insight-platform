@@ -98,6 +98,66 @@ function renderComingSoon(panel) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// BAGIKAN PORTAL
+// ─────────────────────────────────────────────────────────────
+
+function renderSharePortalPanel() {
+    const base = window.location.href.replace(/\/admin\/.*$/, '');
+    const slug = schoolSlug ?? '';
+    if (!slug) {
+        panelContent.innerHTML = `<p class="hint">Data sekolah belum tersedia. Muat ulang halaman.</p>`;
+        return;
+    }
+    const portals = [
+        { label: 'Portal Guru & Staf', path: 'guru/index.html' },
+        { label: 'Portal Siswa',        path: 'student/index.html' },
+        { label: 'Portal Orang Tua',    path: 'parent/index.html' },
+        { label: 'Portal DUDI',         path: 'dudi/index.html' },
+        { label: 'Portal Stakeholder',  path: 'stakeholder/index.html' },
+    ];
+
+    const rows = portals.map(p => {
+        const url = `${base}/${p.path}?school=${encodeURIComponent(slug)}`;
+        return `
+        <tr>
+            <td style="padding:10px 8px;white-space:nowrap;font-weight:500">${p.label}</td>
+            <td style="padding:10px 8px;word-break:break-all;font-size:0.82rem;color:var(--text-muted,#9ca3af)">${url}</td>
+            <td style="padding:10px 8px;white-space:nowrap">
+                <button class="btn btn-secondary btn-sm copy-link-btn" data-url="${url}" style="font-size:0.78rem;padding:4px 12px">Salin</button>
+            </td>
+        </tr>`;
+    }).join('');
+
+    panelContent.innerHTML = `
+        <h3 style="margin-bottom:4px">Bagikan Portal</h3>
+        <p style="margin-bottom:16px;color:var(--text-muted,#9ca3af);font-size:0.875rem">
+            Salin link di bawah lalu kirim ke pengguna masing-masing (WhatsApp, email, dll).
+        </p>
+        <div class="card" style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color,#374151)">
+                        <th style="padding:8px;text-align:left;font-size:0.8rem;color:var(--text-muted,#9ca3af)">Portal</th>
+                        <th style="padding:8px;text-align:left;font-size:0.8rem;color:var(--text-muted,#9ca3af)">Link</th>
+                        <th style="padding:8px"></th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+        <p id="copy-toast" style="display:none;margin-top:12px;color:#10b981;font-size:0.875rem">✓ Link disalin ke clipboard!</p>
+    `;
+
+    panelContent.querySelectorAll('.copy-link-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            await navigator.clipboard.writeText(btn.dataset.url);
+            btn.textContent = 'Disalin!';
+            setTimeout(() => { btn.textContent = 'Salin'; }, 2000);
+        });
+    });
+}
+
+// ─────────────────────────────────────────────────────────────
 // SETUP OVERVIEW
 // ─────────────────────────────────────────────────────────────
 
@@ -136,37 +196,53 @@ async function renderSetupPanel() {
         else if (statuses.every(s => s === 'LULUS')) ortuAlumniCount++;
     }
 
+    const base = window.location.href.replace(/\/admin\/.*$/, '');
+    const slug = schoolSlug ? encodeURIComponent(schoolSlug) : '';
+    const portalUrl = (path) => slug ? `${base}/${path}?school=${slug}` : null;
+
     const items = [
-        { label: 'Program Keahlian',  count: programCount,   panel: 'programs' },
-        { label: 'Kelas & Rombel',    count: classCount,     panel: 'classes' },
-        { label: 'Staf & Peran',      count: stafCount,      panel: 'staff' },
-        { label: 'Siswa Aktif',       count: siswaCount,     panel: 'students' },
-        { label: 'Alumni',            count: alumniCount,    panel: 'alumni' },
-        { label: 'Orang Tua Siswa',   count: ortuSiswaCount, panel: 'parents' },
-        { label: 'Orang Tua Alumni',  count: ortuAlumniCount,panel: 'alumni' },
-        { label: 'DUDI',              count: dudiCount,      panel: 'dudi' },
-        { label: 'Stakeholder',       count: stakeholderCount, panel: 'stakeholders' },
-        { label: 'Jadwal',            count: jadwalCount,    panel: 'jadwal' },
+        { label: 'Program Keahlian',  count: programCount,     panel: 'programs',    portal: null },
+        { label: 'Kelas & Rombel',    count: classCount,       panel: 'classes',     portal: null },
+        { label: 'Staf & Peran',      count: stafCount,        panel: 'staff',       portal: portalUrl('guru/index.html') },
+        { label: 'Siswa Aktif',       count: siswaCount,       panel: 'students',    portal: portalUrl('student/index.html') },
+        { label: 'Alumni',            count: alumniCount,      panel: 'alumni',      portal: null },
+        { label: 'Orang Tua Siswa',   count: ortuSiswaCount,   panel: 'parents',     portal: portalUrl('parent/index.html') },
+        { label: 'Orang Tua Alumni',  count: ortuAlumniCount,  panel: 'alumni',      portal: null },
+        { label: 'DUDI',              count: dudiCount,        panel: 'dudi',        portal: portalUrl('dudi/index.html') },
+        { label: 'Stakeholder',       count: stakeholderCount, panel: 'stakeholders',portal: portalUrl('stakeholder/index.html') },
+        { label: 'Jadwal',            count: jadwalCount,      panel: 'jadwal',      portal: null },
     ];
 
     panelContent.innerHTML = `
         <h3>Ringkasan Data Sekolah</h3>
         <p class="hint">Untuk mengubah data, kembali ke <a href="${schoolSlug ? `wizard.html?school=${encodeURIComponent(schoolSlug)}` : 'wizard.html'}">Setup Wizard</a>.</p>
         <table class="table">
-            <thead><tr><th>Data</th><th>Jumlah</th></tr></thead>
+            <thead><tr><th>Data</th><th>Jumlah</th><th>Link Portal</th></tr></thead>
             <tbody>${items.map(i => `
                 <tr style="cursor:pointer" class="setup-row" data-panel="${i.panel}">
                     <td>${i.label}</td>
                     <td><span class="badge ${i.count > 0 ? 'badge-success' : 'badge-muted'}">${i.count ?? 0}</span></td>
+                    <td>${i.portal ? `<button class="btn btn-secondary btn-sm copy-portal-btn" data-url="${i.portal}" style="font-size:0.75rem;padding:3px 10px" onclick="event.stopPropagation()">Salin Link</button>` : ''}</td>
                 </tr>
             `).join('')}</tbody>
         </table>
+        <p id="copy-portal-toast" style="display:none;margin-top:10px;color:#10b981;font-size:0.875rem">✓ Link disalin ke clipboard!</p>
     `;
 
     panelContent.querySelectorAll('.setup-row').forEach(row => {
         row.addEventListener('click', () => {
             const navLink = document.querySelector(`.nav-link[data-panel="${row.dataset.panel}"]`);
             if (navLink) navLink.click();
+        });
+    });
+
+    panelContent.querySelectorAll('.copy-portal-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            await navigator.clipboard.writeText(btn.dataset.url);
+            btn.textContent = 'Disalin!';
+            const toast = document.getElementById('copy-portal-toast');
+            toast.style.display = 'block';
+            setTimeout(() => { btn.textContent = 'Salin Link'; toast.style.display = 'none'; }, 2000);
         });
     });
 }
