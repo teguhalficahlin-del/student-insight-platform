@@ -800,7 +800,7 @@ async function loadWaliSummary() {
     const end     = document.getElementById('wali-date-end').value;
     const tbody   = document.getElementById('wali-att-body');
     const emptyEl = document.getElementById('wali-empty');
-    tbody.innerHTML = '<tr><td colspan="7" class="hint">Memuat…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="hint">Memuat…</td></tr>';
     emptyEl.style.display = 'none';
 
     try {
