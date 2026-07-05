@@ -165,7 +165,7 @@ export async function getMyCases(studentId) {
     const { data, error } = await supabase
         .from('cases')
         .select(`
-            case_id, title, status, audience, created_at,
+            case_id, title, description, status, audience, created_at,
             initiated_by_role, current_handler_role,
             events:case_events (
                 event_id, event_type, payload, created_at, privacy_level,
@@ -189,8 +189,8 @@ export async function getMyCases(studentId) {
  * RLS rls_observations_read_student sudah membatasi ke student_id + visibility.
  * Filter eksplisit di sini sebagai pertahanan berlapis.
  */
-export async function getMyObservations(studentId) {
-    const { data, error } = await supabase
+export async function getMyObservations(studentId, dateStart = null, dateEnd = null) {
+    let query = supabase
         .from('observations')
         .select(`
             observation_id, dimension, sentiment, content, observed_at, created_at,
@@ -200,6 +200,9 @@ export async function getMyObservations(studentId) {
         .eq('visibility', 'STUDENT_VISIBLE')
         .order('observed_at', { ascending: false })
         .limit(100);
+    if (dateStart) query = query.gte('observed_at', dateStart);
+    if (dateEnd)   query = query.lte('observed_at', dateEnd + 'T23:59:59');
+    const { data, error } = await query;
     if (error) throw error;
     return data ?? [];
 }
@@ -230,7 +233,7 @@ export async function getMyPklPlacement(studentId) {
 export async function getMyPklAttendance(studentId) {
     const { data, error } = await supabase
         .from('pkl_attendance')
-        .select('attendance_date, status')
+        .select('attendance_date, status, notes')
         .eq('student_id', studentId)
         .order('attendance_date', { ascending: false });
     if (error) throw error;

@@ -22,6 +22,7 @@
         <div class="header-info">
             <span class="header-name" id="hdr-name">—</span>
             <span class="header-role" id="hdr-meta">—</span>
+            <span id="hdr-status-badge" style="display:none"></span>
         </div>
         <button class="btn btn-secondary btn-sm" id="logout-btn" style="margin-left:8px">Keluar</button>
     </header>
@@ -89,6 +90,13 @@
         <div class="page-body">
             <div class="section-card">
                 <h3>Observasi Tentang Saya</h3>
+                <div class="date-row" style="margin-bottom:12px">
+                    <label for="obs-date-start">Dari:</label>
+                    <input type="date" id="obs-date-start" class="input" style="width:auto">
+                    <label for="obs-date-end">s/d:</label>
+                    <input type="date" id="obs-date-end" class="input" style="width:auto">
+                    <button class="btn btn-secondary btn-sm" id="obs-filter-btn">Filter</button>
+                </div>
                 <p class="hint" id="obs-hint">Memuat…</p>
                 <div id="obs-list"></div>
             </div>
@@ -120,7 +128,7 @@
                 <h3>Riwayat Absensi PKL</h3>
                 <div class="table-wrapper">
                     <table class="table">
-                        <thead><tr><th>Tanggal</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Tanggal</th><th>Status</th><th>Catatan</th></tr></thead>
                         <tbody id="pkl-recap-body"></tbody>
                     </table>
                 </div>

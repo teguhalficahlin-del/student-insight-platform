@@ -98,6 +98,14 @@ async function init() {
     document.getElementById('hdr-name').textContent = student.full_name;
     document.getElementById('hdr-meta').textContent =
         `NIS ${student.nis} · ${myClass?.class?.name ?? student.program?.name ?? 'Siswa'}`;
+    const STATUS_HDR_LABEL = { AKTIF: 'Aktif', PKL: 'Sedang PKL' };
+    const STATUS_HDR_CLASS = { AKTIF: 'badge-status-aktif', PKL: 'badge-status-pkl' };
+    const badgeEl = document.getElementById('hdr-status-badge');
+    if (badgeEl && student.student_status) {
+        badgeEl.textContent = STATUS_HDR_LABEL[student.student_status] ?? student.student_status;
+        badgeEl.className   = `child-status-badge ${STATUS_HDR_CLASS[student.student_status] ?? ''}`;
+        badgeEl.style.display = 'inline-block';
+    }
 
     const tabs = buildTabs();
     document.getElementById('loading').style.display = 'none';
@@ -320,13 +328,33 @@ function renderObservations(rows, hintEl, listEl) {
         </div>`).join('') + (rows.length >= 100 ? '<p class="hint" style="margin-top:12px">Menampilkan 100 observasi terbaru.</p>' : '');
 }
 
-async function loadObservations() {
-    const hintEl   = document.getElementById('obs-hint');
-    const listEl   = document.getElementById('obs-list');
-    const casesHintEl = document.getElementById('cases-hint');
-    const cacheKey = `stu-obs-${student.student_id}`;
+let obsFilterInit = false;
 
-    // Loading state untuk kedua seksi
+async function loadObservations() {
+    const hintEl      = document.getElementById('obs-hint');
+    const listEl      = document.getElementById('obs-list');
+    const casesHintEl = document.getElementById('cases-hint');
+
+    if (!obsFilterInit) {
+        const today    = localDateStr();
+        const monthAgo = localDateStr(new Date(Date.now() - 30 * 86400000));
+        document.getElementById('obs-date-start').value = monthAgo;
+        document.getElementById('obs-date-end').value   = today;
+        const filterBtn = document.getElementById('obs-filter-btn');
+        filterBtn.addEventListener('click', async () => {
+            const prev = filterBtn.textContent;
+            filterBtn.disabled = true;
+            filterBtn.textContent = 'Memuat…';
+            try { await loadObsOnly(); }
+            finally { filterBtn.disabled = false; filterBtn.textContent = prev; }
+        });
+        obsFilterInit = true;
+    }
+
+    const dateStart   = document.getElementById('obs-date-start').value || null;
+    const dateEnd     = document.getElementById('obs-date-end').value   || null;
+    const cacheKey    = `stu-obs-${student.student_id}-${dateStart}-${dateEnd}`;
+
     const cached = LC.get(cacheKey);
     if (cached) {
         renderObservations(cached, hintEl, listEl);
@@ -339,13 +367,11 @@ async function loadObservations() {
     casesHintEl.style.display = 'block';
     document.getElementById('cases-list').innerHTML = '';
 
-    // Jalankan paralel tapi tangani error secara independen
     const [obsResult, casesResult] = await Promise.allSettled([
-        getMyObservations(student.student_id),
+        getMyObservations(student.student_id, dateStart, dateEnd),
         getMyCases(student.student_id),
     ]);
 
-    // Observasi
     if (obsResult.status === 'fulfilled') {
         obsLoaded = true;
         LC.set(cacheKey, obsResult.value);
@@ -354,11 +380,29 @@ async function loadObservations() {
         hintEl.textContent = `Gagal memuat observasi. ${fe(obsResult.reason)}`;
     }
 
-    // Kasus
     if (casesResult.status === 'fulfilled') {
         renderCases(casesResult.value);
     } else {
         casesHintEl.textContent = `Gagal memuat data kasus. ${fe(casesResult.reason)}`;
+    }
+}
+
+async function loadObsOnly() {
+    const hintEl  = document.getElementById('obs-hint');
+    const listEl  = document.getElementById('obs-list');
+    const dateStart = document.getElementById('obs-date-start').value || null;
+    const dateEnd   = document.getElementById('obs-date-end').value   || null;
+    const cacheKey  = `stu-obs-${student.student_id}-${dateStart}-${dateEnd}`;
+    hintEl.style.display = 'block';
+    hintEl.textContent   = 'Memuat observasi…';
+    listEl.innerHTML     = '';
+    try {
+        const rows = await getMyObservations(student.student_id, dateStart, dateEnd);
+        LC.set(cacheKey, rows);
+        renderObservations(rows, hintEl, listEl);
+    } catch (err) {
+        hintEl.style.display = 'block';
+        hintEl.textContent   = `Gagal memuat observasi. ${fe(err)}`;
     }
 }
 
@@ -388,6 +432,9 @@ function renderCases(cases) {
                         <p style="margin:4px 0 0">${esc(e.payload)}</p>
                     </div>`).join('')}
             </div>`;
+        const descHtml = c.description
+            ? `<p style="margin:8px 0 0;font-size:0.9rem;color:var(--color-text)">${esc(c.description)}</p>`
+            : '';
         return `<div class="obs-card" style="border-left:3px solid ${isClosed ? 'var(--color-text-muted,#6b7280)' : 'var(--color-warning,#f59e0b)'}">
             <div class="obs-meta" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
                 <strong>${esc(c.title)}</strong>
@@ -396,6 +443,7 @@ function renderCases(cases) {
             <div style="font-size:0.8rem;color:var(--color-text-muted,#9ca3af);margin-top:4px">
                 Ditindaklanjuti oleh: ${esc(ROLE_LABEL_SHORT[c.current_handler_role] ?? c.current_handler_role ?? '—')} · ${fmt(c.created_at)}
             </div>
+            ${descHtml}
             ${eventsHtml}
         </div>`;
     }).join('');
@@ -448,6 +496,7 @@ async function loadPkl() {
             recapBody.innerHTML = att.map(r => `<tr>
                 <td>${fmt(r.attendance_date)}</td>
                 <td><span class="badge ${STATUS_BADGE[r.status] ?? ''}">${esc(STATUS_LABELS[r.status] ?? r.status)}</span></td>
+                <td>${esc(r.notes || '—')}</td>
             </tr>`).join('');
         }
     } catch (err) {
