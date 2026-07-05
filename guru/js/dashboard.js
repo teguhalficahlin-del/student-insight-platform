@@ -132,7 +132,8 @@ let config       = null;   // { current_academic_year, current_semester }
 let jabatan      = [];
 let isTeacher    = false;  // hanya GURU & WALI_KELAS yang mengajar
 let myStudents       = [];     // for observation selector
-let isBroadObserver  = false;  // BK/Kaprodi/Waka/Kepsek — bisa cari siswa lintas kelas
+let isBroadObserver    = false;  // BK/Waka/Kepsek — bisa cari siswa seluruh sekolah
+let kaprodiAllStudents = [];     // PKL + aktif di prodi Kaprodi, untuk batas pencarian
 let kpStudents      = [];  // kaprodi PKL students
 let kpAktifStudents = [];  // kaprodi siswa AKTIF (kelas)
 let kpDudiList      = [];
@@ -674,7 +675,7 @@ async function initObsForm() {
     // mengamati siswa di luar kelas yang ia ajar — bahkan saat tak mengajar
     // sama sekali (myStudents kosong). Untuk mereka, lengkapi daftar dengan
     // pencarian sisi-server (cakupan dibatasi RLS).
-    isBroadObserver = jabatan.some(j => ['bk', 'kaprodi', 'waka_kesiswaan', 'kepsek'].includes(j));
+    isBroadObserver = jabatan.some(j => ['bk', 'waka_kesiswaan', 'kepsek'].includes(j));
 
     function renderHits(hits) {
         if (hits.length === 0) { listEl.style.display = 'none'; return; }
@@ -700,8 +701,13 @@ async function initObsForm() {
         const q   = raw.toLowerCase();
         if (q.length < 2) { listEl.style.display = 'none'; return; }
 
-        // Hasil lokal (siswa yang diajar) lebih dulu.
-        const local = myStudents.filter(s =>
+        // Pool lokal: siswa yang diajar + siswa prodi (jika Kaprodi)
+        let localPool = myStudents;
+        if (jabatan.includes('kaprodi') && kaprodiAllStudents.length) {
+            const seen = new Set(myStudents.map(s => s.student_id));
+            localPool = [...myStudents, ...kaprodiAllStudents.filter(s => !seen.has(s.student_id))];
+        }
+        const local = localPool.filter(s =>
             s.full_name.toLowerCase().includes(q) || s.nis?.includes(q)
         );
 
@@ -981,6 +987,10 @@ async function initKaprodiTab() {
         kpStudents = students;
         kpDudiList = dudi;
         kpAktifStudents = aktifStudents;
+
+        // Gabung PKL + aktif untuk pool pencarian siswa (Observasi & Buat Kasus)
+        const seen = new Set(kpStudents.map(s => s.student_id));
+        kaprodiAllStudents = [...kpStudents, ...kpAktifStudents.filter(s => !seen.has(s.student_id))];
 
         renderKpSummary();
         renderKpStudents();
@@ -1677,7 +1687,12 @@ async function initKasusTab() {
         const q   = raw.toLowerCase();
         if (q.length < 2) { listEl.style.display = 'none'; return; }
 
-        const local = myStudents.filter(s =>
+        let localPool = myStudents;
+        if (jabatan.includes('kaprodi') && kaprodiAllStudents.length) {
+            const seen = new Set(myStudents.map(s => s.student_id));
+            localPool = [...myStudents, ...kaprodiAllStudents.filter(s => !seen.has(s.student_id))];
+        }
+        const local = localPool.filter(s =>
             s.full_name.toLowerCase().includes(q) || s.nis?.includes(q)
         );
 
