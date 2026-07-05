@@ -358,8 +358,7 @@ async function loadGuruRecap() {
             const pct = s.total > 0 ? Math.round((s.HADIR / s.total) * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
             return `<tr>
-                <td>${esc(s.full_name)}</td>
-                <td style="text-align:center">${esc(s.nis)}</td>
+                <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted,#9ca3af)">${esc(s.nis)}</span></td>
                 <td style="text-align:center">${s.HADIR}</td>
                 <td style="text-align:center">${s.IZIN}</td>
                 <td style="text-align:center">${s.SAKIT}</td>
@@ -375,7 +374,7 @@ async function loadGuruRecap() {
             <div class="table-wrapper">
             <table class="table">
                 <thead><tr>
-                    <th>Nama</th><th style="text-align:center">NIS</th>
+                    <th>Nama / NIS</th>
                     <th style="text-align:center">Hadir</th><th style="text-align:center">Izin</th>
                     <th style="text-align:center">Sakit</th><th style="text-align:center">Alpa</th>
                     <th style="text-align:center">Total</th><th style="text-align:center">% Hadir</th>
@@ -1042,7 +1041,7 @@ async function loadKpRecap() {
     if (ids.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
     try {
         const rows = await fetchPklAttendance(ids, start, end);
-        const byStudent = new Map(kpStudents.map(s => [s.student_id, { name: s.full_name, HADIR:0, TIDAK_HADIR:0, IZIN:0, SAKIT:0, total:0 }]));
+        const byStudent = new Map(kpStudents.map(s => [s.student_id, { name: s.full_name, nis: s.nis, HADIR:0, TIDAK_HADIR:0, IZIN:0, SAKIT:0, total:0 }]));
         for (const r of rows) {
             const a = byStudent.get(r.student_id);
             if (!a) continue;
@@ -1052,8 +1051,16 @@ async function loadKpRecap() {
         const recap = [...byStudent.values()];
         if (recap.every(a => a.total === 0)) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
         tbody.innerHTML = recap.map(a => {
-            const pct = a.total > 0 ? Math.round(a.HADIR / a.total * 100) : 0;
-            return `<tr><td>${esc(a.name)}</td><td>${a.HADIR}</td><td>${a.SAKIT}</td><td>${a.IZIN}</td><td>${a.TIDAK_HADIR}</td><td>${a.total > 0 ? pct+'%' : '—'}</td></tr>`;
+            const pct   = a.total > 0 ? Math.round(a.HADIR / a.total * 100) : 0;
+            const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+            return `<tr>
+                <td><span style="font-weight:500">${esc(a.name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted,#9ca3af)">${esc(a.nis ?? '—')}</span></td>
+                <td style="text-align:center">${a.HADIR}</td>
+                <td style="text-align:center">${a.IZIN}</td>
+                <td style="text-align:center">${a.SAKIT}</td>
+                <td style="text-align:center">${a.TIDAK_HADIR}</td>
+                <td style="text-align:center;font-weight:600;color:${color}">${a.total > 0 ? pct+'%' : '—'}</td>
+            </tr>`;
         }).join('');
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
@@ -1084,8 +1091,7 @@ async function loadKpClsRecap() {
             const pct   = s.total > 0 ? Math.round(s.HADIR / s.total * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
             return `<tr>
-                <td>${esc(s.full_name)}</td>
-                <td style="text-align:center">${esc(s.nis)}</td>
+                <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted,#9ca3af)">${esc(s.nis)}</span></td>
                 <td style="text-align:center">${s.HADIR}</td>
                 <td style="text-align:center">${s.IZIN}</td>
                 <td style="text-align:center">${s.SAKIT}</td>
@@ -1095,7 +1101,7 @@ async function loadKpClsRecap() {
             </tr>`;
         }).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="8" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
 
