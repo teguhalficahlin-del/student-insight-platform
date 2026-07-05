@@ -309,7 +309,6 @@ async function initGuruTab() {
 
     if (!_guruTabInit) {
         _guruTabInit = true;
-        document.getElementById('sched-refresh').onclick = () => loadSchedule();
         dateEl.addEventListener('change', loadSchedule);
         document.getElementById('guru-recap-btn').onclick = loadGuruRecap;
         // Default rentang: awal bulan ini s/d hari ini
