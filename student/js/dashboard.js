@@ -247,7 +247,7 @@ async function loadAttendance() {
     const end     = document.getElementById('att-date-end').value;
     const tbody   = document.getElementById('att-body');
     const emptyEl = document.getElementById('att-empty');
-    tbody.innerHTML = '<tr><td colspan="3" class="hint">Memuat…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="hint">Memuat…</td></tr>';
     emptyEl.style.display = 'none';
 
     try {
@@ -276,11 +276,12 @@ async function loadAttendance() {
             return `<tr>
                 <td>${fmt(dt)}</td>
                 <td>${esc(r.schedule?.subject?.name ?? '—')}</td>
+                <td>${esc(r.schedule?.teacher?.full_name ?? '—')}</td>
                 <td><span class="badge ${STATUS_BADGE[r.status] ?? ''}">${esc(STATUS_LABELS[r.status] ?? r.status)}</span></td>
             </tr>`;
         }).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="3" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     } finally {
         if (filterBtn) { filterBtn.disabled = false; filterBtn.textContent = prevLabel; }
     }

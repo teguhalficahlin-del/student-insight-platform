@@ -131,6 +131,7 @@ export async function getMyAttendance(studentId, dateStart, dateEnd) {
         .select(`
             session_date, session_start, session_end,
             subject:subjects ( name ),
+            teacher:users!teaching_schedules_scheduled_teacher_id_fkey ( full_name ),
             attendance!inner ( attendance_id, status, is_void )
         `)
         .eq('attendance.student_id', studentId)
@@ -150,6 +151,7 @@ export async function getMyAttendance(studentId, dateStart, dateEnd) {
                 session_start: sched.session_start,
                 session_end:   sched.session_end,
                 subject:       sched.subject,
+                teacher:       sched.teacher,
             },
         }))
     );
