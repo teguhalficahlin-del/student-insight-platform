@@ -167,7 +167,11 @@ async function loadSchedule(classId) {
     }
 
     try {
-        const rows = await fetchSchedule(classId, schedDate.value);
+        const date = schedDate.value;
+        const rows = await fetchSchedule(classId, date);
+        const dayLabel = date ? new Date(date + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+        const dayLabelEl = document.getElementById('schedule-day-label');
+        if (dayLabelEl) dayLabelEl.textContent = dayLabel;
         if (rows.length === 0) {
             schedTbody.innerHTML = '';
             schedEmpty.textContent = 'Tidak ada jadwal pelajaran pada tanggal ini.';

@@ -176,12 +176,18 @@ async function initJadwalTab() {
     await loadSchedule();
 }
 
-function renderScheduleRows(rows, contentEl) {
+function fmtDayLabel(dateStr) {
+    if (!dateStr) return '';
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function renderScheduleRows(rows, contentEl, date) {
+    const dayLabel = `<p style="font-size:0.85rem;color:var(--color-text-muted,#9ca3af);margin-bottom:8px">${fmtDayLabel(date)}</p>`;
     if (rows.length === 0) {
-        contentEl.innerHTML = '<p class="hint">Tidak ada jadwal pada tanggal ini.</p>';
+        contentEl.innerHTML = dayLabel + '<p class="hint">Tidak ada jadwal pada tanggal ini.</p>';
         return;
     }
-    contentEl.innerHTML = `
+    contentEl.innerHTML = dayLabel + `
         <div class="table-wrapper">
         <table class="table">
             <thead><tr><th>Jam</th><th>Mata Pelajaran</th><th>Guru</th></tr></thead>
@@ -210,7 +216,7 @@ async function loadSchedule() {
     const cacheKey = `stu-sched-${student.student_id}-${date}`;
     const cached   = LC.get(cacheKey);
     if (cached) {
-        renderScheduleRows(cached, contentEl);
+        renderScheduleRows(cached, contentEl, date);
     } else {
         contentEl.innerHTML = '<p class="hint">Memuat jadwal…</p>';
     }
@@ -218,7 +224,7 @@ async function loadSchedule() {
     try {
         const rows = await getScheduleForDate(myClass.class_id, date);
         LC.set(cacheKey, rows);
-        renderScheduleRows(rows, contentEl);
+        renderScheduleRows(rows, contentEl, date);
     } catch (err) {
         if (!cached) {
             contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
