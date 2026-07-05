@@ -296,16 +296,18 @@ function renderObservations(rows, hintEl, listEl) {
         listEl.innerHTML     = '';
         return;
     }
+    const SENTIMENT_LABELS = { POSITIF: 'Positif', NEGATIF: 'Negatif', NETRAL: 'Netral' };
     hintEl.style.display = 'none';
     listEl.innerHTML = rows.map(r => `
         <div class="obs-card obs-${(r.sentiment ?? '').toLowerCase()}">
             <div class="obs-meta">
                 ${esc(DIMENSION_LABELS[r.dimension] ?? r.dimension)}
+                &middot; <span>${esc(SENTIMENT_LABELS[r.sentiment] ?? r.sentiment ?? '—')}</span>
                 &middot; oleh ${esc(r.author?.full_name ?? '—')}
                 &middot; ${fmt(r.observed_at ?? r.created_at)}
             </div>
             <p class="obs-content">${esc(r.content)}</p>
-        </div>`).join('');
+        </div>`).join('') + (rows.length >= 100 ? '<p class="hint" style="margin-top:12px">Menampilkan 100 observasi terbaru.</p>' : '');
 }
 
 async function loadObservations() {
