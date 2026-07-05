@@ -500,12 +500,18 @@ async function renderClassesPanel() {
     `;
 }
 
-function buildJabatan(u) {
+function buildJabatan(u, classMap = new Map(), progMap = new Map()) {
     const j = [];
     if (u.role_type === 'GURU') j.push('Guru');
-    if (u.wali_kelas_class_id) j.push('Wali Kelas');
+    if (u.wali_kelas_class_id) {
+        const kelas = classMap.get(u.wali_kelas_class_id);
+        j.push(kelas ? `Wali Kelas ${kelas}` : 'Wali Kelas');
+    }
     if (u.is_bk) j.push('BK');
-    if (u.kaprodi_program_id) j.push('Kaprodi');
+    if (u.kaprodi_program_id) {
+        const prog = progMap.get(u.kaprodi_program_id);
+        j.push(prog ? `Kaprodi ${prog}` : 'Kaprodi');
+    }
     if (u.is_kepsek) j.push('Kepsek');
     if (u.is_waka_kurikulum) j.push('Waka Kurikulum');
     if (u.is_waka_kesiswaan) j.push('Waka Kesiswaan');
@@ -519,11 +525,18 @@ function buildJabatan(u) {
 }
 
 async function renderStaffPanel() {
-    const users = await fetchAllRows('users',
-        q => q.select('user_id, full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, is_waka_humas, wali_kelas_class_id, kaprodi_program_id, is_active, must_change_password')
-              .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")')
-              .is('deleted_at', null)
-              .order('full_name'));
+    const [users, classRows, progRows] = await Promise.all([
+        fetchAllRows('users',
+            q => q.select('user_id, full_name, login_identifier, teacher_code, role_type, is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, is_waka_humas, wali_kelas_class_id, kaprodi_program_id, is_active, must_change_password')
+                  .not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")')
+                  .is('deleted_at', null)
+                  .order('full_name')),
+        fetchAllRows('classes',       q => q.select('class_id, name')),
+        fetchAllRows('study_programs', q => q.select('program_id, name')),
+    ]);
+    const classMap = new Map(classRows.map(c => [c.class_id, c.name]));
+    const progMap  = new Map(progRows.map(p => [p.program_id, p.name]));
+
     const aktif    = users.filter(u => u.is_active !== false);
     const nonaktif = users.filter(u => u.is_active === false);
 
@@ -542,7 +555,7 @@ async function renderStaffPanel() {
             <td>${esc(u.full_name)}${badge}</td>
             <td>${esc(u.login_identifier)}</td>
             <td>${esc(u.teacher_code ?? '—')}</td>
-            <td>${buildJabatan(u)}</td>
+            <td>${buildJabatan(u, classMap, progMap)}</td>
             <td style="white-space:nowrap">${btn}${resetBtn}</td>
         </tr>`;
     }
