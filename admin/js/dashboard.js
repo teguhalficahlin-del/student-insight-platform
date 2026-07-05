@@ -532,7 +532,7 @@ async function renderStaffPanel() {
                   .is('deleted_at', null)
                   .order('full_name')),
         fetchAllRows('classes',       q => q.select('class_id, name')),
-        fetchAllRows('study_programs', q => q.select('program_id, name')),
+        fetchAllRows('programs', q => q.select('program_id, name')),
     ]);
     const classMap = new Map(classRows.map(c => [c.class_id, c.name]));
     const progMap  = new Map(progRows.map(p => [p.program_id, p.name]));
