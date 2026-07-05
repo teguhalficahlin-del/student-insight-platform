@@ -184,17 +184,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 continue;
             }
 
-            // UPDATE student status hanya bila placement sudah mulai.
-            // Trigger fn_pkl_status_consistency blokir bila start_date > today.
-            const today = new Date().toISOString().slice(0, 10);
-            if (row.tanggal_mulai <= today) {
-                const { error: updErr } = await admin
-                    .from('students')
-                    .update({ student_status: 'PKL' })
-                    .eq('student_id', student.student_id);
-                if (updErr) {
-                    errors.push({ row: row.rowNumber, message: `Penempatan dibuat tapi gagal update status siswa: ${updErr.message}` });
-                }
+            const { error: updErr } = await admin
+                .from('students')
+                .update({ student_status: 'PKL' })
+                .eq('student_id', student.student_id);
+            if (updErr) {
+                errors.push({ row: row.rowNumber, message: `Penempatan dibuat tapi gagal update status siswa: ${updErr.message}` });
             }
 
             existingKeys.add(key); // prevent double-insert within same batch

@@ -490,11 +490,15 @@ export async function fetchAllDudiPartners() {
 export async function createPlacement({ studentId, dudiUserId, startDate, endDate }) {
     const { error } = await supabase.from('pkl_placements').insert({ student_id: studentId, dudi_user_id: dudiUserId, start_date: startDate, end_date: endDate, is_active: true });
     if (error) throw error;
-    const today = new Date().toISOString().slice(0, 10);
-    if (startDate <= today) {
-        const { error: e2 } = await supabase.from('students').update({ student_status: 'PKL' }).eq('student_id', studentId);
-        if (e2) throw e2;
-    }
+    const { error: e2 } = await supabase.from('students').update({ student_status: 'PKL' }).eq('student_id', studentId);
+    if (e2) throw e2;
+}
+
+export async function finishPlacement(studentId, placementId) {
+    const { error: e1 } = await supabase.from('pkl_placements').update({ is_active: false }).eq('placement_id', placementId);
+    if (e1) throw e1;
+    const { error: e2 } = await supabase.from('students').update({ student_status: 'AKTIF' }).eq('student_id', studentId);
+    if (e2) throw e2;
 }
 
 export async function bulkImportPkl(csvText) {
