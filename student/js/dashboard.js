@@ -172,7 +172,6 @@ async function initTab(key) {
 async function initJadwalTab() {
     const dateEl = document.getElementById('sched-date');
     if (!dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
-    document.getElementById('sched-refresh').onclick = () => loadSchedule();
     dateEl.addEventListener('change', loadSchedule);
     await loadSchedule();
 }
