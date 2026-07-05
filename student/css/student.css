@@ -146,6 +146,41 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .date-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 .date-row label { margin: 0; }
 
+/* ── Notif dropdown ──────────────────────────────────────── */
+.notif-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: 300px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg, 12px);
+    box-shadow: var(--shadow-md);
+    z-index: 100;
+    max-height: 360px;
+    overflow-y: auto;
+}
+.notif-item { padding: 12px 14px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
+.notif-item:last-child { border-bottom: none; }
+.notif-item-title { font-weight: 600; margin-bottom: 2px; color: var(--color-text); }
+.notif-item-body  { color: var(--color-text-muted); line-height: 1.4; }
+.notif-empty { padding: 16px 14px; text-align: center; font-size: 13px; color: var(--color-text-muted); }
+.notif-badge {
+    position: absolute;
+    top: 2px; right: 2px;
+    background: var(--color-danger);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 999px;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    padding: 0 4px;
+    pointer-events: none;
+}
+
 /* ── Obs card ────────────────────────────────────────────── */
 .obs-card { background: var(--color-bg); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; border-left: 3px solid var(--color-border); }
 .obs-card.obs-positif { border-left-color: var(--color-success); }

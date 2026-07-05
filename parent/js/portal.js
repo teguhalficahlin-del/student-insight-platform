@@ -7,7 +7,7 @@
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { checkMustChangePassword } from '../../shared/change-password.js';
-import { initLoginGuard } from '../../shared/login-guard.js';
+import { initLoginGuard, registerLoginDevice } from '../../shared/login-guard.js';
 import {
     supabase,
     getCurrentUserRow,
@@ -123,6 +123,7 @@ async function init() {
     applyBrandingById(currentUser.school_id, supabase);
     await checkMustChangePassword(supabase, currentUser);
     await initLoginGuard(supabase, currentUser);
+    registerLoginDevice(supabase); // fire-and-forget
     portalUserName.textContent = currentUser.full_name;
 
     try {

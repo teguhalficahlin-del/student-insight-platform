@@ -5,13 +5,14 @@
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { checkMustChangePassword } from '../../shared/change-password.js';
-import { initLoginGuard } from '../../shared/login-guard.js';
+import { initLoginGuard, registerLoginDevice } from '../../shared/login-guard.js';
 import {
     supabase, logout, getCurrentUserRow, STUDENT_ROLES, ACTIVE_STUDENT_STATUSES,
     getMyStudent, getSchoolConfig, getMyClass,
     getScheduleForDate, getMyAttendance, getMyObservations,
     getMyPklPlacement, getMyPklAttendance,
     getMyCases,
+    getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
 } from './api.js';
 
 // ─── State ───────────────────────────────────────────────────
@@ -75,6 +76,7 @@ async function init() {
     applyBrandingById(currentUser.school_id, supabase);
     await checkMustChangePassword(supabase, currentUser);
     await initLoginGuard(supabase, currentUser);
+    registerLoginDevice(supabase); // fire-and-forget
     config  = await getSchoolConfig();
     student = await getMyStudent(currentUser.user_id);
 
@@ -110,6 +112,7 @@ async function init() {
     const tabs = buildTabs();
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display     = 'block';
+    initNotifBell();
 
     // Default ke tab pertama yang tersedia (Jadwal disembunyikan saat PKL).
     const firstTab = tabs[0]?.key ?? 'kehadiran';
@@ -502,6 +505,81 @@ async function loadPkl() {
     } catch (err) {
         infoEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
     }
+}
+
+// ─── Notif bell ──────────────────────────────────────────────
+
+function esc(s) { const el = document.createElement('span'); el.textContent = s ?? ''; return el.innerHTML; }
+
+function fmt(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+let _notifPollTimer = null;
+
+function initNotifBell() {
+    const bellBtn  = document.getElementById('notif-bell-btn');
+    const dropdown = document.getElementById('notif-dropdown');
+    if (!bellBtn || !dropdown) return;
+
+    async function refresh() {
+        try {
+            const count = await getUnreadNotifCount();
+            let badge = bellBtn.querySelector('.notif-badge');
+            if (count > 0) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'notif-badge';
+                    bellBtn.appendChild(badge);
+                }
+                badge.textContent = count > 99 ? '99+' : count;
+            } else {
+                badge?.remove();
+            }
+        } catch {}
+    }
+
+    async function openDropdown() {
+        dropdown.style.display = 'block';
+        dropdown.innerHTML = '<div class="notif-empty">Memuat…</div>';
+        try {
+            const items = await getRecentNotifications(15);
+            if (!items.length) {
+                dropdown.innerHTML = '<div class="notif-empty">Tidak ada notifikasi baru.</div>';
+                return;
+            }
+            dropdown.innerHTML = items.map(n => `
+                <div class="notif-item" data-id="${n.notification_id}">
+                    <div class="notif-item-title">${esc(n.title)}</div>
+                    <div class="notif-item-body">${esc(n.body)}</div>
+                    <div style="font-size:11px;color:var(--color-text-muted);margin-top:4px">${fmt(n.created_at)}</div>
+                </div>`).join('');
+            const ids = items.map(n => n.notification_id);
+            await markNotificationsRead(ids);
+            bellBtn.querySelector('.notif-badge')?.remove();
+        } catch (err) {
+            dropdown.innerHTML = `<div class="notif-empty">Gagal memuat notifikasi.</div>`;
+        }
+    }
+
+    bellBtn.addEventListener('click', async e => {
+        e.stopPropagation();
+        if (dropdown.style.display === 'none') {
+            await openDropdown();
+        } else {
+            dropdown.style.display = 'none';
+        }
+    });
+
+    document.addEventListener('click', e => {
+        if (!e.target.closest('#notif-bell-btn') && !e.target.closest('#notif-dropdown')) {
+            dropdown.style.display = 'none';
+        }
+    });
+
+    refresh();
+    _notifPollTimer = setInterval(refresh, 60_000);
 }
 
 // ─── Logout ──────────────────────────────────────────────────

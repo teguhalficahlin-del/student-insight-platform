@@ -54,6 +54,50 @@ function showConcurrentBanner(onSignOutOthers) {
     };
 }
 
+function parseDeviceLabel(ua) {
+    let browser = 'Browser';
+    if (/Chrome\//.test(ua) && !/Chromium|Edg\//.test(ua)) browser = 'Chrome';
+    else if (/Firefox\//.test(ua))  browser = 'Firefox';
+    else if (/Edg\//.test(ua))      browser = 'Edge';
+    else if (/Safari\//.test(ua) && !/Chrome/.test(ua)) browser = 'Safari';
+    let os = 'perangkat';
+    if (/Windows/.test(ua))               os = 'Windows';
+    else if (/Android/.test(ua))          os = 'Android';
+    else if (/iPhone|iPad|iOS/.test(ua))  os = 'iOS';
+    else if (/Mac OS X|Macintosh/.test(ua)) os = 'Mac';
+    else if (/Linux/.test(ua))            os = 'Linux';
+    return `${browser} di ${os}`;
+}
+
+/**
+ * Daftarkan perangkat login & kirim notif LOGIN_NEW_DEVICE jika baru.
+ * Fire-and-forget — tidak memblokir render.
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ */
+export async function registerLoginDevice(supabase) {
+    try {
+        let devId = localStorage.getItem('sip_device_id');
+        if (!devId) {
+            devId = crypto.randomUUID();
+            localStorage.setItem('sip_device_id', devId);
+        }
+        const ua  = navigator.userAgent || '';
+        const buf = await crypto.subtle.digest(
+            'SHA-256', new TextEncoder().encode(devId + '|' + ua)
+        );
+        const hash = Array.from(new Uint8Array(buf))
+            .map(b => b.toString(16).padStart(2, '0')).join('');
+        const { error } = await supabase.rpc('fn_register_login_device', {
+            p_device_hash: hash,
+            p_user_agent:  ua.slice(0, 400),
+            p_label:       parseDeviceLabel(ua),
+        });
+        if (error) console.warn('[login-device]', error.message);
+    } catch (e) {
+        console.warn('[login-device]', e);
+    }
+}
+
 /**
  * Inisialisasi login guard.
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
