@@ -336,7 +336,6 @@ function renderScheduleRows(rows, contentEl) {
                             data-classname="${esc(r.class?.name ?? '')}">
                             Input Kehadiran
                         </button>
-                        <div class="att-panel" id="att-${r.schedule_id}" style="display:none"></div>
                     </td>
                 </tr>
             `).join('')}
@@ -344,8 +343,28 @@ function renderScheduleRows(rows, contentEl) {
         </table>
         </div>`;
     contentEl.querySelectorAll('.att-open-btn').forEach(btn => {
-        btn.addEventListener('click', () => toggleAttPanel(btn));
+        btn.addEventListener('click', () => openAttModal(btn));
     });
+
+    // Tombol tutup modal
+    document.getElementById('att-modal-close').onclick = closeAttModal;
+    document.getElementById('att-modal').addEventListener('click', e => {
+        if (e.target === e.currentTarget) closeAttModal();
+    });
+}
+
+function openAttModal(btn) {
+    const modal = document.getElementById('att-modal');
+    document.getElementById('att-modal-title').textContent = `Kehadiran — ${btn.dataset.classname}`;
+    document.getElementById('att-modal-body').innerHTML = '<p class="hint">Memuat daftar siswa…</p>';
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    loadAttModalContent(btn.dataset.schedule, btn.dataset.class, btn.dataset.classname);
+}
+
+function closeAttModal() {
+    document.getElementById('att-modal').style.display = 'none';
+    document.body.style.overflow = '';
 }
 
 async function loadSchedule() {
@@ -373,22 +392,8 @@ async function loadSchedule() {
     }
 }
 
-async function toggleAttPanel(btn) {
-    const scheduleId = btn.dataset.schedule;
-    const classId    = btn.dataset.class;
-    const className  = btn.dataset.classname;
-    const panel      = document.getElementById(`att-${scheduleId}`);
-
-    if (panel.style.display !== 'none') {
-        panel.style.display = 'none';
-        btn.textContent = 'Input Kehadiran';
-        return;
-    }
-
-    btn.disabled = true;
-    btn.textContent = 'Memuat…';
-    panel.style.display = 'block';
-    panel.innerHTML = '<p class="hint">Memuat daftar siswa…</p>';
+async function loadAttModalContent(scheduleId, classId, className) {
+    const panel = document.getElementById('att-modal-body');
 
     try {
         const [students, existing] = await Promise.all([
@@ -398,7 +403,6 @@ async function toggleAttPanel(btn) {
 
         if (students.length === 0) {
             panel.innerHTML = '<p class="hint">Tidak ada siswa terdaftar di kelas ini.</p>';
-            btn.disabled = false; btn.textContent = 'Input Kehadiran';
             return;
         }
 
@@ -451,7 +455,6 @@ async function toggleAttPanel(btn) {
         }).join('');
 
         panel.innerHTML = `
-            <h4>Kehadiran — ${esc(className)}</h4>
             ${accordionHtml}
             <div class="att-save-btn">
                 <button class="btn btn-success btn-sm att-save" data-schedule="${scheduleId}" data-count="${students.length}">
@@ -461,11 +464,8 @@ async function toggleAttPanel(btn) {
             </div>`;
 
         panel.querySelector('.att-save').addEventListener('click', () => saveAttendance(scheduleId, students));
-        btn.disabled = false;
-        btn.textContent = 'Tutup';
     } catch (err) {
         panel.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
-        btn.disabled = false; btn.textContent = 'Input Kehadiran';
     }
 }
 
@@ -499,15 +499,21 @@ async function saveAttendance(scheduleId, students) {
         if (result.status === 'synced') {
             statusEl.textContent = `✓ Tersimpan — ${records.length} siswa`;
             statusEl.className   = 'status-msg status-ok';
+            statusEl.style.display = 'inline-block';
+            await updateSyncBanner();
+            setTimeout(() => closeAttModal(), 1200);
         } else if (result.status === 'queued') {
             statusEl.textContent = `⏳ Tersimpan di perangkat — menunggu sinkron (${records.length} siswa)`;
             statusEl.className   = 'status-msg status-warn';
+            statusEl.style.display = 'inline-block';
+            await updateSyncBanner();
+            setTimeout(() => closeAttModal(), 1800);
         } else {
             statusEl.textContent = `✗ ${result.error}`;
             statusEl.className   = 'status-msg status-err';
+            statusEl.style.display = 'inline-block';
+            await updateSyncBanner();
         }
-        statusEl.style.display = 'inline-block';
-        await updateSyncBanner();
     } catch (err) {
         statusEl.textContent = `✗ ${fe(err, 's')}`;
         statusEl.className   = 'status-msg status-err';
