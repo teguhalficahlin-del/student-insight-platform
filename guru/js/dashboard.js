@@ -234,13 +234,13 @@ const TAB_SHORT = {
     guru: 'Beranda', wali_kelas: 'Wali', bk: 'BK', kaprodi: 'Prodi',
     waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', waka_humas: 'Humas',
     kepsek: 'Monitor', ks_admin: 'Admin',
-    kasus: 'Pembinaan', jurnal: 'Jurnal',
+    kasus: 'Pembinaan', jurnal: 'Jurnal', observasi: 'Observasi',
 };
 const TAB_ICON = {
     guru: 'ti-home', wali_kelas: 'ti-users', bk: 'ti-heart-handshake', kaprodi: 'ti-building',
     waka_kesiswaan: 'ti-school', waka_kurikulum: 'ti-book', waka_humas: 'ti-briefcase',
     kepsek: 'ti-chart-line', ks_admin: 'ti-shield-check',
-    kasus: 'ti-alert-triangle', jurnal: 'ti-notebook',
+    kasus: 'ti-alert-triangle', jurnal: 'ti-notebook', observasi: 'ti-eye',
 };
 
 function buildTabs() {
@@ -251,6 +251,7 @@ function buildTabs() {
     jabatan.forEach(j => tabs.push({ key: j, label: jabatanLabel(j) }));
     tabs.push({ key: 'kasus', label: 'Pembinaan Siswa' });
     if (jabatan.includes('kepsek')) tabs.push({ key: 'ks_admin', label: 'Kelola Admin' });
+    if (isTeacher) tabs.push({ key: 'observasi', label: 'Observasi Siswa' });
     if (isTeacher) tabs.push({ key: 'jurnal', label: 'Jurnal Mengajar' });
 
     nav.innerHTML = tabs.map(t =>
