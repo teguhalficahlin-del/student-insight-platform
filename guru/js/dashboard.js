@@ -364,7 +364,9 @@ async function loadGuruRecap() {
             content.innerHTML = '<p class="hint">Belum ada siswa aktif di kelas ini untuk tahun ajaran ini.</p>';
             return;
         }
-        const rows = await getAttendanceSummaryByStudents(students, dateStart || null, dateEnd || null, currentUser.user_id);
+        // Kaprodi melihat semua sesi di kelas program → tidak filter per guru
+        const recapTeacherId = jabatan.includes('kaprodi') ? null : currentUser.user_id;
+        const rows = await getAttendanceSummaryByStudents(students, dateStart || null, dateEnd || null, recapTeacherId);
         const tbody = rows.map(s => {
             const pct = s.total > 0 ? Math.round((s.HADIR / s.total) * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
