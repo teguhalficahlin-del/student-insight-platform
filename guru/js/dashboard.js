@@ -796,19 +796,19 @@ async function loadWaliSummary() {
             return;
         }
         tbody.innerHTML = rows.map(r => {
-            const pct = r.total > 0 ? Math.round(r.HADIR / r.total * 100) : 0;
+            const pct   = r.total > 0 ? Math.round(r.HADIR / r.total * 100) : 0;
+            const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
             return `<tr>
-                <td>${esc(r.full_name)}</td>
-                <td>${esc(r.nis)}</td>
-                <td>${r.HADIR}</td>
-                <td>${r.IZIN}</td>
-                <td>${r.SAKIT}</td>
-                <td>${r.TIDAK_HADIR}</td>
-                <td>${r.total > 0 ? pct + '%' : '—'}</td>
+                <td><span style="font-weight:500">${esc(r.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted,#9ca3af)">${esc(r.nis)}</span></td>
+                <td style="text-align:center">${r.HADIR}</td>
+                <td style="text-align:center">${r.IZIN}</td>
+                <td style="text-align:center">${r.SAKIT}</td>
+                <td style="text-align:center">${r.TIDAK_HADIR}</td>
+                <td style="text-align:center;font-weight:600;color:${color}">${r.total > 0 ? pct + '%' : '—'}</td>
             </tr>`;
         }).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
 
