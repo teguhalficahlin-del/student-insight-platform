@@ -569,6 +569,17 @@ export async function getAttendanceRecapPerClass(dateStart, dateEnd) {
  * Rekap akumulasi kehadiran kelas (tabel attendance) untuk daftar student_id tertentu.
  * Dipakai Kaprodi untuk siswa AKTIF di programnya.
  */
+export async function getClassStudents(classId) {
+    const { data, error } = await supabase
+        .from('students')
+        .select('student_id, nis, full_name')
+        .eq('class_id', classId)
+        .eq('is_active', true)
+        .order('full_name');
+    if (error) throw error;
+    return data ?? [];
+}
+
 export async function getAttendanceSummaryByStudents(students, dateStart, dateEnd) {
     if (!students?.length) return [];
     const ids = students.map(s => s.student_id);

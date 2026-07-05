@@ -16,7 +16,7 @@ import {
     getWaliKelasInfo, getWaliAttendanceSummary,
     getProgram, fetchPklStudents, fetchNonPklStudents,
     fetchDudiPartners, fetchPklAttendance, fetchDudiObservations,
-    getAttendanceSummaryByStudents,
+    getClassStudents, getAttendanceSummaryByStudents,
     fetchAllPklStudents, fetchAllDudiPartners,
     createPlacement, bulkImportPkl,
     getSchoolStats, getKepsekMonitoring, getAbsentTeachersToday,
@@ -349,11 +349,12 @@ async function loadGuruRecap() {
 
     content.innerHTML = '<p class="hint">Memuat rekap…</p>';
     try {
-        const rows = await getWaliAttendanceSummary(classId, config.current_academic_year, dateStart || null, dateEnd || null);
-        if (rows.length === 0) {
-            content.innerHTML = '<p class="hint">Tidak ada data kehadiran pada rentang ini.</p>';
+        const students = await getClassStudents(classId);
+        if (students.length === 0) {
+            content.innerHTML = '<p class="hint">Belum ada siswa di kelas ini.</p>';
             return;
         }
+        const rows = await getAttendanceSummaryByStudents(students, dateStart || null, dateEnd || null);
         const tbody = rows.map(s => {
             const pct = s.total > 0 ? Math.round((s.HADIR / s.total) * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
@@ -364,7 +365,7 @@ async function loadGuruRecap() {
                 <td style="text-align:center">${s.SAKIT}</td>
                 <td style="text-align:center">${s.TIDAK_HADIR}</td>
                 <td style="text-align:center">${s.total}</td>
-                <td style="text-align:center;font-weight:600;color:${color}">${pct}%</td>
+                <td style="text-align:center;font-weight:600;color:${color}">${s.total > 0 ? pct + '%' : '—'}</td>
             </tr>`;
         }).join('');
         content.innerHTML = `
