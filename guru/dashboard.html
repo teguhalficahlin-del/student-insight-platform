@@ -57,6 +57,27 @@
                 </div>
             </div>
 
+            <!-- Rekap Kehadiran Kelas Diampu -->
+            <div class="section-card">
+                <h3>Rekap Kehadiran Siswa</h3>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+                    <div class="field" style="margin:0;min-width:160px">
+                        <label for="guru-recap-class">Kelas</label>
+                        <select id="guru-recap-class" class="input"><option value="">— Pilih Kelas —</option></select>
+                    </div>
+                    <div class="field" style="margin:0">
+                        <label for="guru-recap-start">Dari</label>
+                        <input type="date" id="guru-recap-start" class="input" style="width:auto">
+                    </div>
+                    <div class="field" style="margin:0">
+                        <label for="guru-recap-end">Sampai</label>
+                        <input type="date" id="guru-recap-end" class="input" style="width:auto">
+                    </div>
+                    <button class="btn btn-secondary btn-sm" id="guru-recap-btn">Tampilkan</button>
+                </div>
+                <div id="guru-recap-content"><p class="hint">Pilih kelas dan rentang tanggal lalu klik Tampilkan.</p></div>
+            </div>
+
         </div>
     </div>
 

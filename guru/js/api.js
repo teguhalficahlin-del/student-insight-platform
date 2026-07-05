@@ -157,6 +157,31 @@ export async function getMyScheduleForDate(userId, date) {
     return data ?? [];
 }
 
+/**
+ * Kelas unik yang diampu guru ini pada tahun ajaran + semester tertentu.
+ * Dipakai untuk dropdown rekap absensi guru.
+ */
+export async function getMyClasses(userId, academicYear, semester) {
+    const { data, error } = await supabase
+        .from('teaching_assignments')
+        .select('class:classes ( class_id, name )')
+        .eq('user_id', userId)
+        .eq('academic_year', academicYear)
+        .eq('semester', semester)
+        .eq('is_active', true);
+    if (error) throw error;
+    const seen = new Set();
+    const classes = [];
+    for (const ta of data ?? []) {
+        const c = ta.class;
+        if (c && !seen.has(c.class_id)) {
+            seen.add(c.class_id);
+            classes.push(c);
+        }
+    }
+    return classes.sort((a, b) => a.name.localeCompare(b.name, 'id'));
+}
+
 // ─── SISWA & KEHADIRAN ───────────────────────────────────────
 
 /**

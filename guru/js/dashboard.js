@@ -10,7 +10,7 @@ import {
     supabase, logout, getCurrentUserRow, GURU_ROLES,
     listSchoolAdmins, addSchoolAdmin, removeSchoolAdmin,
     getJabatan, jabatanLabel, getSchoolConfig,
-    getMyScheduleForDate, getEnrolledStudents,
+    getMyScheduleForDate, getEnrolledStudents, getMyClasses,
     getAttendanceForSession,
     getMyStudents, searchStudents, insertObservation,
     getWaliKelasInfo, getWaliAttendanceSummary,
@@ -309,10 +309,82 @@ async function initGuruTab() {
         _guruTabInit = true;
         document.getElementById('sched-refresh').onclick = () => loadSchedule();
         dateEl.addEventListener('change', loadSchedule);
+        document.getElementById('guru-recap-btn').onclick = loadGuruRecap;
+        // Default rentang: awal bulan ini s/d hari ini
+        const today = new Date().toISOString().slice(0, 10);
+        const firstOfMonth = today.slice(0, 8) + '01';
+        document.getElementById('guru-recap-start').value = firstOfMonth;
+        document.getElementById('guru-recap-end').value   = today;
+        await initGuruRekapDropdown();
     }
 
     await loadSchedule();
     await initObsForm();
+}
+
+async function initGuruRekapDropdown() {
+    const sel = document.getElementById('guru-recap-class');
+    try {
+        const classes = await getMyClasses(currentUser.user_id, config.current_academic_year, config.current_semester);
+        if (classes.length === 0) {
+            sel.innerHTML = '<option value="">Tidak ada kelas</option>';
+            return;
+        }
+        sel.innerHTML = '<option value="">— Pilih Kelas —</option>' +
+            classes.map(c => `<option value="${c.class_id}">${esc(c.name)}</option>`).join('');
+    } catch {
+        sel.innerHTML = '<option value="">Gagal memuat kelas</option>';
+    }
+}
+
+async function loadGuruRecap() {
+    const classId   = document.getElementById('guru-recap-class').value;
+    const dateStart = document.getElementById('guru-recap-start').value;
+    const dateEnd   = document.getElementById('guru-recap-end').value;
+    const content   = document.getElementById('guru-recap-content');
+    const className = document.getElementById('guru-recap-class').selectedOptions[0]?.text ?? '';
+
+    if (!classId) { content.innerHTML = '<p class="hint">Pilih kelas terlebih dahulu.</p>'; return; }
+
+    content.innerHTML = '<p class="hint">Memuat rekap…</p>';
+    try {
+        const rows = await getWaliAttendanceSummary(classId, config.current_academic_year, dateStart || null, dateEnd || null);
+        if (rows.length === 0) {
+            content.innerHTML = '<p class="hint">Tidak ada data kehadiran pada rentang ini.</p>';
+            return;
+        }
+        const tbody = rows.map(s => {
+            const pct = s.total > 0 ? Math.round((s.HADIR / s.total) * 100) : 0;
+            const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+            return `<tr>
+                <td>${esc(s.full_name)}</td>
+                <td style="text-align:center">${esc(s.nis)}</td>
+                <td style="text-align:center">${s.HADIR}</td>
+                <td style="text-align:center">${s.IZIN}</td>
+                <td style="text-align:center">${s.SAKIT}</td>
+                <td style="text-align:center">${s.TIDAK_HADIR}</td>
+                <td style="text-align:center">${s.total}</td>
+                <td style="text-align:center;font-weight:600;color:${color}">${pct}%</td>
+            </tr>`;
+        }).join('');
+        content.innerHTML = `
+            <p style="font-size:0.82rem;color:var(--color-text-muted,#9ca3af);margin-bottom:8px">
+                ${esc(className)} · ${rows.length} siswa · akumulasi ${dateStart || '—'} s/d ${dateEnd || '—'}
+            </p>
+            <div class="table-wrapper">
+            <table class="table">
+                <thead><tr>
+                    <th>Nama</th><th style="text-align:center">NIS</th>
+                    <th style="text-align:center">Hadir</th><th style="text-align:center">Izin</th>
+                    <th style="text-align:center">Sakit</th><th style="text-align:center">Alpa</th>
+                    <th style="text-align:center">Total</th><th style="text-align:center">% Hadir</th>
+                </tr></thead>
+                <tbody>${tbody}</tbody>
+            </table>
+            </div>`;
+    } catch (err) {
+        content.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat rekap. ${esc(fe(err))}</p>`;
+    }
 }
 
 function renderScheduleRows(rows, contentEl) {
