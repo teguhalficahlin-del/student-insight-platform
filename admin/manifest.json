@@ -1,6 +1,6 @@
 {
-  "name": "Admin Console — SMK Harapan Rokan",
-  "short_name": "Admin SMK HR",
+  "name": "Admin Console — Student Insight Platform",
+  "short_name": "Admin SIP",
   "description": "Konsol admin untuk mengelola data sekolah, jadwal, dan pengguna.",
   "start_url": "./dashboard.html",
   "scope": "./",

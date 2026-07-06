@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Offline — SMK Harapan Rokan</title>
+    <title>Offline — Student Insight Platform</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -61,8 +61,12 @@
         </svg>
     </div>
     <h1>Tidak Ada Koneksi</h1>
-    <p>Perangkat Anda sedang offline. Hubungkan ke internet untuk menggunakan Platform SMK Harapan Rokan.</p>
+    <p>Perangkat Anda sedang offline. Hubungkan ke internet untuk menggunakan <span data-brand="school-name">platform ini</span>.</p>
     <button onclick="window.location.reload()">Coba Lagi</button>
 </div>
+<script type="module">
+    import { applyBranding } from './shared/branding.js';
+    applyBranding();
+</script>
 </body>
 </html>

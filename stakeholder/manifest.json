@@ -1,6 +1,6 @@
 {
-  "name": "Portal Stakeholder — SMK Harapan Rokan",
-  "short_name": "Stakeholder SMK HR",
+  "name": "Portal Stakeholder — Student Insight Platform",
+  "short_name": "Stakeholder SIP",
   "description": "Portal stakeholder untuk melihat rekap dan statistik sekolah.",
   "start_url": "./dashboard.html",
   "scope": "./",
