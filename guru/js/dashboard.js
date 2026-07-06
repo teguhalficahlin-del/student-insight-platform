@@ -987,7 +987,8 @@ async function loadWaliSummary() {
             return;
         }
         tbody.innerHTML = rows.map(r => {
-            const pct   = r.total > 0 ? Math.round(r.HADIR / r.total * 100) : 0;
+            const pctDenom = r.HADIR + r.IZIN + r.TIDAK_HADIR;
+            const pct   = pctDenom > 0 ? Math.round(r.HADIR / pctDenom * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
             return `<tr>
                 <td><span style="font-weight:500">${esc(r.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted,#9ca3af)">${esc(r.nis)}</span></td>
