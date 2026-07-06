@@ -178,7 +178,7 @@ export function validateAudienceForRole(
     }
     return null;
 }
-export const VISIBILITY_LEVEL   = ['PRIVATE','INTERNAL_SCHOOL','STUDENT_VISIBLE'] as const;
+export const VISIBILITY_LEVEL   = ['PRIVATE','RESTRICTED','PUBLIC','INTERNAL_SCHOOL','STUDENT_VISIBLE'] as const;
 export const OBSERVATION_SENTIMENT  = ['POSITIF','NEGATIF'] as const;
 export const OBSERVATION_DIMENSION  = ['AKADEMIK','KEHADIRAN','PERILAKU','SOSIAL','AFEKTIF','BAKAT_MINAT','FISIK','LAINNYA'] as const;
 
