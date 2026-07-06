@@ -275,17 +275,19 @@ export async function getMyStudents(userId, academicYear, semester) {
  * sehingga getMyStudents (berbasis teaching_assignments) kosong.
  * Cakupan hasil dibatasi RLS sesuai peran pemanggil.
  */
-export async function searchStudents(query) {
+export async function searchStudents(query, schoolId) {
     const q = (query ?? '').trim();
     if (q.length < 2) return [];
     const term = `%${q}%`;
-    const { data, error } = await supabase
+    let req = supabase
         .from('students')
         .select('student_id, nis, full_name, student_status')
         .or(`full_name.ilike.${term},nis.ilike.${term}`)
         .in('student_status', ['AKTIF', 'PKL'])
         .order('full_name')
         .limit(15);
+    if (schoolId) req = req.eq('school_id', schoolId);
+    const { data, error } = await req;
     if (error) throw error;
     return (data ?? []).map(s => ({ ...s, class_name: '' }));
 }

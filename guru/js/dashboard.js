@@ -2118,7 +2118,7 @@ async function initKasusTab() {
         if (isBroadObserver) {
             const seq = ++kasusSearchSeq;
             try {
-                const remote = await searchStudents(raw);
+                const remote = await searchStudents(raw, currentUser.school_id);
                 if (seq !== kasusSearchSeq) return;
                 const seen = new Set(local.map(s => s.student_id));
                 hits = [...local, ...remote.filter(s => !seen.has(s.student_id))];
