@@ -115,9 +115,10 @@ const STAFF_ROLES = ROLE_TYPE.filter(
 );
 
 function generateTempPassword(): string {
-    // Password sementara seragam — pengguna WAJIB ganti saat login pertama
-    // (must_change_password=true). Admin cukup bagikan NIP/NIS/NIK saja.
-    return '12345678';
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    const arr = new Uint8Array(12);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, b => chars[b % chars.length]).join('');
 }
 
 // ─────────────────────────────────────────────────────────────

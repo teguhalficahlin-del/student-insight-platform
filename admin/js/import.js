@@ -147,6 +147,9 @@ function downloadCsvTemplate(filename, columns, exampleRows) {
 
 function renderResult(resultArea, result) {
     const { total = 0, success = 0, failed = 0, errors = [], conflicts = [] } = result;
+    // Akun baru: bulk-import-users → result.imported, bulk-import-dudi/parents → result.created,
+    // provision-student-accounts → result.created_accounts
+    const newAccounts = result.imported ?? result.created ?? result.created_accounts ?? [];
 
     let html = `
         <div class="import-summary">
@@ -156,6 +159,21 @@ function renderResult(resultArea, result) {
             ${conflicts.length ? `<div class="stat"><div class="num" style="color:var(--color-warning)">${conflicts.length}</div><div class="label">Konflik</div></div>` : ''}
         </div>
     `;
+
+    if (newAccounts.length > 0) {
+        const idCol = newAccounts[0].login_identifier !== undefined ? 'login_identifier'
+            : newAccounts[0].nis !== undefined ? 'nis' : 'login_identifier';
+        html += `
+            <div class="alert" style="background:var(--color-warning-bg,#fefce8);border:1px solid var(--color-warning,#ca8a04);border-radius:6px;padding:12px;margin-top:12px">
+                <strong>⚠ Catat password sementara berikut — hanya ditampilkan sekali!</strong>
+                <p class="hint" style="margin:4px 0 8px">Bagikan ke masing-masing pengguna. Mereka wajib ganti saat login pertama.</p>
+                <table class="table" style="font-size:13px">
+                    <thead><tr><th>Nama</th><th>Kode Login</th><th>Password Sementara</th></tr></thead>
+                    <tbody>${newAccounts.map(a => `<tr><td>${a.full_name ?? ''}</td><td><code>${a[idCol] ?? ''}</code></td><td><code>${a.temp_password ?? ''}</code></td></tr>`).join('')}</tbody>
+                </table>
+            </div>
+        `;
+    }
 
     if (errors.length > 0) {
         html += `

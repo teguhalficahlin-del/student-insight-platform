@@ -224,13 +224,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
         // ── 9b. Create accounts for new organizations ────────────
 
+        const createdAccounts: { login_identifier: string; full_name: string; temp_password: string }[] = [];
+
         for (const row of provisionRows) {
             if (!row.isNew) continue;
 
             // Sertakan school_id prefix agar email unik antar-sekolah (Auth bersifat global)
             const schoolPrefix  = user.school_id.replace(/-/g, '').substring(0, 8);
             const internalEmail = `${row.slug}@${schoolPrefix}.dudi`;
-            const password      = '12345678';
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+            const arr = new Uint8Array(12);
+            crypto.getRandomValues(arr);
+            const password = Array.from(arr, b => chars[b % chars.length]).join('');
 
             const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                 email:         internalEmail,
@@ -270,6 +275,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
             }
 
             row.userId = insertedUser.user_id;
+            createdAccounts.push({
+                login_identifier: row.slug,
+                full_name:        row.nama_penanggung_jawab,
+                temp_password:    password,
+            });
         }
 
         // ── 10. Response ─────────────────────────────────────────
@@ -285,6 +295,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             updated,
             failed:  rows.length - success - updated,
             errors,
+            created: createdAccounts, // temp_password per akun baru — tampilkan sekali ke admin
         });
 
     } catch (err) {

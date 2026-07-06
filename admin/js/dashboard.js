@@ -14,6 +14,13 @@ function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+function generateTempPassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    const arr = new Uint8Array(12);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, b => chars[b % chars.length]).join('');
+}
+
 const panelContent = document.getElementById('panel-content');
 let schoolSlug = null; // diisi saat init, dipakai panel renderers
 
@@ -689,10 +696,12 @@ async function renderStaffPanel() {
         if (resetBtn) {
             const userId = resetBtn.dataset.userId;
             const nama   = resetBtn.dataset.nama;
-            if (!confirm(`Reset password ${nama}?\n\nPassword akan diset ke "12345678". Pengguna wajib ganti saat login berikutnya.`)) return;
+            if (!confirm(`Reset password ${nama}?\n\nPassword akan direset ke password sementara acak. Lanjutkan?`)) return;
             resetBtn.disabled = true; resetBtn.textContent = '…';
             try {
-                await adminResetUserPassword(userId, '12345678');
+                const newPw = generateTempPassword();
+                await adminResetUserPassword(userId, newPw);
+                alert(`Password ${nama} berhasil direset.\n\nPassword sementara: ${newPw}\n\nCatat dan bagikan ke pengguna. Password ini tidak akan ditampilkan lagi.`);
                 resetBtn.classList.remove('staff-reset-pw-btn');
                 resetBtn.textContent = 'Menunggu ganti PW';
                 resetBtn.title = 'Menunggu pengguna ganti password';
@@ -1849,10 +1858,12 @@ async function renderExportPanel() {
         if (!btn) return;
         const userId = btn.dataset.userId;
         const nama   = btn.dataset.nama;
-        if (!confirm(`Reset password ${nama}?\n\nPassword akan diset ke "12345678". Pengguna wajib ganti saat login berikutnya.`)) return;
+        if (!confirm(`Reset password ${nama}?\n\nPassword akan direset ke password sementara acak. Lanjutkan?`)) return;
         btn.disabled = true; btn.textContent = '…';
         try {
-            await adminResetUserPassword(userId, '12345678');
+            const newPw = generateTempPassword();
+            await adminResetUserPassword(userId, newPw);
+            alert(`Password ${nama} berhasil direset.\n\nPassword sementara: ${newPw}\n\nCatat dan bagikan ke pengguna. Password ini tidak akan ditampilkan lagi.`);
             btn.classList.remove('user-reset-pw-btn');
             btn.textContent = 'Menunggu ganti PW';
             btn.title = 'Menunggu pengguna ganti password';

@@ -210,12 +210,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
             }
         }
 
+        const createdAccounts: { login_identifier: string; full_name: string; temp_password: string }[] = [];
+
         for (const [nik, namaOrtu] of newNikToName) {
             // Namespace per sekolah: NIK bisa dipakai orang tua yang sama di dua
             // sekolah (anak di sekolah berbeda). Auth global → tanpa prefix,
             // createUser sekolah kedua gagal "email already registered".
             const internalEmail = toInternalEmail(nik, 'NIK', user.school_id);
-            const password      = '12345678';
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+            const arr = new Uint8Array(12);
+            crypto.getRandomValues(arr);
+            const password = Array.from(arr, b => chars[b % chars.length]).join('');
 
             const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                 email:         internalEmail,
@@ -251,6 +256,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
             }
 
             nikToUserId.set(nik, insertedUser.user_id);
+            createdAccounts.push({
+                login_identifier: nik,
+                full_name:        namaOrtu,
+                temp_password:    password,
+            });
         }
 
         // ── 9b. Existing NIKs: update full_name only ────────────
@@ -312,6 +322,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             skipped: 0,
             failed:  rows.length - success - updated,
             errors,
+            created: createdAccounts, // temp_password per akun baru — tampilkan sekali ke admin
         });
 
     } catch (err) {

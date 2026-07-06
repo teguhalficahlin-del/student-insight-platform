@@ -101,6 +101,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
         const batch = (students ?? []) as StudentRow[];
         const errors: ProvisionError[] = [];
+        const createdAccounts: { nis: string; full_name: string; temp_password: string }[] = [];
         let created        = 0;
         let linkedExisting = 0;
 
@@ -138,9 +139,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
                         continue;
                     }
 
+                    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+                    const arr = new Uint8Array(12);
+                    crypto.getRandomValues(arr);
+                    const tempPassword = Array.from(arr, b => chars[b % chars.length]).join('');
+
                     const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                         email:         internalEmail,
-                        password:      '12345678',
+                        password:      tempPassword,
                         email_confirm: true,
                     });
                     if (authErr || !authUser?.user) {
@@ -170,6 +176,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                         continue;
                     }
                     userId = insertedUser.user_id;
+                    createdAccounts.push({ nis: s.nis, full_name: s.full_name, temp_password: tempPassword });
                 }
 
                 // 3. Tautkan ke students
@@ -198,6 +205,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             failed:          errors.length,
             remaining,
             errors,
+            created_accounts: createdAccounts, // temp_password per akun baru — tampilkan sekali ke admin
         });
 
     } catch (err) {
