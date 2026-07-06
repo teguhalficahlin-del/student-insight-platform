@@ -1074,66 +1074,45 @@ async function loadWkAttendanceRecap() {
             const pctDenom = r.HADIR + r.IZIN + r.TIDAK_HADIR;
             const pct   = pctDenom > 0 ? Math.round(r.HADIR / pctDenom * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
-            return `<tr class="wk-class-row" data-class-id="${esc(r.class_id)}" style="cursor:pointer">
-                <td><span class="wk-expand-icon" style="margin-right:6px;font-size:0.75rem">▶</span>${esc(r.name)}</td>
+            return `<tr class="wk-class-row" data-class-id="${esc(r.class_id)}" data-class-name="${esc(r.name)}" style="cursor:pointer" title="Klik untuk lihat detail siswa">
+                <td style="color:var(--color-primary,#4ade80)">${esc(r.name)}</td>
                 <td style="text-align:center">${r.HADIR}</td>
                 <td style="text-align:center">${r.IZIN}</td>
                 <td style="text-align:center">${r.SAKIT}</td>
                 <td style="text-align:center">${r.TIDAK_HADIR}</td>
                 <td style="text-align:center">${r.total}</td>
                 <td style="text-align:center;font-weight:600;color:${color}">${r.total > 0 ? pct + '%' : '—'}</td>
-            </tr>
-            <tr class="wk-detail-row" data-class-id="${esc(r.class_id)}" style="display:none">
-                <td colspan="7" style="padding:0">
-                    <div class="wk-detail-content" id="wk-detail-${esc(r.class_id)}" style="padding:8px 16px">
-                        <p class="hint">Klik untuk memuat detail siswa…</p>
-                    </div>
-                </td>
             </tr>`;
         }).join('');
 
         tbody.querySelectorAll('tr.wk-class-row').forEach(tr => {
-            tr.addEventListener('click', () => wkToggleClassDetail(tr, dateStart, dateEnd));
+            tr.addEventListener('click', () => wkOpenClassModal(tr, dateStart, dateEnd));
         });
+
+        // Setup tombol tutup & backdrop
+        const modal = document.getElementById('wk-class-modal');
+        document.getElementById('wk-modal-close').onclick = () => { modal.style.display = 'none'; };
+        modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
 
-async function wkToggleClassDetail(tr, dateStart, dateEnd) {
+async function wkOpenClassModal(tr, dateStart, dateEnd) {
     const classId   = tr.dataset.classId;
-    const detailRow = tr.nextElementSibling;
-    const content   = document.getElementById(`wk-detail-${classId}`);
-    const icon      = tr.querySelector('.wk-expand-icon');
-    const isOpen    = detailRow.style.display !== 'none';
+    const className = tr.dataset.className;
+    const modal     = document.getElementById('wk-class-modal');
+    const title     = document.getElementById('wk-modal-title');
+    const body      = document.getElementById('wk-modal-body');
 
-    // Tutup semua drill-down lain yang sedang terbuka
-    document.querySelectorAll('tr.wk-detail-row').forEach(row => {
-        if (row !== detailRow && row.style.display !== 'none') {
-            row.style.display = 'none';
-            row.previousElementSibling?.querySelector('.wk-expand-icon')?.textContent && (
-                row.previousElementSibling.querySelector('.wk-expand-icon').textContent = '▶'
-            );
-        }
-    });
-
-    if (isOpen) {
-        detailRow.style.display = 'none';
-        icon.textContent = '▶';
-        return;
-    }
-
-    detailRow.style.display = '';
-    icon.textContent = '▼';
-
-    if (content.dataset.loaded === 'true') return;
-    content.innerHTML = '<p class="hint">Memuat detail siswa…</p>';
+    title.textContent = `Detail Kehadiran — ${className}`;
+    body.innerHTML = '<p class="hint">Memuat detail siswa…</p>';
+    modal.style.display = '';
 
     try {
         const students = await getWaliAttendanceSummary(classId, config.current_academic_year, dateStart || null, dateEnd || null);
         if (students.length === 0) {
-            content.innerHTML = '<p class="hint">Belum ada data kehadiran siswa pada rentang ini.</p>';
-            content.dataset.loaded = 'true';
+            body.innerHTML = '<p class="hint">Belum ada data kehadiran siswa pada rentang ini.</p>';
             return;
         }
         const tableRows = students.map(s => {
@@ -1150,7 +1129,8 @@ async function wkToggleClassDetail(tr, dateStart, dateEnd) {
                 <td style="text-align:center;font-weight:600;color:${color}">${pctDenom > 0 ? pct + '%' : '—'}</td>
             </tr>`;
         }).join('');
-        content.innerHTML = `
+        body.innerHTML = `
+            <div class="table-wrapper">
             <table class="table" style="margin:0">
                 <thead><tr>
                     <th>Nama / NIS</th>
@@ -1159,10 +1139,10 @@ async function wkToggleClassDetail(tr, dateStart, dateEnd) {
                     <th style="text-align:center">Total Sesi</th><th style="text-align:center">% Hadir</th>
                 </tr></thead>
                 <tbody>${tableRows}</tbody>
-            </table>`;
-        content.dataset.loaded = 'true';
+            </table>
+            </div>`;
     } catch (err) {
-        content.innerHTML = `<p style="color:var(--color-danger)">${esc(fe(err))}</p>`;
+        body.innerHTML = `<p style="color:var(--color-danger)">${esc(fe(err))}</p>`;
     }
 }
 

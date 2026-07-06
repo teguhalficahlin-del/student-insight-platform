@@ -363,6 +363,17 @@
         </div>
     </div>
 
+    <!-- Modal drill-down kehadiran siswa per kelas (Waka Kesiswaan) -->
+    <div id="wk-class-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.6);padding:24px;overflow-y:auto" role="dialog" aria-modal="true">
+        <div style="max-width:860px;margin:0 auto;background:var(--color-surface,#1e2330);border-radius:8px;padding:24px;position:relative">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <h3 id="wk-modal-title" style="margin:0;color:var(--color-primary,#4ade80)"></h3>
+                <button id="wk-modal-close" class="btn btn-secondary btn-sm" style="padding:4px 12px">✕ Tutup</button>
+            </div>
+            <div id="wk-modal-body"><p class="hint">Memuat…</p></div>
+        </div>
+    </div>
+
     <!-- ═══════════════════════════════════════════════════════
          TAB: WAKA KESISWAAN
     ════════════════════════════════════════════════════════ -->
