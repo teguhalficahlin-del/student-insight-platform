@@ -1107,6 +1107,16 @@ async function wkToggleClassDetail(tr, dateStart, dateEnd) {
     const icon      = tr.querySelector('.wk-expand-icon');
     const isOpen    = detailRow.style.display !== 'none';
 
+    // Tutup semua drill-down lain yang sedang terbuka
+    document.querySelectorAll('tr.wk-detail-row').forEach(row => {
+        if (row !== detailRow && row.style.display !== 'none') {
+            row.style.display = 'none';
+            row.previousElementSibling?.querySelector('.wk-expand-icon')?.textContent && (
+                row.previousElementSibling.querySelector('.wk-expand-icon').textContent = '▶'
+            );
+        }
+    });
+
     if (isOpen) {
         detailRow.style.display = 'none';
         icon.textContent = '▶';
