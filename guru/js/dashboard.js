@@ -374,7 +374,8 @@ async function loadGuruRecap() {
         }
         const rows = await getAttendanceSummaryByStudents(students, dateStart || null, dateEnd || null, currentUser.user_id);
         const tbody = rows.map(s => {
-            const pct = s.total > 0 ? Math.round((s.HADIR / s.total) * 100) : 0;
+            const pctDenom = s.HADIR + s.IZIN + s.TIDAK_HADIR;
+            const pct = pctDenom > 0 ? Math.round((s.HADIR / pctDenom) * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
             return `<tr>
                 <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted,#9ca3af)">${esc(s.nis)}</span></td>
@@ -408,7 +409,8 @@ async function loadGuruRecap() {
         document.getElementById('guru-recap-export')?.addEventListener('click', () => {
             const header = 'Nama,NIS,Hadir,Izin,Sakit,Alpa,Total Sesi,% Hadir';
             const csvRows = rows.map(s => {
-                const pct = s.total > 0 ? Math.round((s.HADIR / s.total) * 100) : 0;
+                const pctDenom = s.HADIR + s.IZIN + s.TIDAK_HADIR;
+                const pct = pctDenom > 0 ? Math.round((s.HADIR / pctDenom) * 100) : 0;
                 return [s.full_name, s.nis, s.HADIR, s.IZIN, s.SAKIT, s.TIDAK_HADIR, s.total, s.total > 0 ? pct + '%' : '—']
                     .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',');
             });
