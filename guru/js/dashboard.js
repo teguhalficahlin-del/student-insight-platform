@@ -824,34 +824,13 @@ async function initObsForm() {
         });
     }
 
-    let searchSeq = 0;
-    searchEl.addEventListener('input', async () => {
-        const raw = searchEl.value.trim();
-        const q   = raw.toLowerCase();
+    searchEl.addEventListener('input', () => {
+        const q = searchEl.value.trim().toLowerCase();
         if (q.length < 2) { listEl.style.display = 'none'; return; }
-
-        // Pool lokal: siswa yang diajar + siswa prodi (jika Kaprodi)
-        let localPool = myStudents;
-        if (jabatan.includes('kaprodi') && kaprodiAllStudents.length) {
-            const seen = new Set(myStudents.map(s => s.student_id));
-            localPool = [...myStudents, ...kaprodiAllStudents.filter(s => !seen.has(s.student_id))];
-        }
-        const local = localPool.filter(s =>
+        const hits = myStudents.filter(s =>
             s.full_name.toLowerCase().includes(q) || s.nis?.includes(q)
         );
-
-        if (!isBroadObserver) { renderHits(local.slice(0, 10)); return; }
-
-        // Broad observer: gabung lokal + hasil server (dedup by student_id).
-        const seq = ++searchSeq;
-        let merged = local;
-        try {
-            const remote = await searchStudents(raw);
-            if (seq !== searchSeq) return;   // input sudah berubah, abaikan
-            const seen = new Set(local.map(s => s.student_id));
-            merged = [...local, ...remote.filter(s => !seen.has(s.student_id))];
-        } catch (_) { /* fallback ke lokal saja */ }
-        renderHits(merged.slice(0, 12));
+        renderHits(hits.slice(0, 10));
     });
     document.addEventListener('click', (e) => {
         if (!listEl.contains(e.target) && e.target !== searchEl) listEl.style.display = 'none';
