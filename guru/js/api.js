@@ -634,13 +634,15 @@ export async function getAttendanceSummaryByStudents(students, dateStart, dateEn
     return [...map.values()];
 }
 
-export async function getOpenCases() {
-    const { data, error } = await supabase
+export async function getOpenCases(schoolId) {
+    let q = supabase
         .from('cases')
         .select('case_id, title, status, track, current_handler_role, created_at, student:students(full_name, nis)')
         .neq('status', 'CLOSED')
         .order('created_at', { ascending: false })
         .limit(100);
+    if (schoolId) q = q.eq('school_id', schoolId);
+    const { data, error } = await q;
     if (error) throw error;
     return data ?? [];
 }

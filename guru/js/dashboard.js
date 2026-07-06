@@ -1158,6 +1158,7 @@ async function loadWkObservations() {
             .select(`observation_id, sentiment, dimension, content, observed_at, created_at,
                 student:students(full_name, nis),
                 author:users!observations_author_user_id_fkey(full_name)`)
+            .eq('school_id', currentUser.school_id)
             .order('created_at', { ascending: false })
             .limit(50);
         if (error) throw error;
@@ -1192,7 +1193,7 @@ async function loadWkOpenCases() {
     emptyEl.style.display = 'none';
 
     try {
-        const rows = await getOpenCases();
+        const rows = await getOpenCases(currentUser.school_id);
         if (rows.length === 0) {
             tbody.innerHTML = '';
             emptyEl.style.display = 'block';
@@ -1660,7 +1661,7 @@ async function loadWhCases() {
     tbody.innerHTML = '<tr><td colspan="4" class="hint">Memuat…</td></tr>';
     empty.style.display = 'none';
     try {
-        const all = await getOpenCases();
+        const all = await getOpenCases(currentUser.school_id);
         const cases = all.filter(c => c.track === 'PKL');
         if (cases.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
         tbody.innerHTML = cases.map(c => `<tr>
