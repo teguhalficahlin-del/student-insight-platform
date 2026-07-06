@@ -1071,20 +1071,88 @@ async function loadWkAttendanceRecap() {
             return;
         }
         tbody.innerHTML = rows.map(r => {
-            const pct   = r.total > 0 ? Math.round(r.HADIR / r.total * 100) : 0;
+            const pctDenom = r.HADIR + r.IZIN + r.TIDAK_HADIR;
+            const pct   = pctDenom > 0 ? Math.round(r.HADIR / pctDenom * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
-            return `<tr>
-                <td>${esc(r.name)}</td>
+            return `<tr class="wk-class-row" data-class-id="${esc(r.class_id)}" style="cursor:pointer">
+                <td><span class="wk-expand-icon" style="margin-right:6px;font-size:0.75rem">▶</span>${esc(r.name)}</td>
                 <td style="text-align:center">${r.HADIR}</td>
                 <td style="text-align:center">${r.IZIN}</td>
                 <td style="text-align:center">${r.SAKIT}</td>
                 <td style="text-align:center">${r.TIDAK_HADIR}</td>
                 <td style="text-align:center">${r.total}</td>
                 <td style="text-align:center;font-weight:600;color:${color}">${r.total > 0 ? pct + '%' : '—'}</td>
+            </tr>
+            <tr class="wk-detail-row" data-class-id="${esc(r.class_id)}" style="display:none">
+                <td colspan="7" style="padding:0">
+                    <div class="wk-detail-content" id="wk-detail-${esc(r.class_id)}" style="padding:8px 16px">
+                        <p class="hint">Klik untuk memuat detail siswa…</p>
+                    </div>
+                </td>
             </tr>`;
         }).join('');
+
+        tbody.querySelectorAll('tr.wk-class-row').forEach(tr => {
+            tr.addEventListener('click', () => wkToggleClassDetail(tr, dateStart, dateEnd));
+        });
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
+    }
+}
+
+async function wkToggleClassDetail(tr, dateStart, dateEnd) {
+    const classId   = tr.dataset.classId;
+    const detailRow = tr.nextElementSibling;
+    const content   = document.getElementById(`wk-detail-${classId}`);
+    const icon      = tr.querySelector('.wk-expand-icon');
+    const isOpen    = detailRow.style.display !== 'none';
+
+    if (isOpen) {
+        detailRow.style.display = 'none';
+        icon.textContent = '▶';
+        return;
+    }
+
+    detailRow.style.display = '';
+    icon.textContent = '▼';
+
+    if (content.dataset.loaded === 'true') return;
+    content.innerHTML = '<p class="hint">Memuat detail siswa…</p>';
+
+    try {
+        const students = await getWaliAttendanceSummary(classId, config.current_academic_year, dateStart || null, dateEnd || null);
+        if (students.length === 0) {
+            content.innerHTML = '<p class="hint">Belum ada data kehadiran siswa pada rentang ini.</p>';
+            content.dataset.loaded = 'true';
+            return;
+        }
+        const tableRows = students.map(s => {
+            const pctDenom = s.HADIR + s.IZIN + s.TIDAK_HADIR;
+            const pct   = pctDenom > 0 ? Math.round(s.HADIR / pctDenom * 100) : 0;
+            const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+            return `<tr>
+                <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted,#9ca3af)">${esc(s.nis)}</span></td>
+                <td style="text-align:center">${s.HADIR}</td>
+                <td style="text-align:center">${s.IZIN}</td>
+                <td style="text-align:center">${s.SAKIT}</td>
+                <td style="text-align:center">${s.TIDAK_HADIR}</td>
+                <td style="text-align:center">${s.total}</td>
+                <td style="text-align:center;font-weight:600;color:${color}">${pctDenom > 0 ? pct + '%' : '—'}</td>
+            </tr>`;
+        }).join('');
+        content.innerHTML = `
+            <table class="table" style="margin:0">
+                <thead><tr>
+                    <th>Nama / NIS</th>
+                    <th style="text-align:center">Hadir</th><th style="text-align:center">Izin</th>
+                    <th style="text-align:center">Sakit</th><th style="text-align:center">Alpa</th>
+                    <th style="text-align:center">Total</th><th style="text-align:center">% Hadir</th>
+                </tr></thead>
+                <tbody>${tableRows}</tbody>
+            </table>`;
+        content.dataset.loaded = 'true';
+    } catch (err) {
+        content.innerHTML = `<p style="color:var(--color-danger)">${esc(fe(err))}</p>`;
     }
 }
 
