@@ -22,7 +22,8 @@ import {
     getSchoolStats, getKepsekMonitoring, getAbsentTeachersToday,
     getAttendanceRecapPerClass, getOpenCases,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
-    getMyObservations,
+    getMyObservations, updateObsVisibility,
+    getObsAudienceMembers, addObsAudienceMember, removeObsAudienceMember,
     getCases, getCase, getCaseEvents, createCase,
     addCaseComment, escalateCase, changeCaseStatus, closeCase,
     updateCaseAudience, getCaseAudienceMembers,
@@ -904,30 +905,156 @@ const DIMENSION_LABELS_OBS = { AKADEMIK:'Akademik', KEHADIRAN:'Kehadiran', PERIL
 const SENTIMENT_LABELS = { POSITIF:'Positif', NETRAL:'Netral', NEGATIF:'Perlu Perhatian' };
 const SENTIMENT_COLOR  = { POSITIF:'var(--color-success)', NETRAL:'var(--color-text-muted)', NEGATIF:'var(--color-danger)' };
 
+const OBS_VIS_LABEL = {
+    PRIVATE:    '🔒 Privat',
+    RESTRICTED: '👥 Orang Tertentu',
+    PUBLIC:     '🌐 Semua Internal',
+};
+
 function renderObsHistory(rows, listEl) {
     if (!rows.length) {
         listEl.innerHTML = '<p class="hint">Belum ada observasi yang ditulis.</p>';
         return;
     }
     listEl.innerHTML = rows.map(r => {
-        const nama = r.student?.full_name ?? '—';
-        const nis  = r.student?.nis ? ` · ${r.student.nis}` : '';
-        const dim  = DIMENSION_LABELS_OBS[r.dimension] ?? r.dimension;
-        const sent = SENTIMENT_LABELS[r.sentiment]  ?? r.sentiment;
+        const nama      = r.student?.full_name ?? '—';
+        const nis       = r.student?.nis ? ` · ${r.student.nis}` : '';
+        const dim       = DIMENSION_LABELS_OBS[r.dimension] ?? r.dimension;
+        const sent      = SENTIMENT_LABELS[r.sentiment]  ?? r.sentiment;
         const sentColor = SENTIMENT_COLOR[r.sentiment] ?? 'inherit';
+        const vis       = r.visibility ?? 'PUBLIC';
+        const visLabel  = OBS_VIS_LABEL[vis] ?? vis;
+        const visColor  = vis === 'PUBLIC' ? 'var(--color-success,#4ade80)'
+                        : vis === 'RESTRICTED' ? 'var(--color-info,#60a5fa)'
+                        : 'var(--color-text-muted)';
         return `
-        <div style="border-bottom:0.5px solid var(--color-border);padding:10px 0;font-size:13px">
+        <div data-obs-id="${esc(r.observation_id)}" data-obs-vis="${esc(vis)}"
+             style="border-bottom:0.5px solid var(--color-border);padding:10px 0;font-size:13px">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px">
                 <strong>${esc(nama)}<span style="font-weight:400;color:var(--color-text-muted)">${esc(nis)}</span></strong>
                 <span style="font-size:11px;color:var(--color-text-muted)">${fmt(r.observed_at)}</span>
             </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center">
                 <span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--color-bg-alt,#f3f4f6)">${esc(dim)}</span>
                 <span style="font-size:11px;padding:2px 8px;border-radius:20px;color:${sentColor};background:var(--color-bg-alt,#f3f4f6)">${esc(sent)}</span>
+                <span class="obs-vis-badge" style="font-size:11px;padding:2px 8px;border-radius:20px;color:${visColor};background:var(--color-bg-alt,#f3f4f6);cursor:pointer" title="Klik untuk ubah visibilitas">${visLabel}</span>
             </div>
-            <p style="margin:0;white-space:pre-wrap;color:var(--color-text)">${esc(r.content)}</p>
+            <p style="margin:0 0 6px;white-space:pre-wrap;color:var(--color-text)">${esc(r.content)}</p>
+            <div class="obs-vis-panel" style="display:none;margin-top:8px;padding:10px;border-radius:6px;background:var(--color-bg-alt,#2a3145)">
+                <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+                    ${['PRIVATE','RESTRICTED','PUBLIC'].map(a =>
+                        `<button class="btn btn-sm obs-vis-btn ${a === vis ? 'btn-primary' : 'btn-secondary'}" data-vis="${a}">${OBS_VIS_LABEL[a]}</button>`
+                    ).join('')}
+                </div>
+                <div class="obs-restricted-panel" style="display:${vis === 'RESTRICTED' ? 'block' : 'none'}">
+                    <div style="font-size:12px;margin-bottom:6px;color:var(--color-text-muted)">Anggota yang bisa melihat:</div>
+                    <div class="obs-members-list" style="margin-bottom:6px;font-size:12px"></div>
+                    <div style="position:relative">
+                        <input type="text" class="input obs-member-search" placeholder="Cari nama staf…" style="font-size:12px;padding:6px 10px" autocomplete="off">
+                        <div class="obs-member-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--color-surface,#1e2330);border:1px solid var(--color-border);border-radius:6px;z-index:50;max-height:160px;overflow-y:auto"></div>
+                    </div>
+                    <div class="obs-audience-msg" style="font-size:11px;margin-top:4px;color:var(--color-danger)"></div>
+                </div>
+            </div>
         </div>`;
     }).join('');
+
+    // Wire up interactivity for each observation card
+    listEl.querySelectorAll('[data-obs-id]').forEach(card => {
+        const obsId  = card.dataset.obsId;
+        let   curVis = card.dataset.obsVis;
+        const badge  = card.querySelector('.obs-vis-badge');
+        const panel  = card.querySelector('.obs-vis-panel');
+        const rPanel = card.querySelector('.obs-restricted-panel');
+        const mList  = card.querySelector('.obs-members-list');
+        const mSearch= card.querySelector('.obs-member-search');
+        const mDrop  = card.querySelector('.obs-member-drop');
+        const mMsg   = card.querySelector('.obs-audience-msg');
+
+        badge.addEventListener('click', () => {
+            const open = panel.style.display !== 'none';
+            panel.style.display = open ? 'none' : 'block';
+            if (!open && curVis === 'RESTRICTED') loadObsMembers();
+        });
+
+        card.querySelectorAll('.obs-vis-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const newVis = btn.dataset.vis;
+                if (newVis === curVis) return;
+                try {
+                    await updateObsVisibility({ obsId, visibility: newVis });
+                    curVis = newVis;
+                    card.dataset.obsVis = newVis;
+                    const newColor = newVis === 'PUBLIC' ? 'var(--color-success,#4ade80)'
+                                   : newVis === 'RESTRICTED' ? 'var(--color-info,#60a5fa)'
+                                   : 'var(--color-text-muted)';
+                    badge.textContent = OBS_VIS_LABEL[newVis];
+                    badge.style.color = newColor;
+                    card.querySelectorAll('.obs-vis-btn').forEach(b => {
+                        b.className = `btn btn-sm obs-vis-btn ${b.dataset.vis === newVis ? 'btn-primary' : 'btn-secondary'}`;
+                    });
+                    rPanel.style.display = newVis === 'RESTRICTED' ? 'block' : 'none';
+                    if (newVis === 'RESTRICTED') loadObsMembers();
+                } catch (err) { mMsg.textContent = fe(err); }
+            });
+        });
+
+        async function loadObsMembers() {
+            mList.textContent = 'Memuat…';
+            try {
+                const members = await getObsAudienceMembers(obsId);
+                if (!members.length) {
+                    mList.innerHTML = '<em style="color:var(--color-text-muted)">Belum ada anggota khusus.</em>';
+                } else {
+                    mList.innerHTML = members.map(m => `
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">
+                            <span>${esc(m.users?.full_name ?? '—')}</span>
+                            <button class="btn btn-secondary btn-sm" data-uid="${m.user_id}" style="padding:2px 8px;font-size:11px">✕</button>
+                        </div>`).join('');
+                    mList.querySelectorAll('button[data-uid]').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            try {
+                                await removeObsAudienceMember({ obsId, userId: btn.dataset.uid });
+                                await loadObsMembers();
+                            } catch (err) { mMsg.textContent = fe(err); }
+                        });
+                    });
+                }
+            } catch (err) { mList.textContent = fe(err); }
+        }
+
+        let obsSearchSeq = 0;
+        mSearch?.addEventListener('input', async () => {
+            const q = mSearch.value.trim();
+            if (q.length < 2) { mDrop.style.display = 'none'; return; }
+            const seq = ++obsSearchSeq;
+            try {
+                const users = await searchInternalUsers(q);
+                if (seq !== obsSearchSeq) return;
+                if (!users.length) { mDrop.style.display = 'none'; return; }
+                mDrop.innerHTML = users.map(u =>
+                    `<div class="obs-member-hit" data-id="${u.user_id}" data-name="${esc(u.full_name)}"
+                         style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--color-border)">
+                         ${esc(u.full_name)}
+                     </div>`
+                ).join('');
+                mDrop.style.display = 'block';
+                mDrop.querySelectorAll('.obs-member-hit').forEach(el => {
+                    el.addEventListener('mousedown', async () => {
+                        mDrop.style.display = 'none';
+                        mSearch.value = '';
+                        try {
+                            await addObsAudienceMember({ obsId, userId: el.dataset.id, schoolId: currentUser.school_id });
+                            await loadObsMembers();
+                        } catch (err) { mMsg.textContent = fe(err); }
+                    });
+                });
+            } catch { mDrop.style.display = 'none'; }
+        });
+        document.addEventListener('click', e => {
+            if (!mDrop?.contains(e.target) && e.target !== mSearch) mDrop.style.display = 'none';
+        });
+    });
 }
 
 // ─── TAB WALI KELAS ──────────────────────────────────────────

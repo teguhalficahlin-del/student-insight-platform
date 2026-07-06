@@ -709,6 +709,39 @@ export async function getMyObservations(userId) {
     return data ?? [];
 }
 
+export async function updateObsVisibility({ obsId, visibility }) {
+    const { error } = await supabase
+        .from('observations')
+        .update({ visibility })
+        .eq('observation_id', obsId);
+    if (error) throw error;
+}
+
+export async function getObsAudienceMembers(obsId) {
+    const { data, error } = await supabase
+        .from('observation_audience_members')
+        .select('user_id, users:user_id(full_name, role_type)')
+        .eq('observation_id', obsId);
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function addObsAudienceMember({ obsId, userId, schoolId }) {
+    const { error } = await supabase
+        .from('observation_audience_members')
+        .insert({ observation_id: obsId, user_id: userId, school_id: schoolId });
+    if (error) throw error;
+}
+
+export async function removeObsAudienceMember({ obsId, userId }) {
+    const { error } = await supabase
+        .from('observation_audience_members')
+        .delete()
+        .eq('observation_id', obsId)
+        .eq('user_id', userId);
+    if (error) throw error;
+}
+
 // ─── KASUS ───────────────────────────────────────────────────
 
 // Diganti oleh getUnreadNotifCount — tetap diekspor untuk kompatibilitas sementara
