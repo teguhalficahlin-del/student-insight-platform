@@ -579,14 +579,14 @@ export async function getAttendanceRecapPerClass(dateStart, dateEnd) {
     const { data, error } = await q;
     if (error) throw error;
 
-    // 3. Akumulasi ke map — kelas tanpa attendance tetap ada dengan nilai 0
+    // 3. Akumulasi ke map — total = jumlah sesi (bukan presensi individual)
     for (const sched of data ?? []) {
         const agg = map.get(sched.class_id);
         if (!agg) continue;
+        agg.total++;
         for (const r of sched.attendance ?? []) {
             const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
             if (agg[st] !== undefined) agg[st]++;
-            agg.total++;
         }
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'id'));

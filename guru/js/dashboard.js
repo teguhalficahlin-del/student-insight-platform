@@ -1146,7 +1146,7 @@ async function wkToggleClassDetail(tr, dateStart, dateEnd) {
                     <th>Nama / NIS</th>
                     <th style="text-align:center">Hadir</th><th style="text-align:center">Izin</th>
                     <th style="text-align:center">Sakit</th><th style="text-align:center">Alpa</th>
-                    <th style="text-align:center">Total</th><th style="text-align:center">% Hadir</th>
+                    <th style="text-align:center">Total Sesi</th><th style="text-align:center">% Hadir</th>
                 </tr></thead>
                 <tbody>${tableRows}</tbody>
             </table>`;
