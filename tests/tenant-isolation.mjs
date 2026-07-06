@@ -28,6 +28,9 @@
  *                          internal kasus (tolak SISWA/ORTU/STAKEHOLDER/dst),
  *                          dan DUDI hanya boleh eskalasi ke KAPRODI (E3-1 /
  *                          desain kasus Langkah A).
+ *   8. PKL ortu x-tenant — ortu Sekolah A TIDAK bisa baca pkl_placements /
+ *                          pkl_attendance Sekolah B, bahkan dengan anomali
+ *                          student_parents lintas-sekolah (mig 190000).
  *
  * CARA JALANKAN:
  *   SUPABASE_ACCESS_TOKEN=sbp_xxx node tests/tenant-isolation.mjs
@@ -305,6 +308,225 @@ async function main() {
         if (notOurBlock(e7d))
             log.pass('DUDI→KAPRODI lolos kunci (sesuai aturan)');
         else log.fail(`DUDI→KAPRODI salah ditolak: ${e7d}`);
+    }
+
+    // ── CHECK 8: PKL Ortu Cross-Tenant Isolation ─────────────────
+    // Memverifikasi bahwa rls_pkl_attendance_read_ortu dan rls_pkl_read_ortu
+    // (yang kini punya school_id = fn_current_school_id() — mig 190000)
+    // memblokir ortu di Sekolah A dari membaca PKL Sekolah B bahkan jika
+    // ada baris student_parents yang secara anomali menunjuk ke siswa B.
+    //
+    // PENTING: check ini TIDAK bergantung pada data PKL yang sudah ada.
+    // Semua data uji (pkl_placements, pkl_attendance, student_parents silang)
+    // dibuat sintetis di dalam satu transaksi yang di-ROLLBACK, sehingga
+    // DB production tidak berubah.
+    //
+    // Syarat minimal: 2 sekolah yang masing-masing punya ortu aktif + siswa.
+    // (Tidak perlu PKL asli.)
+    log.head('CHECK 8 — PKL ortu cross-tenant: ortu Sekolah A TIDAK bisa baca PKL Sekolah B (sintetis, ROLLBACK)');
+
+    // Cari 2 sekolah dengan ortu aktif + siswa + user DUDI (untuk INSERT sintetis)
+    // — TIDAK butuh pkl_placements yang sudah ada.
+    const c8Schools = await mgmtQuery(`
+        select s.school_id::text,
+               s.name,
+               (select u.auth_user_id::text from users u
+                 where u.school_id = s.school_id and u.role_type = 'ORTU' and u.is_active
+                 limit 1) as ortu_auid,
+               (select u.user_id::text from users u
+                 where u.school_id = s.school_id and u.role_type = 'ORTU' and u.is_active
+                 limit 1) as ortu_user_id,
+               (select st.student_id::text from students st
+                 where st.school_id = s.school_id
+                 limit 1) as student_id,
+               (select u.user_id::text from users u
+                 where u.school_id = s.school_id and u.role_type = 'DUDI' and u.is_active
+                 limit 1) as dudi_user_id,
+               (select count(*) from students st where st.school_id = s.school_id)::int as n_students
+        from schools s
+        where exists (select 1 from users u
+                       where u.school_id = s.school_id and u.role_type = 'ORTU' and u.is_active)
+          and exists (select 1 from students st where st.school_id = s.school_id)
+          and exists (select 1 from users u
+                       where u.school_id = s.school_id and u.role_type = 'DUDI' and u.is_active)
+        order by n_students desc
+        limit 2;`);
+
+    const c8Missing = c8Schools.length < 2
+        ? `hanya ${c8Schools.length} sekolah berdata (butuh ≥2 dengan ortu+siswa+dudi)`
+        : (!c8Schools[0].ortu_auid || !c8Schools[1].ortu_auid)
+            ? 'salah satu sekolah tidak punya ortu aktif'
+            : (!c8Schools[0].student_id || !c8Schools[1].student_id)
+                ? 'salah satu sekolah tidak punya siswa'
+                : (!c8Schools[0].dudi_user_id || !c8Schools[1].dudi_user_id)
+                    ? 'salah satu sekolah tidak punya dudi aktif'
+                    : null;
+
+    if (c8Missing) {
+        log.fail(`CHECK 8 SKIP tidak terduga — ${c8Missing} (butuh minimal 2 sekolah berisi ortu+siswa+dudi)`);
+    } else {
+        const [A, B] = c8Schools; // A = sekolah ortu yg diuji; B = sekolah target PKL
+        const claimsA = `{"sub":"${A.ortu_auid}","role":"authenticated"}`;
+
+        // Satu transaksi: INSERT sintetis (sebagai postgres/superuser, bypass RLS)
+        // → SET ROLE authenticated (RLS aktif) → SELECT → ROLLBACK (DB bersih)
+        //
+        // Yang dimasukkan sintetis:
+        //   (1) pkl_placements: siswa B, dudi B, school B
+        //   (2) pkl_attendance: placement di atas, dicatat dudi B, school B
+        //   (3) student_parents: ortu A → siswa B, school A (anomali lintas-tenant)
+        //
+        // RLS yang diuji:
+        //   rls_pkl_read_ortu:            school_id = fn_current_school_id() AND role=ORTU AND EXISTS student_parents
+        //   rls_pkl_attendance_read_ortu: school_id = fn_current_school_id() AND role=ORTU AND EXISTS student_parents
+        //
+        // fn_current_school_id() untuk ortu A → school A.
+        // Baris sintetis ada di school B → school_id filter memblokir → 0 baris.
+
+        // Satu transaksi utuh: INSERT sintetis sebagai postgres (bypass RLS)
+        // → SET ROLE authenticated (RLS aktif) → SELECT → ROLLBACK (DB bersih).
+        // Management API mengembalikan hasil statement terakhir (SELECT).
+        let crossRows;
+        try {
+            crossRows = await mgmtQuery(
+                `begin;` +
+
+                // (1) Placement sintetis di Sekolah B (sebagai postgres, bypass RLS)
+                // is_active=false agar tidak melanggar EXCLUDE CONSTRAINT
+                // uq_active_pkl_per_student (berlaku hanya untuk is_active=true).
+                // Policy rls_pkl_read_ortu tidak memfilter is_active, jadi baris
+                // tetap terlihat bila school_id guard gagal.
+                ` insert into pkl_placements` +
+                `   (student_id, dudi_user_id, school_id, start_date, end_date, is_active)` +
+                ` values` +
+                `   ('${B.student_id}', '${B.dudi_user_id}', '${B.school_id}', '2026-01-01', '2026-06-30', false);` +
+
+                // (2) Attendance sintetis: subquery ke placement yang baru diinsert di txn yang sama
+                ` insert into pkl_attendance` +
+                `   (placement_id, student_id, attendance_date, recorded_by_user_id, school_id)` +
+                ` select pp.placement_id, pp.student_id, '2026-01-02', '${B.dudi_user_id}', '${B.school_id}'` +
+                ` from pkl_placements pp` +
+                ` where pp.student_id = '${B.student_id}'` +
+                `   and pp.school_id  = '${B.school_id}'` +
+                `   and pp.start_date = '2026-01-01'` +
+                ` limit 1;` +
+
+                // (3) Anomali: student_parents ortu A → siswa B
+                //     school_id = sekolah A agar FK schools valid; ini inti uji cross-tenant.
+                ` insert into student_parents (student_id, parent_user_id, school_id)` +
+                ` values ('${B.student_id}', '${A.ortu_user_id}', '${A.school_id}')` +
+                ` on conflict do nothing;` +
+
+                // Beralih ke konteks authenticated ortu A — RLS mulai aktif
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $c$${claimsA}$c$, true);` +
+
+                // Ukur: ortu A mencoba baca PKL Sekolah B
+                // Dengan school_id guard: fn_current_school_id() = school A ≠ school B → 0
+                ` select` +
+                `   (select count(*) from pkl_placements` +
+                `     where school_id = '${B.school_id}')::int as p,` +
+                `   (select count(*) from pkl_attendance` +
+                `     where school_id = '${B.school_id}')::int as a,` +
+                `   fn_current_school_id()::text as resolved_school;` +
+
+                ` rollback;`
+            );
+        } catch (e) {
+            log.fail(`CHECK 8 — Transaksi sintetis gagal: ${e.message}`);
+            crossRows = null;
+        }
+
+        if (crossRows !== null) {
+            const cr = crossRows[0] || {};
+            const p  = cr.p  ?? -1;
+            const a  = cr.a  ?? -1;
+            const rs = cr.resolved_school ?? '(null)';
+
+            if (rs === A.school_id)
+                log.pass(`fn_current_school_id() → ${A.name} (benar, ortu A dikontekskan)`);
+            else
+                log.fail(`fn_current_school_id() salah: ${rs} ≠ ${A.school_id}`);
+
+            if (p === 0)
+                log.pass(`ortu ${A.name} + anomali student_parents → 0 pkl_placements Sekolah B (school_id guard bekerja)`);
+            else
+                log.fail(`BOCOR: ortu ${A.name} dengan anomali student_parents melihat ${p} pkl_placements Sekolah B — school_id filter TIDAK bekerja`);
+
+            if (a === 0)
+                log.pass(`ortu ${A.name} + anomali student_parents → 0 pkl_attendance Sekolah B (school_id guard bekerja)`);
+            else
+                log.fail(`BOCOR: ortu ${A.name} dengan anomali student_parents melihat ${a} pkl_attendance Sekolah B — school_id filter TIDAK bekerja`);
+        }
+    }
+
+    // ── CHECK 9: rls_schedules_read_parent defense-in-depth ──────
+    // Memverifikasi dua hal setelah fix fase 2.2:
+    //   (a) Struktural: qual policy kini mengandung ce.school_id eksplisit.
+    //   (b) Fungsional (regression): ortu dengan anak terdaftar masih bisa
+    //       melihat jadwal kelas anaknya — fix tidak mematahkan fitur aktif.
+    log.head('CHECK 9 — rls_schedules_read_parent: ce.school_id eksplisit & regression ortu-melihat-jadwal');
+
+    // (a) Cek struktural: qual harus mengandung ce.school_id = fn_current_school_id()
+    const c9Policy = await mgmtQuery(`
+        select qual from pg_policies
+        where schemaname = 'public'
+          and tablename  = 'teaching_schedules'
+          and policyname = 'rls_schedules_read_parent'`);
+    if (c9Policy.length === 0) {
+        log.fail('rls_schedules_read_parent tidak ditemukan di pg_policies');
+    } else {
+        const qual = c9Policy[0].qual || '';
+        if (qual.includes('ce.school_id = fn_current_school_id()'))
+            log.pass('rls_schedules_read_parent: ce.school_id = fn_current_school_id() hadir di qual (defense-in-depth aktif)');
+        else
+            log.fail(`rls_schedules_read_parent: ce.school_id TIDAK ada di qual — migrasi mungkin belum ter-apply. Qual: ${qual.slice(0, 200)}`);
+    }
+
+    // (b) Regression fungsional: cari ortu yang anaknya punya class_enrollment
+    //     aktif dan kelas itu punya teaching_schedules. Simulasikan konteks RLS
+    //     ortu via SET ROLE, pastikan ia masih melihat ≥1 jadwal.
+    const c9Data = await mgmtQuery(`
+        select u.auth_user_id::text as ortu_auid,
+               u.school_id::text,
+               s2.name as school_name,
+               ts.schedule_id::text
+        from student_parents sp
+        join users u on u.user_id = sp.parent_user_id and u.role_type = 'ORTU' and u.is_active
+        join schools s2 on s2.school_id = u.school_id
+        join class_enrollments ce on ce.student_id = sp.student_id
+                                  and ce.school_id = u.school_id
+                                  and ce.withdrawn_at is null
+        join teaching_schedules ts on ts.class_id = ce.class_id
+                                   and ts.school_id = u.school_id
+        where u.auth_user_id is not null
+        limit 1`);
+
+    if (c9Data.length === 0) {
+        log.pass('CHECK 9b SKIP — tidak ada data (ortu+enrollment+jadwal) untuk regression fungsional (tidak menggagalkan)');
+    } else {
+        const { ortu_auid, school_id, school_name } = c9Data[0];
+        const claims9 = `{"sub":"${ortu_auid}","role":"authenticated"}`;
+        let c9Rows;
+        try {
+            c9Rows = await mgmtQuery(
+                `begin;` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $c9$${claims9}$c9$, true);` +
+                ` select count(*)::int as n_schedules from teaching_schedules` +
+                ` where school_id = '${school_id}';` +
+                ` commit;`);
+        } catch (e) {
+            log.fail(`CHECK 9b — transaksi regression gagal: ${e.message}`);
+            c9Rows = null;
+        }
+        if (c9Rows !== null) {
+            const n = c9Rows[0]?.n_schedules ?? -1;
+            if (n > 0)
+                log.pass(`ortu ${school_name} masih melihat ${n} jadwal setelah fix ce.school_id — regression OK`);
+            else
+                log.fail(`REGRESI: ortu ${school_name} melihat 0 jadwal setelah fix ce.school_id — fitur terganggu`);
+        }
     }
 
     // ── Ringkasan ────────────────────────────────────────────────
