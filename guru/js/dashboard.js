@@ -982,16 +982,17 @@ function renderObsHistory(rows, listEl) {
             if (!open && curVis === 'RESTRICTED') loadObsMembers();
         });
 
+        const OBS_ROLE_LABEL = { GURU:'Guru', BK:'BK', WALI_KELAS:'Wali Kelas', KAPRODI:'Kaprodi', WAKA_KESISWAAN:'Waka Kesiswaan', KEPSEK:'Kepala Sekolah' };
+
         card.querySelectorAll('.obs-vis-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const newVis = btn.dataset.vis;
                 if (newVis === curVis) return;
-                visErrEl.textContent = '';
+                visErrEl.style.color = ''; visErrEl.textContent = 'Menyimpan…';
                 try {
                     await updateObsVisibility({ obsId, visibility: newVis });
                     curVis = newVis;
                     card.dataset.obsVis = newVis;
-                    // Bug 3: invalidasi cache agar reload tidak tampilkan data lama
                     LC.remove(`obs-history-${currentUser.user_id}`);
                     const newColor = newVis === 'PUBLIC' ? 'var(--color-success,#4ade80)'
                                    : newVis === 'RESTRICTED' ? 'var(--color-info,#60a5fa)'
@@ -1003,7 +1004,14 @@ function renderObsHistory(rows, listEl) {
                     });
                     rPanel.style.display = newVis === 'RESTRICTED' ? 'block' : 'none';
                     if (newVis === 'RESTRICTED') loadObsMembers();
-                } catch (err) { visErrEl.textContent = fe(err); } // Bug 2: tampil di luar panel RESTRICTED
+                    // [1] Pesan sukses dulu (seperti kasus), lalu reload
+                    visErrEl.style.color = 'var(--color-success,#4ade80)';
+                    visErrEl.textContent = `Visibilitas diubah ke: ${OBS_VIS_LABEL[newVis]}.`;
+                    await loadObsHistory();
+                } catch (err) {
+                    visErrEl.style.color = 'var(--color-danger)';
+                    visErrEl.textContent = fe(err);
+                }
             });
         });
 
@@ -1014,11 +1022,15 @@ function renderObsHistory(rows, listEl) {
                 if (!members.length) {
                     mList.innerHTML = '<em style="color:var(--color-text-muted)">Belum ada anggota khusus.</em>';
                 } else {
-                    mList.innerHTML = members.map(m => `
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">
-                            <span>${esc(m.users?.full_name ?? '—')}</span>
-                            <button class="btn btn-secondary btn-sm" data-uid="${m.user_id}" style="padding:2px 8px;font-size:11px">✕</button>
-                        </div>`).join('');
+                    // [3+4] Nama + peran, chip inline dengan × seperti kasus
+                    mList.innerHTML = members.map(m => {
+                        const name = m.users?.full_name ?? m.user_id;
+                        const role = OBS_ROLE_LABEL[m.users?.role_type] ?? m.users?.role_type ?? '';
+                        return `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;padding:2px 8px;border:1px solid var(--color-border);border-radius:20px;font-size:12px">
+                            ${esc(name)} <span style="color:var(--color-text-muted)">(${esc(role)})</span>
+                            <button data-uid="${m.user_id}" style="background:none;border:none;cursor:pointer;color:var(--color-danger);font-size:14px;line-height:1;padding:0 2px" title="Hapus">×</button>
+                        </span>`;
+                    }).join('');
                     mList.querySelectorAll('button[data-uid]').forEach(btn => {
                         btn.addEventListener('click', async () => {
                             try {
