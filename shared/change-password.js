@@ -86,9 +86,9 @@ export async function checkMustChangePassword(supabase, userRow) {
                 submitBtn.disabled = false; submitBtn.textContent = 'Simpan Password';
                 return;
             }
-            // Hapus flag must_change_password
-            await supabase.from('users').update({ must_change_password: false })
-                .eq('user_id', userRow.user_id);
+            // Konfirmasi via RPC server-side — satu-satunya jalur resmi
+            // yang boleh mengubah must_change_password dan password_changed_at.
+            await supabase.rpc('fn_confirm_password_changed');
 
             showStatus(status, '✓ Password berhasil diubah!', true);
             submitBtn.style.display = 'none';
@@ -146,6 +146,10 @@ export function initChangePassword(supabase, triggerSelector) {
                 submitBtn.disabled = false; submitBtn.textContent = 'Simpan Password';
                 return;
             }
+
+            // Konfirmasi via RPC server-side — satu-satunya jalur resmi
+            // yang boleh mengubah must_change_password dan password_changed_at.
+            await supabase.rpc('fn_confirm_password_changed');
 
             showStatus(status, '✓ Password berhasil diubah!', true);
             submitBtn.style.display = 'none';
