@@ -158,6 +158,9 @@ const LC = {
         try { Object.keys(localStorage).filter(k => k.startsWith(`smkhr:${prefix}`)).forEach(k => localStorage.removeItem(k)); }
         catch {}
     },
+    remove(key) {
+        try { localStorage.removeItem(`smkhr:${key}`); } catch {}
+    },
 };
 
 function esc(s) {
@@ -946,6 +949,7 @@ function renderObsHistory(rows, listEl) {
                         `<button class="btn btn-sm obs-vis-btn ${a === vis ? 'btn-primary' : 'btn-secondary'}" data-vis="${a}">${OBS_VIS_LABEL[a]}</button>`
                     ).join('')}
                 </div>
+                <div class="obs-vis-err" style="font-size:11px;color:var(--color-danger);margin-bottom:4px"></div>
                 <div class="obs-restricted-panel" style="display:${vis === 'RESTRICTED' ? 'block' : 'none'}">
                     <div style="font-size:12px;margin-bottom:6px;color:var(--color-text-muted)">Anggota yang bisa melihat:</div>
                     <div class="obs-members-list" style="margin-bottom:6px;font-size:12px"></div>
@@ -961,15 +965,16 @@ function renderObsHistory(rows, listEl) {
 
     // Wire up interactivity for each observation card
     listEl.querySelectorAll('[data-obs-id]').forEach(card => {
-        const obsId  = card.dataset.obsId;
-        let   curVis = card.dataset.obsVis;
-        const badge  = card.querySelector('.obs-vis-badge');
-        const panel  = card.querySelector('.obs-vis-panel');
-        const rPanel = card.querySelector('.obs-restricted-panel');
-        const mList  = card.querySelector('.obs-members-list');
-        const mSearch= card.querySelector('.obs-member-search');
-        const mDrop  = card.querySelector('.obs-member-drop');
-        const mMsg   = card.querySelector('.obs-audience-msg');
+        const obsId     = card.dataset.obsId;
+        let   curVis    = card.dataset.obsVis;
+        const badge     = card.querySelector('.obs-vis-badge');
+        const panel     = card.querySelector('.obs-vis-panel');
+        const rPanel    = card.querySelector('.obs-restricted-panel');
+        const mList     = card.querySelector('.obs-members-list');
+        const mSearch   = card.querySelector('.obs-member-search');
+        const mDrop     = card.querySelector('.obs-member-drop');
+        const mMsg      = card.querySelector('.obs-audience-msg');
+        const visErrEl  = card.querySelector('.obs-vis-err'); // Bug 2: error visibilitas terpisah
 
         badge.addEventListener('click', () => {
             const open = panel.style.display !== 'none';
@@ -981,10 +986,13 @@ function renderObsHistory(rows, listEl) {
             btn.addEventListener('click', async () => {
                 const newVis = btn.dataset.vis;
                 if (newVis === curVis) return;
+                visErrEl.textContent = '';
                 try {
                     await updateObsVisibility({ obsId, visibility: newVis });
                     curVis = newVis;
                     card.dataset.obsVis = newVis;
+                    // Bug 3: invalidasi cache agar reload tidak tampilkan data lama
+                    LC.remove(`obs-history-${currentUser.user_id}`);
                     const newColor = newVis === 'PUBLIC' ? 'var(--color-success,#4ade80)'
                                    : newVis === 'RESTRICTED' ? 'var(--color-info,#60a5fa)'
                                    : 'var(--color-text-muted)';
@@ -995,7 +1003,7 @@ function renderObsHistory(rows, listEl) {
                     });
                     rPanel.style.display = newVis === 'RESTRICTED' ? 'block' : 'none';
                     if (newVis === 'RESTRICTED') loadObsMembers();
-                } catch (err) { mMsg.textContent = fe(err); }
+                } catch (err) { visErrEl.textContent = fe(err); } // Bug 2: tampil di luar panel RESTRICTED
             });
         });
 
@@ -1051,10 +1059,18 @@ function renderObsHistory(rows, listEl) {
                 });
             } catch { mDrop.style.display = 'none'; }
         });
-        document.addEventListener('click', e => {
-            if (!mDrop?.contains(e.target) && e.target !== mSearch) mDrop.style.display = 'none';
-        });
     });
+
+    // Bug 1: listener didaftarkan sekali (flag modul) — tidak menumpuk tiap re-render
+    if (!renderObsHistory._clickBound) {
+        renderObsHistory._clickBound = true;
+        document.addEventListener('click', e => {
+            document.querySelectorAll('#obs-history-list .obs-member-drop').forEach(drop => {
+                const search = drop.closest('[data-obs-id]')?.querySelector('.obs-member-search');
+                if (!drop.contains(e.target) && e.target !== search) drop.style.display = 'none';
+            });
+        });
+    }
 }
 
 // ─── TAB WALI KELAS ──────────────────────────────────────────
