@@ -399,14 +399,14 @@ async function loadGuruRecap() {
                     <th>Nama / NIS</th>
                     <th style="text-align:center">Hadir</th><th style="text-align:center">Izin</th>
                     <th style="text-align:center">Sakit</th><th style="text-align:center">Alpa</th>
-                    <th style="text-align:center">Total</th><th style="text-align:center">% Hadir</th>
+                    <th style="text-align:center">Total Sesi</th><th style="text-align:center">% Hadir</th>
                 </tr></thead>
                 <tbody>${tbody}</tbody>
             </table>
             </div>`;
 
         document.getElementById('guru-recap-export')?.addEventListener('click', () => {
-            const header = 'Nama,NIS,Hadir,Izin,Sakit,Alpa,Total,% Hadir';
+            const header = 'Nama,NIS,Hadir,Izin,Sakit,Alpa,Total Sesi,% Hadir';
             const csvRows = rows.map(s => {
                 const pct = s.total > 0 ? Math.round((s.HADIR / s.total) * 100) : 0;
                 return [s.full_name, s.nis, s.HADIR, s.IZIN, s.SAKIT, s.TIDAK_HADIR, s.total, s.total > 0 ? pct + '%' : '—']
