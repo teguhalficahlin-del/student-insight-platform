@@ -556,31 +556,40 @@ export async function getAbsentTeachersToday() {
 // ─── WAKA KESISWAAN ─────────────────────────────────────────
 
 export async function getAttendanceRecapPerClass(dateStart, dateEnd) {
+    // 1. Ambil semua kelas aktif — tampil meski belum ada attendance
+    const { data: classData, error: classErr } = await supabase
+        .from('classes')
+        .select('class_id, name')
+        .eq('is_active', true)
+        .order('name');
+    if (classErr) throw classErr;
+
+    const map = new Map((classData ?? []).map(c => [
+        c.class_id,
+        { class_id: c.class_id, name: c.name, HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0, total: 0 }
+    ]));
+
+    // 2. Ambil attendance dari teaching_schedules dalam rentang tanggal
     let q = supabase
         .from('teaching_schedules')
-        .select('class:classes(class_id, name), attendance!inner(status, is_void)')
+        .select('class_id, attendance!inner(status, is_void)')
         .eq('attendance.is_void', false);
     if (dateStart) q = q.gte('session_date', dateStart);
     if (dateEnd)   q = q.lte('session_date', dateEnd);
     const { data, error } = await q;
     if (error) throw error;
 
-    const map = new Map();
+    // 3. Akumulasi ke map — kelas tanpa attendance tetap ada dengan nilai 0
     for (const sched of data ?? []) {
-        const classId = sched.class?.class_id;
-        if (!classId) continue;
-        if (!map.has(classId)) {
-            map.set(classId, { class_id: classId, name: sched.class?.name ?? '—',
-                HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0, total: 0 });
-        }
-        const agg = map.get(classId);
+        const agg = map.get(sched.class_id);
+        if (!agg) continue;
         for (const r of sched.attendance ?? []) {
             const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
             if (agg[st] !== undefined) agg[st]++;
             agg.total++;
         }
     }
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'id'));
 }
 
 /**
