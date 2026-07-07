@@ -112,15 +112,15 @@ Grep kode client menunjukkan hampir semua tabel ini tidak butuh client write (di
 
 | ID | Policy | Tabel | Temuan Awal | Status |
 |----|--------|-------|-------------|--------|
-| **E1** | `rls_pkl_read_ortu` | `pkl_placements` | Policy ortu tidak punya guard `school_id` eksplisit — hanya join ke `student_parents` | **BELUM DIVERIFIKASI LIVE** — jangan asumsi aman atau berbahaya sebelum simulasi cross-tenant seperti yang dilakukan untuk C3 |
-| **E2** | Policy read `schedule_time_slots` | `schedule_time_slots` | Semua role bisa baca (tidak ada filter role) — apakah disengaja? | **BELUM DIVERIFIKASI LIVE** |
+| **E1** | `rls_pkl_read_ortu` | `pkl_placements` | Policy ortu tidak punya guard `school_id` eksplisit — hanya join ke `student_parents` | ✅ **VERIFIED 7 Juli 2026 — (b) TIDAK EXPLOITABLE.** Policy live `rls_pkl_read_ortu` MEMILIKI guard `school_id = fn_current_school_id()` sebagai kondisi AND terluar (bukan hanya join ke student_parents seperti deskripsi awal di dokumen ini menyebutkan — deskripsi awal keliru, kemungkinan ditulis dari asumsi pola kode lama, bukan dari `pg_policies` live — pelajaran Rule 4 berlaku juga saat menulis dokumentasi audit). Guard ini menutup akses lintas-sekolah terlepas isi subquery. Tidak ada data pkl_placements di smkkb/smkhb untuk uji empiris langsung; kesimpulan berbasis pembacaan definisi policy (valid secara logis: AND dengan kondisi false selalu gagal). Defense-in-depth opsional (tambah sp.school_id ke subquery) — prioritas rendah, masuk batch nanti bareng C3. |
+| **E2** | Policy read `schedule_time_slots` | `schedule_time_slots` | Semua role bisa baca (tidak ada filter role) — apakah disengaja? | ✅ **VERIFIED 7 Juli 2026 — SUDAH TER-FIX, tidak exploitable.** Migration 20260706200000 (6 Juli 2026, bagian Fase 1) sudah membatasi rls_time_slots_read hanya ke role ADMINISTRATIVE. Deskripsi awal di dokumen ini ('semua role bisa baca') sudah usang sejak migration tsb — sama seperti kasus E1, deskripsi ditulis dari kondisi lama bukan pg_policies live saat ini. Simulasi live SISWA & ORTU smkhr: 0 baris (tertolak di kondisi role, bukan sekedar school_id kosong). Tidak ada FK masuk ke tabel ini dari tabel lain — tidak ada jalur bocor tidak langsung. Isi kolom sendiri juga rendah-sensitivitas (jam & label slot, tanpa data personal). |
 
 #### Cakupan Keseluruhan Fase 2
 
 - **Fase 2.1** (RLS coverage scan): 33/33 tabel = 100% ✅  
 - **Fase 2.2 Kelompok A–C**: 13/13 policy = 100% ✅  
 - **Kelompok D**: Dianalisis via grep kode, 12/14 jelas aman, 2 perlu klarifikasi  
-- **Kelompok E**: 0/2 diverifikasi live  
+- **Kelompok E**: 2/2 diverifikasi live — SELESAI. Keduanya (b) tidak exploitable / sudah ter-fix.  
 - **Policy di luar Kelompok A–E**: ~47+ policy dari tabel lain (absensi guru, PKL full, users, observations, dll.) belum di-deep-audit secara formal → estimasi **<25% dari total ~60+ policy tujuan Fase 2**.
 
 #### Fase 5 — Skalabilitas: DITUNDA ⏸
@@ -297,9 +297,9 @@ Urutkan dari yang paling mendesak:
 
 - [ ] **D2 — Klarifikasi `achievements`:** Tidak ditemukan client write ke tabel ini. Tabel ini aktif dipakai? Diisi via mana (edge function, admin import, atau belum dipakai sama sekali)?
 
-- [ ] **E1 — Verifikasi severity live: `pkl_placements` + `rls_pkl_read_ortu`** — Policy ini tidak punya guard `school_id` eksplisit, hanya join ke `student_parents`. Ikuti metodologi Langkah 1–5 di §4 untuk membuktikan apakah ini (a) exploitable atau (b) sudah tertutup lapisan lain. JANGAN fix sebelum verifikasi.
+- [x] **E1 — SELESAI (7 Juli 2026):** Verified TIDAK EXPLOITABLE — guard school_id di level policy terluar, independen dari subquery student_parents. Detail lengkap di §3.2 Kelompok E.
 
-- [ ] **E2 — Verifikasi severity live: `schedule_time_slots`** — Semua role termasuk SISWA/ORTU bisa baca. Apakah ini disengaja (data referensi publik) atau kebocoran? Cek apakah ada data sensitif di tabel ini, lalu verifikasi live.
+- [x] **E2 — SELESAI (7 Juli 2026):** Sudah ter-fix via migration 20260706200000 (restrict ke ADMINISTRATIVE). Verified live, 0 baris untuk non-admin. Detail di §3.2 Kelompok E.
 
 - [ ] **Lanjut scan tabel/policy di luar Kelompok A–E** — Perkiraan tersisa: ~47+ policy belum di-deep-audit formal. Prioritas natural berikutnya: tabel `observations` (INSERT policies per-role), tabel `users` (UPDATE policy), dan `pkl_placements` (WRITE policies).
 
