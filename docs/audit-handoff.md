@@ -115,6 +115,24 @@ Grep kode client menunjukkan hampir semua tabel ini tidak butuh client write (di
 | **E1** | `rls_pkl_read_ortu` | `pkl_placements` | Policy ortu tidak punya guard `school_id` eksplisit — hanya join ke `student_parents` | ✅ **VERIFIED 7 Juli 2026 — (b) TIDAK EXPLOITABLE.** Policy live `rls_pkl_read_ortu` MEMILIKI guard `school_id = fn_current_school_id()` sebagai kondisi AND terluar (bukan hanya join ke student_parents seperti deskripsi awal di dokumen ini menyebutkan — deskripsi awal keliru, kemungkinan ditulis dari asumsi pola kode lama, bukan dari `pg_policies` live — pelajaran Rule 4 berlaku juga saat menulis dokumentasi audit). Guard ini menutup akses lintas-sekolah terlepas isi subquery. Tidak ada data pkl_placements di smkkb/smkhb untuk uji empiris langsung; kesimpulan berbasis pembacaan definisi policy (valid secara logis: AND dengan kondisi false selalu gagal). Defense-in-depth opsional (tambah sp.school_id ke subquery) — prioritas rendah, masuk batch nanti bareng C3. |
 | **E2** | Policy read `schedule_time_slots` | `schedule_time_slots` | Semua role bisa baca (tidak ada filter role) — apakah disengaja? | ✅ **VERIFIED 7 Juli 2026 — SUDAH TER-FIX, tidak exploitable.** Migration 20260706200000 (6 Juli 2026, bagian Fase 1) sudah membatasi rls_time_slots_read hanya ke role ADMINISTRATIVE. Deskripsi awal di dokumen ini ('semua role bisa baca') sudah usang sejak migration tsb — sama seperti kasus E1, deskripsi ditulis dari kondisi lama bukan pg_policies live saat ini. Simulasi live SISWA & ORTU smkhr: 0 baris (tertolak di kondisi role, bukan sekedar school_id kosong). Tidak ada FK masuk ke tabel ini dari tabel lain — tidak ada jalur bocor tidak langsung. Isi kolom sendiri juga rendah-sensitivitas (jam & label slot, tanpa data personal). |
 
+### 3.3 Temuan Baru — Investigasi Lanjutan (7 Juli 2026)
+
+Investigasi ini memeriksa sisa 70 policy yang belum di-deep-audit dari
+total 117 policy (47 sudah ter-cover Kelompok A–E). Hasil triase:
+45 pola aman jelas (school_id guard terluar konsisten), 18 perlu
+deep-audit fungsi helper, 7 perlu baca kual lengkap — ketujuhnya
+sudah diperiksa di sesi ini.
+
+| ID | Temuan | Status |
+|----|--------|--------|
+| — | **fn_can_see_case + seluruh sub-fungsinya** | 🟢 **VERIFIED AMAN** — school_id guard ada di level terluar EXISTS; semua cabang case-related aman. |
+| — | **fn_can_see_student + 3 policy pemanggil** (rls_students_read_staff, rls_enrollments_read_staff, rls_attendance_read_staff) | 🟢 **VERIFIED AMAN** — pola school_id AND terluar identik dengan A7/B3; tidak ada jalur bypass. |
+| — | **rls_users_read_own, rls_users_update_own** | 🟢 **VERIFIED AMAN** — filter auth_user_id UNIQUE global; satu user = satu baris; tidak butuh guard school_id tambahan. |
+| **F2-A** | **rls_users_read_staff_names + rls_users_read_staff: over-exposure kolom** | ✅ **Migration 20260707130000 SUDAH DI-PUSH ke live (7 Juli 2026).** View `v_users_staff_directory` aktif, tervalidasi identik (baris) dengan tabel dasar untuk role SISWA dan GURU, hanya 8 kolom aman yang terekspos. Test suite tenant-isolation.mjs dijalankan ulang pasca-push (7 Juli 2026): 42/42 CHECK lulus, termasuk CHECK 6 baru yang memverifikasi v_users_staff_directory (security_invoker=true, anon tidak bisa baca). CATATAN: ini baru infrastruktur — client code di 7 portal BELUM dipindah ke view ini, akses langsung ke tabel `users` masih terbuka. Migrasi client adalah pekerjaan terpisah (belum dimulai). |
+| — | **Integritas cross-school class_enrollments + teaching_assignments** | 🟢 **0 baris inkonsisten di data live** — tidak ada CHECK/FK composite di skema, tapi tertutup oleh trigger `trg_auto_school_id` via `fn_auto_set_school_id()` yang menutup 18 tabel (students, class_enrollments, teaching_assignments, student_parents, dll). Trigger fallback: derive school_id dari parent entity (program→students, class→enrollments, dll). |
+| — | **fn_bulk_import_students: tidak ada validasi school_id internal** | 🟢 **VERIFIED AMAN (eksposur rendah)** — EXECUTE hanya `service_role` (anon: false, authenticated: false); hanya dipanggil dari edge function `bulk-import-students` via admin client; tidak pernah exposed ke portal client manapun. Tidak ada jalur exploit dari luar. |
+| — | **Defense-in-depth opsional (prioritas rendah)** | Tambah `p_school_id` eksplisit + validasi ke `fn_bulk_import_students`; tambah trigger validasi CHECK cross-entity di `class_enrollments`/`teaching_assignments` sebagai lapis kedua di luar `trg_auto_school_id`. Batch nanti bareng C3/E1. |
+
 #### Cakupan Keseluruhan Fase 2
 
 - **Fase 2.1** (RLS coverage scan): 33/33 tabel = 100% ✅  
@@ -292,6 +310,9 @@ Migration sebelum 2026-07-03 adalah fondasi multi-tenant platform (RLS isolasi, 
 ## 6. Langkah Selanjutnya — Checklist untuk Sesi Berikutnya
 
 Urutkan dari yang paling mendesak:
+
+- [x] **F2-A (infrastruktur) — SELESAI (7 Juli 2026):** view `v_users_staff_directory` live & tervalidasi. Migration `20260707130000` di-push, 8 kolom aman terkonfirmasi, total 4499 baris accessible.
+- [ ] **F2-A (lanjutan) — Migrasi client code 7 portal ke view (belum dimulai).** Urutan: `guru/js/api.js` (pilot) → lokasi lain satu-satu, verifikasi tiap lokasi sebelum lanjut. Setelah semua portal selesai: evaluasi apakah grant SELECT langsung ke `users` perlu dibatasi.
 
 - [ ] **D1 — Klarifikasi `academic_periods` DELETE:** Admin portal melakukan INSERT+UPDATE langsung ke tabel ini (lihat `admin/js/semester.js:354,416`). Apakah ada use case DELETE (misal: hapus periode yang salah dibuat), atau selalu via RPC/admin DB? Jika butuh client DELETE, tambahkan policy DELETE hanya untuk role ADMINISTRATIVE.
 
