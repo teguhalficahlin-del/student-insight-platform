@@ -529,6 +529,203 @@ async function main() {
         }
     }
 
+    // ── CHECK 10: rls_schedules_read_student defense-in-depth ────
+    // Simetris dengan CHECK 9 (rls_schedules_read_parent).
+    // Memverifikasi dua hal setelah fix fase 2.2 Kelompok B:
+    //   (a) Struktural: qual policy kini mengandung ce.school_id eksplisit.
+    //   (b) Fungsional (regression): siswa dengan enrollment aktif masih bisa
+    //       melihat jadwal kelas mereka — fix tidak mematahkan fitur aktif.
+    log.head('CHECK 10 — rls_schedules_read_student: ce.school_id eksplisit & regression siswa-melihat-jadwal');
+
+    // (a) Cek struktural: qual harus mengandung ce.school_id = fn_current_school_id()
+    const c10Policy = await mgmtQuery(`
+        select qual from pg_policies
+        where schemaname = 'public'
+          and tablename  = 'teaching_schedules'
+          and policyname = 'rls_schedules_read_student'`);
+    if (c10Policy.length === 0) {
+        log.fail('rls_schedules_read_student tidak ditemukan di pg_policies');
+    } else {
+        const qual = c10Policy[0].qual || '';
+        if (qual.includes('ce.school_id = fn_current_school_id()'))
+            log.pass('rls_schedules_read_student: ce.school_id = fn_current_school_id() hadir di qual (defense-in-depth aktif)');
+        else
+            log.fail(`rls_schedules_read_student: ce.school_id TIDAK ada di qual — migrasi mungkin belum ter-apply. Qual: ${qual.slice(0, 200)}`);
+    }
+
+    // (b) Regression fungsional: cari siswa yang punya class_enrollment aktif
+    //     dan kelas itu punya teaching_schedules. Simulasikan konteks RLS
+    //     siswa via SET ROLE, pastikan ia masih melihat ≥1 jadwal.
+    const c10Data = await mgmtQuery(`
+        select u.auth_user_id::text as siswa_auid,
+               u.school_id::text,
+               s2.name as school_name,
+               ts.schedule_id::text
+        from students st
+        join users u on u.user_id = st.user_id and u.role_type = 'SISWA' and u.is_active
+        join schools s2 on s2.school_id = u.school_id
+        join class_enrollments ce on ce.student_id = st.student_id
+                                  and ce.school_id = u.school_id
+                                  and ce.withdrawn_at is null
+        join teaching_schedules ts on ts.class_id = ce.class_id
+                                   and ts.school_id = u.school_id
+        where u.auth_user_id is not null
+        limit 1`);
+
+    if (c10Data.length === 0) {
+        log.pass('CHECK 10b SKIP — tidak ada data (siswa+enrollment+jadwal) untuk regression fungsional (tidak menggagalkan)');
+    } else {
+        const { siswa_auid, school_id, school_name } = c10Data[0];
+        const claims10 = `{"sub":"${siswa_auid}","role":"authenticated"}`;
+        let c10Rows;
+        try {
+            c10Rows = await mgmtQuery(
+                `begin;` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $c10$${claims10}$c10$, true);` +
+                ` select count(*)::int as n_schedules from teaching_schedules` +
+                ` where school_id = '${school_id}';` +
+                ` commit;`);
+        } catch (e) {
+            log.fail(`CHECK 10b — transaksi regression gagal: ${e.message}`);
+            c10Rows = null;
+        }
+        if (c10Rows !== null) {
+            const n = c10Rows[0]?.n_schedules ?? -1;
+            if (n > 0)
+                log.pass(`siswa ${school_name} masih melihat ${n} jadwal setelah fix ce.school_id — regression OK`);
+            else
+                log.fail(`REGRESI: siswa ${school_name} melihat 0 jadwal setelah fix ce.school_id — fitur terganggu`);
+        }
+    }
+
+    // ── CHECK 11: rls_cases_insert cross-tenant write guard ──────
+    // Memverifikasi fix fase 2.2 Kelompok C — celah INSERT kasus untuk
+    // student dari sekolah lain (school_id=A, student_id=B).
+    //
+    // (a) Struktural: with_check harus mengandung EXISTS student school guard.
+    // (b) Serangan: staff sekolah A TIDAK bisa INSERT kasus untuk siswa B.
+    // (c) Regression: staff sekolah A MASIH bisa INSERT kasus untuk siswa A.
+    // Semua INSERT dalam transaksi yang di-ROLLBACK — DB tidak berubah.
+    log.head('CHECK 11 — rls_cases_insert: guard student ↔ school & regression INSERT guru-sekolah-sendiri');
+
+    // (a) Struktural: with_check harus mengandung st.school_id = fn_current_school_id()
+    const c11Policy = await mgmtQuery(`
+        select with_check from pg_policies
+        where schemaname = 'public'
+          and tablename  = 'cases'
+          and policyname = 'rls_cases_insert'`);
+    if (c11Policy.length === 0) {
+        log.fail('rls_cases_insert tidak ditemukan di pg_policies');
+    } else {
+        const wc = c11Policy[0].with_check || '';
+        if (wc.includes('fn_student_in_current_school(student_id)'))
+            log.pass('rls_cases_insert: fn_student_in_current_school hadir di with_check (cross-tenant guard aktif)');
+        else
+            log.fail(`rls_cases_insert: fn_student_in_current_school TIDAK ada di with_check — migrasi mungkin belum ter-apply. Snippet: ${wc.slice(0, 200)}`);
+    }
+
+    // Data prep: cari 2 sekolah dengan GURU aktif + siswa yang TIDAK sedang PKL aktif
+    const c11Schools = await mgmtQuery(`
+        select s.school_id::text,
+               s.name,
+               (select u.auth_user_id::text from users u
+                 where u.school_id = s.school_id and u.role_type = 'GURU' and u.is_active
+                 limit 1) as guru_auid,
+               (select u.user_id::text from users u
+                 where u.school_id = s.school_id and u.role_type = 'GURU' and u.is_active
+                 limit 1) as guru_user_id,
+               (select st.student_id::text from students st
+                 where st.school_id = s.school_id
+                   and not exists (
+                     select 1 from pkl_placements pp
+                     where pp.student_id = st.student_id
+                       and pp.school_id  = st.school_id
+                       and pp.start_date <= current_date
+                       and (pp.end_date is null or pp.end_date >= current_date)
+                   )
+                 limit 1) as student_id,
+               (select count(*) from students st where st.school_id = s.school_id)::int as n_students
+        from schools s
+        where exists (select 1 from users u
+                       where u.school_id = s.school_id and u.role_type = 'GURU' and u.is_active)
+          and exists (select 1 from students st where st.school_id = s.school_id)
+        order by n_students desc
+        limit 2`);
+
+    if (c11Schools.length < 2 || !c11Schools[0].guru_auid || !c11Schools[1].student_id) {
+        log.pass('CHECK 11b/11c SKIP — tidak ada 2 sekolah dengan guru+siswa untuk uji perilaku (tidak menggagalkan)');
+    } else {
+        const [A, B] = c11Schools; // A = sekolah guru; B = sekolah target siswa
+        const claims11 = `{"sub":"${A.guru_auid}","role":"authenticated"}`;
+
+        // (b) Serangan: guru A mencoba INSERT kasus untuk siswa B → HARUS GAGAL
+        let c11AttackErr = null;
+        try {
+            await mgmtQuery(
+                `begin;` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $c11a$${claims11}$c11a$, true);` +
+                ` insert into cases` +
+                `   (school_id, student_id, title, description, track, audience,` +
+                `    created_by_user_id, initiated_by_role, current_handler_role)` +
+                ` values` +
+                `   ('${A.school_id}', '${B.student_id}',` +
+                `    'Test cross-tenant insert attack',` +
+                `    'Deskripsi uji minimal dua puluh karakter untuk lolos cek.',` +
+                `    'SEKOLAH', 'RESTRICTED',` +
+                `    '${A.guru_user_id}', 'GURU', 'GURU');` +
+                ` rollback;`
+            );
+        } catch (e) {
+            c11AttackErr = e.message;
+        }
+        const blocked = c11AttackErr && (
+            c11AttackErr.includes('42501') ||
+            c11AttackErr.includes('row-level security') ||
+            c11AttackErr.includes('new row violates')
+        );
+        if (blocked)
+            log.pass(`guru ${A.name} TIDAK bisa INSERT kasus untuk siswa ${B.name} (cross-tenant INSERT ditolak)`);
+        else if (c11AttackErr)
+            log.fail(`guru ${A.name} → siswa ${B.name}: INSERT gagal tapi bukan karena RLS: ${c11AttackErr.slice(0, 150)}`);
+        else
+            log.fail(`BOCOR: guru ${A.name} berhasil INSERT kasus untuk siswa ${B.name} — cross-tenant write TIDAK terblokir`);
+
+        // (c) Regression: guru A INSERT kasus untuk siswa A → HARUS BERHASIL
+        let c11RegOk = false;
+        let c11RegErr = null;
+        try {
+            const regRows = await mgmtQuery(
+                `begin;` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $c11r$${claims11}$c11r$, true);` +
+                ` insert into cases` +
+                `   (school_id, student_id, title, description, track, audience,` +
+                `    created_by_user_id, initiated_by_role, current_handler_role)` +
+                ` values` +
+                `   ('${A.school_id}', '${A.student_id}',` +
+                `    'Test regression insert own school',` +
+                `    'Deskripsi uji minimal dua puluh karakter untuk lolos cek.',` +
+                `    'SEKOLAH', 'RESTRICTED',` +
+                `    '${A.guru_user_id}', 'GURU', 'GURU');` +
+                // Tidak pakai RETURNING — GURU tidak bisa SELECT kasus yang baru diinsert
+                // (rls_cases_read_staff butuh fn_can_see_case). Gunakan SELECT 1 sebagai penanda sukses.
+                ` select 1 as inserted_ok;` +
+                ` rollback;`
+            );
+            c11RegOk = Array.isArray(regRows) && regRows.length > 0 && regRows[0]?.inserted_ok === 1;
+        } catch (e) {
+            c11RegErr = e.message;
+        }
+        if (c11RegOk)
+            log.pass(`guru ${A.name} masih bisa INSERT kasus untuk siswa ${A.name} sendiri — regression OK (ROLLBACK, tidak ada sisa data)`);
+        else if (c11RegErr)
+            log.fail(`REGRESI: guru ${A.name} INSERT siswa sendiri GAGAL: ${c11RegErr.slice(0, 150)}`);
+        else
+            log.fail(`REGRESI: guru ${A.name} INSERT siswa sendiri tidak mengembalikan case_id — mungkin gagal diam`);
+    }
+
     // ── Ringkasan ────────────────────────────────────────────────
     console.log(`\n${'='.repeat(52)}`);
     if (failures === 0) {

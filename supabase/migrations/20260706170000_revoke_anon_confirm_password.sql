@@ -1,0 +1,39 @@
+-- ============================================================
+-- Migration: 20260706170000_revoke_anon_confirm_password.sql
+--
+-- Fix CHECK 2 tenant-isolation: mencabut hak EXECUTE
+-- fn_confirm_password_changed() dari role anon secara eksplisit.
+--
+-- MENGAPA migration 20260706160000 (REVOKE FROM PUBLIC) tidak cukup:
+--   Supabase menginisialisasi setiap project baru dengan:
+--     GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated;
+--   Ini membuat entry EKSPLISIT {anon=X/postgres} di pg_proc.proacl —
+--   terpisah dari entry PUBLIC. REVOKE FROM PUBLIC hanya mencabut entry
+--   PUBLIC; entry eksplisit ke anon tetap ada dan has_function_privilege
+--   masih return true.
+--
+-- STANDING NOTE — wajib diikuti di Fase 2 dan seterusnya:
+--   Setiap kali membuat fungsi SECURITY DEFINER baru di project ini,
+--   migration HARUS menyertakan dua REVOKE di blok yang SAMA:
+--
+--     REVOKE EXECUTE ON FUNCTION nama_fungsi() FROM anon;
+--     REVOKE EXECUTE ON FUNCTION nama_fungsi() FROM PUBLIC;
+--
+--   Jangan mengandalkan salah satu saja:
+--   - REVOKE FROM PUBLIC  → tidak mencabut grant eksplisit ke anon
+--   - REVOKE FROM anon    → tidak mencabut entry PUBLIC (defense-in-depth)
+--   Keduanya wajib ada di migration yang sama saat fungsi dibuat.
+--
+-- Verifikasi SEBELUM/SESUDAH (jalankan di SQL Editor — tidak mengeksekusi
+-- fungsi, hanya baca metadata):
+--
+--   SELECT proname, proacl,
+--          has_function_privilege('anon', oid, 'EXECUTE') AS anon_can_exec,
+--          has_function_privilege('authenticated', oid, 'EXECUTE') AS auth_can_exec
+--   FROM pg_proc WHERE proname = 'fn_confirm_password_changed';
+--
+--   Sebelum: anon_can_exec = true
+--   Sesudah: anon_can_exec = false, auth_can_exec = true (tetap)
+-- ============================================================
+
+REVOKE EXECUTE ON FUNCTION fn_confirm_password_changed() FROM anon;
