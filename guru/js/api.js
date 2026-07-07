@@ -296,10 +296,11 @@ export async function searchStudents(query, schoolId) {
  * Simpan observasi baru. Offline-capable: antre ke IndexedDB bila jaringan mati.
  * @returns {{status:'synced'|'queued'|'error', error?:string}}
  */
-export async function insertObservation({ authorId, studentId, dimension, sentiment, visibility, content }) {
+export async function insertObservation({ obsId, authorId, studentId, dimension, sentiment, visibility, content }) {
+    const observation_id = obsId ?? crypto.randomUUID();
     const payload = {
         idempotency_key: crypto.randomUUID(),
-        observation_id:  crypto.randomUUID(),
+        observation_id,
         author_user_id:  authorId,
         student_id:      studentId,
         dimension,
@@ -308,7 +309,8 @@ export async function insertObservation({ authorId, studentId, dimension, sentim
         content,
         observed_at:     new Date().toISOString().slice(0, 10),
     };
-    return saveObservation(payload);
+    const result = await saveObservation(payload);
+    return { ...result, observation_id };
 }
 
 // ─── WALI KELAS ──────────────────────────────────────────────

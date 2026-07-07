@@ -792,16 +792,83 @@ async function initObsForm() {
         LC.set(stuCacheKey, fresh);
     } catch (_) { /* pakai cache yang sudah di-load di atas */ }
 
-    const searchEl   = document.getElementById('obs-student-search');
-    const hiddenEl   = document.getElementById('obs-student-id');
-    const listEl     = document.getElementById('obs-student-list');
-    const form       = document.getElementById('obs-form');
-    const submitBtn  = document.getElementById('obs-submit');
-    const statusEl   = document.getElementById('obs-status');
+    const searchEl      = document.getElementById('obs-student-search');
+    const hiddenEl      = document.getElementById('obs-student-id');
+    const listEl        = document.getElementById('obs-student-list');
+    const form          = document.getElementById('obs-form');
+    const submitBtn     = document.getElementById('obs-submit');
+    const statusEl      = document.getElementById('obs-status');
     const obsContentEl  = document.getElementById('obs-content');
-    const obsCharCountEl = document.getElementById('obs-char-count');
+    const obsCharCountEl= document.getElementById('obs-char-count');
+    const visSelect     = document.getElementById('obs-visibility');
+    const restrictedForm= document.getElementById('obs-restricted-form');
+    const formMembersEl = document.getElementById('obs-form-members');
+    const formMemberSearch = document.getElementById('obs-form-member-search');
+    const formMemberDrop   = document.getElementById('obs-form-member-drop');
+    const formMemberMsg    = document.getElementById('obs-form-member-msg');
+
     obsContentEl.addEventListener('input', () => {
         obsCharCountEl.textContent = obsContentEl.value.length;
+    });
+
+    // ── Anggota audiens lokal (RESTRICTED, sebelum simpan) ──
+    let pendingMembers = []; // [{ user_id, full_name, role_type }]
+
+    function renderPendingMembers() {
+        if (!pendingMembers.length) {
+            formMembersEl.innerHTML = '<em style="color:var(--color-text-muted);font-size:12px">Belum ada anggota dipilih.</em>';
+            return;
+        }
+        const OBS_ROLE_LBL = { GURU:'Guru', BK:'BK', WALI_KELAS:'Wali Kelas', KAPRODI:'Kaprodi', WAKA_KESISWAAN:'Waka Kesiswaan', KEPSEK:'Kepala Sekolah' };
+        formMembersEl.innerHTML = pendingMembers.map(m =>
+            `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;padding:2px 8px;border:1px solid var(--color-border);border-radius:20px;font-size:12px">
+                ${esc(m.full_name)} <span style="color:var(--color-text-muted)">(${esc(OBS_ROLE_LBL[m.role_type] ?? m.role_type)})</span>
+                <button data-uid="${m.user_id}" style="background:none;border:none;cursor:pointer;color:var(--color-danger);font-size:14px;line-height:1;padding:0 2px" title="Hapus">×</button>
+            </span>`
+        ).join('');
+        formMembersEl.querySelectorAll('button[data-uid]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                pendingMembers = pendingMembers.filter(m => m.user_id !== btn.dataset.uid);
+                renderPendingMembers();
+            });
+        });
+    }
+
+    visSelect.addEventListener('change', () => {
+        restrictedForm.style.display = visSelect.value === 'RESTRICTED' ? 'block' : 'none';
+        if (visSelect.value !== 'RESTRICTED') { pendingMembers = []; renderPendingMembers(); }
+        else renderPendingMembers();
+    });
+
+    let formMemberSeq = 0;
+    formMemberSearch.addEventListener('input', async () => {
+        const q = formMemberSearch.value.trim();
+        if (q.length < 2) { formMemberDrop.style.display = 'none'; return; }
+        const seq = ++formMemberSeq;
+        try {
+            const users = await searchInternalUsers(q);
+            if (seq !== formMemberSeq) return;
+            const filtered = users.filter(u => !pendingMembers.find(m => m.user_id === u.user_id));
+            if (!filtered.length) { formMemberDrop.style.display = 'none'; return; }
+            formMemberDrop.innerHTML = filtered.map(u =>
+                `<div class="obs-form-hit" data-id="${u.user_id}" data-name="${esc(u.full_name)}" data-role="${esc(u.role_type)}"
+                     style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--color-border)">
+                     ${esc(u.full_name)} <span style="color:var(--color-text-muted);font-size:11px">(${esc(u.role_type)})</span>
+                 </div>`
+            ).join('');
+            formMemberDrop.style.display = 'block';
+            formMemberDrop.querySelectorAll('.obs-form-hit').forEach(el => {
+                el.addEventListener('mousedown', () => {
+                    pendingMembers.push({ user_id: el.dataset.id, full_name: el.dataset.name, role_type: el.dataset.role });
+                    formMemberSearch.value = '';
+                    formMemberDrop.style.display = 'none';
+                    renderPendingMembers();
+                });
+            });
+        } catch { formMemberDrop.style.display = 'none'; }
+    });
+    document.addEventListener('click', e => {
+        if (!formMemberDrop.contains(e.target) && e.target !== formMemberSearch) formMemberDrop.style.display = 'none';
     });
 
     // Observer berjangkauan luas (BK/Kaprodi/Waka Kesiswaan/Kepsek) bisa
@@ -848,6 +915,12 @@ async function initObsForm() {
             statusEl.textContent = 'Pilih siswa terlebih dahulu.';
             return;
         }
+        const visibility = visSelect.value;
+        if (visibility === 'RESTRICTED' && pendingMembers.length === 0) {
+            formMemberMsg.textContent = 'Tambahkan minimal satu orang sebelum menyimpan.';
+            return;
+        }
+        formMemberMsg.textContent = '';
         statusEl.style.display = 'none';
         submitBtn.disabled = true;
         submitBtn.textContent = 'Menyimpan…';
@@ -857,17 +930,26 @@ async function initObsForm() {
                 studentId:  hiddenEl.value,
                 dimension:  document.getElementById('obs-dimension').value,
                 sentiment:  document.getElementById('obs-sentiment').value,
-                visibility: document.getElementById('obs-visibility').value,
+                visibility,
                 content:    document.getElementById('obs-content').value,
             });
             if (r.status === 'error') throw new Error(r.error);
+            // Jika synced dan RESTRICTED, simpan anggota audiens ke DB
+            if (r.status === 'synced' && visibility === 'RESTRICTED' && pendingMembers.length) {
+                await Promise.all(pendingMembers.map(m =>
+                    addObsAudienceMember({ obsId: r.observation_id, userId: m.user_id, schoolId: currentUser.school_id })
+                ));
+            }
             statusEl.textContent   = r.status === 'queued'
                 ? '⏳ Observasi disimpan lokal — akan dikirim saat online.'
                 : '✓ Observasi berhasil disimpan.';
             statusEl.className     = 'status-msg status-ok';
             statusEl.style.display = 'block';
             form.reset();
-            hiddenEl.value = '';
+            hiddenEl.value   = '';
+            pendingMembers   = [];
+            restrictedForm.style.display = 'none';
+            renderPendingMembers();
             if (r.status === 'synced') await loadObsHistory();
         } catch (err) {
             statusEl.textContent   = `✗ ${fe(err, 's')}`;
