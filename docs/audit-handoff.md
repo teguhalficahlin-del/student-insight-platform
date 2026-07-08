@@ -123,6 +123,16 @@ total 117 policy (47 sudah ter-cover Kelompok A–E). Hasil triase:
 deep-audit fungsi helper, 7 perlu baca kual lengkap — ketujuhnya
 sudah diperiksa di sesi ini.
 
+> ⚠️ **CATATAN KEHATI-HATIAN:** 45 policy yang dikategorikan "pola aman
+> jelas" ditriase secara VISUAL (pencocokan pola `school_id` guard terluar
+> secara konsisten di definisi policy). BELUM DIKONFIRMASI apakah masing-masing
+> dari 45 policy ini juga melalui simulasi live cross-tenant sesuai Rule 4,
+> atau hanya dicocokkan secara visual saja. Ini BERBEDA dari 18+7 policy
+> yang secara eksplisit diverifikasi live dalam investigasi ini. Sesi
+> berikutnya **tidak boleh mengasumsikan** 45 policy ini setara dengan yang
+> telah diverifikasi live — perlu konfirmasi metodologi sebelum menutup
+> coverage scan ini sebagai "selesai".
+
 | ID | Temuan | Status |
 |----|--------|--------|
 | — | **fn_can_see_case + seluruh sub-fungsinya** | 🟢 **VERIFIED AMAN** — school_id guard ada di level terluar EXISTS; semua cabang case-related aman. |
@@ -308,6 +318,14 @@ Migration sebelum 2026-07-03 adalah fondasi multi-tenant platform (RLS isolasi, 
 ---
 
 ## 6. Langkah Selanjutnya — Checklist untuk Sesi Berikutnya
+
+> ⚠️ **STATUS FASE 2 SECARA KESELURUHAN: BELUM SELESAI.** Jangan
+> menyimpulkan Fase 2 selesai hanya karena PRIORITAS 2 (scan SECURITY
+> DEFINER) sudah ✅. Item berikut MASIH TERBUKA dan wajib diselesaikan
+> sebelum Fase 2 bisa ditutup: **PRIORITAS 1** (migrasi client 7 portal
+> ke `v_users_staff_directory`) belum dimulai sama sekali; **D1**
+> (klarifikasi DELETE `academic_periods`) belum dijawab; **D2** (status
+> tabel `achievements`) belum dikonfirmasi.
 
 Urutkan dari yang paling mendesak:
 
@@ -526,6 +544,65 @@ dari JWT claim `school_id`) — bukan bug policy sungguhan.
 (DDL), bungkus CREATE/DROP POLICY + skenario uji dalam SATU transaksi
 `BEGIN...ROLLBACK` sebelum diterapkan permanen — jangan apply dulu baru
 uji terpisah.
+
+---
+
+---
+
+## 11. Ringkasan Sesi 8 Juli 2026 (Kedua Blok)
+
+### Blok 1 — Pagi: Scan Sistemik SECURITY DEFINER
+
+59 fungsi SECURITY DEFINER di-scan. 4 temuan ditemukan, semua yang
+exploitable sudah di-fix dan diverifikasi live + test suite:
+
+- **FINDING 1** — `fn_get_stale_staff()` tanpa guard role → fix `20260708040000`
+- **FINDING 2** — Regresi write-path kasus (20260707150000 terlalu agresif) → fix `20260708010000` + `20260708030000`
+- **FINDING 3** — `fn_stakeholder_summary()` tanpa guard role → fix `20260708050000`
+- **FINDING 4** — 14 fungsi helper `anon=true` (technical debt, tidak exploitable saat ini) → dicatat sebagai Fase 3 backlog
+
+Commit: `b0d545d`. 42/42 CHECK lulus pasca keempat migration.
+
+### Blok 2 — Siang–Sore: Audience RESTRICTED Diperluas ke Siswa/Ortu
+
+Migration `20260708060000` diterapkan live. Dua bug regresi ditemukan dan
+diperbaiki dalam blok yang sama:
+
+1. `rls_cam_insert` dengan `added_by_user_id` guard tetapi client tidak pernah
+   mengirim field itu → INSERT diam-diam ditolak. Fix: tambah field ke 4
+   call site di client.
+2. `getMyObservations`/`fetchObservations` filter `visibility = 'STUDENT_VISIBLE'`
+   (enum tidak ada) → fitur observasi siswa/ortu tidak pernah bisa berjalan.
+   Fix: ganti ke `'RESTRICTED'`.
+
+Commit: `333130e` (migration + bug fixes), `a6f8eac` (update dokumentasi).
+Test suite: 42/42 lulus.
+
+### ⛔ GAP YANG DITEMUKAN SAAT REVIEW AKHIR — BELUM DITINDAKLANJUTI
+
+**PRIORITAS TERTINGGI sesi berikutnya.** Migration 20260708060000 sudah
+live TANPA pengecekan ini dilakukan:
+
+Verifikasi apakah **`rls_case_events_read_student`** dan policy serupa di
+**`student_updates`** BERGANTUNG pada `case_audience_members` (aman:
+siswa yang tidak ada di audience tabel otomatis tidak bisa baca event/update)
+ataukah BERDIRI SENDIRI dengan akses "ini kasus tentang saya" tanpa cek
+membership audience (berarti kebocoran: siswa bisa baca detail event/update
+kasus yang dia sendiri tidak bisa lihat kasusnya karena tidak di audience).
+
+Langkah verifikasi yang perlu dilakukan:
+1. Baca definisi live kedua policy via `pg_policies`
+2. Jika bergantung `case_audience_members` → aman, catat konfirmasi
+3. Jika berdiri sendiri → buat migration fix, konfirmasi Romo sebelum apply
+
+### Status Fase — Akhir Sesi 8 Juli 2026
+
+| Fase | Status |
+|------|--------|
+| Fase 1 | ✅ SELESAI |
+| Fase 2 | 🔄 BELUM SELESAI — PRIORITAS 1, D1, D2 masih terbuka |
+| Fase 3 | ⏳ BELUM DIMULAI (backlog: 14 fungsi anon + WAKA_HUMAS/PKL) |
+| Fase 4–6 | ⏳ Belum dimulai |
 
 ---
 
