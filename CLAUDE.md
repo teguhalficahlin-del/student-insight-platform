@@ -13,7 +13,7 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
 3. **Missing RLS policy bukan otomatis celah.** RLS default-deny: tidak ada policy = akses ditolak. Verifikasi live dulu (simulasi cross-tenant nyata) SEBELUM fix, jangan asumsi dari pola kode saja.
 4. Lihat `docs/audit-handoff.md §3a` untuk daftar lengkap standing rules.
 
-## Status Singkat (terakhir diperbarui: 8 Juli 2026)
+## Status Singkat (terakhir diperbarui: 9 Juli 2026)
 
 - **Fase 1**: ✅ Selesai
 - **Fase 2**: 🔄 Sedang berjalan — **BELUM SELESAI.** Kelompok A-E selesai
@@ -29,14 +29,19 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
   `roles={public}` ke `TO authenticated`), kemungkinan analisis akses
   WAKA_HUMAS/PKL (lihat §10 backlog). Jangan mulai Fase 3 sebelum PRIORITAS 1
   Fase 2 selesai.
-- **PRIORITAS TERTINGGI sesi berikutnya — GAP yang ditemukan saat review
-  akhir, belum ditindaklanjuti:** Verifikasi apakah `rls_case_events_read_student`
-  dan policy serupa di `student_updates` BERGANTUNG pada `case_audience_members`
-  (aman: otomatis ikut ketat setelah migration 20260708060000) atau BERDIRI
-  SENDIRI dengan akses "ini kasus saya" tanpa cek audience membership (berarti
-  ada kebocoran: siswa tidak terlihat di audience, tidak bisa lihat kasus,
-  tapi masih bisa baca event/update detailnya). Migration 20260708060000 sudah
-  live TANPA pengecekan ini — harus diverifikasi di sesi berikutnya.
+- **✅ GAP rls_case_events_read_student — SELESAI (9 Juli 2026):**
+  Investigasi selesai: ketiga policy (`rls_case_events_read_student`,
+  `rls_case_events_read_parent`, `rls_student_updates_read_student`) BERDIRI
+  SENDIRI (Rule 3 violation) — non-fungsional total, bukan kebocoran.
+  Ditemukan juga regresi ke-4: `rls_case_events_read_staff` tanpa filter role
+  → SISWA/ORTU dalam audience bisa baca event INTERNAL_SCHOOL (0 baris
+  terekspos saat ditemukan). Keduanya di-fix via migration `20260709010000`
+  (fix b/c/d/e/f), 12/12 skenario BEGIN...ROLLBACK lulus, 42/42 CHECK suite
+  lulus pasca-apply. Commit 28fc884. Lihat docs/audit-handoff.md §11 Blok 3.
+- **⚠️ Gap test suite (backlog §9.4):** 12 skenario T1–T12 yang memverifikasi
+  read-path case_events/student_updates siswa/ortu belum menjadi CHECK permanen
+  di `tests/tenant-isolation.mjs` — hanya diuji ad-hoc sesi 9 Juli 2026.
+  Lihat docs/audit-handoff.md §9.4 untuk rekomendasi.
 - **Fitur audience RESTRICTED diperluas (8 Juli 2026, blok kedua):**
   siswa subjek kasus/observasi dan orang tua mereka kini bisa ditambahkan
   ke audience RESTRICTED secara eksplisit oleh guru (opt-in per-item).
@@ -44,11 +49,13 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
   akses siswa/ortu ke kasus RESTRICTED sebelumnya OTOMATIS, sekarang
   OPT-IN penuh. Lihat docs/audit-handoff.md §10 untuk detail lengkap.
 - **Version control**: 5 migration 8 Juli 2026 applied live
-  (20260708010000/030000/040000/050000/060000) + commit a8f7336 (fitur
-  RESTRICTED audience inline form) + commit 333130e (audience siswa/ortu
-  + fix bug added_by_user_id) + commit a6f8eac (update dokumentasi).
+  (20260708010000/030000/040000/050000/060000) + 1 migration 9 Juli 2026
+  (20260709010000) + commit a8f7336 (fitur RESTRICTED audience inline form)
+  + commit 333130e (audience siswa/ortu + fix bug added_by_user_id)
+  + commit a6f8eac (update dokumentasi) + commit 28fc884 (fix regresi Rule 3
+  + role filter case_events/student_updates) + commit 411df2e (docs §9.4).
   Lihat docs/audit-handoff.md §8, §10, §11.
-- **Test suite**: 42/42 CHECK lulus (terakhir dijalankan 8 Juli 2026,
-  pasca migration 20260708060000).
+- **Test suite**: 42/42 CHECK lulus (terakhir dijalankan 9 Juli 2026,
+  pasca migration 20260709010000).
 
 Detail lengkap dan checklist prioritas ada di `docs/audit-handoff.md §6`.
