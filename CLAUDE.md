@@ -54,7 +54,7 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
   + commit 333130e (audience siswa/ortu + fix bug added_by_user_id)
   + commit a6f8eac (update dokumentasi) + commit 28fc884 (fix regresi Rule 3
   + role filter case_events/student_updates) + commit 411df2e (docs §9.4)
-  + commit TBD (CHECK 12+13 permanen + sinkronisasi docs §9.4/§12).
+  + commit 5e7ead5 (CHECK 12+13 permanen + sinkronisasi docs §9.4/§12).
   Lihat docs/audit-handoff.md §8, §10, §11, §12.
 - **Test suite**: 77/77 ✓ lulus (terakhir dijalankan 9 Juli 2026, pasca
   CHECK 12+13 ditambahkan). 13 CHECK top-level. Catatan historis: "42/42"
