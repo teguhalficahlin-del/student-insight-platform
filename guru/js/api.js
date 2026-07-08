@@ -730,10 +730,10 @@ export async function getObsAudienceMembers(obsId) {
     return data ?? [];
 }
 
-export async function addObsAudienceMember({ obsId, userId, schoolId }) {
+export async function addObsAudienceMember({ obsId, userId, schoolId, addedByUserId }) {
     const { error } = await supabase
         .from('observation_audience_members')
-        .insert({ observation_id: obsId, user_id: userId, school_id: schoolId });
+        .insert({ observation_id: obsId, user_id: userId, school_id: schoolId, added_by_user_id: addedByUserId });
     if (error) throw error;
 }
 
@@ -865,10 +865,10 @@ export async function getCaseAudienceMembers(caseId) {
     return data ?? [];
 }
 
-export async function addCaseAudienceMember({ caseId, userId, schoolId }) {
+export async function addCaseAudienceMember({ caseId, userId, schoolId, addedByUserId }) {
     const { error } = await supabase
         .from('case_audience_members')
-        .insert({ case_id: caseId, user_id: userId, school_id: schoolId });
+        .insert({ case_id: caseId, user_id: userId, school_id: schoolId, added_by_user_id: addedByUserId });
     if (error) throw error;
 }
 
@@ -884,7 +884,7 @@ export async function removeCaseAudienceMember({ caseId, userId }) {
 export async function searchInternalUsers(query) {
     const INTERNAL_ROLES = ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK'];
     const { data, error } = await supabase
-        .from('users')
+        .from('v_users_staff_directory')
         .select('user_id, full_name, role_type')
         .in('role_type', INTERNAL_ROLES)
         .ilike('full_name', `%${query}%`)

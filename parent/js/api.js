@@ -189,7 +189,7 @@ export async function fetchObservations(studentId, dateStart = null, dateEnd = n
             author:users!observations_author_user_id_fkey ( full_name )
         `)
         .eq('student_id', studentId)
-        .eq('visibility', 'STUDENT_VISIBLE')
+        .eq('visibility', 'RESTRICTED')
         .order('observed_at', { ascending: false })
         .limit(50);
 

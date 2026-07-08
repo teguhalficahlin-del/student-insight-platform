@@ -865,7 +865,7 @@ async function initObsForm() {
                     renderPendingMembers();
                 });
             });
-        } catch { formMemberDrop.style.display = 'none'; }
+        } catch(e) { console.error('[obs-member-search]', e); formMemberDrop.style.display = 'none'; }
     });
     document.addEventListener('click', e => {
         if (!formMemberDrop.contains(e.target) && e.target !== formMemberSearch) formMemberDrop.style.display = 'none';
@@ -937,7 +937,7 @@ async function initObsForm() {
             // Jika synced dan RESTRICTED, simpan anggota audiens ke DB
             if (r.status === 'synced' && visibility === 'RESTRICTED' && pendingMembers.length) {
                 await Promise.all(pendingMembers.map(m =>
-                    addObsAudienceMember({ obsId: r.observation_id, userId: m.user_id, schoolId: currentUser.school_id })
+                    addObsAudienceMember({ obsId: r.observation_id, userId: m.user_id, schoolId: currentUser.school_id, addedByUserId: currentUser.user_id })
                 ));
             }
             statusEl.textContent   = r.status === 'queued'
@@ -1146,7 +1146,7 @@ function renderObsHistory(rows, listEl) {
                         mDrop.style.display = 'none';
                         mSearch.value = '';
                         try {
-                            await addObsAudienceMember({ obsId, userId: el.dataset.id, schoolId: currentUser.school_id });
+                            await addObsAudienceMember({ obsId, userId: el.dataset.id, schoolId: currentUser.school_id, addedByUserId: currentUser.user_id });
                             await loadObsMembers();
                         } catch (err) { mMsg.textContent = fe(err); }
                     });
@@ -2691,7 +2691,7 @@ async function loadAudienceMembers(kasus) {
                         dropEl.style.display = 'none';
                         searchEl.value = '';
                         try {
-                            await addCaseAudienceMember({ caseId: kasus.case_id, userId: el.dataset.id, schoolId: currentUser.school_id });
+                            await addCaseAudienceMember({ caseId: kasus.case_id, userId: el.dataset.id, schoolId: currentUser.school_id, addedByUserId: currentUser.user_id });
                             await loadAudienceMembers(kasus);
                         } catch (err) {
                             msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
@@ -2700,7 +2700,7 @@ async function loadAudienceMembers(kasus) {
                     el.addEventListener('mouseenter', () => { el.style.background = 'var(--color-bg)'; });
                     el.addEventListener('mouseleave', () => { el.style.background = ''; });
                 });
-            } catch { dropEl.style.display = 'none'; }
+            } catch(e) { console.error('[kasus-member-search]', e); dropEl.style.display = 'none'; }
         }, 250);
     };
 }
