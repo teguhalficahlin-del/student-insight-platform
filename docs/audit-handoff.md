@@ -312,7 +312,14 @@ Migration sebelum 2026-07-03 adalah fondasi multi-tenant platform (RLS isolasi, 
 Urutkan dari yang paling mendesak:
 
 - [x] **F2-A (infrastruktur) — SELESAI (7 Juli 2026):** view `v_users_staff_directory` live & tervalidasi. Migration `20260707130000` di-push, 8 kolom aman terkonfirmasi, total 4499 baris accessible.
-- [ ] **F2-A (lanjutan) — Migrasi client code 7 portal ke view (belum dimulai).** Urutan: `guru/js/api.js` (pilot) → lokasi lain satu-satu, verifikasi tiap lokasi sebelum lanjut. Setelah semua portal selesai: evaluasi apakah grant SELECT langsung ke `users` perlu dibatasi.
+
+- [ ] **PRIORITAS 1 — F2-A lanjutan: Migrasi client code 7 portal ke `v_users_staff_directory`.** Infrastruktur (VIEW) sudah live sejak migration 20260707130000. Belum ada satu portal pun yang dipindah. Urutan rencana: pilot `guru/js/api.js` (5 lokasi query users teridentifikasi) → 6 portal lain satu-satu, verifikasi fungsional tiap lokasi sebelum lanjut. Kasus khusus: `guru/js/api.js:974` butuh kolom `login_identifier` yang SENGAJA dikecualikan dari view (data sensitif) — perlu keputusan produk terpisah sebelum lokasi ini bisa dipindah (apakah fitur diubah scope-nya, atau tetap akses tabel dasar untuk kasus ini saja). Setelah 7 portal selesai: evaluasi apakah grant SELECT langsung ke `users` perlu dibatasi.
+
+- [x] **PRIORITAS 2 — Scan sistemik grant EXECUTE fungsi SECURITY DEFINER — SELESAI (8 Juli 2026).** 59 fungsi discan. 4 temuan ditemukan, semua yang exploitable sudah di-fix dan diverifikasi live + test suite:
+  - **FINDING 1 — fn_get_stale_staff()** (NIP guru, tanpa guard role → semua authenticated bisa akses): fix migration `20260708040000` — tambah guard KEPSEK/ADMINISTRATIVE, konversi ke plpgsql. Verified.
+  - **FINDING 2 — Regresi write-path kasus** (migration 20260707150000 terlalu agresif merevoke: fn_is_internal_case_actor + fn_matches_case_handler ikut tercabut, padahal dipanggil langsung dari 6 policy roles={public}): fix `20260708010000` regrant kedua fungsi ke authenticated. Fix tambahan `20260708030000`: rls_cam_insert WITH CHECK ganti panggilan fn_user_is_internal_case_actor (terkunci) dengan inline EXISTS check berbatas sekolah. Verified.
+  - **FINDING 3 — fn_stakeholder_summary()** (statistik agregat sekolah, tanpa guard role → semua authenticated bisa akses): fix `20260708050000` — tambah guard KEPSEK/STAKEHOLDER, konversi ke plpgsql. Verified.
+  - **FINDING 4 (technical debt, tidak exploitable saat ini) — 14 fungsi helper anon=true** (fn_can_see_case, fn_can_see_student, dll.): tidak bisa langsung di-REVOKE karena dipanggil 19 policy roles={public}. Dicatat sebagai Fase 3 backlog — lihat §8 item "14 fungsi helper anon=true".
 
 - [ ] **D1 — Klarifikasi `academic_periods` DELETE:** Admin portal melakukan INSERT+UPDATE langsung ke tabel ini (lihat `admin/js/semester.js:354,416`). Apakah ada use case DELETE (misal: hapus periode yang salah dibuat), atau selalu via RPC/admin DB? Jika butuh client DELETE, tambahkan policy DELETE hanya untuk role ADMINISTRATIVE.
 
@@ -327,6 +334,105 @@ Urutkan dari yang paling mendesak:
 - [ ] **Setelah Fase 2 selesai: mulai Fase 3** — Access control per-portal (capability audit: apakah setiap tab/fitur di setiap portal hanya bisa diakses role yang semestinya, bukan hanya di-hide di frontend tapi tidak di-block backend).
 
 - [ ] **P1-A backup restore (dari Fase prioritas 2026-07-04) — DITUNDA oleh user:** Uji restore backup ke project Supabase terpisah, isi tabel hasil di `docs/konsep/runbook-rilis-aman.md`. Wajib sebelum go-live nyata.
+
+---
+
+---
+
+## 7. Status Version Control (7 Juli 2026)
+
+7 commit sesi audit Fase 2 lanjutan sudah ter-push ke origin/main:
+d69a5de → b865f0f → 200aaa6 → c19b164 → 076d096 → 609ce4e → 3a34755.
+Mencakup: fix Kelompok E, 2 fix privilege escalation aktif, laporan
+naratif lengkap (docs/audit/fase2-investigasi-lanjutan-f2a-report.md),
+sinkronisasi 9 migration historis Fase 1/2.1 yang sebelumnya untracked,
+arsip laporan Fase 1, dan cleanup cache CLI.
+
+Commit a8f7336 (fitur pemilihan audiens RESTRICTED inline di form observasi
+guru — guru/dashboard.html, guru/js/api.js, guru/js/dashboard.js) sudah
+ter-push ke origin/main. Ini commit fitur di luar audit keamanan.
+
+---
+
+## 8. Status Version Control (8 Juli 2026)
+
+### Migration Applied Live
+
+| Migration | Ringkasan |
+|-----------|-----------|
+| `20260708010000` | regrant_case_write_functions — kembalikan EXECUTE fn_is_internal_case_actor + fn_matches_case_handler ke authenticated (tercabut tidak sengaja oleh 20260707150000, regresi 6 policy write-path kasus) |
+| `20260708030000` | fix_cam_insert_inline_check — ganti panggilan fn_user_is_internal_case_actor (terkunci, exploitable) di rls_cam_insert WITH CHECK dengan inline EXISTS check yang otomatis dibatasi sekolah sendiri |
+| `20260708040000` | guard_fn_get_stale_staff — tambah guard KEPSEK/ADMINISTRATIVE ke fn_get_stale_staff(), konversi LANGUAGE sql→plpgsql |
+| `20260708050000` | guard_fn_stakeholder_summary — tambah guard KEPSEK/STAKEHOLDER ke fn_stakeholder_summary(), konversi LANGUAGE sql→plpgsql |
+
+Keempat migration di-apply langsung ke DB live via `supabase db query --linked`.
+Semua diverifikasi dengan uji rollback + uji pasca-push (positif & negatif per role).
+
+### Migration Files Untracked
+
+File-file migration di atas ada di `supabase/migrations/` tapi belum di-commit ke git
+(status: `??`). Demikian juga `20260708010000`. Perlu `git add` manual + commit
+terpisah jika akan di-track. CATATAN: docs/ di .gitignore — dokumen audit-handoff.md
+ini hanya update lokal kecuali di-force-add.
+
+### Test Suite
+
+42/42 CHECK lulus (terakhir dijalankan 8 Juli 2026, pasca 4 migration hari ini).
+CATATAN: test suite tidak punya CHECK otomatis untuk write-path kasus (UPDATE cases,
+INSERT case_events, INSERT case_audience_members) — regresi FINDING 2 terdeteksi manual,
+bukan via test suite. Rekomendasi: tambah CHECK 12+ di sesi mendatang.
+
+---
+
+## 9. Temuan & Backlog untuk Sesi Berikutnya
+
+Item-item ini BUKAN prioritas sesi ini, dicatat untuk referensi sesi mendatang.
+
+### 9.1 Gap Test Suite — Write-Path Kasus (Prioritas Tinggi)
+
+Regresi FINDING 2 (20260707150000 mencabut fn_is_internal_case_actor secara tidak
+sengaja) terdeteksi manual via simulasi langsung, BUKAN oleh test suite. Ini berarti
+regresi serupa di masa depan bisa lolos undetected.
+
+**Rekomendasi:** Tambah CHECK 12+ di `tests/tenant-isolation.mjs` yang memverifikasi:
+- GURU bisa UPDATE cases (status, current_handler_role)
+- GURU bisa INSERT case_events (catatan kasus)
+- GURU bisa INSERT case_audience_members (untuk case RESTRICTED)
+- SISWA/ORTU tidak bisa melakukan ketiga operasi di atas
+
+### 9.2 fn_deactivate_stale_staff — Kemungkinan Gagal Fungsional (Perlu Investigasi)
+
+Ditemukan tidak sengaja saat verifikasi TARGET 5c migration 20260708040000:
+`fn_deactivate_stale_staff()` dipanggil sebagai KEPSEK → fn_get_stale_staff() berhasil
+(guard pass), tapi UPDATE berikutnya gagal dengan:
+
+```
+ERROR: 42501: Perubahan kolom ini tidak diizinkan lewat update langsung.
+CONTEXT: PL/pgSQL function fn_guard_users_protected_columns() line 37 at RAISE
+```
+
+Artinya trigger `fn_guard_users_protected_columns` memblokir UPDATE `users.is_active`
+dari role `authenticated` — bahkan untuk KEPSEK. Fungsi ini hanya bisa berjalan dari
+service_role/edge function. **Belum diinvestigasi lebih lanjut** — di luar scope audit
+keamanan hari ini. Perlu dicek: apakah portal admin memanggil ini via edge function
+(service_role) ataukah via supabase.rpc() langsung (authenticated)?
+
+### 9.3 14 Fungsi Helper anon=true — Technical Debt (Fase 3 Scope)
+
+Scan sistemik menemukan 14 fungsi helper dengan `anon_can_execute = true`:
+`fn_can_see_case`, `fn_can_see_student`, dan 12 lainnya. Kesemuanya dipanggil
+langsung dari 19 policy RLS dengan `roles = {public}` (bukan `TO authenticated`
+eksplisit). Tidak exploitable saat ini karena semua policy yang memanggilnya
+punya guard `school_id = fn_current_school_id()` yang sudah terluar.
+
+**Mengapa tidak bisa langsung di-REVOKE:** REVOKE anon dari helper-helper ini akan
+mematikan semua 19 policy yang memanggil mereka (ERROR: permission denied for function)
+karena policy `roles={public}` mencakup anon. Perbaikan yang benar membutuhkan refactor
+policy dari `TO public` → `TO authenticated` eksplisit di semua 19 policy tersebut,
+baru REVOKE bisa dilakukan.
+
+**Rekomendasi:** Masuk ke scope Fase 3 (Access Control per Aktor). Lakukan sebagai
+satu batch — bukan piecemeal — karena scope-nya lebar (19 policy di banyak tabel).
 
 ---
 
