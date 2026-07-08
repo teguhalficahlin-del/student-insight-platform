@@ -578,24 +578,54 @@ diperbaiki dalam blok yang sama:
 Commit: `333130e` (migration + bug fixes), `a6f8eac` (update dokumentasi).
 Test suite: 42/42 lulus.
 
-### ⛔ GAP YANG DITEMUKAN SAAT REVIEW AKHIR — BELUM DITINDAKLANJUTI
+### ✅ GAP YANG DITEMUKAN SAAT REVIEW AKHIR — SELESAI (9 Juli 2026)
 
-**PRIORITAS TERTINGGI sesi berikutnya.** Migration 20260708060000 sudah
-live TANPA pengecekan ini dilakukan:
+Migration `20260709010000_fix_case_events_student_updates_rls.sql` applied
+live, 42/42 CHECK lulus. Lihat Blok 3 di bawah untuk detail lengkap.
 
-Verifikasi apakah **`rls_case_events_read_student`** dan policy serupa di
-**`student_updates`** BERGANTUNG pada `case_audience_members` (aman:
-siswa yang tidak ada di audience tabel otomatis tidak bisa baca event/update)
-ataukah BERDIRI SENDIRI dengan akses "ini kasus tentang saya" tanpa cek
-membership audience (berarti kebocoran: siswa bisa baca detail event/update
-kasus yang dia sendiri tidak bisa lihat kasusnya karena tidak di audience).
+### Blok 3 — 8–9 Juli 2026: Investigasi & Fix Gap rls_case_events_read_student
 
-Langkah verifikasi yang perlu dilakukan:
-1. Baca definisi live kedua policy via `pg_policies`
-2. Jika bergantung `case_audience_members` → aman, catat konfirmasi
-3. Jika berdiri sendiri → buat migration fix, konfirmasi Romo sebelum apply
+**Kesimpulan investigasi:** Ketiga policy (`rls_case_events_read_student`,
+`rls_case_events_read_parent`, `rls_student_updates_read_student`) **BERDIRI
+SENDIRI** — menggunakan `EXISTS (SELECT 1 FROM cases c WHERE c.case_id = ...)`.
+Namun bukan kebocoran data: EXISTS ini tunduk Rule 3 (RLS pemanggil). Setelah
+migration 20260708060000 men-DROP `rls_cases_read_student/parent`, SISWA/ORTU
+tidak lagi punya SELECT policy di `cases` → EXISTS selalu false → ketiga policy
+**NON-FUNGSIONAL TOTAL** (siswa/ortu tidak bisa baca apapun, bahkan jika di
+audience). Tidak ada data bocor, tapi fitur tidak bekerja sama sekali.
 
-### Status Fase — Akhir Sesi 8 Juli 2026
+**Temuan baru saat uji (f) — rls_case_events_read_staff missing role filter:**
+`rls_case_events_read_staff` tidak punya filter role — USING-nya hanya
+`school_id = fn_current_school_id() AND fn_can_see_case(case_id)`. Setelah
+20260708060000, `fn_can_see_case` bisa return TRUE untuk SISWA/ORTU dalam
+`case_audience_members` kasus RESTRICTED. Akibatnya lewat RLS OR-ing, siswa/ortu
+bisa baca event `INTERNAL_SCHOOL`. Bug live tapi belum ada data terekspos (0 baris
+SISWA/ORTU di `case_audience_members` saat audit). **Ini regresi ke-4 dari
+migration 20260708060000.**
+
+**Fix — Migration `20260709010000` (applied live 9 Juli 2026):**
+
+| Fix | Policy | Perubahan |
+|-----|--------|-----------|
+| (b) | `rls_case_events_read_student` | Ganti EXISTS langsung ke `cases` → `fn_can_see_case()` + filter `STUDENT_VISIBLE` |
+| (c) | `rls_case_events_read_parent` | Sama, untuk ORTU |
+| (d) | `rls_student_updates_read_student` | Ganti EXISTS langsung ke `cases` → `fn_can_see_case()` |
+| (e) | `rls_student_updates_read_parent` | Baru — ORTU dalam audience RESTRICTED bisa baca student_updates (Keputusan Romo: YA) |
+| (f) | `rls_case_events_read_staff` | Tambah `NOT IN (SISWA, ORTU)` ke USING clause |
+
+Diuji 12/12 skenario BEGIN...ROLLBACK termasuk T11/T12 (SISWA lain yang TIDAK
+di audience kasus RESTRICTED yang sama → case_events 0, student_updates 0). 42/42
+CHECK suite lulus pasca-apply. Commit: lihat git log setelah commit dikonfirmasi.
+
+> ⚠️ **CATATAN PENTING UNTUK SESI MENDATANG:** Migration `20260709010000`
+> **WAJIB LIVE** sebelum atau bersamaan dengan pembangunan UI audience siswa/ortu
+> (item backlog §10 — tombol tambah siswa/ortu ke audience di portal guru).
+> Jangan bangun UI tersebut tanpa memverifikasi migration ini sudah live — atau
+> temuan (f) akan langsung aktif begitu guru pertama kali menambahkan siswa/ortu
+> ke audience, membuat mereka bisa baca event `INTERNAL_SCHOOL`. Migration ini
+> sudah live per 9 Juli 2026.
+
+### Status Fase — Akhir Sesi 9 Juli 2026
 
 | Fase | Status |
 |------|--------|
