@@ -452,6 +452,26 @@ baru REVOKE bisa dilakukan.
 **Rekomendasi:** Masuk ke scope Fase 3 (Access Control per Aktor). Lakukan sebagai
 satu batch — bukan piecemeal — karena scope-nya lebar (19 policy di banyak tabel).
 
+### 9.4 Read-Path case_events/student_updates Siswa/Ortu — Belum Masuk Test Suite Permanen
+
+12 skenario T1–T12 yang memverifikasi akses siswa/ortu ke `case_events` dan
+`student_updates` (migration `20260709010000`) diuji secara ad-hoc dalam transaksi
+`BEGIN...ROLLBACK` pada sesi 9 Juli 2026. Skenario ini **belum menjadi CHECK permanen**
+di `tests/tenant-isolation.mjs`.
+
+Artinya regresi terhadap policy (b)(c)(d)(e)(f) di masa depan tidak akan terdeteksi
+otomatis oleh guard-rail yang ada. Ini konsisten dengan gap yang sudah dicatat di §9.1
+(write-path kasus), tapi coverage-nya berbeda (read-path siswa/ortu vs write-path guru).
+
+**Rekomendasi:** Migrasikan 12 skenario T1–T12 menjadi CHECK 12 permanen di
+`tests/tenant-isolation.mjs`. Cakupan minimum yang diuji:
+- T1/T3: SISWA/ORTU dalam audience → case_events: hanya STUDENT_VISIBLE terlihat (expect 1, bukan 2+)
+- T2/T4: SISWA/ORTU dalam audience → student_updates (expect 1)
+- T5/T6/T7: SISWA/ORTU TIDAK dalam audience → case_events/student_updates kasus PRIVATE (expect 0)
+- T11/T12: SISWA lain (bukan audience member) → case_events/student_updates kasus RESTRICTED (expect 0)
+
+Uji T8–T10 (GURU) opsional karena sudah tercakup secara tidak langsung oleh CHECK 5 dan 11.
+
 ---
 
 ---
