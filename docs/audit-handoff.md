@@ -436,4 +436,97 @@ satu batch — bukan piecemeal — karena scope-nya lebar (19 policy di banyak t
 
 ---
 
+---
+
+## 10. Fitur Audience RESTRICTED — Siswa/Ortu (8 Juli 2026, blok kedua)
+
+### Perubahan Perilaku (PENTING — baca sebelum kerja di area ini)
+
+**SEBELUM:** Siswa/ortu OTOMATIS bisa lihat kasus RESTRICTED tentang
+diri/anaknya (via rls_cases_read_student/rls_cases_read_parent), tanpa
+guru perlu melakukan apapun.
+
+**SESUDAH:** Akses siswa/ortu ke kasus DAN observasi RESTRICTED bersifat
+OPT-IN PENUH — guru harus secara eksplisit menambahkan mereka ke
+case_audience_members / observation_audience_members. Ini keputusan
+produk sadar dari Romo (guru bebas menentukan siapa saja per-item, bisa
+staf saja, staf+siswa, atau staf+siswa+ortu).
+
+### Migration 20260708060000 — Ringkasan Isi
+
+- `fn_is_case_subject_or_parent(case_id, user_id)` — SECURITY DEFINER baru
+- `fn_is_observation_subject_or_parent(observation_id, user_id)` — SECURITY DEFINER baru
+- `rls_cam_insert` diperluas: izinkan siswa subjek kasus / ortu siswa itu
+- `rls_obs_audience_insert` diperketat + diperluas: tambah `added_by_user_id`
+  guard + filter role/subjek (sebelumnya TANPA FILTER SAMA SEKALI — celah lama)
+- DROP `rls_cases_read_student`, DROP `rls_cases_read_parent` (akses otomatis lama)
+- Policy baru: `rls_observations_read_student`, `rls_observations_read_parent`
+  (opt-in via observation_audience_members — fitur BARU, sebelumnya siswa/ortu
+  0% akses observasi apapun)
+- Policy baru: `rls_obs_audience_read_own` (siswa/ortu baca baris OAM sendiri —
+  diperlukan agar EXISTS subquery di policy read_student/read_parent bisa jalan)
+- `ALTER TABLE observation_audience_members ADD COLUMN added_by_user_id`
+
+Commit: `333130e`. Applied live 8 Juli 2026. Test suite 42/42 lulus pasca-migration.
+
+### Bug Regresi Ditemukan & Diperbaiki dalam Blok Ini
+
+1. **Bug aktif sejak migration 20260708030000 (pagi ini):** `rls_cam_insert`
+   mensyaratkan `added_by_user_id = fn_current_user_id()`, tapi
+   `addCaseAudienceMember` di client TIDAK PERNAH mengirim field itu → semua
+   INSERT dari client ditolak diam-diam (NULL = apapun selalu UNKNOWN).
+   Tidak terdeteksi saat verifikasi pagi karena uji ROLLBACK memakai SQL
+   yang menyertakan field itu eksplisit, bukan menguji jalur client
+   sungguhan. Fix: client sekarang mengirim `added_by_user_id` (3 call site
+   di `guru/js/dashboard.js` untuk observasi, 1 untuk kasus).
+
+2. **Bug lama (pra-existing, ditemukan saat investigasi):**
+   `getMyObservations` (`student/js/api.js`) dan `fetchObservations`
+   (`parent/js/api.js`) memfilter `visibility = 'STUDENT_VISIBLE'` — nilai
+   enum yang TIDAK PERNAH ADA (enum hanya PRIVATE/RESTRICTED/PUBLIC).
+   Fitur observasi untuk siswa/ortu sebelumnya tidak pernah bisa berfungsi
+   sama sekali. Diganti ke `'RESTRICTED'`, sekarang didukung oleh policy
+   baru migration ini.
+
+### Yang BELUM Selesai — UI Guru Belum Mendukung Pilih Siswa/Ortu
+
+Migration ini membuka kemampuan BACKEND, tapi `guru/dashboard.html` BELUM
+punya elemen UI untuk memilih siswa/ortu sebagai anggota audience — kotak
+pencarian saat ini (`#obs-form-member-search`, `#kasus-aud-member-search`)
+HANYA mencari staf internal (`searchInternalUsers`, filter role staf).
+Guru belum bisa benar-benar memanfaatkan fitur ini dari UI sampai
+elemen pemilihan siswa/ortu dibangun terpisah. PRIORITAS untuk sesi
+berikutnya jika fitur ini ingin benar-benar dipakai.
+
+### Backlog Terpisah — WAKA_HUMAS untuk Wilayah PKL
+
+Romo mengonfirmasi: WAKA_HUMAS punya wewenang atas SELURUH wilayah PKL
+(kasus/observasi yang dibuat DUDI) — pola pengawasan mirip
+`fn_dudi_supervises_student` tapi arah sebaliknya (WAKA_HUMAS mengawasi
+DUDI, bukan DUDI mengawasi siswa). INI BUKAN bagian dari migration hari
+ini — sengaja dipisah karena butuh ANALYZE tersendiri: apakah "terkait
+PKL" = `fn_student_is_on_pkl`, scope baca-saja atau juga tulis/kelola,
+berlaku untuk kasus PRIVATE juga atau hanya RESTRICTED/PUBLIC.
+**CATATAN:** `searchInternalUsers` sempat ditambahi `WAKA_HUMAS` untuk
+pencarian umum lalu DIKEMBALIKAN (Romo tolak) karena scope-nya harusnya
+PKL-only, bukan general — jangan tambahkan `WAKA_HUMAS` ke pencarian
+umum lagi tanpa membangun scoping PKL-nya dulu.
+
+### Pelajaran Proses — Penyimpangan Rule 5 (dicatat, tidak diulang)
+
+Migration 20260708060000 SEMPAT diterapkan ke DB live SEBELUM 10 skenario
+ROLLBACK diuji (seharusnya sebaliknya). Tidak ada dampak nyata (semua
+skenario akhirnya lulus, 42/42 test suite, 0 sekolah live saat ini),
+tapi ini penyimpangan dari Rule 5 §3a. T10 sempat menunjukkan
+"false failure" (cross-tenant INSERT tampak berhasil) yang ternyata
+soal metodologi uji (JWT spoofing tidak relevan karena
+`fn_current_school_id()` baca dari tabel `users` via `auth.uid()`, bukan
+dari JWT claim `school_id`) — bukan bug policy sungguhan.
+**REKOMENDASI SESI BERIKUTNYA:** untuk migration yang mengubah skema/policy
+(DDL), bungkus CREATE/DROP POLICY + skenario uji dalam SATU transaksi
+`BEGIN...ROLLBACK` sebelum diterapkan permanen — jangan apply dulu baru
+uji terpisah.
+
+---
+
 *Dokumen ini bersifat ringkasan orientasi. Untuk detail teknis lengkap (isi migration, kode fungsi, skenario exploit), baca file laporan di `docs/audit/` dan file migration di `supabase/migrations/`.*

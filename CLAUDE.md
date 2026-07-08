@@ -22,10 +22,17 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
   dari revoke-excess-grant 20260707150000 + 2 fungsi SECURITY DEFINER tanpa
   guard role). Prioritas berikutnya: migrasi client F2-A (7 portal) —
   lihat docs/audit-handoff.md §6.
-- **Version control**: 4 migration 8 Juli 2026 applied live
-  (20260708010000/030000/040000/050000) + commit a8f7336 (fitur RESTRICTED
-  audience). Lihat docs/audit-handoff.md §8 untuk detail.
+- **Fitur audience RESTRICTED diperluas (8 Juli 2026, blok kedua):**
+  siswa subjek kasus/observasi dan orang tua mereka kini bisa ditambahkan
+  ke audience RESTRICTED secara eksplisit oleh guru (opt-in per-item).
+  Migration 20260708060000, commit 333130e. Perubahan perilaku penting:
+  akses siswa/ortu ke kasus RESTRICTED sebelumnya OTOMATIS, sekarang
+  OPT-IN penuh. Lihat docs/audit-handoff.md §10 untuk detail lengkap.
+- **Version control**: 5 migration 8 Juli 2026 applied live
+  (20260708010000/030000/040000/050000/060000) + commit a8f7336 (fitur
+  RESTRICTED audience inline form) + commit 333130e (audience siswa/ortu
+  + fix bug added_by_user_id). Lihat docs/audit-handoff.md §8 dan §10.
 - **Test suite**: 42/42 CHECK lulus (terakhir dijalankan 8 Juli 2026,
-  pasca 4 migration hari ini).
+  pasca migration 20260708060000).
 
 Detail lengkap dan checklist prioritas ada di `docs/audit-handoff.md §6`.
