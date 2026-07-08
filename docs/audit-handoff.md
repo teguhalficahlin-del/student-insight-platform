@@ -267,8 +267,15 @@ WHERE u.kaprodi_program_id IS NOT NULL ORDER BY sc.slug LIMIT 6;
 ```bash
 SUPABASE_ACCESS_TOKEN="sbp_..." node tests/tenant-isolation.mjs
 ```
-**Status terverifikasi:** 42/42 CHECK LULUS — `✅ LULUS — invarian isolasi tenant utuh.` (7 Juli 2026, dijalankan ulang saat pembuatan dokumen ini)  
-**CHECK 1–11:**
+**Status terverifikasi:** 77/77 ✓ LULUS — `✅ LULUS — invarian isolasi tenant utuh.` (9 Juli 2026, pasca CHECK 12+13)
+
+> **Catatan angka historis:** Dokumen ini sempat mencatat "42/42 CHECK lulus" — angka itu
+> berasal dari run sebelum commit `c19b164` (8 Juli 2026) menambahkan CHECK 10/11 (+13 ✓ → 55).
+> Sesi 9 Juli 2026 kemudian menambahkan CHECK 12+13 (+22 ✓ → 77). "42" dan "55" mengukur
+> metrik yang sama (jumlah baris ✓ individual dalam satu run), tapi dari titik waktu berbeda.
+> Angka yang valid saat ini: **77 ✓, 13 CHECK top-level**.
+
+**CHECK 1–13:**
 - CHECK 1: RLS enabled semua tabel
 - CHECK 2: fn_* SECURITY DEFINER tidak bocor ke anon
 - CHECK 3: anon tidak bisa baca tabel inti
@@ -280,6 +287,8 @@ SUPABASE_ACCESS_TOKEN="sbp_..." node tests/tenant-isolation.mjs
 - CHECK 9: rls_schedules_read_parent — ce.school_id eksplisit + regression ortu
 - CHECK 10: rls_schedules_read_student — ce.school_id eksplisit + regression siswa
 - CHECK 11: rls_cases_insert — fn_student_in_current_school + cross-tenant INSERT ditolak
+- CHECK 12: Struktural — 5 policy read-path case_events/student_updates (mig 20260709010000): fn_can_see_case guard, filter privacy_level STUDENT_VISIBLE, role exclusion SISWA/ORTU pada rls_case_events_read_staff
+- CHECK 13: Behavioral — read-path sintetis BEGIN...ROLLBACK: T1–T7, T11–T12, regresi-f (audience member bisa baca STUDENT_VISIBLE; non-member 0; GURU creator baca semua termasuk INTERNAL_SCHOOL)
 
 ### Dokumen Audit
 
@@ -395,10 +404,12 @@ ini hanya update lokal kecuali di-force-add.
 
 ### Test Suite
 
-42/42 CHECK lulus (terakhir dijalankan 8 Juli 2026, pasca 4 migration hari ini).
+77/77 ✓ lulus (terakhir dijalankan 9 Juli 2026, pasca CHECK 12+13 ditambahkan).
+Sebelumnya 42 (sebelum CHECK 10/11, commit c19b164 8 Juli), lalu 55 (sebelum CHECK 12/13 sesi ini).
+CHECK 12+13 ditambahkan 9 Juli 2026 — lihat §9.4 dan §12.
 CATATAN: test suite tidak punya CHECK otomatis untuk write-path kasus (UPDATE cases,
 INSERT case_events, INSERT case_audience_members) — regresi FINDING 2 terdeteksi manual,
-bukan via test suite. Rekomendasi: tambah CHECK 12+ di sesi mendatang.
+bukan via test suite.
 
 ---
 
@@ -452,25 +463,28 @@ baru REVOKE bisa dilakukan.
 **Rekomendasi:** Masuk ke scope Fase 3 (Access Control per Aktor). Lakukan sebagai
 satu batch — bukan piecemeal — karena scope-nya lebar (19 policy di banyak tabel).
 
-### 9.4 Read-Path case_events/student_updates Siswa/Ortu — Belum Masuk Test Suite Permanen
+### 9.4 Read-Path case_events/student_updates Siswa/Ortu — ✅ SELESAI (9 Juli 2026)
 
-12 skenario T1–T12 yang memverifikasi akses siswa/ortu ke `case_events` dan
-`student_updates` (migration `20260709010000`) diuji secara ad-hoc dalam transaksi
-`BEGIN...ROLLBACK` pada sesi 9 Juli 2026. Skenario ini **belum menjadi CHECK permanen**
-di `tests/tenant-isolation.mjs`.
+12 skenario T1–T12 + regresi-f **sudah menjadi CHECK permanen** di
+`tests/tenant-isolation.mjs` per sesi 9 Juli 2026:
 
-Artinya regresi terhadap policy (b)(c)(d)(e)(f) di masa depan tidak akan terdeteksi
-otomatis oleh guard-rail yang ada. Ini konsisten dengan gap yang sudah dicatat di §9.1
-(write-path kasus), tapi coverage-nya berbeda (read-path siswa/ortu vs write-path guru).
+- **CHECK 12** (struktural): memverifikasi 5 policy read-path dari migration `20260709010000`
+  masih berisi fragment kunci (`fn_can_see_case`, `STUDENT_VISIBLE`, role exclusion
+  `SISWA`/`ORTU` pada `rls_case_events_read_staff`) via `pg_policies.qual`.
+- **CHECK 13** (behavioral): 17 assertion via data sintetis `BEGIN...ROLLBACK` —
+  T1/T2/T3/T4 (audience member bisa baca RESTRICTED), T11/T12 (non-member RESTRICTED = 0),
+  T5/T6/T7 (non-member PRIVATE = 0), 2 assertion bonus (audience member tidak bocor ke
+  kasus PRIVATE lain), regresi-f (GURU creator baca semua termasuk INTERNAL_SCHOOL).
 
-**Rekomendasi:** Migrasikan 12 skenario T1–T12 menjadi CHECK 12 permanen di
-`tests/tenant-isolation.mjs`. Cakupan minimum yang diuji:
-- T1/T3: SISWA/ORTU dalam audience → case_events: hanya STUDENT_VISIBLE terlihat (expect 1, bukan 2+)
-- T2/T4: SISWA/ORTU dalam audience → student_updates (expect 1)
-- T5/T6/T7: SISWA/ORTU TIDAK dalam audience → case_events/student_updates kasus PRIVATE (expect 0)
-- T11/T12: SISWA lain (bukan audience member) → case_events/student_updates kasus RESTRICTED (expect 0)
+**Hasil:**
+- Baseline sebelum CHECK 12+13: **55 ✓** (CHECK 1–11)
+- Sesudah CHECK 12+13: **77 ✓** (+22: CHECK 12 = 5 ✓, CHECK 13 = 17 ✓)
+- Validasi negatif dikonfirmasi non-vacuous: DROP filter `privacy_level` dari
+  `rls_case_events_read_student` → SISWA A melihat `ce_r=2` (bukan 1) → T1 FAIL terdeteksi.
+- Semua `ROLLBACK` berhasil: 0 sisa data sentinel di `cases`.
 
-Uji T8–T10 (GURU) opsional karena sudah tercakup secara tidak langsung oleh CHECK 5 dan 11.
+Gap ini tidak lagi terbuka. Regresi terhadap policy (b)(c)(d)(e)(f) kini terdeteksi
+otomatis oleh guard-rail permanen. Lihat §12 untuk detail commit.
 
 ---
 
@@ -653,6 +667,65 @@ CHECK suite lulus pasca-apply. Commit: lihat git log setelah commit dikonfirmasi
 | Fase 2 | 🔄 BELUM SELESAI — PRIORITAS 1, D1, D2 masih terbuka |
 | Fase 3 | ⏳ BELUM DIMULAI (backlog: 14 fungsi anon + WAKA_HUMAS/PKL) |
 | Fase 4–6 | ⏳ Belum dimulai |
+
+---
+
+---
+
+## 12. CHECK 12+13 Permanen — §9.4 Selesai (9 Juli 2026)
+
+### Konteks
+
+Sesi 9 Juli 2026 (lanjutan pasca migration `20260709010000`) menyelesaikan backlog §9.4:
+12 skenario T1–T12 yang sebelumnya hanya diuji ad-hoc kini menjadi CHECK permanen.
+
+### Apa yang Berubah
+
+**`tests/tenant-isolation.mjs`** — +306 baris (CHECK 12 + CHECK 13):
+
+**CHECK 12 — Struktural (5 assertion):**
+Memverifikasi via `pg_policies.qual` bahwa 5 policy hasil migration `20260709010000`
+masih berisi fragment kunci. Deteksi dini jika policy tidak sengaja di-DROP atau diganti:
+- `rls_case_events_read_student`: `fn_can_see_case` + `STUDENT_VISIBLE` + `SISWA`
+- `rls_case_events_read_parent`: `fn_can_see_case` + `STUDENT_VISIBLE` + `ORTU`
+- `rls_case_events_read_staff`: `fn_can_see_case` + `<> ALL` + `SISWA` + `ORTU`
+- `rls_student_updates_read_student`: `fn_can_see_case` + `SISWA`
+- `rls_student_updates_read_parent`: `fn_can_see_case` + `ORTU`
+
+**CHECK 13 — Behavioral (17 assertion):**
+Data sintetis `BEGIN...ROLLBACK` (2 kasus sentinel, 4 aktor): tidak mengubah DB live.
+- T1: SISWA A (audience) → `case_events` RESTRICTED = 1 (STUDENT_VISIBLE saja)
+- T2: SISWA A (audience) → `student_updates` RESTRICTED = 1
+- T3: ORTU A (audience) → `case_events` RESTRICTED = 1
+- T4: ORTU A (audience) → `student_updates` RESTRICTED = 1
+- T5: SISWA B (bukan audience) → `case_events` PRIVATE = 0
+- T6: ORTU B (bukan audience) → `case_events` PRIVATE = 0
+- T7: ORTU B (bukan audience) → `student_updates` PRIVATE = 0
+- T11: SISWA B (bukan audience) → `case_events/student_updates` RESTRICTED = 0 (isolasi per-member)
+- T12: ORTU B (bukan audience) → `case_events/student_updates` RESTRICTED = 0 (isolasi per-member)
+- Bonus: SISWA A (audience RESTRICTED) → `case_events` PRIVATE = 0 (anggota audience RESTRICTED tidak bocor ke kasus PRIVATE lain)
+- Bonus: ORTU A (audience RESTRICTED) → `case_events` PRIVATE = 0 (idem)
+- Regresi-f: GURU creator → `case_events` RESTRICTED = 2 (INTERNAL_SCHOOL + STUDENT_VISIBLE)
+- Setup sanity: `n_cases=1, n_ce=2, n_su=1, n_cam=2` (memverifikasi trigger otomatis)
+- Idempotency: 0 sisa sentinel setelah semua ROLLBACK
+
+### Angka Test Suite
+
+| Titik waktu | ✓ assertions | CHECK top-level |
+|---|---|---|
+| Sebelum commit `c19b164` (8 Jul) | ~42 | 1–9 |
+| Setelah `c19b164` (CHECK 10+11) | 55 | 1–11 |
+| Setelah sesi ini (CHECK 12+13) | **77** | **1–13** |
+
+### Validasi Negatif
+
+DROP `rls_case_events_read_student` + CREATE ulang tanpa filter `privacy_level` (dalam
+ROLLBACK) → SISWA A melihat `ce_r=2` (bukan 1) → T1 FAIL. Membuktikan CHECK 13 tidak vacuous.
+
+### Commit
+
+Commit hash: *(diisi setelah commit dibuat)*
+Tanggal: 9 Juli 2026
 
 ---
 

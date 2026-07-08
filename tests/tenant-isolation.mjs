@@ -7,7 +7,7 @@
  * mencegah terulangnya kelas bug audit 3 Juli 2026
  * (RPC SECURITY DEFINER ber-GRANT PUBLIC bocor ke anon).
  *
- * Menjalankan 7 pemeriksaan terhadap DB LIVE:
+ * Menjalankan 13 pemeriksaan terhadap DB LIVE:
  *   1. RLS coverage      — SEMUA tabel public wajib RLS enabled.
  *   2. RPC exposure      — TIDAK boleh ada fungsi SECURITY DEFINER `fn_*`
  *                          VOLATILE (menulis, non-trigger) yang EXECUTE-nya
@@ -31,6 +31,16 @@
  *   8. PKL ortu x-tenant — ortu Sekolah A TIDAK bisa baca pkl_placements /
  *                          pkl_attendance Sekolah B, bahkan dengan anomali
  *                          student_parents lintas-sekolah (mig 190000).
+ *   9. rls_schedules_read_parent  — ce.school_id eksplisit & regression ortu.
+ *  10. rls_schedules_read_student — ce.school_id eksplisit & regression siswa.
+ *  11. rls_cases_insert  — guard student ↔ school & regression INSERT guru.
+ *  12. Struktural 5 policy read-path case_events/student_updates (mig 20260709010000):
+ *                          fn_can_see_case guard, filter privacy_level STUDENT_VISIBLE,
+ *                          role exclusion SISWA/ORTU pada rls_case_events_read_staff.
+ *  13. Behavioral read-path siswa/ortu — data sintetis BEGIN...ROLLBACK (T1–T7,
+ *                          T11–T12, regresi-f): audience members bisa baca
+ *                          STUDENT_VISIBLE saja; non-member 0; GURU creator
+ *                          tetap bisa baca SEMUA (termasuk INTERNAL_SCHOOL).
  *
  * CARA JALANKAN:
  *   SUPABASE_ACCESS_TOKEN=sbp_xxx node tests/tenant-isolation.mjs
@@ -724,6 +734,306 @@ async function main() {
             log.fail(`REGRESI: guru ${A.name} INSERT siswa sendiri GAGAL: ${c11RegErr.slice(0, 150)}`);
         else
             log.fail(`REGRESI: guru ${A.name} INSERT siswa sendiri tidak mengembalikan case_id — mungkin gagal diam`);
+    }
+
+    // ── CHECK 12: Struktural — 5 policy read-path (migration 20260709010000) ──
+    // Memverifikasi bahwa kelima policy yang di-fix/dibuat 9 Juli 2026 masih
+    // berisi fragment kunci: fn_can_see_case (Rule 3 fix), filter role, filter
+    // privacy_level STUDENT_VISIBLE, dan role exclusion SISWA/ORTU pada
+    // rls_case_events_read_staff (fix regresi ke-4).
+    // PostgreSQL normalises NOT IN (A, B) → <> ALL (ARRAY[A, B]) di pg_policies.qual.
+    log.head('CHECK 12 — Struktural: 5 policy read-path case_events/student_updates siswa/ortu (migration 20260709010000)');
+    const c12 = await mgmtQuery(`
+        select policyname, qual from pg_policies
+        where schemaname = 'public'
+          and policyname in (
+            'rls_case_events_read_student',
+            'rls_case_events_read_parent',
+            'rls_case_events_read_staff',
+            'rls_student_updates_read_student',
+            'rls_student_updates_read_parent'
+          )
+        order by tablename, policyname`);
+    const c12map = Object.fromEntries(c12.map((r) => [r.policyname, r.qual || '']));
+    const c12checks = [
+        ['rls_case_events_read_student',     ['fn_can_see_case', 'STUDENT_VISIBLE', 'SISWA']],
+        ['rls_case_events_read_parent',      ['fn_can_see_case', 'STUDENT_VISIBLE', 'ORTU']],
+        ['rls_case_events_read_staff',       ['fn_can_see_case', '<> ALL', 'SISWA', 'ORTU']],
+        ['rls_student_updates_read_student', ['fn_can_see_case', 'SISWA']],
+        ['rls_student_updates_read_parent',  ['fn_can_see_case', 'ORTU']],
+    ];
+    for (const [name, frags] of c12checks) {
+        if (!(name in c12map)) {
+            log.fail(`${name}: tidak ditemukan di pg_policies — migrasi 20260709010000 mungkin belum ter-apply`);
+        } else {
+            const qual = c12map[name];
+            const missing = frags.filter((f) => !qual.includes(f));
+            if (missing.length === 0)
+                log.pass(`${name}: ${frags.join(' + ')} hadir di qual`);
+            else
+                log.fail(`${name}: fragment hilang [${missing.join(', ')}] — qual: ${qual.slice(0, 200)}`);
+        }
+    }
+
+    // ── CHECK 13: Behavioral — read-path sintetis BEGIN...ROLLBACK ───────────
+    // Memverifikasi policy (b)(c)(d)(e)(f) dari migration 20260709010000:
+    //   T1/T2:     SISWA dalam audience RESTRICTED → case_events=1 (STUDENT_VISIBLE saja), student_updates=1
+    //   T3/T4:     ORTU dalam audience RESTRICTED → idem
+    //   T5/T11:    SISWA bukan audience → case_events=0 (RESTRICTED dan PRIVATE)
+    //   T6/T7/T12: ORTU bukan audience → idem
+    //   Regresi-f: GURU creator → case_events=2 (SEMUA: INTERNAL_SCHOOL + STUDENT_VISIBLE)
+    //
+    // Semua data uji dibuat di dalam BEGIN...ROLLBACK — DB production tidak berubah.
+    // Trigger trg_case_log_create_event otomatis INSERT 1 INTERNAL_SCHOOL per cases INSERT.
+    // Setelah setup: RESTRICTED = 2 events (1 trigger + 1 manual) + 1 student_update + 2 audience.
+    //               PRIVATE    = 2 events (1 trigger + 1 manual) + 1 student_update + 0 audience.
+    log.head('CHECK 13 — Behavioral: read-path siswa/ortu case_events/student_updates (T1–T7, T11–T12, regresi-f)');
+
+    const C13R = 'ffffffff-ffff-ffff-ffff-000000000012'; // RESTRICTED sentinel
+    const C13P = 'ffffffff-ffff-ffff-ffff-000000000013'; // PRIVATE sentinel
+
+    // Pre-query: 1 GURU + 2 SISWA berbeda + 2 ORTU berbeda di sekolah yang sama
+    const c13pre = await mgmtQuery(`
+        with
+        guru as (
+          select u.user_id, u.auth_user_id, u.school_id
+          from users u
+          where u.role_type = 'GURU' and u.is_active and u.auth_user_id is not null
+          limit 1
+        ),
+        siswa_r as (
+          select u.user_id, u.auth_user_id, st.student_id,
+                 row_number() over (order by u.full_name) as rn
+          from users u
+          join students st on st.user_id = u.user_id and st.school_id = u.school_id
+          where u.role_type = 'SISWA' and u.is_active and u.auth_user_id is not null
+            and u.school_id = (select school_id from guru)
+          limit 2
+        ),
+        ortu_r as (
+          select u.user_id, u.auth_user_id,
+                 row_number() over (order by u.full_name) as rn
+          from users u
+          where u.role_type = 'ORTU' and u.is_active and u.auth_user_id is not null
+            and u.school_id = (select school_id from guru)
+          limit 2
+        )
+        select
+          (select user_id::text      from guru)               as guru_uid,
+          (select auth_user_id::text from guru)               as guru_auth,
+          (select school_id::text    from guru)               as school_id,
+          (select user_id::text      from siswa_r where rn=1) as sa_uid,
+          (select auth_user_id::text from siswa_r where rn=1) as sa_auth,
+          (select student_id::text   from siswa_r where rn=1) as sa_sid,
+          (select user_id::text      from siswa_r where rn=2) as sb_uid,
+          (select auth_user_id::text from siswa_r where rn=2) as sb_auth,
+          (select user_id::text      from ortu_r  where rn=1) as oa_uid,
+          (select auth_user_id::text from ortu_r  where rn=1) as oa_auth,
+          (select user_id::text      from ortu_r  where rn=2) as ob_uid,
+          (select auth_user_id::text from ortu_r  where rn=2) as ob_auth`);
+
+    const d13 = c13pre[0] || {};
+    const c13skip =
+        !d13.guru_uid ? 'tidak ada GURU aktif dengan auth_user_id' :
+        !d13.sa_uid   ? 'tidak ada SISWA aktif di sekolah GURU' :
+        !d13.sb_uid   ? 'hanya 1 SISWA aktif (butuh ≥2)' :
+        !d13.oa_uid   ? 'tidak ada ORTU aktif di sekolah GURU' :
+        !d13.ob_uid   ? 'hanya 1 ORTU aktif (butuh ≥2)' : null;
+
+    if (c13skip) {
+        log.pass(`CHECK 13 SKIP — ${c13skip} untuk uji perilaku sintetis (tidak menggagalkan)`);
+    } else {
+        // Fragmen INSERT setup — identik di setiap transaksi (diulang karena ROLLBACK).
+        // Harus dijalankan sebagai postgres (sebelum set local role) agar bypass RLS.
+        const c13ins =
+            ` insert into cases` +
+            `   (case_id, student_id, created_by_user_id, initiated_by_role,` +
+            `    current_handler_role, track, title, description, school_id, audience)` +
+            ` values ('${C13R}', '${d13.sa_sid}', '${d13.guru_uid}', 'GURU',` +
+            `   'GURU', 'SEKOLAH', 'Test RLS CHECK 13 RESTRICTED',` +
+            `   'Deskripsi uji kasus RESTRICTED untuk guard rail permanen.', '${d13.school_id}', 'RESTRICTED');` +
+            ` insert into cases` +
+            `   (case_id, student_id, created_by_user_id, initiated_by_role,` +
+            `    current_handler_role, track, title, description, school_id, audience)` +
+            ` values ('${C13P}', '${d13.sa_sid}', '${d13.guru_uid}', 'GURU',` +
+            `   'GURU', 'SEKOLAH', 'Test RLS CHECK 13 PRIVATE',` +
+            `   'Deskripsi uji kasus PRIVATE untuk guard rail permanen.', '${d13.school_id}', 'PRIVATE');` +
+            // case_events manual: 1 STUDENT_VISIBLE per kasus
+            // (trigger menambahkan 1 INTERNAL_SCHOOL otomatis saat INSERT cases di atas)
+            ` insert into case_events` +
+            `   (case_id, event_type, author_user_id, author_role_at_time, privacy_level, payload, school_id)` +
+            ` values ('${C13R}', 'COMMENT_ADDED', '${d13.guru_uid}', 'GURU',` +
+            `   'STUDENT_VISIBLE', '{}'::jsonb, '${d13.school_id}');` +
+            ` insert into case_events` +
+            `   (case_id, event_type, author_user_id, author_role_at_time, privacy_level, payload, school_id)` +
+            ` values ('${C13P}', 'COMMENT_ADDED', '${d13.guru_uid}', 'GURU',` +
+            `   'STUDENT_VISIBLE', '{}'::jsonb, '${d13.school_id}');` +
+            ` insert into student_updates (case_id, author_user_id, content, school_id)` +
+            ` values ('${C13R}', '${d13.guru_uid}', 'Catatan uji RESTRICTED.', '${d13.school_id}');` +
+            ` insert into student_updates (case_id, author_user_id, content, school_id)` +
+            ` values ('${C13P}', '${d13.guru_uid}', 'Catatan uji PRIVATE.', '${d13.school_id}');` +
+            // Audience eksplisit untuk RESTRICTED: SISWA A + ORTU A (opt-in)
+            ` insert into case_audience_members (case_id, user_id, school_id, added_by_user_id)` +
+            ` values ('${C13R}', '${d13.sa_uid}', '${d13.school_id}', '${d13.guru_uid}');` +
+            ` insert into case_audience_members (case_id, user_id, school_id, added_by_user_id)` +
+            ` values ('${C13R}', '${d13.oa_uid}', '${d13.school_id}', '${d13.guru_uid}');`;
+
+        // HARDEN poin 2: sanity setup — verifikasi INSERT berhasil sebelum assertion perilaku.
+        // Dijalankan sebagai postgres (tanpa SET ROLE) agar case_audience_members tidak kena RLS.
+        // Harapan: n_ce=2 (1 INTERNAL_SCHOOL trigger + 1 STUDENT_VISIBLE manual), n_cam=2.
+        let c13setupOk = false;
+        try {
+            const sanity = await mgmtQuery(
+                `begin;` + c13ins +
+                ` select` +
+                `   (select count(*)::int from cases                 where case_id = '${C13R}') as n_cases,` +
+                `   (select count(*)::int from case_events           where case_id = '${C13R}') as n_ce,` +
+                `   (select count(*)::int from student_updates       where case_id = '${C13R}') as n_su,` +
+                `   (select count(*)::int from case_audience_members where case_id = '${C13R}') as n_cam;` +
+                ` rollback;`);
+            const s = sanity[0] || {};
+            if (s.n_cases === 1 && s.n_ce === 2 && s.n_su === 1 && s.n_cam === 2) {
+                log.pass('CHECK 13 setup: 1 case RESTRICTED, 2 case_events (trigger+manual), 1 student_update, 2 audience members — data valid');
+                c13setupOk = true;
+            } else {
+                log.fail(`CHECK 13 setup tidak sesuai: cases=${s.n_cases} ce=${s.n_ce} su=${s.n_su} cam=${s.n_cam} (harapkan 1/2/1/2)`);
+            }
+        } catch (e) {
+            log.fail(`CHECK 13 setup error: ${e.message.slice(0, 150)}`);
+        }
+
+        if (!c13setupOk) {
+            log.fail('CHECK 13 behavioral dilewati — setup sintetis gagal');
+        } else {
+            // Satu call per aktor: BEGIN; INSERT setup (postgres); SET ROLE authenticated;
+            // SELECT 4 counts; ROLLBACK. mgmtQuery hanya mengembalikan SELECT terakhir,
+            // sehingga tidak bisa menggabungkan beberapa aktor dalam satu transaksi.
+            const c13run = async (tag, authId) => {
+                const claims = `{"sub":"${authId}","role":"authenticated"}`;
+                try {
+                    const rows = await mgmtQuery(
+                        `begin;` + c13ins +
+                        ` set local role authenticated;` +
+                        ` select set_config('request.jwt.claims', $${tag}$${claims}$${tag}$, true);` +
+                        ` select` +
+                        `   (select count(*)::int from case_events    where case_id = '${C13R}') as ce_r,` +
+                        `   (select count(*)::int from student_updates where case_id = '${C13R}') as su_r,` +
+                        `   (select count(*)::int from case_events    where case_id = '${C13P}') as ce_p,` +
+                        `   (select count(*)::int from student_updates where case_id = '${C13P}') as su_p;` +
+                        ` rollback;`);
+                    return rows[0] || {};
+                } catch (e) {
+                    return { _err: e.message };
+                }
+            };
+
+            // T1/T2 — SISWA A dalam audience RESTRICTED: ce_r=1 (STUDENT_VISIBLE saja), su_r=1
+            const r13a = await c13run('c13a', d13.sa_auth);
+            if (r13a._err) {
+                log.fail(`T1/T2 (SISWA A dalam audience): transaksi error: ${r13a._err.slice(0, 150)}`);
+            } else {
+                if (r13a.ce_r === 1)
+                    log.pass('T1 — SISWA A dalam audience: case_events RESTRICTED = 1 (STUDENT_VISIBLE saja, INTERNAL_SCHOOL tidak bocor)');
+                else
+                    log.fail(`T1 — SISWA A dalam audience: case_events RESTRICTED = ${r13a.ce_r} (harapkan 1)`);
+                if (r13a.su_r === 1)
+                    log.pass('T2 — SISWA A dalam audience: student_updates RESTRICTED = 1');
+                else
+                    log.fail(`T2 — SISWA A dalam audience: student_updates RESTRICTED = ${r13a.su_r} (harapkan 1)`);
+                if (r13a.ce_p === 0)
+                    log.pass('T5 sanity — SISWA A: case_events PRIVATE = 0 (PRIVATE tidak terlihat meski dalam audience RESTRICTED lain)');
+                else
+                    log.fail(`T5 sanity — SISWA A: case_events PRIVATE = ${r13a.ce_p} (harapkan 0)`);
+            }
+
+            // T3/T4 — ORTU A dalam audience RESTRICTED: ce_r=1, su_r=1
+            const r13b = await c13run('c13b', d13.oa_auth);
+            if (r13b._err) {
+                log.fail(`T3/T4 (ORTU A dalam audience): transaksi error: ${r13b._err.slice(0, 150)}`);
+            } else {
+                if (r13b.ce_r === 1)
+                    log.pass('T3 — ORTU A dalam audience: case_events RESTRICTED = 1 (STUDENT_VISIBLE saja)');
+                else
+                    log.fail(`T3 — ORTU A dalam audience: case_events RESTRICTED = ${r13b.ce_r} (harapkan 1)`);
+                if (r13b.su_r === 1)
+                    log.pass('T4 — ORTU A dalam audience: student_updates RESTRICTED = 1');
+                else
+                    log.fail(`T4 — ORTU A dalam audience: student_updates RESTRICTED = ${r13b.su_r} (harapkan 1)`);
+                if (r13b.ce_p === 0)
+                    log.pass('T6 sanity — ORTU A: case_events PRIVATE = 0');
+                else
+                    log.fail(`T6 sanity — ORTU A: case_events PRIVATE = ${r13b.ce_p} (harapkan 0)`);
+            }
+
+            // T11+T5 — SISWA B bukan audience member: ce_r=0, su_r=0, ce_p=0
+            const r13c = await c13run('c13c', d13.sb_auth);
+            if (r13c._err) {
+                log.fail(`T11/T5 (SISWA B bukan audience): transaksi error: ${r13c._err.slice(0, 150)}`);
+            } else {
+                if (r13c.ce_r === 0)
+                    log.pass('T11 — SISWA B bukan audience: case_events RESTRICTED = 0 (isolasi per-member)');
+                else
+                    log.fail(`T11 — SISWA B bukan audience: case_events RESTRICTED = ${r13c.ce_r} (harapkan 0 — BOCOR)`);
+                if (r13c.su_r === 0)
+                    log.pass('T11 — SISWA B bukan audience: student_updates RESTRICTED = 0');
+                else
+                    log.fail(`T11 — SISWA B bukan audience: student_updates RESTRICTED = ${r13c.su_r} (harapkan 0 — BOCOR)`);
+                if (r13c.ce_p === 0)
+                    log.pass('T5 — SISWA B: case_events PRIVATE = 0');
+                else
+                    log.fail(`T5 — SISWA B: case_events PRIVATE = ${r13c.ce_p} (harapkan 0)`);
+            }
+
+            // T12+T6+T7 — ORTU B bukan audience member: ce_r=0, su_r=0, ce_p=0, su_p=0
+            const r13d = await c13run('c13d', d13.ob_auth);
+            if (r13d._err) {
+                log.fail(`T12/T6/T7 (ORTU B bukan audience): transaksi error: ${r13d._err.slice(0, 150)}`);
+            } else {
+                if (r13d.ce_r === 0)
+                    log.pass('T12 — ORTU B bukan audience: case_events RESTRICTED = 0 (isolasi per-member)');
+                else
+                    log.fail(`T12 — ORTU B bukan audience: case_events RESTRICTED = ${r13d.ce_r} (harapkan 0 — BOCOR)`);
+                if (r13d.su_r === 0)
+                    log.pass('T12 — ORTU B bukan audience: student_updates RESTRICTED = 0');
+                else
+                    log.fail(`T12 — ORTU B bukan audience: student_updates RESTRICTED = ${r13d.su_r} (harapkan 0 — BOCOR)`);
+                if (r13d.ce_p === 0)
+                    log.pass('T6 — ORTU B: case_events PRIVATE = 0');
+                else
+                    log.fail(`T6 — ORTU B: case_events PRIVATE = ${r13d.ce_p} (harapkan 0)`);
+                if (r13d.su_p === 0)
+                    log.pass('T7 — ORTU B: student_updates PRIVATE = 0');
+                else
+                    log.fail(`T7 — ORTU B: student_updates PRIVATE = ${r13d.su_p} (harapkan 0)`);
+            }
+
+            // Regresi-(f) — GURU creator: ce_r=2 (SEMUA event, termasuk INTERNAL_SCHOOL)
+            // Membuktikan fix (f) (NOT IN SISWA/ORTU di rls_case_events_read_staff)
+            // tidak overshoot — GURU tetap bisa baca INTERNAL_SCHOOL.
+            const r13e = await c13run('c13e', d13.guru_auth);
+            if (r13e._err) {
+                log.fail(`Regresi-f (GURU creator): transaksi error: ${r13e._err.slice(0, 150)}`);
+            } else {
+                if (r13e.ce_r === 2)
+                    log.pass('Regresi-f — GURU creator: case_events RESTRICTED = 2 (INTERNAL_SCHOOL + STUDENT_VISIBLE — fix f tidak overshoot)');
+                else
+                    log.fail(`Regresi-f — GURU creator: case_events RESTRICTED = ${r13e.ce_r} (harapkan 2 — periksa rls_case_events_read_staff atau fn_involved_in_case)`);
+                if (r13e.su_r === 1)
+                    log.pass('Regresi-f — GURU creator: student_updates RESTRICTED = 1');
+                else
+                    log.fail(`Regresi-f — GURU creator: student_updates RESTRICTED = ${r13e.su_r} (harapkan 1)`);
+            }
+        }
+
+        // HARDEN poin 1: Idempotency — verifikasi 0 sisa data sentinel setelah semua ROLLBACK
+        const c13idem = await mgmtQuery(`
+            select count(*)::int as sentinel_cases
+            from cases
+            where case_id in ('${C13R}'::uuid, '${C13P}'::uuid)`);
+        if ((c13idem[0]?.sentinel_cases ?? -1) === 0)
+            log.pass('CHECK 13 idempotency: 0 sisa data sentinel di cases (semua ROLLBACK berhasil)');
+        else
+            log.fail(`CHECK 13 idempotency: ${c13idem[0]?.sentinel_cases} baris sentinel masih ada — ROLLBACK gagal`);
     }
 
     // ── Ringkasan ────────────────────────────────────────────────
