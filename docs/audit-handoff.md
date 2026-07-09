@@ -455,17 +455,55 @@ bukan via test suite.
 
 Item-item ini BUKAN prioritas sesi ini, dicatat untuk referensi sesi mendatang.
 
-### 9.1 Gap Test Suite — Write-Path Kasus (Prioritas Tinggi)
+### 9.1 Gap Test Suite — Write-Path Kasus — ✅ SELESAI (9 Juli 2026)
 
 Regresi FINDING 2 (20260707150000 mencabut fn_is_internal_case_actor secara tidak
-sengaja) terdeteksi manual via simulasi langsung, BUKAN oleh test suite. Ini berarti
-regresi serupa di masa depan bisa lolos undetected.
+sengaja) terdeteksi manual via simulasi langsung, BUKAN oleh test suite. Gap ini kini
+sudah ditutup dengan **CHECK 14 permanen** di `tests/tenant-isolation.mjs`.
 
-**Rekomendasi:** Tambah CHECK 12+ di `tests/tenant-isolation.mjs` yang memverifikasi:
-- GURU bisa UPDATE cases (status, current_handler_role)
-- GURU bisa INSERT case_events (catatan kasus)
-- GURU bisa INSERT case_audience_members (untuk case RESTRICTED)
-- SISWA/ORTU tidak bisa melakukan ketiga operasi di atas
+**CHECK 14 mencakup 13 assertion:**
+
+| Kode | Deskripsi | Harapkan |
+|------|-----------|----------|
+| W1   | GURU_A UPDATE kasus handler=GURU | 1 baris |
+| W2c  | GURU_A UPDATE kasus buatannya sendiri (creator, bukan handler/kepsek) | 1 baris |
+| W2   | GURU_B UPDATE kasus PUBLIC yang bukan miliknya (audience member biasa) | 0 baris |
+| W3   | GURU_A INSERT case_events ke kasus sendiri | berhasil |
+| W4   | GURU_A INSERT case_events ke kasus handler=KEPSEK | ditolak 42501 |
+| W5   | GURU_A INSERT case_audience_members dengan added_by_user_id benar | berhasil |
+| W6   | GURU_A INSERT case_audience_members dengan added_by_user_id=NULL | ditolak 42501 |
+| W7   | GURU_A INSERT student_updates ke kasus sendiri | berhasil |
+| W8   | GURU_A INSERT student_updates ke kasus handler=KEPSEK | ditolak 42501 |
+| W9   | GURU_X (cross-tenant) UPDATE kasus sekolah lain | 0 baris |
+| W10  | GURU_X INSERT case_events ke kasus sekolah lain | ditolak 42501 |
+| W11  | KEPSEK_A INSERT case_events ke kasus handler=KEPSEK | berhasil |
+| idem | 0 sisa sentinel setelah semua ROLLBACK | 0 baris |
+
+**W2 dan W2c** (ditambahkan 9 Juli 2026) membuktikan fix `20260709020000`:
+- W2c memverifikasi klausul `created_by_user_id = fn_current_user_id()` aktif
+- W2 membuktikan audience member biasa TIDAK lagi bisa UPDATE cases (celah lama
+  tertutup: sebelumnya siapapun yang *bisa lihat* kasus bisa UPDATE semua kolom)
+
+**Hasil test suite pasca-CHECK 14:**
+
+| Tahap | Jumlah ✓ |
+|-------|----------|
+| CHECK 1–11 (baseline) | 55 ✓ |
+| + CHECK 12 (struktural read-path, 5 assertion) | 60 ✓ |
+| + CHECK 13 (behavioral read-path siswa/ortu, 17 assertion) | 77 ✓ |
+| + CHECK 14 (write-path kasus, 13 assertion) | **90 ✓** |
+
+**BACKLOG BARU — fn_can_see_case KEPSEK (prioritas tinggi, fungsional):**
+
+Ditemukan saat investigasi skenario W2b (KEPSEK UPDATE via fn_is_kepsek): `fn_can_see_case()`
+tidak punya cabang `OR fn_is_kepsek()`. Akibatnya **KEPSEK tidak bisa melihat kasus
+PRIVATE/RESTRICTED yang tidak melibatkan dia** (bukan handler, creator, atau audience member).
+Dikonfirmasi Romo: ini **BUG** (bukan desain disengaja) — KEPSEK seharusnya bisa lihat semua
+kasus di sekolahnya sebagai kepala sekolah.
+
+Opsi fix: tambah `OR fn_is_kepsek()` ke `fn_can_see_case()`. Blast radius besar (fungsi
+dipakai di banyak policy) — perlu investigasi ANALYZE sendiri sebelum diterapkan. Dicatat
+sebagai backlog prioritas tinggi untuk Fase 3.
 
 ### 9.2 fn_deactivate_stale_staff — Kemungkinan Gagal Fungsional (Perlu Investigasi)
 

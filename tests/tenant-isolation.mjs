@@ -7,7 +7,7 @@
  * mencegah terulangnya kelas bug audit 3 Juli 2026
  * (RPC SECURITY DEFINER ber-GRANT PUBLIC bocor ke anon).
  *
- * Menjalankan 13 pemeriksaan terhadap DB LIVE:
+ * Menjalankan 14 pemeriksaan terhadap DB LIVE:
  *   1. RLS coverage      — SEMUA tabel public wajib RLS enabled.
  *   2. RPC exposure      — TIDAK boleh ada fungsi SECURITY DEFINER `fn_*`
  *                          VOLATILE (menulis, non-trigger) yang EXECUTE-nya
@@ -41,6 +41,13 @@
  *                          T11–T12, regresi-f): audience members bisa baca
  *                          STUDENT_VISIBLE saja; non-member 0; GURU creator
  *                          tetap bisa baca SEMUA (termasuk INTERNAL_SCHOOL).
+ *  14. Write-path kasus (regression FINDING 2 + fix rls_cases_update_audience) —
+ *                          fn_matches_case_handler + fn_is_internal_case_actor
+ *                          EXECUTE tersedia untuk authenticated; added_by_user_id
+ *                          guard aktif di rls_cam_insert; cross-tenant write
+ *                          isolation; audience member biasa TIDAK bisa UPDATE cases
+ *                          (W2, mig 20260709020000); creator kasus bisa UPDATE
+ *                          walaupun bukan handler (W2c).
  *
  * CARA JALANKAN:
  *   SUPABASE_ACCESS_TOKEN=sbp_xxx node tests/tenant-isolation.mjs
@@ -1034,6 +1041,380 @@ async function main() {
             log.pass('CHECK 13 idempotency: 0 sisa data sentinel di cases (semua ROLLBACK berhasil)');
         else
             log.fail(`CHECK 13 idempotency: ${c13idem[0]?.sentinel_cases} baris sentinel masih ada — ROLLBACK gagal`);
+    }
+
+    // ── CHECK 14: Write-path kasus (regression FINDING 2) ──────────
+    // FINDING 2: migration 20260707150000 secara tak sengaja me-REVOKE
+    // fn_matches_case_handler + fn_is_internal_case_actor dari authenticated,
+    // merusak SEMUA write case (UPDATE, INSERT case_events/student_updates/cam).
+    // Fixed oleh 20260708010000. CHECK ini memastikan fix tetap berlaku.
+    //
+    // Dua sentinel berbeda handler_role (GURU vs KEPSEK):
+    //   C14G: current_handler_role=GURU  → rls_case_events_insert_handler lulus utk GURU_A
+    //   C14K: current_handler_role=KEPSEK → rls_case_events_insert_handler TOLAK utk GURU_A
+    //                                        (hanya rls_case_events_insert_kepsek yg bisa)
+    //
+    // Note: rls_cases_update_audience (fn_can_see_case) membolehkan GURU_A update
+    // kasus apapun yang bisa ia lihat — UPDATE semantik lebih longgar dari INSERT
+    // case_events. W1 tetap valid karena rls_cases_update_sync memanggil
+    // fn_matches_case_handler, dan REVOKE fn_matches_case_handler memblokir
+    // evaluasi policy (bukan short-circuit) → 42501 (dikonfirmasi HARDEN probe).
+    log.head('CHECK 14 — Write-path kasus: fn_matches_case_handler + fn_is_internal_case_actor EXECUTE tersedia untuk authenticated, added_by_user_id guard aktif, cross-tenant write isolation, rls_cases_update_audience tidak bocor ke audience member biasa');
+
+    const C14G = 'ffffffff-ffff-ffff-ffff-000000000014'; // handler=GURU,  audience=RESTRICTED
+    const C14K = 'ffffffff-ffff-ffff-ffff-000000000015'; // handler=KEPSEK, audience=PUBLIC
+
+    // Pre-query: ambil GURU_A, GURU_B, KEPSEK_A (sekolah smkhr), GURU_X (sekolah lain)
+    // GURU_B diperlukan untuk W2 (audience member biasa, bukan handler/creator/kepsek)
+    const c14actors = await mgmtQuery(`
+        with
+          smkhr as (
+            select school_id from schools where slug = 'smkhr' limit 1
+          ),
+          other as (
+            select school_id from schools where slug != 'smkhr' limit 1
+          ),
+          glist as (
+            select u.auth_user_id::text as auth_id, u.user_id::text as uid,
+                   u.school_id::text    as school_id,
+                   row_number() over (order by u.user_id) as rn
+            from users u
+            join smkhr s on u.school_id = s.school_id
+            where u.role_type = 'GURU' and u.is_active and not u.is_kepsek
+          ),
+          ka as (
+            select u.auth_user_id::text as auth_id, u.user_id::text as uid
+            from users u
+            join smkhr s on u.school_id = s.school_id
+            where (u.role_type = 'KEPSEK' or u.is_kepsek) and u.is_active
+            limit 1
+          ),
+          gx as (
+            select u.auth_user_id::text as auth_id, u.user_id::text as uid
+            from users u
+            join other o on u.school_id = o.school_id
+            where u.role_type = 'GURU' and u.is_active
+            limit 1
+          ),
+          st as (
+            select s.student_id::text as student_id
+            from students s
+            join smkhr sc on s.school_id = sc.school_id
+            limit 1
+          )
+        select
+          (select auth_id   from glist where rn=1) as ga_auth,
+          (select uid       from glist where rn=1) as ga_uid,
+          (select school_id from glist where rn=1) as ga_school,
+          (select auth_id   from glist where rn=2) as gb_auth,
+          (select uid       from glist where rn=2) as gb_uid,
+          (select auth_id   from ka)               as ka_auth,
+          (select uid       from ka)               as ka_uid,
+          (select auth_id   from gx)               as gx_auth,
+          (select uid       from gx)               as gx_uid,
+          (select student_id from st)              as student_id`);
+
+    const c14a = c14actors[0];
+    if (!c14a?.ga_auth || !c14a?.gb_auth || !c14a?.ka_auth || !c14a?.gx_auth || !c14a?.student_id) {
+        log.pass('CHECK 14 SKIP — tidak ada data aktor lengkap (GURU_A + GURU_B + KEPSEK_A + GURU_X + siswa smkhr), cek seed data');
+    } else {
+
+        const gaAuth = c14a.ga_auth, gaUid = c14a.ga_uid, gaSchool = c14a.ga_school;
+        const gbAuth = c14a.gb_auth, gbUid = c14a.gb_uid;
+        const kaAuth = c14a.ka_auth, kaUid = c14a.ka_uid;
+        const gxAuth = c14a.gx_auth, gxUid = c14a.gx_uid;
+        const stId   = c14a.student_id;
+
+        const claimsGA = `{"sub":"${gaAuth}","role":"authenticated"}`;
+        const claimsGB = `{"sub":"${gbAuth}","role":"authenticated"}`;
+        const claimsKA = `{"sub":"${kaAuth}","role":"authenticated"}`;
+        const claimsGX = `{"sub":"${gxAuth}","role":"authenticated"}`;
+
+        // Fragment INSERT kedua sentinel (dieksekusi sebagai postgres via mgmtQuery).
+        // cases kolom: case_id, school_id, student_id, title, description, track,
+        //              audience, created_by_user_id, initiated_by_role, current_handler_role
+        // C14K audience=PUBLIC agar GURU_B bisa SELECT (fn_can_see_case=true via PUBLIC+internal)
+        // sehingga W2 membuktikan UPDATE-lah yang memblok, bukan SELECT policy.
+        const c14ins =
+            `insert into cases (case_id, school_id, student_id, title, description, track, audience, created_by_user_id, initiated_by_role, current_handler_role)` +
+            ` values` +
+            ` ('${C14G}', '${gaSchool}', '${stId}', 'Sentinel C14G handler GURU', 'Deskripsi sentinel CHECK 14 handler guru minimal.', 'SEKOLAH', 'RESTRICTED', '${gaUid}', 'GURU', 'GURU'),` +
+            ` ('${C14K}', '${gaSchool}', '${stId}', 'Sentinel C14K handler KEPSEK', 'Deskripsi sentinel CHECK 14 handler kepsek minimal.', 'SEKOLAH', 'PUBLIC', '${gaUid}', 'GURU', 'KEPSEK');`;
+
+        // ── W1: GURU_A UPDATE C14G (handler=GURU) → harapkan 1 baris ──
+        // Membuktikan fn_matches_case_handler dapat dipanggil (EXECUTE privilege ada).
+        // rls_cases_update_sync memanggil fn_matches_case_handler; REVOKE-nya terbukti
+        // memblokir UPDATE dengan 42501 (HARDEN probe, BEGIN...ROLLBACK transaksional).
+        let c14w1 = null;
+        try {
+            const rW1 = await mgmtQuery(
+                `begin;` +
+                ` set local role postgres;` +
+                ` ${c14ins}` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $w1$${claimsGA}$w1$, true);` +
+                ` with upd as (update cases set status = 'OPEN' where case_id = '${C14G}' returning case_id)` +
+                ` select count(*)::int as w1 from upd;` +
+                ` rollback;`
+            );
+            c14w1 = rW1[0]?.w1;
+        } catch (e) {
+            log.fail(`W1 error tidak terduga: ${e.message.slice(0, 150)}`);
+        }
+        if (c14w1 === 1)
+            log.pass('W1: GURU_A berhasil UPDATE kasus handler=GURU (fn_matches_case_handler EXECUTE aktif, rls_cases_update_sync bekerja)');
+        else if (c14w1 !== null)
+            log.fail(`W1: GURU_A UPDATE handler=GURU → ${c14w1} baris (harapkan 1) — fn_matches_case_handler atau EXECUTE privilege rusak`);
+
+        // ── W2c: GURU_A UPDATE C14K (creator, bukan handler/kepsek) → harapkan 1 baris ──
+        // Membuktikan klausul created_by_user_id = fn_current_user_id() di
+        // rls_cases_update_audience (mig 20260709020000) berfungsi.
+        let c14w2c = null;
+        try {
+            const rW2c = await mgmtQuery(
+                `begin;` +
+                ` set local role postgres;` +
+                ` ${c14ins}` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $w2c$${claimsGA}$w2c$, true);` +
+                ` with upd as (update cases set audience = audience where case_id = '${C14K}' returning case_id)` +
+                ` select count(*)::int as w2c from upd;` +
+                ` rollback;`
+            );
+            c14w2c = rW2c[0]?.w2c;
+        } catch (e) {
+            log.fail(`W2c error tidak terduga: ${e.message.slice(0, 150)}`);
+        }
+        if (c14w2c === 1)
+            log.pass('W2c: GURU_A berhasil UPDATE kasus yang dia buat (creator clause rls_cases_update_audience aktif)');
+        else if (c14w2c !== null)
+            log.fail(`W2c: GURU_A UPDATE kasus sendiri (creator) → ${c14w2c} baris (harapkan 1) — created_by clause rusak`);
+
+        // ── W2: GURU_B UPDATE C14K (audience PUBLIC, bukan handler/creator/kepsek) → harapkan 0 ──
+        // Membuktikan rls_cases_update_audience (mig 20260709020000) TIDAK lagi bocor
+        // ke audience member biasa. C14K=PUBLIC sehingga GURU_B bisa SELECT (fn_can_see_case=true),
+        // maka 0 baris membuktikan UPDATE-lah yang memblok (bukan SELECT policy).
+        let c14w2 = null;
+        try {
+            const rW2 = await mgmtQuery(
+                `begin;` +
+                ` set local role postgres;` +
+                ` ${c14ins}` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $w2b$${claimsGB}$w2b$, true);` +
+                ` with upd as (update cases set audience = audience where case_id = '${C14K}' returning case_id)` +
+                ` select count(*)::int as w2 from upd;` +
+                ` rollback;`
+            );
+            c14w2 = rW2[0]?.w2;
+        } catch (e) {
+            log.fail(`W2 error tidak terduga: ${e.message.slice(0, 150)}`);
+        }
+        if (c14w2 === 0)
+            log.pass('W2: GURU_B (audience member biasa) TIDAK bisa UPDATE kasus — rls_cases_update_audience tidak bocor ke audience member');
+        else if (c14w2 !== null)
+            log.fail(`W2: GURU_B UPDATE kasus bukan miliknya → ${c14w2} baris (harapkan 0) — rls_cases_update_audience masih bocor`);
+
+        // ── W3 + W7 (satu call, GURU_A) ──
+        // W3: GURU_A INSERT case_events ke C14G → berhasil (rls_case_events_insert_handler: fn_matches_case_handler('GURU') = true)
+        // W7: GURU_A INSERT student_updates ke C14G → berhasil
+        // case_events kolom wajib: case_id, school_id, author_user_id, event_type, author_role_at_time
+        // student_updates kolom wajib: case_id, school_id, author_user_id, content
+        let c14w3 = false, c14w7 = false, c14w37err = null;
+        try {
+            const rW37 = await mgmtQuery(
+                `begin;` +
+                ` set local role postgres;` +
+                ` ${c14ins}` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $w37$${claimsGA}$w37$, true);` +
+                ` insert into case_events (case_id, school_id, author_user_id, event_type, author_role_at_time, privacy_level)` +
+                ` values ('${C14G}', '${gaSchool}', '${gaUid}', 'COMMENT_ADDED', 'GURU', 'STUDENT_VISIBLE');` +
+                ` insert into student_updates (case_id, school_id, author_user_id, content)` +
+                ` values ('${C14G}', '${gaSchool}', '${gaUid}', 'Update W7 sentinel CHECK 14 dari GURU_A.');` +
+                ` select 1 as ok;` +
+                ` rollback;`
+            );
+            c14w3 = Array.isArray(rW37) && rW37.length > 0 && rW37[0]?.ok === 1;
+            c14w7 = c14w3;
+        } catch (e) {
+            c14w37err = e.message;
+        }
+        if (c14w3)
+            log.pass('W3: GURU_A berhasil INSERT case_events ke kasus sendiri (fn_is_internal_case_actor + fn_matches_case_handler berfungsi)');
+        else
+            log.fail(`W3: GURU_A INSERT case_events gagal${c14w37err ? ': ' + c14w37err.slice(0, 120) : ' (tidak ada ok=1)'}`);
+        if (c14w7)
+            log.pass('W7: GURU_A berhasil INSERT student_updates ke kasus sendiri');
+        else if (!c14w37err)
+            log.fail('W7: student_updates tidak berhasil dalam transaksi W3+W7');
+
+        // ── W5: GURU_A INSERT case_audience_members dengan added_by_user_id=gaUid (positif) ──
+        let c14w5 = false, c14w5err = null;
+        try {
+            const rW5 = await mgmtQuery(
+                `begin;` +
+                ` set local role postgres;` +
+                ` ${c14ins}` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $w5p$${claimsGA}$w5p$, true);` +
+                ` insert into case_audience_members (case_id, school_id, user_id, added_by_user_id)` +
+                ` values ('${C14G}', '${gaSchool}', '${kaUid}', '${gaUid}');` +
+                ` select 1 as ok;` +
+                ` rollback;`
+            );
+            c14w5 = Array.isArray(rW5) && rW5.length > 0 && rW5[0]?.ok === 1;
+        } catch (e) {
+            c14w5err = e.message;
+        }
+        if (c14w5)
+            log.pass('W5: GURU_A berhasil INSERT case_audience_members dengan added_by_user_id benar');
+        else
+            log.fail(`W5: GURU_A INSERT cam gagal${c14w5err ? ': ' + c14w5err.slice(0, 120) : ' (tidak ada ok=1)'}`);
+
+        // ── W6: GURU_A INSERT cam dengan added_by_user_id=NULL (negatif) ──
+        let blockedW6 = false;
+        try {
+            await mgmtQuery(
+                `begin;` +
+                ` set local role postgres;` +
+                ` ${c14ins}` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $w6n$${claimsGA}$w6n$, true);` +
+                ` insert into case_audience_members (case_id, school_id, user_id, added_by_user_id)` +
+                ` values ('${C14G}', '${gaSchool}', '${kaUid}', null);` +
+                ` rollback;`
+            );
+        } catch (e) {
+            blockedW6 = e.message.includes('42501') || e.message.includes('row-level security') || e.message.includes('new row violates');
+        }
+        if (blockedW6)
+            log.pass('W6: INSERT cam dengan added_by_user_id=NULL ditolak RLS (guard added_by_user_id aktif)');
+        else
+            log.fail('W6: INSERT cam dengan added_by_user_id=NULL TIDAK ditolak — guard added_by_user_id rusak');
+
+        // ── W4: GURU_A INSERT case_events ke C14K handler=KEPSEK (negatif) ──
+        // rls_case_events_insert_handler: fn_matches_case_handler('KEPSEK', stId) = false untuk GURU_A
+        // rls_case_events_insert_kepsek:  fn_is_kepsek() = false untuk GURU_A (role_type='GURU', not is_kepsek)
+        // → kedua policy gagal → INSERT ditolak 42501
+        let blockedW4 = false;
+        try {
+            await mgmtQuery(
+                `begin;` +
+                ` set local role postgres;` +
+                ` ${c14ins}` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $w4n$${claimsGA}$w4n$, true);` +
+                ` insert into case_events (case_id, school_id, author_user_id, event_type, author_role_at_time, privacy_level)` +
+                ` values ('${C14K}', '${gaSchool}', '${gaUid}', 'COMMENT_ADDED', 'GURU', 'STUDENT_VISIBLE');` +
+                ` rollback;`
+            );
+        } catch (e) {
+            blockedW4 = e.message.includes('42501') || e.message.includes('row-level security') || e.message.includes('new row violates');
+        }
+        if (blockedW4)
+            log.pass('W4: GURU_A TIDAK bisa INSERT case_events ke kasus handler=KEPSEK (fn_matches_case_handler menyaring role)');
+        else
+            log.fail('W4: GURU_A berhasil INSERT case_events ke kasus handler=KEPSEK — fn_matches_case_handler tidak menyaring');
+
+        // ── W8: GURU_A INSERT student_updates ke C14K (negatif) ──
+        let blockedW8 = false;
+        try {
+            await mgmtQuery(
+                `begin;` +
+                ` set local role postgres;` +
+                ` ${c14ins}` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $w8n$${claimsGA}$w8n$, true);` +
+                ` insert into student_updates (case_id, school_id, author_user_id, content)` +
+                ` values ('${C14K}', '${gaSchool}', '${gaUid}', 'Update W8 sentinel ke kasus handler=KEPSEK.');` +
+                ` rollback;`
+            );
+        } catch (e) {
+            blockedW8 = e.message.includes('42501') || e.message.includes('row-level security') || e.message.includes('new row violates');
+        }
+        if (blockedW8)
+            log.pass('W8: GURU_A TIDAK bisa INSERT student_updates ke kasus handler=KEPSEK');
+        else
+            log.fail('W8: GURU_A berhasil INSERT student_updates ke kasus handler=KEPSEK — guard tidak aktif');
+
+        // ── W9: GURU_X (sekolah lain) UPDATE C14G (negatif, cross-tenant) ──
+        let c14w9 = null;
+        try {
+            const rW9 = await mgmtQuery(
+                `begin;` +
+                ` set local role postgres;` +
+                ` ${c14ins}` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $w9x$${claimsGX}$w9x$, true);` +
+                ` with upd as (update cases set status = 'OPEN' where case_id = '${C14G}' returning case_id)` +
+                ` select count(*)::int as w9 from upd;` +
+                ` rollback;`
+            );
+            c14w9 = rW9[0]?.w9;
+        } catch (e) {
+            log.fail(`W9 error tidak terduga: ${e.message.slice(0, 150)}`);
+        }
+        if (c14w9 === 0)
+            log.pass('W9: GURU_X (cross-tenant) TIDAK bisa UPDATE kasus sekolah lain (fn_current_school_id isolasi aktif)');
+        else if (c14w9 !== null)
+            log.fail(`W9: GURU_X UPDATE cross-tenant → ${c14w9} baris (harapkan 0) — isolasi school_id bocor`);
+
+        // ── W10: GURU_X INSERT case_events ke C14G (negatif, cross-tenant) ──
+        // school_id=gaSchool ≠ fn_current_school_id() untuk GURU_X → WITH CHECK gagal → 42501
+        let blockedW10 = false;
+        try {
+            await mgmtQuery(
+                `begin;` +
+                ` set local role postgres;` +
+                ` ${c14ins}` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $w10x$${claimsGX}$w10x$, true);` +
+                ` insert into case_events (case_id, school_id, author_user_id, event_type, author_role_at_time, privacy_level)` +
+                ` values ('${C14G}', '${gaSchool}', '${gxUid}', 'COMMENT_ADDED', 'GURU', 'STUDENT_VISIBLE');` +
+                ` rollback;`
+            );
+        } catch (e) {
+            blockedW10 = e.message.includes('42501') || e.message.includes('row-level security') || e.message.includes('new row violates');
+        }
+        if (blockedW10)
+            log.pass('W10: GURU_X TIDAK bisa INSERT case_events ke kasus sekolah lain (cross-tenant write ditolak)');
+        else
+            log.fail('W10: GURU_X berhasil INSERT case_events ke kasus sekolah lain — cross-tenant write BOCOR');
+
+        // ── W11: KEPSEK_A INSERT case_events ke C14K handler=KEPSEK (positif) ──
+        // rls_case_events_insert_kepsek: fn_is_kepsek() = true untuk KEPSEK_A → INSERT lulus
+        let c14w11 = false, c14w11err = null;
+        try {
+            const rW11 = await mgmtQuery(
+                `begin;` +
+                ` set local role postgres;` +
+                ` ${c14ins}` +
+                ` set local role authenticated;` +
+                ` select set_config('request.jwt.claims', $w11$${claimsKA}$w11$, true);` +
+                ` insert into case_events (case_id, school_id, author_user_id, event_type, author_role_at_time, privacy_level)` +
+                ` values ('${C14K}', '${gaSchool}', '${kaUid}', 'COMMENT_ADDED', 'KEPSEK', 'STUDENT_VISIBLE');` +
+                ` select 1 as ok;` +
+                ` rollback;`
+            );
+            c14w11 = Array.isArray(rW11) && rW11.length > 0 && rW11[0]?.ok === 1;
+        } catch (e) {
+            c14w11err = e.message;
+        }
+        if (c14w11)
+            log.pass('W11: KEPSEK_A berhasil INSERT case_events ke kasus handler=KEPSEK (rls_case_events_insert_kepsek berfungsi)');
+        else
+            log.fail(`W11: KEPSEK_A INSERT case_events ke handler=KEPSEK gagal${c14w11err ? ': ' + c14w11err.slice(0, 120) : ''}`);
+
+        // Idempotency: verifikasi 0 sisa data sentinel setelah semua ROLLBACK
+        const c14idem = await mgmtQuery(`
+            select count(*)::int as sentinel_cases
+            from cases
+            where case_id in ('${C14G}'::uuid, '${C14K}'::uuid)`);
+        if ((c14idem[0]?.sentinel_cases ?? -1) === 0)
+            log.pass('CHECK 14 idempotency: 0 sisa data sentinel di cases (semua ROLLBACK berhasil)');
+        else
+            log.fail(`CHECK 14 idempotency: ${c14idem[0]?.sentinel_cases} baris sentinel masih ada — ROLLBACK gagal`);
     }
 
     // ── Ringkasan ────────────────────────────────────────────────

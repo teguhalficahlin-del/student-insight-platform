@@ -43,6 +43,14 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
   regresi-f sudah menjadi CHECK 12 (struktural) dan CHECK 13 (behavioral)
   permanen di `tests/tenant-isolation.mjs`. Baseline 55 ✓ → 77 ✓ (+22).
   Validasi negatif terbukti non-vacuous. Lihat docs/audit-handoff.md §9.4 dan §12.
+- **✅ Gap test suite §9.1 + rls_cases_update_audience — SELESAI (9 Juli 2026):**
+  Celah keamanan: `rls_cases_update_audience` lama membolehkan SIAPAPUN staf
+  internal yang bisa *lihat* kasus untuk UPDATE semua kolom (termasuk handler/status).
+  Diperbaiki via migration `20260709020000` — policy diperketat ke handler/kepsek/creator.
+  CHECK 14 (13 assertion, write-path kasus) ditambahkan ke test suite: 77 ✓ → 90 ✓.
+  BACKLOG BARU: `fn_can_see_case()` tidak punya cabang `OR fn_is_kepsek()` — KEPSEK
+  tidak bisa lihat kasus PRIVATE/RESTRICTED di luar keterlibatannya (bug fungsional,
+  bukan security leak; ditunda ke Fase 3). Lihat docs/audit-handoff.md §9.1.
 - **Fitur audience RESTRICTED diperluas (8 Juli 2026, blok kedua):**
   siswa subjek kasus/observasi dan orang tua mereka kini bisa ditambahkan
   ke audience RESTRICTED secara eksplisit oleh guru (opt-in per-item).
@@ -58,10 +66,12 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
   + commit 5e7ead5 (CHECK 12+13 permanen + sinkronisasi docs §9.4/§12)
   + commit caac5f8 (PRIORITAS 1 selesai: 4 file client + docs §6/§13 update)
   + **commit TBD (Fase 2 SELESAI): docs §6 D1/D2 + §11 status + §14 baru.**
+  + **commit TBD (§9.1 + CHECK 14): mig 20260709020000 live, CHECK 14 (13
+    assertion write-path), docs §9.1 SELESAI, CLAUDE.md update.**
   Lihat docs/audit-handoff.md §8, §10, §11, §12, §13, §14.
-- **Test suite**: 77/77 ✓ lulus (terakhir dijalankan 9 Juli 2026, pasca
-  CHECK 12+13 ditambahkan). 13 CHECK top-level. Catatan historis: "42/42"
+- **Test suite**: 90/90 ✓ lulus (terakhir dijalankan 9 Juli 2026, pasca
+  CHECK 14 ditambahkan). 14 CHECK top-level. Catatan historis: "42/42"
   yang sempat tercatat adalah angka pre-CHECK-10/11 (sebelum commit c19b164
-  8 Juli 2026) — sudah stale, 77 adalah angka valid saat ini.
+  8 Juli 2026) — sudah stale, 90 adalah angka valid saat ini.
 
 Detail lengkap dan checklist prioritas ada di `docs/audit-handoff.md §6`.
