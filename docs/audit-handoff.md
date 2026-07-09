@@ -31,7 +31,7 @@ Fase-fase berikut direncanakan di awal sesi audit (6–7 Juli 2026). Fase 1 dan 
 | Fase | Nama | Status |
 |------|------|--------|
 | **1** | Temuan Langsung — Branding, Credential & Privilege Exposure | ✅ SELESAI |
-| **2** | RLS & Tenant Isolation (semua tabel/policy) | 🔄 SEDANG BERJALAN |
+| **2** | RLS & Tenant Isolation (semua tabel/policy) | ✅ SELESAI (9 Juli 2026) |
 | **3** | Access Control per Aktor (capability audit per portal) | ⏳ Belum dimulai |
 | **4** | Frontend Security (input validation, XSS, offline queue) | ⏳ Belum dimulai |
 | **5** | Skalabilitas & Performance | ⏸ DITUNDA (lihat §3) |
@@ -328,10 +328,9 @@ Migration sebelum 2026-07-03 adalah fondasi multi-tenant platform (RLS isolasi, 
 
 ## 6. Langkah Selanjutnya — Checklist untuk Sesi Berikutnya
 
-> ~~⚠️ **STATUS FASE 2 SECARA KESELURUHAN: BELUM SELESAI.**~~ **PRIORITAS 1
-> SELESAI (9 Juli 2026).** Item yang MASIH TERBUKA sebelum Fase 2 bisa
-> ditutup: **D1** (klarifikasi DELETE `academic_periods`) belum dijawab;
-> **D2** (status tabel `achievements`) belum dikonfirmasi.
+> ✅ **FASE 2 SELESAI (9 Juli 2026).** PRIORITAS 1 selesai (commit caac5f8).
+> D1 dan D2 diinvestigasi dan dijawab — tidak ada aksi keamanan lanjutan
+> diperlukan untuk keduanya. Fase 2 resmi ditutup sesi ini.
 
 Urutkan dari yang paling mendesak:
 
@@ -366,9 +365,30 @@ Urutkan dari yang paling mendesak:
   - **FINDING 3 — fn_stakeholder_summary()** (statistik agregat sekolah, tanpa guard role → semua authenticated bisa akses): fix `20260708050000` — tambah guard KEPSEK/STAKEHOLDER, konversi ke plpgsql. Verified.
   - **FINDING 4 (technical debt, tidak exploitable saat ini) — 14 fungsi helper anon=true** (fn_can_see_case, fn_can_see_student, dll.): tidak bisa langsung di-REVOKE karena dipanggil 19 policy roles={public}. Dicatat sebagai Fase 3 backlog — lihat §8 item "14 fungsi helper anon=true".
 
-- [ ] **D1 — Klarifikasi `academic_periods` DELETE:** Admin portal melakukan INSERT+UPDATE langsung ke tabel ini (lihat `admin/js/semester.js:354,416`). Apakah ada use case DELETE (misal: hapus periode yang salah dibuat), atau selalu via RPC/admin DB? Jika butuh client DELETE, tambahkan policy DELETE hanya untuk role ADMINISTRATIVE.
+- [x] **D1 — `academic_periods` DELETE — VERIFIED, tidak ada aksi keamanan (9 Juli 2026).**
+  Tidak ada satu pun client code yang melakukan DELETE ke `academic_periods` (tabel
+  tidak terdaftar di `PK_COLUMNS`, sehingga `deleteRecord`/`deleteBulk` pun tidak bisa
+  memanggilnya). Tidak ada `FOR DELETE` policy di tabel ini — ini **by-design**: RLS
+  default-deny sudah menutup akses DELETE dari client. Satu-satunya jalur "hapus"
+  adalah `fn_batalkan_tahun_ajaran` (SECURITY DEFINER, migration
+  `20260702160000_batalkan_tahun_ajaran.sql`) yang menghapus `academic_periods` secara
+  transaksional bersama enrollment — tidak butuh RLS `FOR DELETE` karena berjalan sebagai
+  superuser DB. **CATATAN:** Fungsi ini belum punya UI pemanggil di client manapun.
+  Dicatat sebagai **backlog FITUR** (bukan keamanan): admin butuh tombol/form
+  "Batalkan Tahun Ajaran" di masa depan. Lihat §14 Backlog Produk.
 
-- [ ] **D2 — Klarifikasi `achievements`:** Tidak ditemukan client write ke tabel ini. Tabel ini aktif dipakai? Diisi via mana (edge function, admin import, atau belum dipakai sama sekali)?
+- [x] **D2 — `achievements` — VERIFIED, backend-complete, belum ada UI (9 Juli 2026).**
+  Tabel `achievements` memiliki 0 baris di database live. Infrastruktur backend sudah
+  lengkap: tabel dengan `school_id` + soft-delete via `is_voided`, 4 RLS policy
+  (`rls_achievements_write` INSERT untuk WALI_KELAS/KAPRODI/KEPSEK,
+  `rls_achievements_read_staff`, `rls_achievements_read_student`,
+  `rls_achievements_void` UPDATE), view `v_student_portal_achievements`
+  (security_invoker=true, dari migration `20260703230000`). Namun tidak ada satu pun
+  portal (guru/siswa/admin) yang mengimplementasikan UI untuk fitur ini — tidak ada
+  `.from('achievements')` atau `.from('v_student_portal_achievements')` di client code
+  manapun. Referensi satu-satunya: entri `achievements: 'catatan prestasi'` di
+  `DEPENDENCY_LABELS` (pesan error saat hapus siswa). Dicatat sebagai **backlog FITUR**
+  (bukan keamanan): RLS sudah benar, tidak ada celah. Lihat §14 Backlog Produk.
 
 - [x] **E1 — SELESAI (7 Juli 2026):** Verified TIDAK EXPLOITABLE — guard school_id di level policy terluar, independen dari subquery student_parents. Detail lengkap di §3.2 Kelompok E.
 
@@ -682,7 +702,7 @@ CHECK suite lulus pasca-apply. Commit: lihat git log setelah commit dikonfirmasi
 | Fase | Status |
 |------|--------|
 | Fase 1 | ✅ SELESAI |
-| Fase 2 | 🔄 BELUM SELESAI — **PRIORITAS 1 ✅ (9 Jul)**, D1 dan D2 masih terbuka |
+| Fase 2 | ✅ SELESAI (9 Juli 2026) — PRIORITAS 1 ✅, D1 & D2 dijawab, tidak ada aksi keamanan |
 | Fase 3 | ⏳ BELUM DIMULAI (backlog: 14 fungsi anon + WAKA_HUMAS/PKL + column-restriction `rls_users_read_staff`) |
 | Fase 4–6 | ⏳ Belum dimulai |
 
@@ -820,3 +840,61 @@ karena pakai view; eksposur sisa hanya via REST API manual (bukan via portal).
 - Test suite: **77/77 ✓** — tidak ada regresi.
 
 *Dokumen ini bersifat ringkasan orientasi. Untuk detail teknis lengkap (isi migration, kode fungsi, skenario exploit), baca file laporan di `docs/audit/` dan file migration di `supabase/migrations/`.*
+
+---
+
+---
+
+## 14. Backlog Produk — BUKAN Backlog Audit Keamanan
+
+> ⚠️ **PERHATIAN:** Section ini TERPISAH dari backlog Fase 3 di §9.3 yang
+> bersifat keamanan (14 fungsi `anon=true`, column-restriction, WAKA_HUMAS/PKL).
+> Item di bawah adalah **fitur produk** yang belum dibangun — tidak ada celah
+> keamanan, backend sudah aman. Kerjakan kapan saja sesuai prioritas produk,
+> tidak perlu koordinasi dengan audit Fase 3.
+
+### BP-1 — Fitur "Batalkan Tahun Ajaran" (UI Admin)
+
+**Status backend:** Selesai. Fungsi `fn_batalkan_tahun_ajaran(p_config_id uuid)`
+sudah ada di database (migration `20260702160000_batalkan_tahun_ajaran.sql`,
+SECURITY DEFINER + REVOKE anon). Fungsi ini membalik buka-tahun-ajaran secara
+transaksional: pulihkan enrollment lama, hapus enrollment baru, hapus
+`academic_periods` tahun baru, kembalikan `school_config` ke tahun/semester
+sebelumnya.
+
+**Yang belum ada:** UI pemanggil. Tidak ada tombol atau form di portal admin
+yang memanggil `supabase.rpc('fn_batalkan_tahun_ajaran', { p_config_id })`.
+Halaman `admin/tutup-tahun.html` hanya menangani maju (buka tahun baru),
+bukan batalkan.
+
+**Yang perlu dibangun:** Tombol/form "Batalkan Tahun Ajaran" di halaman
+admin yang sesuai (mungkin di `admin/semester.html` atau `admin/tutup-tahun.html`)
+dengan konfirmasi berlapis (tindakan ini tidak bisa dibatalkan).
+
+---
+
+### BP-2 — Fitur "Prestasi & Penghargaan" (UI Guru + Tampilan Siswa)
+
+**Status backend:** Selesai dan aman. Tabel `achievements` dengan RLS lengkap:
+- INSERT: `rls_achievements_write` — WALI_KELAS (kelas yang diajar), KAPRODI
+  (program jurusannya), KEPSEK
+- SELECT staf: `rls_achievements_read_staff` — semua staf sekolah yang sama
+- SELECT siswa: `rls_achievements_read_student` — siswa hanya bisa baca
+  prestasinya sendiri
+- UPDATE (void): `rls_achievements_void` — KEPSEK/KAPRODI (soft-delete via
+  `is_voided = true`)
+- View siap pakai: `v_student_portal_achievements` (security_invoker=true) —
+  join ke `users` untuk nama pencatat, filter `is_voided = FALSE`
+
+**Yang belum ada:** Tidak ada satu pun UI yang menggunakan tabel atau view ini.
+0 baris di database live.
+
+**Yang perlu dibangun:**
+1. **Portal Guru** — form input prestasi siswa (judul, deskripsi, kategori,
+   tanggal, lingkup) dengan pencarian siswa. Targetkan via
+   `supabase.from('achievements').insert(...)`.
+2. **Portal Siswa** — section "Prestasi & Penghargaan" yang membaca dari
+   `v_student_portal_achievements` via
+   `supabase.from('v_student_portal_achievements').select(...)`.
+3. **Opsional:** Portal Admin — list prestasi per siswa, tombol void untuk
+   KEPSEK/KAPRODI.
