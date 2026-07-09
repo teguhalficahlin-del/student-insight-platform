@@ -19,16 +19,19 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
 - **Fase 2**: 🔄 Sedang berjalan — **BELUM SELESAI.** Kelompok A-E selesai
   100%, coverage scan 70 policy sisa selesai, scan sistemik SECURITY DEFINER
   selesai (8 Juli 2026): 59 fungsi discan, 4 temuan ditemukan & di-fix.
-  **Yang MASIH TERBUKA dan wajib diselesaikan sebelum Fase 2 bisa dinyatakan
-  selesai:** (a) PRIORITAS 1 — migrasi client code 7 portal ke
-  `v_users_staff_directory` BELUM DIMULAI SAMA SEKALI; (b) D1 — klarifikasi
-  DELETE `academic_periods` belum dijawab; (c) D2 — status tabel `achievements`
-  belum dikonfirmasi. Lihat docs/audit-handoff.md §6.
+  **✅ PRIORITAS 1 SELESAI (9 Juli 2026):** 7 titik query di 4 file portal
+  dimigrasi ke `v_users_staff_directory`, 2 bug pra-existing ditemukan & diperbaiki
+  (PGRST201 ambiguous FK + nama kolom `program_name`→`name`), keputusan produk:
+  KEPSEK tidak lagi lihat `login_identifier` admin. Divalidasi live 77/77 ✓.
+  **Yang MASIH TERBUKA:** (a) D1 — klarifikasi DELETE `academic_periods` belum
+  dijawab; (b) D2 — status tabel `achievements` belum dikonfirmasi. Lihat
+  docs/audit-handoff.md §6 dan §13.
 - **Fase 3**: ⏳ BELUM DIMULAI. Item yang sudah menumpuk menunggu Fase 3:
   FINDING 4 (14 fungsi helper anon=true, perlu refactor 19 policy dari
   `roles={public}` ke `TO authenticated`), kemungkinan analisis akses
-  WAKA_HUMAS/PKL (lihat §10 backlog). Jangan mulai Fase 3 sebelum PRIORITAS 1
-  Fase 2 selesai.
+  WAKA_HUMAS/PKL (lihat §10 backlog), **BARU: column-restriction
+  `rls_users_read_staff`** — GURU/SISWA/ORTU masih bisa pilih kolom sensitif
+  via REST API langsung (keputusan Romo: ditunda ke Fase 3, lihat §13).
 - **✅ GAP rls_case_events_read_student — SELESAI (9 Juli 2026):**
   Investigasi selesai: ketiga policy (`rls_case_events_read_student`,
   `rls_case_events_read_parent`, `rls_student_updates_read_student`) BERDIRI
@@ -54,8 +57,9 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
   + commit 333130e (audience siswa/ortu + fix bug added_by_user_id)
   + commit a6f8eac (update dokumentasi) + commit 28fc884 (fix regresi Rule 3
   + role filter case_events/student_updates) + commit 411df2e (docs §9.4)
-  + commit 5e7ead5 (CHECK 12+13 permanen + sinkronisasi docs §9.4/§12).
-  Lihat docs/audit-handoff.md §8, §10, §11, §12.
+  + commit 5e7ead5 (CHECK 12+13 permanen + sinkronisasi docs §9.4/§12)
+  + **commit TBD (PRIORITAS 1 selesai): 4 file client + docs §6/§13 update.**
+  Lihat docs/audit-handoff.md §8, §10, §11, §12, §13.
 - **Test suite**: 77/77 ✓ lulus (terakhir dijalankan 9 Juli 2026, pasca
   CHECK 12+13 ditambahkan). 13 CHECK top-level. Catatan historis: "42/42"
   yang sempat tercatat adalah angka pre-CHECK-10/11 (sebelum commit c19b164

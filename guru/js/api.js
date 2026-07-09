@@ -411,7 +411,7 @@ export async function fetchNonPklStudents(programId) {
 
 export async function fetchDudiPartners(programId) {
     const { data, error } = await supabase
-        .from('users')
+        .from('v_users_staff_directory')
         .select('user_id, full_name, dudi_org_name')
         .eq('role_type', 'DUDI')
         .eq('program_id', programId)
@@ -478,16 +478,31 @@ export async function fetchAllPklStudents() {
 // Semua mitra DUDI lintas program (untuk Waka Humas)
 export async function fetchAllDudiPartners() {
     const { data, error } = await supabase
-        .from('users')
-        .select('user_id, full_name, dudi_org_name, program:programs ( program_name )')
+        .from('v_users_staff_directory')
+        .select('user_id, full_name, dudi_org_name, program_id')
         .eq('role_type', 'DUDI')
         .order('dudi_org_name');
     if (error) throw error;
+
+    const programIds = [...new Set((data ?? []).map(u => u.program_id).filter(Boolean))];
+    const programNames = {};
+    if (programIds.length) {
+        const { data: progs, error: progErr } = await supabase
+            .from('programs')
+            .select('program_id, name')
+            .in('program_id', programIds);
+        if (progErr) {
+            console.warn('fetchAllDudiPartners: gagal muat nama program, fallback ke —', progErr.message);
+        } else {
+            for (const p of (progs ?? [])) programNames[p.program_id] = p.name;
+        }
+    }
+
     return (data ?? []).map(u => ({
         user_id: u.user_id,
         org_name: u.dudi_org_name ?? u.full_name,
         pic_name: u.full_name,
-        program_name: u.program?.program_name ?? '—',
+        program_name: u.program_id ? (programNames[u.program_id] ?? '—') : '—',
     }));
 }
 
@@ -525,7 +540,7 @@ export async function getSchoolStats(academicYear, semester) {
     const today = new Date().toISOString().slice(0, 10);
     const [studentsRes, staffRes, schedToday, attToday] = await Promise.all([
         supabase.from('students').select('student_id', { count: 'exact', head: true }).eq('student_status', 'AKTIF'),
-        supabase.from('users').select('user_id', { count: 'exact', head: true }).not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")'),
+        supabase.from('v_users_staff_directory').select('user_id', { count: 'exact', head: true }).not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")'),
         supabase.from('teaching_schedules').select('schedule_id, class_id', { count: 'exact' }).eq('session_date', today).eq('academic_year', academicYear),
         supabase.from('attendance').select('status', { count: 'exact' }).gte('created_at', today + 'T00:00:00').eq('status', 'HADIR'),
     ]);
@@ -971,8 +986,8 @@ export async function closeCase({ caseId, note, authorUserId, authorRole }) {
 
 export async function listSchoolAdmins() {
     const { data, error } = await supabase
-        .from('users')
-        .select('user_id, full_name, login_identifier')
+        .from('v_users_staff_directory')
+        .select('user_id, full_name')
         .eq('role_type', 'ADMINISTRATIVE')
         .order('full_name');
     if (error) throw error;

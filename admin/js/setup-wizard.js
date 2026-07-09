@@ -560,7 +560,7 @@ async function renderStep() {
         const [programsData, classesData, guruData] = await Promise.all([
             supabase.from('programs').select('program_id', { count: 'exact', head: true }),
             supabase.from('classes').select('class_id', { count: 'exact', head: true }),
-            supabase.from('users').select('user_id', { count: 'exact', head: true })
+            supabase.from('v_users_staff_directory').select('user_id', { count: 'exact', head: true })
                 .eq('role_type', 'GURU'),
         ]);
 

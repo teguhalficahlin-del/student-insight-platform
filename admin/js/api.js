@@ -131,7 +131,7 @@ export async function getAlumniRecap(studentId) {
     const dudiIds = [...new Set(placements.map(p => p.dudi_user_id).filter(Boolean))];
     const dudiNames = {};
     if (dudiIds.length) {
-        const { data: dudis } = await supabase.from('users')
+        const { data: dudis } = await supabase.from('v_users_staff_directory')
             .select('user_id, full_name, dudi_org_name').in('user_id', dudiIds);
         for (const d of (dudis ?? [])) dudiNames[d.user_id] = d.dudi_org_name || d.full_name;
     }
@@ -453,7 +453,7 @@ export async function saveScheduleTemplates(academicYear, semester, dayOfWeek, t
 
 export async function getTeacherList() {
     const { data, error } = await supabase
-        .from('users')
+        .from('v_users_staff_directory')
         .select('user_id, full_name, teacher_code')
         .eq('role_type', 'GURU')
         .order('teacher_code');

@@ -328,19 +328,37 @@ Migration sebelum 2026-07-03 adalah fondasi multi-tenant platform (RLS isolasi, 
 
 ## 6. Langkah Selanjutnya — Checklist untuk Sesi Berikutnya
 
-> ⚠️ **STATUS FASE 2 SECARA KESELURUHAN: BELUM SELESAI.** Jangan
-> menyimpulkan Fase 2 selesai hanya karena PRIORITAS 2 (scan SECURITY
-> DEFINER) sudah ✅. Item berikut MASIH TERBUKA dan wajib diselesaikan
-> sebelum Fase 2 bisa ditutup: **PRIORITAS 1** (migrasi client 7 portal
-> ke `v_users_staff_directory`) belum dimulai sama sekali; **D1**
-> (klarifikasi DELETE `academic_periods`) belum dijawab; **D2** (status
-> tabel `achievements`) belum dikonfirmasi.
+> ~~⚠️ **STATUS FASE 2 SECARA KESELURUHAN: BELUM SELESAI.**~~ **PRIORITAS 1
+> SELESAI (9 Juli 2026).** Item yang MASIH TERBUKA sebelum Fase 2 bisa
+> ditutup: **D1** (klarifikasi DELETE `academic_periods`) belum dijawab;
+> **D2** (status tabel `achievements`) belum dikonfirmasi.
 
 Urutkan dari yang paling mendesak:
 
 - [x] **F2-A (infrastruktur) — SELESAI (7 Juli 2026):** view `v_users_staff_directory` live & tervalidasi. Migration `20260707130000` di-push, 8 kolom aman terkonfirmasi, total 4499 baris accessible.
 
-- [ ] **PRIORITAS 1 — F2-A lanjutan: Migrasi client code 7 portal ke `v_users_staff_directory`.** Infrastruktur (VIEW) sudah live sejak migration 20260707130000. Belum ada satu portal pun yang dipindah. Urutan rencana: pilot `guru/js/api.js` (5 lokasi query users teridentifikasi) → 6 portal lain satu-satu, verifikasi fungsional tiap lokasi sebelum lanjut. Kasus khusus: `guru/js/api.js:974` butuh kolom `login_identifier` yang SENGAJA dikecualikan dari view (data sensitif) — perlu keputusan produk terpisah sebelum lokasi ini bisa dipindah (apakah fitur diubah scope-nya, atau tetap akses tabel dasar untuk kasus ini saja). Setelah 7 portal selesai: evaluasi apakah grant SELECT langsung ke `users` perlu dibatasi.
+- [x] **PRIORITAS 1 — F2-A lanjutan: Migrasi client code ke `v_users_staff_directory` — SELESAI (9 Juli 2026).** 4 file diubah, 7 titik query dimigrasi, 77/77 test suite lulus.
+
+  **7 titik yang dimigrasi ke view:**
+  - `guru/js/api.js:414` — `fetchDudiPartners` (ganti nama tabel, 1 baris)
+  - `guru/js/api.js:481` — `fetchAllDudiPartners` (refactor embed→pisah-query — lihat bug tambahan di bawah)
+  - `guru/js/api.js:528` — `getSchoolStats` count staf (ganti nama tabel, 1 baris)
+  - `guru/js/api.js:974` — `listSchoolAdmins` (ganti nama tabel + **hapus `login_identifier`** dari SELECT dan dari UI)
+  - `admin/js/api.js:134` — lookup DUDI names dalam `getAlumniRecap` (ganti nama tabel)
+  - `admin/js/api.js:456` — `getTeacherList` (ganti nama tabel)
+  - `admin/js/setup-wizard.js:563` — progress check count GURU (ganti nama tabel)
+
+  **16 titik yang TIDAK dimigrasi (keputusan Romo):** Pola A (`getCurrentUserRow` semua portal — baca diri sendiri via `auth_user_id = auth.uid()`), Pola C/D (admin UI butuh `must_change_password`/`deleted_at`/`login_identifier`), Pola E (dudi self-lookup). Semua cukup aman via `rls_users_read_own` dan `rls_users_read_administrative`. Tidak perlu migrasi.
+
+  **Keputusan produk — `guru/js/api.js:974` (`listSchoolAdmins`):** KEPSEK **tidak lagi bisa melihat `login_identifier`** (kode login NIP/NIK) akun ADMINISTRATIVE. Query dan kolom tabel UI (`<th>Login ID</th>` + `<td><code>...</code></td>`) sudah dihapus. Keputusan: data ini sensitif, cukup tampilkan nama saja.
+
+  **Bug tambahan ditemukan & diperbaiki saat live testing (bukan regresi dari migrasi):**
+
+  1. **PGRST201 — ambiguous relationship `users`→`programs`** (pra-existing di produksi sebelum migrasi ini): kode lama `fetchAllDudiPartners` pakai embed `program:programs(program_name)` langsung di tabel `users`. PostgREST menemukan 2 FK dari `users` ke `programs` (`program_id` tanpa nama relasi eksplisit, dan `kaprodi_program_id REFERENCES programs`), tidak tahu yang mana — error PGRST201. Bug ini sudah ada di produksi SEBELUM sesi ini, baru ketahuan saat testing. Diselesaikan sekaligus oleh solusi pisah-query.
+
+  2. **Nama kolom salah `program_name` → `name`**: query kedua (fetch program names) memakai `program_name` yang tidak ada di tabel `programs`. Kolom yang benar adalah `name`. Ditemukan saat live test kedua, langsung diperbaiki.
+
+  **Backlog baru untuk Fase 3 (dicatat dari sesi ini):** `rls_users_read_staff` dan `rls_users_read_staff_names` tidak membatasi KOLOM — hanya membatasi baris. KEPSEK/GURU/SISWA/ORTU secara teknis masih bisa akses `login_identifier`, `email`, dll. lewat REST API langsung (`GET /rest/v1/users?select=login_identifier`), meski UI sudah tidak menampilkannya. Keputusan Romo: RLS-level column-restriction DITUNDA ke Fase 3. Migrasi client ke view sudah cukup untuk menutup eksposur via portal resmi.
 
 - [x] **PRIORITAS 2 — Scan sistemik grant EXECUTE fungsi SECURITY DEFINER — SELESAI (8 Juli 2026).** 59 fungsi discan. 4 temuan ditemukan, semua yang exploitable sudah di-fix dan diverifikasi live + test suite:
   - **FINDING 1 — fn_get_stale_staff()** (NIP guru, tanpa guard role → semua authenticated bisa akses): fix migration `20260708040000` — tambah guard KEPSEK/ADMINISTRATIVE, konversi ke plpgsql. Verified.
@@ -664,8 +682,8 @@ CHECK suite lulus pasca-apply. Commit: lihat git log setelah commit dikonfirmasi
 | Fase | Status |
 |------|--------|
 | Fase 1 | ✅ SELESAI |
-| Fase 2 | 🔄 BELUM SELESAI — PRIORITAS 1, D1, D2 masih terbuka |
-| Fase 3 | ⏳ BELUM DIMULAI (backlog: 14 fungsi anon + WAKA_HUMAS/PKL) |
+| Fase 2 | 🔄 BELUM SELESAI — **PRIORITAS 1 ✅ (9 Jul)**, D1 dan D2 masih terbuka |
+| Fase 3 | ⏳ BELUM DIMULAI (backlog: 14 fungsi anon + WAKA_HUMAS/PKL + column-restriction `rls_users_read_staff`) |
 | Fase 4–6 | ⏳ Belum dimulai |
 
 ---
@@ -728,5 +746,77 @@ Commit hash: *(diisi setelah commit dibuat)*
 Tanggal: 9 Juli 2026
 
 ---
+
+---
+
+---
+
+## 13. PRIORITAS 1 Selesai — Migrasi Client ke `v_users_staff_directory` (9 Juli 2026)
+
+### Ringkasan
+
+PRIORITAS 1 Fase 2 (migrasi client code 7 portal dari akses langsung tabel `users`
+ke `v_users_staff_directory`) selesai dan divalidasi live oleh Romo. 4 file diubah,
+7 titik query dimigrasi, 77/77 test suite lulus, tidak ada regresi.
+
+Tujuan: menutup eksposur kolom sensitif (`email`, `login_identifier`, `auth_user_id`,
+dll.) yang sebelumnya bisa diakses siapapun dengan JWT valid via REST API langsung,
+meski RLS sudah membatasi baris. View `v_users_staff_directory` (migration
+`20260707130000`) hanya mengekspos 8 kolom aman: `user_id`, `school_id`, `full_name`,
+`role_type`, `dudi_org_name`, `teacher_code`, `program_id`, `is_active`.
+
+### File yang Diubah
+
+| File | Titik | Perubahan |
+|------|-------|-----------|
+| `guru/js/api.js` | :414 `fetchDudiPartners` | `.from('users')` → `.from('v_users_staff_directory')` |
+| `guru/js/api.js` | :481 `fetchAllDudiPartners` | Refactor embed→pisah-query + fix 2 bug (lihat bawah) |
+| `guru/js/api.js` | :528 `getSchoolStats` | `.from('users')` → `.from('v_users_staff_directory')` |
+| `guru/js/api.js` | :974 `listSchoolAdmins` | `.from('users')` → `.from('v_users_staff_directory')` + hapus `login_identifier` |
+| `guru/js/dashboard.js` | :2046 render tabel | Hapus kolom `<th>Login ID</th>` + `<td><code>login_identifier</code></td>` |
+| `admin/js/api.js` | :134 `getAlumniRecap` | `.from('users')` → `.from('v_users_staff_directory')` |
+| `admin/js/api.js` | :456 `getTeacherList` | `.from('users')` → `.from('v_users_staff_directory')` |
+| `admin/js/setup-wizard.js` | :563 progress check | `.from('users')` → `.from('v_users_staff_directory')` |
+
+### Bug Tambahan Ditemukan & Diperbaiki (Pra-existing, Bukan Regresi)
+
+**Bug 1 — PGRST201 ambiguous relationship `users`→`programs`:**
+`fetchAllDudiPartners` lama pakai embed `program:programs(program_name)` langsung
+di tabel `users`. PostgREST tidak bisa resolve karena ada 2 FK dari `users` ke
+`programs`: `program_id` (tanpa nama relasi eksplisit) dan `kaprodi_program_id
+REFERENCES programs(program_id)` (migration `20260630110000`). Error PGRST201 sudah
+ada di produksi sebelum sesi ini — baru ketahuan saat live testing. Diselesaikan
+sekaligus oleh solusi pisah-query (query 1: DUDI dari view, query 2: program names
+dari tabel `programs` dengan `.in('program_id', programIds)`).
+
+**Bug 2 — Nama kolom salah `program_name` → `name`:**
+Query kedua (fetch program names) memakai `select('program_id, program_name')` —
+kolom `program_name` tidak ada di tabel `programs`. Kolom yang benar adalah `name`
+(dikonfirmasi dari `admin/js/api.js:480`, `guru/js/api.js:370`, dll.). Ditemukan saat
+live test kedua, diperbaiki di tempat.
+
+### Keputusan Produk
+
+- **`listSchoolAdmins` (guru/api.js:974):** KEPSEK tidak lagi bisa melihat `login_identifier`
+  akun ADMINISTRATIVE. Keputusan sadar Romo: data identitas sensitif, cukup tampilkan nama.
+- **16 titik lain tidak dimigrasi:** Pola A (`getCurrentUserRow` — baca diri sendiri,
+  cukup aman via `rls_users_read_own`), Pola C/D/E (admin UI butuh kolom di luar view,
+  cukup aman via `rls_users_read_administrative`). Tidak ada security gap.
+
+### Backlog Fase 3 Baru (dari Sesi Ini)
+
+`rls_users_read_staff` dan `rls_users_read_staff_names` tidak membatasi KOLOM —
+GURU/SISWA/ORTU masih bisa pilih kolom sensitif lewat REST API langsung. Keputusan
+Romo: column-restriction di RLS level DITUNDA ke Fase 3. Portal resmi sudah aman
+karena pakai view; eksposur sisa hanya via REST API manual (bukan via portal).
+
+### Hasil Validasi Live
+
+- Titik A/C/E/F/G: HTTP 200, data benar, tidak ada error.
+- Titik D (`listSchoolAdmins`): `login_identifier` tidak ada di response; UI menampilkan
+  kolom Nama + tombol Hapus saja (benar).
+- Titik B (`fetchAllDudiPartners`): `console.table` menunjukkan 20/20 baris dengan
+  `program_name` terisi benar setelah 2 bug diperbaiki.
+- Test suite: **77/77 ✓** — tidak ada regresi.
 
 *Dokumen ini bersifat ringkasan orientasi. Untuk detail teknis lengkap (isi migration, kode fungsi, skenario exploit), baca file laporan di `docs/audit/` dan file migration di `supabase/migrations/`.*
