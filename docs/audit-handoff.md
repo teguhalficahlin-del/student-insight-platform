@@ -936,3 +936,82 @@ dengan konfirmasi berlapis (tindakan ini tidak bisa dibatalkan).
    `supabase.from('v_student_portal_achievements').select(...)`.
 3. **Opsional:** Portal Admin — list prestasi per siswa, tombol void untuk
    KEPSEK/KAPRODI.
+
+---
+
+### BP-3 — Kolom "Nama Anak" di Tabel Orang Tua (Dashboard Admin)
+
+**Diminta:** Romo, 10 Juli 2026.
+
+**Konteks:** Tabel "Orang Tua Siswa Aktif" di Dashboard Admin saat ini hanya
+menampilkan nama orang tua dan kelas. Admin tidak bisa langsung tahu orang tua
+ini terhubung ke siswa mana tanpa navigasi terpisah.
+
+**Yang perlu dibangun:** Tambahkan kolom "Nama Anak" di setiap baris tabel
+orang tua di `admin/dashboard` (atau halaman admin yang relevan), dengan
+menampilkan nama siswa yang terhubung via tabel `student_parents`. Tidak ada
+perubahan backend/RLS yang diperlukan — data sudah tersedia.
+
+---
+
+## 15. Backlog Bug — Ditemukan Selama Sesi §10 (10 Juli 2026)
+
+> ⚠️ **PERHATIAN:** Item di bawah adalah **bug fungsional** yang ditemukan
+> SELAMA pengerjaan sesi §10 (toggle siswa/ortu ke audience kasus/observasi),
+> bukan bagian dari perubahan sesi tersebut. Masing-masing perlu ANALYZE
+> tersendiri sebelum diperbaiki. BUKAN backlog keamanan/RLS.
+
+### BUG-1 — createCase Gagal 500 dari Edge Function `sync-case`
+
+**Ditemukan:** 10 Juli 2026, saat testing manual modal "Buat Kasus Baru" di
+Portal Guru.
+
+**Gejala:** Console menampilkan `[guru] Error: Terjadi kesalahan pada server`
+dari `createCase` (`api.js:881`) → `dashboard.js:2429`. Error 500 dari edge
+function `sync-case`.
+
+**Status investigasi:** Belum diinvestigasi. `createCase` tidak disentuh
+selama sesi §10 — bug ini sudah ada sebelumnya atau dipicu kondisi data
+tertentu.
+
+**Prioritas:** Tinggi — memblokir pembuatan kasus baru dari portal guru.
+
+---
+
+### BUG-2 — Portal Siswa Gagal Total Dimuat (SyntaxError `esc`)
+
+**Ditemukan:** 10 Juli 2026, saat verifikasi manual apakah toggle audience
+siswa dari Portal Guru benar-benar memengaruhi visibilitas di Portal Siswa.
+
+**Gejala:** `Uncaught SyntaxError: Identifier 'esc' has already been declared`
+di `student/dashboard.js:512`. Portal Siswa tidak bisa dimuat sama sekali.
+
+**Dampak:** Verifikasi end-to-end RLS/audience dari sisi portal siswa
+**belum bisa dikonfirmasi** — fitur toggle siswa/ortu di Portal Guru mungkin
+sudah benar di sisi DB/RLS, tapi belum terverifikasi dari sisi penerima.
+
+**Dugaan awal (belum diverifikasi):** Kemungkinan ada deklarasi variabel `esc`
+ganda di `student/dashboard.js` sekitar baris 512.
+
+**Status investigasi:** Belum diinvestigasi.
+
+---
+
+### BUG-3 — Duplikasi Nama Kelas di Dashboard Admin (Siswa & Orang Tua)
+
+**Ditemukan:** 10 Juli 2026 oleh Romo, di `localhost/admin/dashboard`, menu
+Siswa Aktif dan Orang Tua Siswa Aktif.
+
+**Gejala:** Hampir semua kelas muncul dua kali dengan jumlah anggota berbeda
+— contoh: "X AKL 1 (35)" dan "X AKL 1 (0)" berdampingan untuk kelas yang
+sama. Pola konsisten di seluruh daftar, bukan hanya satu kelas.
+
+**Dugaan awal (belum diverifikasi):** Kemungkinan duplikasi baris di tabel
+`classes`, atau query yang memecah enrollment berdasarkan kriteria yang tidak
+disengaja (mis. `academic_year` atau `semester` berbeda) sehingga siswa/ortu
+yang sama terhitung di dua grup.
+
+**Catatan penting:** BUKAN dugaan bug keamanan/RLS. Kemungkinan besar murni
+bug query/agregasi data. Perlu ANALYZE tersendiri sebelum diagnosis.
+
+**Status investigasi:** Belum diinvestigasi.
