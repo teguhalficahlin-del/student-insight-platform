@@ -22,7 +22,7 @@ import {
     getSchoolStats, getKepsekMonitoring, getAbsentTeachersToday,
     getAttendanceRecapPerClass, getOpenCases,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
-    getMyObservations, updateObsVisibility,
+    getMyObservations, updateObsVisibility, getStudentUserId, getStudentParents,
     getObsAudienceMembers, addObsAudienceMember, removeObsAudienceMember,
     getCases, getCase, getCaseEvents, createCase,
     addCaseComment, escalateCase, changeCaseStatus, closeCase,
@@ -130,6 +130,7 @@ function markKasusAsSeen() {
 
 // ─── State ───────────────────────────────────────────────────
 let currentUser  = null;
+const _studentSubjectCache = new Map(); // studentId → { userId, parents }
 let config       = null;   // { current_academic_year, current_semester }
 let jabatan      = [];
 let isTeacher    = false;  // hanya GURU & WALI_KELAS yang mengajar
@@ -812,7 +813,8 @@ async function initObsForm() {
     });
 
     // ── Anggota audiens lokal (RESTRICTED, sebelum simpan) ──
-    let pendingMembers = []; // [{ user_id, full_name, role_type }]
+    let pendingMembers = []; // [{ user_id, full_name, role_type }] — hanya staf
+    let pendingSubjectMembers = new Map(); // userId → { user_id, full_name, role_type } — siswa/ortu
 
     function renderPendingMembers() {
         if (!pendingMembers.length) {
@@ -834,10 +836,67 @@ async function initObsForm() {
         });
     }
 
+    async function renderObsSubjectToggles() {
+        const studentId = hiddenEl.value;
+        let subjectPanel = document.getElementById('obs-form-subject-panel');
+        if (!subjectPanel) {
+            subjectPanel = document.createElement('div');
+            subjectPanel.id = 'obs-form-subject-panel';
+            subjectPanel.style.marginBottom = '8px';
+            restrictedForm.insertBefore(subjectPanel, document.getElementById('obs-form-members'));
+        }
+        if (visSelect.value !== 'RESTRICTED' || !studentId) {
+            subjectPanel.style.display = 'none';
+            return;
+        }
+        subjectPanel.style.display = 'block';
+        subjectPanel.innerHTML = '<em style="color:var(--color-text-muted);font-size:12px">Memuat data siswa &amp; ortu…</em>';
+        try {
+            const subject = await fetchStudentSubject(studentId);
+            const rows = [];
+            if (subject.userId) {
+                rows.push({ uid: subject.userId, label: esc(searchEl.value || 'Siswa'), role: 'Siswa' });
+            }
+            subject.parents.forEach(p => {
+                rows.push({ uid: p.parent_user_id, label: esc(p.users?.full_name ?? p.parent_user_id), role: 'Ortu' });
+            });
+            if (!rows.length) { subjectPanel.style.display = 'none'; return; }
+            subjectPanel.innerHTML = `
+                <div style="font-size:12px;font-weight:600;color:var(--color-text-muted);margin-bottom:6px">Siswa &amp; Orang Tua Terkait</div>
+                ${rows.map(row => `
+                    <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;cursor:pointer">
+                        <input type="checkbox" data-uid="${row.uid}" ${pendingSubjectMembers.has(row.uid) ? 'checked' : ''}
+                            style="width:14px;height:14px;accent-color:var(--color-primary,#6366f1);cursor:pointer">
+                        ${row.label} <span style="color:var(--color-text-muted)">(${row.role})</span>
+                    </label>
+                `).join('')}
+                <div style="border-bottom:1px solid var(--color-border);margin:6px 0 8px"></div>`;
+            subjectPanel.querySelectorAll('input[type=checkbox][data-uid]').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    const uid = cb.dataset.uid;
+                    const found = rows.find(row => row.uid === uid);
+                    if (cb.checked) {
+                        pendingSubjectMembers.set(uid, { user_id: uid, full_name: found?.label ?? uid, role_type: found?.role === 'Siswa' ? 'SISWA' : 'ORTU' });
+                    } else {
+                        pendingSubjectMembers.delete(uid);
+                    }
+                });
+            });
+        } catch (_) {
+            subjectPanel.innerHTML = '<em style="color:var(--color-danger);font-size:12px">Gagal memuat data siswa/ortu.</em>';
+        }
+    }
+
     visSelect.addEventListener('change', () => {
         restrictedForm.style.display = visSelect.value === 'RESTRICTED' ? 'block' : 'none';
-        if (visSelect.value !== 'RESTRICTED') { pendingMembers = []; renderPendingMembers(); }
-        else renderPendingMembers();
+        if (visSelect.value !== 'RESTRICTED') {
+            pendingMembers = [];
+            pendingSubjectMembers.clear();
+            renderPendingMembers();
+        } else {
+            renderPendingMembers();
+        }
+        renderObsSubjectToggles();
     });
 
     let formMemberSeq = 0;
@@ -891,6 +950,8 @@ async function initObsForm() {
                 hiddenEl.value       = item.dataset.id;
                 searchEl.value       = item.dataset.name;
                 listEl.style.display = 'none';
+                pendingSubjectMembers.clear();
+                renderObsSubjectToggles();
             });
         });
     }
@@ -916,7 +977,7 @@ async function initObsForm() {
             return;
         }
         const visibility = visSelect.value;
-        if (visibility === 'RESTRICTED' && pendingMembers.length === 0) {
+        if (visibility === 'RESTRICTED' && pendingMembers.length === 0 && pendingSubjectMembers.size === 0) {
             formMemberMsg.textContent = 'Tambahkan minimal satu orang sebelum menyimpan.';
             return;
         }
@@ -935,21 +996,36 @@ async function initObsForm() {
             });
             if (r.status === 'error') throw new Error(r.error);
             // Jika synced dan RESTRICTED, simpan anggota audiens ke DB
-            if (r.status === 'synced' && visibility === 'RESTRICTED' && pendingMembers.length) {
-                await Promise.all(pendingMembers.map(m =>
-                    addObsAudienceMember({ obsId: r.observation_id, userId: m.user_id, schoolId: currentUser.school_id, addedByUserId: currentUser.user_id })
-                ));
+            let audienceFailCount = 0;
+            let audienceTotalCount = 0;
+            if (r.status === 'synced' && visibility === 'RESTRICTED') {
+                const allMembers = [...pendingMembers, ...pendingSubjectMembers.values()];
+                audienceTotalCount = allMembers.length;
+                if (allMembers.length) {
+                    const results = await Promise.allSettled(allMembers.map(m =>
+                        addObsAudienceMember({ obsId: r.observation_id, userId: m.user_id, schoolId: currentUser.school_id, addedByUserId: currentUser.user_id })
+                    ));
+                    audienceFailCount = results.filter(res => res.status === 'rejected').length;
+                }
             }
-            statusEl.textContent   = r.status === 'queued'
-                ? '⏳ Observasi disimpan lokal — akan dikirim saat online.'
-                : '✓ Observasi berhasil disimpan.';
-            statusEl.className     = 'status-msg status-ok';
+            if (audienceFailCount > 0) {
+                statusEl.textContent = `Observasi tersimpan. ${audienceFailCount} dari ${audienceTotalCount} anggota audiens gagal ditambahkan — buka riwayat untuk menambahkan manual.`;
+                statusEl.className   = 'status-msg status-warn';
+            } else {
+                statusEl.textContent = r.status === 'queued'
+                    ? '⏳ Observasi disimpan lokal — akan dikirim saat online.'
+                    : '✓ Observasi berhasil disimpan.';
+                statusEl.className   = 'status-msg status-ok';
+            }
             statusEl.style.display = 'block';
             form.reset();
             hiddenEl.value   = '';
             pendingMembers   = [];
+            pendingSubjectMembers.clear();
             restrictedForm.style.display = 'none';
             renderPendingMembers();
+            const _sp = document.getElementById('obs-form-subject-panel');
+            if (_sp) { _sp.innerHTML = ''; _sp.style.display = 'none'; }
             if (r.status === 'synced') await loadObsHistory();
         } catch (err) {
             statusEl.textContent   = `✗ ${fe(err, 's')}`;
@@ -1014,6 +1090,9 @@ function renderObsHistory(rows, listEl) {
                         : 'var(--color-text-muted)';
         return `
         <div data-obs-id="${esc(r.observation_id)}" data-obs-vis="${esc(vis)}"
+             data-student-id="${esc(r.student_id ?? '')}"
+             data-author-id="${esc(r.author_user_id ?? '')}"
+             data-student-name="${esc(r.student?.full_name ?? '')}"
              style="border-bottom:0.5px solid var(--color-border);padding:10px 0;font-size:13px">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px">
                 <strong>${esc(nama)}<span style="font-weight:400;color:var(--color-text-muted)">${esc(nis)}</span></strong>
@@ -1033,7 +1112,8 @@ function renderObsHistory(rows, listEl) {
                 </div>
                 <div class="obs-vis-err" style="font-size:11px;color:var(--color-danger);margin-bottom:4px"></div>
                 <div class="obs-restricted-panel" style="display:${vis === 'RESTRICTED' ? 'block' : 'none'}">
-                    <div style="font-size:12px;margin-bottom:6px;color:var(--color-text-muted)">Anggota yang bisa melihat:</div>
+                    <div class="obs-subject-panel" style="margin-bottom:6px"></div>
+                    <div style="font-size:12px;margin-bottom:6px;color:var(--color-text-muted)">Staf yang bisa melihat:</div>
                     <div class="obs-members-list" style="margin-bottom:6px;font-size:12px"></div>
                     <div style="position:relative">
                         <input type="text" class="input obs-member-search" placeholder="Cari nama staf…" style="font-size:12px;padding:6px 10px" autocomplete="off">
@@ -1047,16 +1127,21 @@ function renderObsHistory(rows, listEl) {
 
     // Wire up interactivity for each observation card
     listEl.querySelectorAll('[data-obs-id]').forEach(card => {
-        const obsId     = card.dataset.obsId;
-        let   curVis    = card.dataset.obsVis;
+        const obsId         = card.dataset.obsId;
+        let   curVis        = card.dataset.obsVis;
+        const obsStudentId  = card.dataset.studentId  || null;
+        const obsAuthorId   = card.dataset.authorId   || '';
+        const obsStudentName = card.dataset.studentName || 'Siswa';
         const badge     = card.querySelector('.obs-vis-badge');
         const panel     = card.querySelector('.obs-vis-panel');
         const rPanel    = card.querySelector('.obs-restricted-panel');
+        const sPanel    = card.querySelector('.obs-subject-panel');
         const mList     = card.querySelector('.obs-members-list');
         const mSearch   = card.querySelector('.obs-member-search');
         const mDrop     = card.querySelector('.obs-member-drop');
         const mMsg      = card.querySelector('.obs-audience-msg');
         const visErrEl  = card.querySelector('.obs-vis-err'); // Bug 2: error visibilitas terpisah
+        const isAuthor  = obsAuthorId === currentUser.user_id;
 
         badge.addEventListener('click', () => {
             const open = panel.style.display !== 'none';
@@ -1099,28 +1184,101 @@ function renderObsHistory(rows, listEl) {
 
         async function loadObsMembers() {
             mList.textContent = 'Memuat…';
+            if (mMsg) { mMsg.style.color = ''; mMsg.textContent = ''; }
             try {
-                const members = await getObsAudienceMembers(obsId);
+                const [members, subject] = await Promise.all([
+                    getObsAudienceMembers(obsId),
+                    obsStudentId ? fetchStudentSubject(obsStudentId) : Promise.resolve(null),
+                ]);
+                const memberSet = new Set(members.map(m => m.user_id));
+
+                // ── Toggle siswa & ortu ──
+                if (sPanel && subject) {
+                    const rows = [];
+                    if (subject.userId) {
+                        rows.push({ uid: subject.userId, label: esc(obsStudentName || 'Siswa'), role: 'Siswa' });
+                    }
+                    subject.parents.forEach(p => {
+                        rows.push({ uid: p.parent_user_id, label: esc(p.users?.full_name ?? p.parent_user_id), role: 'Ortu' });
+                    });
+                    if (rows.length) {
+                        sPanel.innerHTML = `
+                            <div style="font-size:12px;font-weight:600;color:var(--color-text-muted);margin-bottom:6px">Siswa &amp; Orang Tua Terkait</div>
+                            ${rows.map(row => `
+                                <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;${isAuthor ? 'cursor:pointer' : 'opacity:0.65'}">
+                                    <input type="checkbox" data-uid="${row.uid}"
+                                        ${memberSet.has(row.uid) ? 'checked' : ''}
+                                        ${isAuthor ? '' : 'disabled'}
+                                        style="width:14px;height:14px;accent-color:var(--color-primary,#6366f1);cursor:${isAuthor ? 'pointer' : 'default'}">
+                                    ${row.label} <span style="color:var(--color-text-muted)">(${row.role})</span>
+                                </label>
+                            `).join('')}
+                            <div style="border-bottom:1px solid var(--color-border);margin:6px 0 8px"></div>`;
+                        if (isAuthor) {
+                            sPanel.querySelectorAll('input[type=checkbox][data-uid]').forEach(cb => {
+                                cb.addEventListener('change', async () => {
+                                    const uid = cb.dataset.uid;
+                                    const nowChecked = cb.checked;
+                                    cb.disabled = true;
+                                    try {
+                                        if (nowChecked) {
+                                            await addObsAudienceMember({ obsId, userId: uid, schoolId: currentUser.school_id, addedByUserId: currentUser.user_id });
+                                        } else {
+                                            await removeObsAudienceMember({ obsId, userId: uid });
+                                        }
+                                        await loadObsMembers();
+                                    } catch (err) {
+                                        if (err?.code === '23505') {
+                                            await loadObsMembers();
+                                        } else {
+                                            cb.checked = !nowChecked;
+                                            cb.disabled = false;
+                                            if (mMsg) mMsg.textContent = fe(err);
+                                        }
+                                    }
+                                });
+                            });
+                        }
+                    } else {
+                        sPanel.innerHTML = '';
+                    }
+                } else if (sPanel) {
+                    sPanel.innerHTML = '';
+                }
+
+                // ── Chip staf ──
                 if (!members.length) {
-                    mList.innerHTML = '<em style="color:var(--color-text-muted)">Belum ada anggota khusus.</em>';
+                    mList.innerHTML = '<em style="color:var(--color-text-muted)">Belum ada staf yang ditambahkan.</em>';
                 } else {
-                    // [3+4] Nama + peran, chip inline dengan × seperti kasus
                     mList.innerHTML = members.map(m => {
                         const name = m.users?.full_name ?? m.user_id;
                         const role = OBS_ROLE_LABEL[m.users?.role_type] ?? m.users?.role_type ?? '';
+                        const removeBtn = isAuthor
+                            ? `<button data-uid="${m.user_id}" style="background:none;border:none;cursor:pointer;color:var(--color-danger);font-size:14px;line-height:1;padding:0 2px" title="Hapus">×</button>`
+                            : '';
                         return `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;padding:2px 8px;border:1px solid var(--color-border);border-radius:20px;font-size:12px">
-                            ${esc(name)} <span style="color:var(--color-text-muted)">(${esc(role)})</span>
-                            <button data-uid="${m.user_id}" style="background:none;border:none;cursor:pointer;color:var(--color-danger);font-size:14px;line-height:1;padding:0 2px" title="Hapus">×</button>
+                            ${esc(name)} <span style="color:var(--color-text-muted)">(${esc(role)})</span>${removeBtn}
                         </span>`;
                     }).join('');
-                    mList.querySelectorAll('button[data-uid]').forEach(btn => {
-                        btn.addEventListener('click', async () => {
-                            try {
-                                await removeObsAudienceMember({ obsId, userId: btn.dataset.uid });
-                                await loadObsMembers();
-                            } catch (err) { mMsg.textContent = fe(err); }
+                    if (isAuthor) {
+                        mList.querySelectorAll('button[data-uid]').forEach(btn => {
+                            btn.addEventListener('click', async () => {
+                                try {
+                                    await removeObsAudienceMember({ obsId, userId: btn.dataset.uid });
+                                    await loadObsMembers();
+                                } catch (err) { if (mMsg) mMsg.textContent = fe(err); }
+                            });
                         });
-                    });
+                    }
+                }
+
+                // ── Hint non-penulis ──
+                if (!isAuthor && mMsg) {
+                    mMsg.style.color = 'var(--color-text-muted)';
+                    mMsg.textContent = 'Hanya penulis observasi ini yang bisa mengubah daftar anggota.';
+                    if (mSearch) mSearch.parentElement.style.display = 'none';
+                } else if (mSearch) {
+                    mSearch.parentElement.style.display = '';
                 }
             } catch (err) { mList.textContent = fe(err); }
         }
@@ -2637,16 +2795,97 @@ function renderAudiencePanel(kasus, currentAudience) {
     });
 }
 
+async function fetchStudentSubject(studentId, knownUserId = null) {
+    if (_studentSubjectCache.has(studentId)) return _studentSubjectCache.get(studentId);
+    const [userId, parents] = await Promise.all([
+        knownUserId != null ? Promise.resolve(knownUserId) : getStudentUserId(studentId),
+        getStudentParents(studentId),
+    ]);
+    const result = { userId, parents };
+    _studentSubjectCache.set(studentId, result);
+    return result;
+}
+
 async function loadAudienceMembers(kasus) {
+    const restrictedPanel = document.getElementById('kasus-aud-restricted-panel');
     const listEl  = document.getElementById('kasus-aud-members-list');
     const searchEl = document.getElementById('kasus-aud-member-search');
     const dropEl   = document.getElementById('kasus-aud-member-list');
     const msgEl    = document.getElementById('kasus-audience-msg');
     listEl.textContent = 'Memuat anggota…';
+
+    // Pastikan container toggle subjek ada (inject sekali, innerHTML-nya ditimpa tiap panggil)
+    let subjectPanel = document.getElementById('kasus-aud-subject-panel');
+    if (!subjectPanel) {
+        subjectPanel = document.createElement('div');
+        subjectPanel.id = 'kasus-aud-subject-panel';
+        restrictedPanel.insertBefore(subjectPanel, restrictedPanel.firstChild);
+    }
+
     try {
-        const members = await getCaseAudienceMembers(kasus.case_id);
+        const studentId   = kasus.student?.student_id ?? null;
+        const knownUserId = kasus.student?.user_id ?? null;
+
+        const [members, subject] = await Promise.all([
+            getCaseAudienceMembers(kasus.case_id),
+            studentId ? fetchStudentSubject(studentId, knownUserId) : Promise.resolve(null),
+        ]);
+        const memberSet = new Set(members.map(m => m.user_id));
+
+        // ── Toggle siswa & ortu ──
+        if (subject) {
+            const rows = [];
+            if (subject.userId) {
+                rows.push({ uid: subject.userId, label: esc(kasus.student?.full_name ?? 'Siswa'), role: 'Siswa' });
+            }
+            subject.parents.forEach(p => {
+                rows.push({ uid: p.parent_user_id, label: esc(p.users?.full_name ?? p.parent_user_id), role: 'Ortu' });
+            });
+            if (rows.length) {
+                subjectPanel.innerHTML = `
+                    <div style="font-size:12px;font-weight:600;color:var(--color-text-muted);margin-bottom:6px">Siswa &amp; Orang Tua Terkait</div>
+                    ${rows.map(row => `
+                        <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;cursor:pointer">
+                            <input type="checkbox" data-uid="${row.uid}" ${memberSet.has(row.uid) ? 'checked' : ''}
+                                style="width:14px;height:14px;accent-color:var(--color-primary,#6366f1);cursor:pointer">
+                            ${row.label} <span style="color:var(--color-text-muted)">(${row.role})</span>
+                        </label>
+                    `).join('')}
+                    <div style="border-bottom:1px solid var(--color-border);margin:8px 0"></div>`;
+                subjectPanel.querySelectorAll('input[type=checkbox][data-uid]').forEach(cb => {
+                    cb.addEventListener('change', async () => {
+                        const uid = cb.dataset.uid;
+                        const nowChecked = cb.checked;
+                        cb.disabled = true;
+                        try {
+                            if (nowChecked) {
+                                await addCaseAudienceMember({ caseId: kasus.case_id, userId: uid, schoolId: currentUser.school_id, addedByUserId: currentUser.user_id });
+                            } else {
+                                await removeCaseAudienceMember({ caseId: kasus.case_id, userId: uid });
+                            }
+                            await loadAudienceMembers(kasus);
+                        } catch (err) {
+                            if (err?.code === '23505') {
+                                await loadAudienceMembers(kasus);
+                            } else {
+                                cb.checked = !nowChecked;
+                                cb.disabled = false;
+                                msgEl.style.color = 'var(--color-danger)';
+                                msgEl.textContent = fe(err, 's');
+                            }
+                        }
+                    });
+                });
+            } else {
+                subjectPanel.innerHTML = '';
+            }
+        } else {
+            subjectPanel.innerHTML = '';
+        }
+
+        // ── Chip staf (unchanged) ──
         if (!members.length) {
-            listEl.innerHTML = '<em style="color:var(--color-text-muted)">Belum ada anggota khusus.</em>';
+            listEl.innerHTML = '<em style="color:var(--color-text-muted)">Belum ada staf yang ditambahkan.</em>';
         } else {
             listEl.innerHTML = members.map(m => {
                 const name = m.users?.full_name ?? m.user_id;

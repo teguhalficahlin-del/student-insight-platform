@@ -719,11 +719,30 @@ export async function getMyObservations(userId) {
         .from('observations')
         .select(`
             observation_id, dimension, sentiment, visibility, content, observed_at, created_at,
+            student_id, author_user_id,
             student:students!observations_student_id_fkey ( full_name, nis )
         `)
         .eq('author_user_id', userId)
         .order('created_at', { ascending: false })
         .limit(100);
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function getStudentUserId(studentId) {
+    const { data } = await supabase
+        .from('students')
+        .select('student_id, user_id')
+        .eq('student_id', studentId)
+        .maybeSingle();
+    return data?.user_id ?? null;
+}
+
+export async function getStudentParents(studentId) {
+    const { data, error } = await supabase
+        .from('student_parents')
+        .select('parent_user_id, users:parent_user_id(full_name)')
+        .eq('student_id', studentId);
     if (error) throw error;
     return data ?? [];
 }
@@ -820,8 +839,8 @@ export async function getCase(caseId) {
         .from('cases')
         .select(`
             case_id, title, description, status, track, current_handler_role, is_locked,
-            created_at, initiated_by_role,
-            student:students(student_id, full_name, nis),
+            created_at, initiated_by_role, audience,
+            student:students(student_id, user_id, full_name, nis),
             created_by:users!cases_created_by_user_id_fkey(full_name)
         `)
         .eq('case_id', caseId)
@@ -864,11 +883,13 @@ export async function createCase({ studentId, title, description, track, audienc
 }
 
 export async function updateCaseAudience({ caseId, audience }) {
-    const { error } = await supabase
+    const { data, error } = await supabase
         .from('cases')
         .update({ audience })
-        .eq('case_id', caseId);
+        .eq('case_id', caseId)
+        .select('case_id');
     if (error) throw error;
+    if (!data || data.length === 0) throw new Error('Tidak ada perubahan tersimpan — periksa izin Anda.');
 }
 
 export async function getCaseAudienceMembers(caseId) {
