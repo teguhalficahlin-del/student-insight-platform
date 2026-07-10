@@ -420,6 +420,7 @@ function renderCases(cases) {
 
     if (!cases.length) {
         hintEl.style.display = 'block';
+        hintEl.textContent = 'Belum ada kasus yang dibagikan untukmu.';
         listEl.innerHTML = '';
         return;
     }
