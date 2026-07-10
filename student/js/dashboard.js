@@ -509,13 +509,6 @@ async function loadPkl() {
 
 // ─── Notif bell ──────────────────────────────────────────────
 
-function esc(s) { const el = document.createElement('span'); el.textContent = s ?? ''; return el.innerHTML; }
-
-function fmt(d) {
-    if (!d) return '—';
-    return new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 let _notifPollTimer = null;
 
 function initNotifBell() {
