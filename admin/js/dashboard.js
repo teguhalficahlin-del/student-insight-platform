@@ -173,7 +173,7 @@ async function renderForumKelasPanel() {
                 <summary style="cursor:pointer;font-weight:600">
                     ${esc(progName)} (${progClasses.length} kelas)
                 </summary>
-                <table class="data-table" style="width:100%;margin-top:8px;table-layout:fixed;border-collapse:collapse">
+                <table class="table" style="width:100%;margin-top:8px;table-layout:fixed">
                     <thead><tr>
                         <th style="width:40%">Kelas</th>
                         <th style="width:60%">BK yang Ditugaskan</th>
@@ -228,7 +228,7 @@ async function renderForumKelasPanel() {
                     <summary style="cursor:pointer;font-weight:600">
                         ${esc(cls.name)} (${clsTotal})
                     </summary>
-                    <table class="data-table" style="width:100%;margin-top:8px;table-layout:fixed;border-collapse:collapse">
+                    <table class="table" style="width:100%;margin-top:8px;table-layout:fixed">
                         <thead><tr>
                             <th style="width:45%">Siswa</th>
                             <th style="width:15%">NIS</th>
