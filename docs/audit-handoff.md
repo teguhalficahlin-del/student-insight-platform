@@ -1011,6 +1011,23 @@ di sesi ini (hanya migration fungsi helper read-only).
 - Tab manual untuk koreksi individual tersedia
 - Test suite: 90/90 ✓
 
+### Perbaikan Dashboard Admin (11 Juli 2026)
+
+| Commit | Deskripsi |
+|--------|-----------|
+| `ed11da7` | Panel Siswa: accordion grouped per program + single-expand |
+| `a76e64b` | Panel Siswa: single-expand accordion |
+| `8b816aa` | Panel Alumni: single-expand accordion |
+| `760b370` | Panel Orang Tua: accordion grouped per program + single-expand |
+| `6c1c596` | Panel Penugasan Forum: accordion grouped per program + daftar Guru Wali |
+| `e3f8ec5` | Fix lebar kolom tabel Guru Wali panel Penugasan Forum |
+| `66e7ca8` | Fix overflow kolom tabel Guru Wali |
+| `6a9ece6` | Fix tabel BK table-layout fixed + lebar kolom persentase |
+| `e31b57f` | Dropdown kelas grouped per program di wizard & Portal Guru |
+| `5aaed0e` | Fix async renderWzFkGuruWaliTab |
+| `b022b49` | Hapus dropdown tambah BK & Guru Wali — ganti via upload file |
+| `95f2955` | Label "Input Manual" → "Koreksi & Kelola Penugasan" |
+
 ---
 
 ## 15. Backlog Produk — BUKAN Backlog Audit Keamanan
