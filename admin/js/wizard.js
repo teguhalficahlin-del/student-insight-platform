@@ -25,12 +25,16 @@ import {
     updateProgram, updateClass, updateStudent, updateUserIdentifier,
     importPrograms, importClasses, importUsers, importStudents, importSchedules,
     importParents, importDudi,
+    getForumBkStaff, getForumGuruWaliCandidates,
+    getBkAssignments, getGuruWaliAssignments,
+    assignBkToClass, revokeBkFromClass,
+    assignGuruWaliToStudent, revokeGuruWaliFromStudent,
     logout,
 } from './api.js';
 
 import { openScheduleBuilder } from './schedule-builder.js';
 
-const TOTAL_STEPS = 11;
+const TOTAL_STEPS = 12;
 
 const STEP_NAMES = {
     1: 'Profil Sekolah',
@@ -43,7 +47,8 @@ const STEP_NAMES = {
     8: 'DUDI',
     9: 'Stakeholder',
     10: 'Jadwal',
-    11: 'Selesai',
+    11: 'Penugasan Forum',
+    12: 'Selesai',
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -442,6 +447,361 @@ async function renderStakeholderStep() {
     nextBtn.disabled = false;
 }
 
+// ── Langkah 11: Penugasan Forum ───────────────────────────────
+
+let _wzFkTab            = 'bk';
+let _wzFkClasses        = [];
+let _wzFkBkStaff        = [];
+let _wzFkGuruWaliCands  = [];
+let _wzFkBkAssignments  = [];
+let _wzFkGwAssignments  = [];
+let _wzFkSelectedClass  = null;
+let _wzFkAcademicYear   = null;
+let _wzFkCurrentUserId  = null;
+
+async function renderForumAssignmentStep() {
+    contentEl.innerHTML = '<p class="hint">Memuat data penugasan…</p>';
+    try {
+        const config = await getSchoolConfig();
+        _wzFkAcademicYear = config?.current_academic_year ?? null;
+
+        const userRow = await getCurrentUserRow();
+        _wzFkCurrentUserId = userRow?.user_id ?? null;
+
+        const [classes, bkStaff, gwCands, bkAsgn, gwAsgn] =
+            await Promise.all([
+                getClasses(_wzFkAcademicYear),
+                getForumBkStaff(),
+                getForumGuruWaliCandidates(),
+                getBkAssignments(_wzFkAcademicYear),
+                getGuruWaliAssignments(_wzFkAcademicYear),
+            ]);
+
+        _wzFkClasses       = classes;
+        _wzFkBkStaff       = bkStaff;
+        _wzFkGuruWaliCands = gwCands;
+        _wzFkBkAssignments = bkAsgn;
+        _wzFkGwAssignments = gwAsgn;
+
+        renderWzFkShell();
+    } catch (err) {
+        contentEl.innerHTML =
+            `<div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
+             <h3>Penugasan Forum Kelas</h3>
+             <p style="color:var(--color-danger)">${esc(err?.message ?? String(err))}</p>`;
+    }
+    nextBtn.disabled = false;
+}
+
+function renderWzFkShell() {
+    contentEl.innerHTML = `
+        <div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
+        <h3>Penugasan Forum Kelas</h3>
+        <p class="hint">Tugaskan BK ke kelas dan Guru Wali ke siswa.
+            Langkah ini opsional — bisa dilengkapi setelah wizard selesai.</p>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+            <button id="wz-fk-tab-bk"
+                class="btn ${_wzFkTab === 'bk' ? 'btn-primary' : 'btn-secondary'}"
+                style="min-width:120px">BK per Kelas</button>
+            <button id="wz-fk-tab-gw"
+                class="btn ${_wzFkTab === 'guru-wali' ? 'btn-primary' : 'btn-secondary'}"
+                style="min-width:140px">Guru Wali per Siswa</button>
+        </div>
+        <div id="wz-forum-tab-content"></div>
+    `;
+
+    document.getElementById('wz-fk-tab-bk').addEventListener('click', () => {
+        _wzFkTab = 'bk';
+        renderWzFkShell();
+    });
+    document.getElementById('wz-fk-tab-gw').addEventListener('click', () => {
+        _wzFkTab = 'guru-wali';
+        renderWzFkShell();
+    });
+
+    if (_wzFkTab === 'bk') renderWzFkBkTab();
+    else renderWzFkGuruWaliTab();
+}
+
+function renderWzFkBkTab() {
+    const tabEl = document.getElementById('wz-forum-tab-content');
+    if (!_wzFkClasses.length) {
+        tabEl.innerHTML = '<p class="hint">Belum ada kelas di tahun ajaran ini.</p>';
+        return;
+    }
+    if (!_wzFkBkStaff.length) {
+        tabEl.innerHTML = '<p class="hint">Belum ada staf dengan peran BK.</p>';
+        return;
+    }
+
+    const asnMap = new Map();
+    _wzFkBkAssignments.forEach(a => {
+        if (!asnMap.has(a.class_id)) asnMap.set(a.class_id, []);
+        asnMap.get(a.class_id).push(a);
+    });
+
+    const rows = _wzFkClasses.map(cls => {
+        const assigned    = asnMap.get(cls.class_id) ?? [];
+        const assignedIds = new Set(assigned.map(a => a.bk_user_id));
+
+        const chips = assigned.map(a => {
+            const bk = _wzFkBkStaff.find(s => s.user_id === a.bk_user_id);
+            if (!bk) return '';
+            return `<span style="display:inline-flex;align-items:center;
+                        gap:4px;background:var(--color-primary-subtle,#eff6ff);
+                        color:var(--color-primary,#2563eb);
+                        border:1px solid var(--color-primary-light,#bfdbfe);
+                        border-radius:999px;padding:2px 10px 2px 8px;
+                        font-size:12px">
+                        ${esc(bk.full_name)}
+                        <button type="button"
+                            class="wzfk-bk-revoke"
+                            data-aid="${esc(a.assignment_id)}"
+                            style="background:none;border:none;cursor:pointer;
+                                   color:inherit;padding:0;font-size:14px">×
+                        </button>
+                    </span>`;
+        }).join('');
+
+        const options = _wzFkBkStaff
+            .filter(s => !assignedIds.has(s.user_id))
+            .map(s => `<option value="${esc(s.user_id)}">${esc(s.full_name)}</option>`)
+            .join('');
+
+        const addSelect = options
+            ? `<select class="wzfk-bk-add input" data-cid="${esc(cls.class_id)}"
+                   style="font-size:12px;padding:4px 8px;min-width:160px">
+                   <option value="">+ Tambah BK…</option>
+                   ${options}
+               </select>`
+            : '<span class="hint" style="font-size:12px">Semua BK sudah ditugaskan</span>';
+
+        return `<tr>
+            <td style="font-weight:500">${esc(cls.name)}</td>
+            <td>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+                    ${chips}
+                    ${addSelect}
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+
+    tabEl.innerHTML = `
+        <div style="overflow-x:auto">
+        <table class="data-table" style="width:100%">
+            <thead>
+                <tr>
+                    <th style="width:200px">Kelas</th>
+                    <th>BK yang Ditugaskan</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+        </div>
+        <p id="wz-fk-status" class="hint" style="margin-top:8px"></p>
+    `;
+
+    tabEl.querySelectorAll('.wzfk-bk-add').forEach(sel => {
+        sel.addEventListener('change', async () => {
+            const bkUserId = sel.value;
+            const classId  = sel.dataset.cid;
+            if (!bkUserId) return;
+            sel.disabled = true;
+            try {
+                await assignBkToClass(classId, bkUserId, _wzFkAcademicYear, _wzFkCurrentUserId);
+                _wzFkBkAssignments = await getBkAssignments(_wzFkAcademicYear);
+                renderWzFkBkTab();
+            } catch (err) {
+                const st = document.getElementById('wz-fk-status');
+                if (st) st.textContent = 'Gagal menyimpan: ' + (err?.message ?? String(err));
+            } finally {
+                sel.disabled = false;
+            }
+        });
+    });
+
+    tabEl.querySelectorAll('.wzfk-bk-revoke').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            try {
+                await revokeBkFromClass(btn.dataset.aid);
+                _wzFkBkAssignments = await getBkAssignments(_wzFkAcademicYear);
+                renderWzFkBkTab();
+            } catch (err) {
+                const st = document.getElementById('wz-fk-status');
+                if (st) st.textContent = 'Gagal mencabut: ' + (err?.message ?? String(err));
+            }
+        });
+    });
+}
+
+function renderWzFkGuruWaliTab() {
+    const tabEl = document.getElementById('wz-forum-tab-content');
+    if (!_wzFkClasses.length) {
+        tabEl.innerHTML = '<p class="hint">Belum ada kelas di tahun ajaran ini.</p>';
+        return;
+    }
+
+    const classOptions = _wzFkClasses
+        .map(c =>
+            `<option value="${esc(c.class_id)}"
+                ${_wzFkSelectedClass === c.class_id ? 'selected' : ''}>
+                ${esc(c.name)}
+             </option>`
+        ).join('');
+
+    tabEl.innerHTML = `
+        <div class="field" style="max-width:320px;margin-bottom:16px">
+            <label for="wz-fk-gw-class-select">Pilih Kelas</label>
+            <select id="wz-fk-gw-class-select" class="input">
+                <option value="">— Pilih kelas —</option>
+                ${classOptions}
+            </select>
+        </div>
+        <div id="wz-fk-gw-students"></div>
+    `;
+
+    document.getElementById('wz-fk-gw-class-select').addEventListener('change', async (e) => {
+        _wzFkSelectedClass = e.target.value || null;
+        await loadWzFkGuruWaliStudents();
+    });
+
+    if (_wzFkSelectedClass) loadWzFkGuruWaliStudents();
+}
+
+async function loadWzFkGuruWaliStudents() {
+    const el = document.getElementById('wz-fk-gw-students');
+    if (!_wzFkSelectedClass) { el.innerHTML = ''; return; }
+    el.innerHTML = '<p class="hint">Memuat siswa…</p>';
+    try {
+        const { data, error } = await supabase
+            .from('class_enrollments')
+            .select('student:students(student_id, full_name, nis)')
+            .eq('class_id',      _wzFkSelectedClass)
+            .eq('academic_year', _wzFkAcademicYear)
+            .is('withdrawn_at',  null);
+        if (error) throw error;
+
+        const students = (data ?? [])
+            .map(r => r.student)
+            .filter(Boolean)
+            .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
+
+        if (!students.length) {
+            el.innerHTML = '<p class="hint">Tidak ada siswa aktif di kelas ini.</p>';
+            return;
+        }
+
+        const asnMap = new Map();
+        _wzFkGwAssignments.forEach(a => {
+            if (!asnMap.has(a.student_id)) asnMap.set(a.student_id, []);
+            asnMap.get(a.student_id).push(a);
+        });
+
+        const rows = students.map(stu => {
+            const assigned    = asnMap.get(stu.student_id) ?? [];
+            const assignedIds = new Set(assigned.map(a => a.guru_user_id));
+
+            const chips = assigned.map(a => {
+                const gw = _wzFkGuruWaliCands.find(s => s.user_id === a.guru_user_id);
+                if (!gw) return '';
+                return `<span style="display:inline-flex;align-items:center;
+                            gap:4px;background:var(--color-primary-subtle,#eff6ff);
+                            color:var(--color-primary,#2563eb);
+                            border:1px solid var(--color-primary-light,#bfdbfe);
+                            border-radius:999px;padding:2px 10px 2px 8px;font-size:12px">
+                            ${esc(gw.full_name)}
+                            <button type="button"
+                                class="wzfk-gw-revoke"
+                                data-aid="${esc(a.assignment_id)}"
+                                style="background:none;border:none;cursor:pointer;
+                                       color:inherit;padding:0;font-size:14px">×
+                            </button>
+                        </span>`;
+            }).join('');
+
+            const options = _wzFkGuruWaliCands
+                .filter(s => !assignedIds.has(s.user_id))
+                .map(s => `<option value="${esc(s.user_id)}">${esc(s.full_name)}</option>`)
+                .join('');
+
+            const addSelect = options
+                ? `<select class="wzfk-gw-add input"
+                       data-sid="${esc(stu.student_id)}"
+                       style="font-size:12px;padding:4px 8px;min-width:180px">
+                       <option value="">+ Tambah Guru Wali…</option>
+                       ${options}
+                   </select>`
+                : '';
+
+            return `<tr>
+                <td>
+                    <div style="font-weight:500">${esc(stu.full_name)}</div>
+                    <div style="font-size:11px;color:var(--color-text-muted)">${esc(stu.nis)}</div>
+                </td>
+                <td>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+                        ${chips}
+                        ${addSelect}
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+
+        el.innerHTML = `
+            <div style="overflow-x:auto">
+            <table class="data-table" style="width:100%">
+                <thead>
+                    <tr>
+                        <th style="width:220px">Siswa</th>
+                        <th>Guru Wali</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+            </div>
+            <p id="wz-fk-gw-status" class="hint" style="margin-top:8px"></p>
+        `;
+
+        el.querySelectorAll('.wzfk-gw-add').forEach(sel => {
+            sel.addEventListener('change', async () => {
+                const guruId    = sel.value;
+                const studentId = sel.dataset.sid;
+                if (!guruId) return;
+                sel.disabled = true;
+                try {
+                    await assignGuruWaliToStudent(studentId, guruId, _wzFkAcademicYear, _wzFkCurrentUserId);
+                    _wzFkGwAssignments = await getGuruWaliAssignments(_wzFkAcademicYear);
+                    await loadWzFkGuruWaliStudents();
+                } catch (err) {
+                    const st = document.getElementById('wz-fk-gw-status');
+                    if (st) st.textContent = 'Gagal menyimpan: ' + (err?.message ?? String(err));
+                } finally {
+                    sel.disabled = false;
+                }
+            });
+        });
+
+        el.querySelectorAll('.wzfk-gw-revoke').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                btn.disabled = true;
+                try {
+                    await revokeGuruWaliFromStudent(btn.dataset.aid);
+                    _wzFkGwAssignments = await getGuruWaliAssignments(_wzFkAcademicYear);
+                    await loadWzFkGuruWaliStudents();
+                } catch (err) {
+                    const st = document.getElementById('wz-fk-gw-status');
+                    if (st) st.textContent = 'Gagal mencabut: ' + (err?.message ?? String(err));
+                }
+            });
+        });
+
+    } catch (err) {
+        el.innerHTML = `<p style="color:var(--color-danger)">${esc(err?.message ?? String(err))}</p>`;
+    }
+}
+
 async function renderScheduleStep() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 10 dari ${TOTAL_STEPS}</div>
@@ -659,7 +1019,8 @@ const STEP_RENDERERS = {
     8: renderImportStep,
     9: renderStakeholderStep,
     10: renderScheduleStep,
-    11: renderSummaryStep,
+    11: renderForumAssignmentStep,
+    12: renderSummaryStep,
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -677,7 +1038,7 @@ async function saveCurrentStep() {
         case 3: return saveStep3();
         // Langkah 4–9 berbasis impor: data tersimpan langsung saat unggah,
         // dan langkah-langkah ini opsional (boleh dilewati / dilanjutkan dari dashboard).
-        case 4: case 5: case 6: case 7: case 8: case 9: case 10: return;
+        case 4: case 5: case 6: case 7: case 8: case 9: case 10: case 11: return;
         default: throw new Error('Langkah ini belum tersedia. Gunakan tombol Sebelumnya untuk kembali.');
     }
 }
