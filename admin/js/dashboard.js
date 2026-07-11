@@ -224,11 +224,11 @@ async function renderForumKelasPanel() {
                     <summary style="cursor:pointer;font-weight:600">
                         ${esc(cls.name)} (${clsTotal})
                     </summary>
-                    <table class="data-table" style="width:100%;margin-top:8px">
+                    <table class="data-table" style="width:100%;margin-top:8px;table-layout:fixed">
                         <thead><tr>
-                            <th>Siswa</th>
-                            <th style="width:100px">NIS</th>
-                            <th>Guru Wali</th>
+                            <th style="width:45%">Siswa</th>
+                            <th style="width:15%">NIS</th>
+                            <th style="width:40%">Guru Wali</th>
                         </tr></thead>
                         <tbody>${rows}</tbody>
                     </table>
