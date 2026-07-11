@@ -1057,14 +1057,18 @@ async function renderParentsPanel() {
     ]);
 
     // Fetch semua kelas + enrollment tahun ajaran aktif
-    const [{ data: allClasses }, { data: enrollments }] = await Promise.all([
-        supabase.from('classes').select('class_id, name, grade_level')
+    const [{ data: allClasses }, { data: enrollments }, programs] = await Promise.all([
+        supabase.from('classes').select('class_id, name, grade_level, program_id')
             .order('grade_level').order('name'),
         supabase.from('class_enrollments')
             .select('student_id, class_id')
             .eq('academic_year', config?.current_academic_year ?? '')
             .is('withdrawn_at', null),
+        getPrograms(),
     ]);
+    const programNameById = new Map(
+        (programs ?? []).map(p => [p.program_id, p.name])
+    );
 
     // Map student_id → class_id
     const studentClassId = new Map((enrollments ?? []).map(e => [e.student_id, e.class_id]));
@@ -1095,21 +1099,60 @@ async function renderParentsPanel() {
     for (const list of classMap.values()) list.sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
 
     const totalAktif = [...classMap.values()].reduce((s, l) => s + l.length, 0) + tanpaKelas.length;
-    let aktifHtml = renderClassAccordion(
-        allClasses ?? [],
-        classMap,
-        ['Nama', 'NIK', 'Aksi'],
-        u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td>${u.must_change_password
-            ? `<button class="btn btn-sm btn-secondary" disabled style="font-size:11px;padding:3px 8px;opacity:0.6" title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
-            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button>`}</td></tr>`,
-    );
+
+    const rowOf = u => `<tr>
+        <td>${esc(u.full_name)}</td>
+        <td>${esc(u.login_identifier)}</td>
+        <td>${u.must_change_password
+            ? `<button class="btn btn-sm btn-secondary" disabled
+                style="font-size:11px;padding:3px 8px;opacity:0.6"
+                title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
+            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn"
+                data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}"
+                style="font-size:11px;padding:3px 8px">Reset PW</button>`}
+        </td></tr>`;
+
+    // Kelompokkan kelas per program
+    const byProgram = new Map();
+    (allClasses ?? []).forEach(cls => {
+        const progName = programNameById.get(cls.program_id) ?? 'Tanpa Program';
+        if (!byProgram.has(progName)) byProgram.set(progName, []);
+        byProgram.get(progName).push(cls);
+    });
+
+    const progNames = [...byProgram.keys()].sort((a, b) => {
+        if (/^Tanpa/i.test(a)) return 1;
+        if (/^Tanpa/i.test(b)) return -1;
+        return a.localeCompare(b, 'id');
+    });
+
+    let aktifHtml = progNames.map(progName => {
+        const progClasses = byProgram.get(progName);
+        const progTotal   = progClasses.reduce(
+            (s, cls) => s + (classMap.get(cls.class_id)?.length ?? 0), 0
+        );
+        const classHtml = renderClassAccordion(
+            progClasses,
+            classMap,
+            ['Nama', 'NIK', 'Aksi'],
+            rowOf,
+        );
+        return `<details style="margin-bottom:8px">
+            <summary style="cursor:pointer;font-weight:600">
+                ${esc(progName)} (${progTotal})
+            </summary>
+            <div style="padding:4px 0 4px 16px">${classHtml}</div>
+        </details>`;
+    }).join('');
+
     if (tanpaKelas.length > 0) {
         aktifHtml += `<details style="margin-bottom:8px">
-            <summary style="cursor:pointer;font-weight:600">Tanpa Kelas (${tanpaKelas.length})</summary>
-            <table class="table" style="margin-top:4px"><thead><tr><th>Nama</th><th>NIK</th><th>Aksi</th></tr></thead>
-            <tbody>${tanpaKelas.map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td>${u.must_change_password
-            ? `<button class="btn btn-sm btn-secondary" disabled style="font-size:11px;padding:3px 8px;opacity:0.6" title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
-            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button>`}</td></tr>`).join('')}</tbody>
+            <summary style="cursor:pointer;font-weight:600">
+                Tanpa Kelas (${tanpaKelas.length})
+            </summary>
+            <table class="table" style="margin-top:4px">
+                <thead><tr><th>Nama</th><th>NIK</th><th>Aksi</th></tr></thead>
+                <tbody>${tanpaKelas.map(rowOf).join('')}</tbody>
             </table></details>`;
     }
 
@@ -1118,6 +1161,18 @@ async function renderParentsPanel() {
         <p class="hint" style="margin-bottom:12px">Orang tua alumni ada di menu <strong>Alumni</strong>.</p>
         ${aktifHtml}
     `;
+
+    // Single-expand: saat satu accordion dibuka, tutup sibling
+    panelContent.querySelectorAll('details').forEach(det => {
+        det.addEventListener('toggle', () => {
+            if (!det.open) return;
+            const parent = det.parentElement;
+            if (!parent) return;
+            parent.querySelectorAll(':scope > details').forEach(sib => {
+                if (sib !== det) sib.open = false;
+            });
+        });
+    });
 }
 
 // Menu khusus Alumni: siswa lulus + orang tua yang semua anaknya sudah lulus.
