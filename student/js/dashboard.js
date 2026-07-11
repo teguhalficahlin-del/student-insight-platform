@@ -171,7 +171,7 @@ async function loadTabContent(key) {
         case 'kehadiran': await loadAttendance(); break;
         case 'observasi': if (!obsLoaded) await loadObservations(); break;
         case 'pkl':       if (!pklLoaded) await loadPkl(); break;
-        case 'forum':     await loadForumPosts(); break;
+        case 'forum':     await initForumTab(); break;
     }
 }
 
