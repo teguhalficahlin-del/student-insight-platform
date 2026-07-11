@@ -289,3 +289,93 @@ export async function markNotificationsRead(ids) {
         .in('notification_id', ids);
     if (error) throw error;
 }
+
+export async function getMyChildren() {
+    const { data: config } = await supabase
+        .from('school_config')
+        .select('current_academic_year')
+        .single();
+    const academicYear = config?.current_academic_year ?? null;
+
+    const { data, error } = await supabase
+        .from('student_parents')
+        .select(`
+            student:students (
+                student_id, full_name, nis,
+                enrollment:class_enrollments (
+                    class_id, academic_year,
+                    class:classes ( name )
+                )
+            )
+        `);
+    if (error) throw error;
+    const result = [];
+    for (const row of data ?? []) {
+        const s = row.student;
+        if (!s) continue;
+        const enr = (s.enrollment ?? []).find(e =>
+            e.academic_year === academicYear && e.class_id
+        );
+        result.push({
+            student_id:    s.student_id,
+            full_name:     s.full_name,
+            nis:           s.nis,
+            class_id:      enr?.class_id ?? null,
+            class_name:    enr?.class?.name ?? '',
+            academic_year: enr?.academic_year ?? academicYear,
+        });
+    }
+    return result;
+}
+
+export async function getForumPosts(classId, academicYear, userId, schoolId, limit = 20, offset = 0) {
+    const { data, error } = await supabase
+        .from('forum_posts')
+        .select(`
+            post_id, title, body, visibility, is_pinned, created_at, updated_at,
+            author_user_id,
+            category:communication_categories ( category_code, label_sekolah, polarity ),
+            author:users!forum_posts_author_user_id_fkey ( user_id, full_name ),
+            subjects:forum_post_subjects (
+                student:students ( student_id, full_name, nis )
+            ),
+            acknowledgements:forum_post_acknowledgements ( user_id ),
+            comments:forum_post_comments (
+                comment_id, body, created_at,
+                author:users!forum_post_comments_author_user_id_fkey ( user_id, full_name )
+            ),
+            forum_post_audience!inner ( user_id )
+        `)
+        .eq('class_id', classId)
+        .eq('academic_year', academicYear)
+        .eq('school_id', schoolId)
+        .eq('forum_post_audience.user_id', userId)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+    if (error) throw error;
+    return (data ?? []).map(p => {
+        const { forum_post_audience: _aud, ...rest } = p;
+        return rest;
+    });
+}
+
+export async function addForumAck(postId, userId, schoolId) {
+    const { error } = await supabase
+        .from('forum_post_acknowledgements')
+        .upsert(
+            { post_id: postId, user_id: userId, school_id: schoolId },
+            { onConflict: 'post_id,user_id', ignoreDuplicates: true }
+        );
+    if (error) throw error;
+}
+
+export async function addForumComment(postId, userId, schoolId, body) {
+    const { data, error } = await supabase
+        .from('forum_post_comments')
+        .insert({ post_id: postId, author_user_id: userId, school_id: schoolId, body })
+        .select('comment_id, body, created_at, author:users!forum_post_comments_author_user_id_fkey ( user_id, full_name )')
+        .single();
+    if (error) throw error;
+    return data;
+}
