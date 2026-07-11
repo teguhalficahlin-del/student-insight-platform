@@ -1088,7 +1088,7 @@ function renderWzFkBkTab() {
     });
 }
 
-function renderWzFkGuruWaliTab() {
+async function renderWzFkGuruWaliTab() {
     const tabEl = document.getElementById('wz-forum-tab-content');
     if (!_wzFkClasses.length) {
         tabEl.innerHTML = '<p class="hint">Belum ada kelas di tahun ajaran ini.</p>';
