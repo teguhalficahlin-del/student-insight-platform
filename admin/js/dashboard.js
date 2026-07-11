@@ -1002,6 +1002,18 @@ async function renderStudentsPanel() {
     `;
 
     document.getElementById('provision-students-btn')?.addEventListener('click', runProvisionStudents);
+
+    // Single-expand: saat satu accordion dibuka, tutup sibling
+    panelContent.querySelectorAll('details').forEach(det => {
+        det.addEventListener('toggle', () => {
+            if (!det.open) return;
+            const parent = det.parentElement;
+            if (!parent) return;
+            parent.querySelectorAll(':scope > details').forEach(sib => {
+                if (sib !== det) sib.open = false;
+            });
+        });
+    });
 }
 
 async function runProvisionStudents() {
