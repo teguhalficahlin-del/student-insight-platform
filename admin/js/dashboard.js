@@ -173,10 +173,10 @@ async function renderForumKelasPanel() {
                 <summary style="cursor:pointer;font-weight:600">
                     ${esc(progName)} (${progClasses.length} kelas)
                 </summary>
-                <table class="data-table" style="width:100%;margin-top:8px">
+                <table class="data-table" style="width:100%;margin-top:8px;table-layout:fixed">
                     <thead><tr>
-                        <th style="width:200px">Kelas</th>
-                        <th>BK yang Ditugaskan</th>
+                        <th style="width:40%">Kelas</th>
+                        <th style="width:60%">BK yang Ditugaskan</th>
                     </tr></thead>
                     <tbody>${progRows}</tbody>
                 </table>
