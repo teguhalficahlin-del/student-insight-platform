@@ -595,8 +595,8 @@ async function importForumGuruWali(csvText) {
     const [{ data: students }, { data: gwStaff }] = await Promise.all([
         supabase
             .from('students')
-            .select('student_id, login_identifier')
-            .eq('is_active', true),
+            .select('student_id, nis')
+            .eq('student_status', 'AKTIF'),
         supabase
             .from('users')
             .select('user_id, login_identifier')
@@ -608,7 +608,7 @@ async function importForumGuruWali(csvText) {
     ]);
 
     const studentByNis = new Map(
-        (students ?? []).map(s => [s.login_identifier, s.student_id])
+        (students ?? []).map(s => [s.nis, s.student_id])
     );
     const gwByNip = new Map(
         (gwStaff ?? []).map(u => [u.login_identifier, u.user_id])

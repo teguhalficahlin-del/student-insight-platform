@@ -1069,7 +1069,6 @@ export async function getForumGuruWaliCandidates() {
         .from('v_users_staff_directory')
         .select('user_id, full_name, role_type')
         .in('role_type', INTERNAL_ROLES)
-        .eq('is_active', true)
         .order('full_name');
     if (error) throw error;
     return data ?? [];
