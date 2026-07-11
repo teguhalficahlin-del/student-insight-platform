@@ -740,14 +740,87 @@ async function renderForumAssignmentStep() {
             );
         });
 
-        // ── Tombol unduh template Guru Wali ──
-        document.getElementById('wz-fk-gw-tpl-btn').addEventListener('click', () => {
-            const sheet = tmpl11?.sheets?.gw;
-            if (!sheet) return;
-            generateExcelTemplate(
-                'template_penugasan_guru_wali.xlsx',
-                sheet.headers, sheet.exampleRows, sheet.guide
-            );
+        // ── Tombol unduh template Guru Wali (pre-filled siswa aktif) ──
+        document.getElementById('wz-fk-gw-tpl-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('wz-fk-gw-tpl-btn');
+            const gwResultEl = document.getElementById('wz-fk-gw-result');
+            btn.disabled = true;
+            btn.textContent = 'Memuat data siswa…';
+            try {
+                const [config, classes, programs] = await Promise.all([
+                    getSchoolConfig(),
+                    getClasses(_wzFkAcademicYear),
+                    getPrograms(),
+                ]);
+                const academicYear = _wzFkAcademicYear ?? config?.current_academic_year;
+                const programByCode = new Map(programs.map(p => [p.program_id, p.code]));
+
+                const rows = [];
+                const sortedClasses = [...classes].sort((a, b) =>
+                    a.name.localeCompare(b.name, 'id'));
+
+                for (const cls of sortedClasses) {
+                    const { data: enrollments } = await supabase
+                        .from('class_enrollments')
+                        .select('student:students(student_id, full_name, login_identifier)')
+                        .eq('class_id', cls.class_id)
+                        .eq('academic_year', academicYear)
+                        .is('withdrawn_at', null);
+
+                    const students = (enrollments ?? [])
+                        .map(e => e.student)
+                        .filter(Boolean)
+                        .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
+
+                    const kodeProgram = programByCode.get(cls.program_id) ?? '';
+                    for (const stu of students) {
+                        rows.push([
+                            cls.name,
+                            kodeProgram,
+                            stu.login_identifier ?? '',
+                            stu.full_name ?? '',
+                            '', // nip_guru_wali — diisi admin
+                        ]);
+                    }
+                }
+
+                if (typeof XLSX === 'undefined') {
+                    throw new Error('Pustaka Excel gagal dimuat. Periksa koneksi internet.');
+                }
+
+                const headers = ['nama_kelas', 'kode_program', 'nis_siswa', 'nama_siswa', 'nip_guru_wali'];
+                const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+                ws['!cols'] = [
+                    { wch: 15 }, // nama_kelas
+                    { wch: 14 }, // kode_program
+                    { wch: 14 }, // nis_siswa
+                    { wch: 25 }, // nama_siswa
+                    { wch: 18 }, // nip_guru_wali
+                ];
+
+                // Format semua sel sebagai teks agar NIS/NIP tidak diubah ke angka
+                const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1');
+                for (let R = range.s.r; R <= range.e.r; R++) {
+                    for (let C = range.s.c; C <= range.e.c; C++) {
+                        const addr = XLSX.utils.encode_cell({ r: R, c: C });
+                        const cell = ws[addr] ?? { t: 's', v: '' };
+                        cell.t = 's';
+                        cell.z = '@';
+                        ws[addr] = cell;
+                    }
+                }
+
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Guru Wali');
+                XLSX.writeFile(wb, 'template_guru_wali.xlsx');
+
+            } catch (err) {
+                gwResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal mengunduh template.')}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '↓ Unduh Template Guru Wali';
+            }
         });
 
         // ── Import BK ──
