@@ -267,7 +267,7 @@ WHERE u.kaprodi_program_id IS NOT NULL ORDER BY sc.slug LIMIT 6;
 ```bash
 SUPABASE_ACCESS_TOKEN="sbp_..." node tests/tenant-isolation.mjs
 ```
-**Status terverifikasi:** 77/77 ✓ LULUS — `✅ LULUS — invarian isolasi tenant utuh.` (9 Juli 2026, pasca CHECK 12+13)
+**Status terverifikasi:** 90/90 ✓ LULUS — `✅ LULUS — invarian isolasi tenant utuh.` (9 Juli 2026, pasca CHECK 14). Catatan: Forum Kelas tidak menambah CHECK baru — test suite tidak berubah dari angka 90.
 
 > **Catatan angka historis:** Dokumen ini sempat mencatat "42/42 CHECK lulus" — angka itu
 > berasal dari run sebelum commit `c19b164` (8 Juli 2026) menambahkan CHECK 10/11 (+13 ✓ → 55).
@@ -290,7 +290,7 @@ SUPABASE_ACCESS_TOKEN="sbp_..." node tests/tenant-isolation.mjs
 - CHECK 12: Struktural — 5 policy read-path case_events/student_updates (mig 20260709010000): fn_can_see_case guard, filter privacy_level STUDENT_VISIBLE, role exclusion SISWA/ORTU pada rls_case_events_read_staff
 - CHECK 13: Behavioral — read-path sintetis BEGIN...ROLLBACK: T1–T7, T11–T12, regresi-f (audience member bisa baca STUDENT_VISIBLE; non-member 0; GURU creator baca semua termasuk INTERNAL_SCHOOL)
 
-### Dokumen Audit
+### Dokumen Audit & Fitur
 
 | File | Isi |
 |------|-----|
@@ -298,6 +298,7 @@ SUPABASE_ACCESS_TOKEN="sbp_..." node tests/tenant-isolation.mjs
 | `docs/audit/fase2-2-kelompok-a-report.md` | Deep audit join student_parents |
 | `docs/audit/fase2-2-kelompok-b-report.md` | Deep audit join guru/jadwal |
 | `docs/audit/fase2-2-kelompok-c-report.md` | Deep audit pola fungsi siswa |
+| `docs/features/konsep-forum-kelas-final.md` | **Konsep final Forum Kelas** — WAJIB DIBACA sebelum melanjutkan build UI Forum Kelas. Semua keputusan produk (keanggotaan, hak tulis/baca, audience, lifecycle posting, dst.) sudah final di sini. |
 | `audit-fase1-branding-secret-exposure.md` | Laporan Fase 1 (di root, belum di-commit) |
 | `investigasi-password-default.md` | Detail temuan password (di root, belum di-commit) |
 
@@ -791,7 +792,8 @@ Data sintetis `BEGIN...ROLLBACK` (2 kasus sentinel, 4 aktor): tidak mengubah DB 
 |---|---|---|
 | Sebelum commit `c19b164` (8 Jul) | ~42 | 1–9 |
 | Setelah `c19b164` (CHECK 10+11) | 55 | 1–11 |
-| Setelah sesi ini (CHECK 12+13) | **77** | **1–13** |
+| Setelah CHECK 12+13 (9 Jul) | 77 | 1–13 |
+| Setelah CHECK 14 (9 Jul, write-path kasus) | **90** | **1–14** |
 
 ### Validasi Negatif
 
@@ -883,7 +885,67 @@ karena pakai view; eksposur sisa hanya via REST API manual (bukan via portal).
 
 ---
 
-## 14. Backlog Produk — BUKAN Backlog Audit Keamanan
+## 14. Status Sesi 10 Juli 2026 — Forum Kelas & Bug Fix
+
+### 14.1 Commit-Commit Baru Sejak 302a7dd
+
+| Hash | Deskripsi |
+|------|-----------|
+| `f61f8d2` | fix(student): hapus duplikat function `esc`/`fmt` di `student/dashboard.js` (BUG-2) |
+| `68085cc` | fix(db): tambah cast enum di `fn_sync_case`, perbaiki `createCase` 500 (BUG-1) |
+| `45946d1` | fix(student): `renderCases` empty-state tidak update hint text |
+| `24afcc5` | feat(db): tambah skema Forum Kelas (migration awal — 8 tabel, 2 fungsi, 2 trigger, 13 kategori, DROP `parent_messages`) |
+| `794c539` | feat(db): tambah `fn_create_forum_post` + fix `fn_can_read_forum_post` |
+| `b23867c` | feat(guru): tambah fungsi Forum Kelas di `guru/js/api.js` |
+| *(lihat `git log --oneline -3`)* | feat(guru): UI Forum Kelas — `guru/dashboard.html` + `guru/js/dashboard.js` |
+
+Test suite setelah sesi ini: **90/90 ✓ lulus** (14 CHECK top-level — tidak berubah dari pasca-CHECK 14).
+
+### 14.2 Fitur Forum Kelas — Status (BARU)
+
+**Dokumen konsep:** `docs/features/konsep-forum-kelas-final.md` — **WAJIB DIBACA sebelum melanjutkan BUILD UI.** Semua keputusan produk sudah final di dokumen ini.
+
+**Skema database:** ✅ LIVE sejak commit `24afcc5` + `794c539`.
+
+Migration yang applied:
+- `20260710020000_forum_kelas_initial.sql` — 8 tabel baru: `communication_categories`, `guru_wali_assignments`, `bk_class_assignments`, `forum_posts`, `forum_post_subjects`, `forum_post_audience`, `forum_post_acknowledgements`, `forum_post_comments`. Plus 2 fungsi (`fn_create_forum_post`, `fn_can_read_forum_post`), 2 trigger (`trg_forum_post_updated_at`, `trg_forum_audience_freeze`), 13 kategori. DROP `parent_messages` (0 data, tidak pernah diimplementasikan).
+
+**Fungsi API (`guru/js/api.js`):** ✅ Selesai. Fungsi tersedia: `getForumClasses`, `getForumPosts`, `getForumPostComments`, `getForumCategories`, `getForumStudents`, `createForumPost`, `addForumAcknowledgement`, `addForumComment`.
+
+**UI Portal Guru:** ⚠️ SEBAGIAN SELESAI.
+- Tab "Forum Kelas" ada di `guru/dashboard.html` dan `guru/js/dashboard.js`
+- Dropdown kelas: berfungsi via `getForumClasses(userId, academicYear)`
+- Aliran posting dengan tombol ack, komentar, tarik: berfungsi
+- Modal "Buat Posting" dengan pilih siswa/kategori/audiens/catatan: berfungsi
+- **BELUM:** Fitur "Tambah orang tertentu" (`specificUserIds`) ke audience posting — kolom ini ada di `createForumPost()` tapi belum ada UI-nya di modal
+- **BELUM:** Penanganan `is_withdrawn` di sisi DB (kolom belum tentu ada — perlu dicek schema vs yang dipakai di JS)
+
+**UI Portal Siswa:** ❌ BELUM DIBANGUN.
+**UI Portal Ortu:** ❌ BELUM DIBANGUN.
+**Wizard Admin penugasan Guru Wali & BK:** ❌ BELUM DIBANGUN.
+
+**CATATAN PENTING — `getForumClasses()`:** Fungsi ini mengquery `guru_wali_assignments` (filter `guru_user_id`) dan `bk_class_assignments` (filter `bk_user_id`) — nama kolom ini SUDAH BENAR dan cocok dengan skema live (dikonfirmasi via OpenAPI introspection sesi ini). Jangan diubah ke `user_id`.
+
+### 14.3 Backlog Forum Kelas (FORUM-1 s/d FORUM-5)
+
+| ID | Item | Status |
+|----|------|--------|
+| **FORUM-1** | Selesaikan UI "Tambah orang tertentu" di modal buat posting Portal Guru (`specificUserIds` — sudah ada di `createForumPost()`, tinggal bangun UI search-and-add) | ⏳ Pending |
+| **FORUM-2** | Bangun UI Portal Siswa untuk Forum Kelas (baca posting, ack, lihat komentar — siswa tidak bisa komentar per konsep §7.2) | ⏳ Belum dimulai |
+| **FORUM-3** | Bangun UI Portal Ortu untuk Forum Kelas (baca posting, ack, komentar) | ⏳ Belum dimulai |
+| **FORUM-4** | Wizard Admin penugasan Guru Wali dan BK (tabel `guru_wali_assignments`, `bk_class_assignments` sudah ada tapi 0 baris — tidak ada UI admin untuk mengisinya) | ⏳ Belum dimulai |
+| **FORUM-5** | Test end-to-end siklus lengkap: guru posting → siswa/ortu yang relevan bisa baca (perlu FORUM-4 selesai dulu agar ada data Guru Wali/BK untuk diuji) | ⏳ Belum dimulai |
+
+**Audit keamanan Fase 3** — masih ditunda, belum dimulai. Item yang menunggu: 14 fungsi `anon=true`, WAKA_HUMAS/PKL, column-restriction `rls_users_read_staff`.
+
+### 14.4 Fitur yang TIDAK DISENTUH (Keputusan Romo — Sesi Ini)
+
+- **`observations` dan `observation_audience_members`:** dibiarkan apa adanya, tidak ada perubahan skema atau UI di sesi ini
+- **Seluruh fitur existing (Kasus, Observasi, Jurnal, Absensi, PKL, dll.):** tidak berubah kecuali bug fix BUG-1/2 yang sudah tercatat
+
+---
+
+## 15. Backlog Produk — BUKAN Backlog Audit Keamanan
 
 > ⚠️ **PERHATIAN:** Section ini TERPISAH dari backlog Fase 3 di §9.3 yang
 > bersifat keamanan (14 fungsi `anon=true`, column-restriction, WAKA_HUMAS/PKL).

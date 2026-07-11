@@ -30,6 +30,8 @@ import {
     addCaseAudienceMember, removeCaseAudienceMember, searchInternalUsers,
     getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
     registerLoginDevice,
+    getForumPosts, getForumCategories, getForumStudents, createForumPost,
+    addForumAcknowledgement, addForumComment, getForumPostComments, getForumClasses,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 
@@ -245,13 +247,13 @@ const TAB_SHORT = {
     guru: 'Beranda', wali_kelas: 'Wali', bk: 'BK', kaprodi: 'Prodi',
     waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', waka_humas: 'Humas',
     kepsek: 'Monitor', ks_admin: 'Admin',
-    kasus: 'Pembinaan', jurnal: 'Jurnal', observasi: 'Observasi',
+    kasus: 'Pembinaan', jurnal: 'Jurnal', observasi: 'Observasi', forum: 'Forum',
 };
 const TAB_ICON = {
     guru: 'ti-home', wali_kelas: 'ti-users', bk: 'ti-heart-handshake', kaprodi: 'ti-building',
     waka_kesiswaan: 'ti-school', waka_kurikulum: 'ti-book', waka_humas: 'ti-briefcase',
     kepsek: 'ti-chart-line', ks_admin: 'ti-shield-check',
-    kasus: 'ti-alert-triangle', jurnal: 'ti-notebook', observasi: 'ti-eye',
+    kasus: 'ti-alert-triangle', jurnal: 'ti-notebook', observasi: 'ti-eye', forum: 'ti-messages',
 };
 
 function buildTabs() {
@@ -264,6 +266,7 @@ function buildTabs() {
     if (jabatan.includes('kepsek')) tabs.push({ key: 'ks_admin', label: 'Kelola Admin' });
     if (isTeacher) tabs.push({ key: 'observasi', label: 'Observasi Siswa' });
     if (isTeacher) tabs.push({ key: 'jurnal', label: 'Jurnal Mengajar' });
+    tabs.push({ key: 'forum', label: 'Forum Kelas' });
 
     nav.innerHTML = tabs.map(t =>
         `<button class="tab-btn" data-tab="${t.key}">${esc(t.label)}</button>`
@@ -307,6 +310,7 @@ async function loadTabContent(key) {
         case 'kasus':       await initKasusTab(); break;
         case 'jurnal':      await initJurnalTab(); break;
         case 'observasi':   await initObsTab(); break;
+        case 'forum':       await initForumTab(); break;
     }
 }
 
@@ -3142,6 +3146,420 @@ async function loadJurnalList() {
         if (!cached) {
             listEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
         }
+    }
+}
+
+// ─── TAB FORUM ───────────────────────────────────────────────
+
+let _forumClassId          = null;
+let _forumAcademicYear     = null;
+let _forumOffset           = 0;
+let _forumHasMore          = false;
+let _forumTabInit          = false;
+let _forumSelectedStudents = [];
+let _forumSelectedCategory = null;
+let _forumCategories       = [];
+let _forumStudents         = [];
+
+async function initForumTab() {
+    if (_forumTabInit) {
+        await loadForumPosts();
+        return;
+    }
+    _forumTabInit = true;
+
+    const sel = document.getElementById('forum-class-select');
+    sel.innerHTML = '<option value="">Memuat kelas…</option>';
+    try {
+        const classes = await getForumClasses(currentUser.user_id, config.current_academic_year);
+        if (!classes.length) {
+            sel.innerHTML = '<option value="">Tidak ada kelas</option>';
+            document.getElementById('forum-loading').textContent = 'Anda tidak memiliki kelas yang bisa diakses.';
+            return;
+        }
+        sel.innerHTML = classes.map(c =>
+            `<option value="${esc(c.class_id)}">${esc(c.name)}</option>`
+        ).join('');
+        const first = classes[0];
+        _forumClassId      = first.class_id;
+        _forumAcademicYear = config.current_academic_year;
+    } catch (err) {
+        sel.innerHTML = '<option value="">Gagal memuat</option>';
+        document.getElementById('forum-loading').textContent = fe(err);
+        return;
+    }
+
+    sel.addEventListener('change', () => {
+        _forumClassId      = sel.value || null;
+        _forumOffset = 0;
+        loadForumPosts();
+    });
+
+    document.getElementById('btn-create-post').addEventListener('click', openCreatePostModal);
+    document.getElementById('btn-load-more-posts').addEventListener('click', () => loadForumPosts(true));
+    document.getElementById('btn-cancel-post').addEventListener('click', closeCreatePostModal);
+    document.getElementById('modal-create-post').addEventListener('click', e => {
+        if (e.target === e.currentTarget) closeCreatePostModal();
+    });
+    document.getElementById('btn-submit-post').addEventListener('click', submitCreatePost);
+    document.getElementById('forum-audience-select').addEventListener('change', updateAudienceWarning);
+
+    await loadForumPosts();
+}
+
+async function loadForumPosts(append = false) {
+    const loadingEl = document.getElementById('forum-loading');
+    const listEl    = document.getElementById('forum-posts-list');
+    const moreBtn   = document.getElementById('btn-load-more-posts');
+
+    if (!_forumClassId) {
+        loadingEl.textContent = 'Pilih kelas untuk melihat forum.';
+        loadingEl.style.display = 'block';
+        listEl.innerHTML = '';
+        moreBtn.style.display = 'none';
+        return;
+    }
+
+    if (!append) {
+        _forumOffset = 0;
+        listEl.innerHTML = '';
+        loadingEl.textContent = 'Memuat forum…';
+        loadingEl.style.display = 'block';
+    }
+    moreBtn.style.display = 'none';
+
+    const LIMIT = 20;
+    try {
+        const posts = await getForumPosts(
+            _forumClassId, _forumAcademicYear,
+            currentUser.user_id, currentUser.school_id,
+            LIMIT, _forumOffset
+        );
+        loadingEl.style.display = 'none';
+
+        if (!posts.length && !append) {
+            listEl.innerHTML = '<p class="hint">Belum ada posting di forum ini.</p>';
+            return;
+        }
+
+        listEl.insertAdjacentHTML('beforeend', posts.map(renderForumPostCard).join(''));
+        _forumOffset += posts.length;
+        _forumHasMore = posts.length === LIMIT;
+        moreBtn.style.display = _forumHasMore ? 'inline-block' : 'none';
+
+        wireForumCards(listEl, posts);
+    } catch (err) {
+        loadingEl.textContent = fe(err);
+        loadingEl.style.display = 'block';
+    }
+}
+
+function renderForumPostCard(post) {
+    const isWithdrawn = !!post.is_withdrawn;
+    const isAuthor    = post.author_user_id === currentUser.user_id;
+    const authorName  = post.author?.full_name ?? '—';
+    const ts = post.created_at
+        ? new Date(post.created_at).toLocaleString('id-ID', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
+        : '—';
+    const edited = post.updated_at && post.updated_at !== post.created_at
+        ? ` <span style="color:var(--color-text-muted);font-size:11px">(diedit)</span>` : '';
+
+    const subjects = (post.subjects ?? []).map(s => s.student?.full_name).filter(Boolean);
+    const catLabel  = post.category?.label_sekolah ?? null;
+    const catPol    = post.category?.polarity ?? null;
+    const catColor  = catPol === 'POSITIVE' ? 'var(--color-success,#4ade80)'
+                    : catPol === 'NEGATIVE' ? 'var(--color-danger,#f87171)'
+                    : 'var(--color-info,#60a5fa)';
+
+    const ackCount = (post.acknowledgements ?? []).length;
+    const cmtCount = (post.comments ?? []).length;
+    const hasAcked = (post.acknowledgements ?? []).some(a => a.user_id === currentUser.user_id);
+
+    const bodyHtml = isWithdrawn
+        ? `<p style="color:var(--color-text-muted);font-style:italic;margin:8px 0">[Posting ini telah ditarik]</p>`
+        : `<p style="margin:8px 0;white-space:pre-wrap;color:var(--color-text)">${esc(post.body ?? '')}</p>`;
+
+    return `
+    <div class="forum-post-card" data-post-id="${esc(post.post_id)}"
+         data-author-id="${esc(post.author_user_id ?? '')}"
+         data-withdrawn="${isWithdrawn ? '1' : '0'}"
+         style="border-bottom:0.5px solid var(--color-border);padding:14px 0${isWithdrawn ? ';opacity:.6' : ''}">
+
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:4px">
+            <strong style="font-size:14px">${esc(authorName)}</strong>
+            <span style="font-size:11px;color:var(--color-text-muted)">${ts}${edited}</span>
+        </div>
+
+        ${subjects.length ? `<p style="font-size:12px;color:var(--color-text-muted);margin:0 0 4px">Siswa: ${esc(subjects.join(', '))}</p>` : ''}
+        ${catLabel ? `<span style="font-size:11px;padding:2px 8px;border-radius:20px;color:${catColor};background:var(--color-bg-alt,#2a3145);margin-bottom:6px;display:inline-block">${esc(catLabel)}</span>` : ''}
+
+        ${bodyHtml}
+
+        ${!isWithdrawn ? `
+        <div class="forum-post-actions" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <button class="btn btn-sm ${hasAcked ? 'btn-primary' : 'btn-secondary'} btn-ack"
+                    style="font-size:12px" data-acked="${hasAcked ? '1' : '0'}">
+                ✓ Sudah baca${ackCount > 0 ? ` (${ackCount})` : ''}
+            </button>
+            <button class="btn btn-sm btn-secondary btn-comments" style="font-size:12px">
+                💬 Komentar${cmtCount > 0 ? ` (${cmtCount})` : ''}
+            </button>
+            ${isAuthor ? `<button class="btn btn-sm btn-secondary btn-withdraw" style="font-size:12px;color:var(--color-danger)">Tarik posting</button>` : ''}
+        </div>
+        <div class="forum-comments-panel" style="display:none;margin-top:12px;padding:10px;background:var(--color-bg-alt,#2a3145);border-radius:var(--radius)">
+            <div class="forum-comments-list" style="margin-bottom:8px;font-size:13px"></div>
+            <div style="display:flex;gap:6px">
+                <input type="text" class="input forum-comment-input" placeholder="Tulis komentar…" style="flex:1;font-size:13px">
+                <button class="btn btn-primary btn-sm btn-send-comment">Kirim</button>
+            </div>
+            <p class="forum-comment-err" style="font-size:12px;color:var(--color-danger);margin:4px 0 0;display:none"></p>
+        </div>
+        ` : ''}
+    </div>`;
+}
+
+function wireForumCards(containerEl, posts) {
+    containerEl.querySelectorAll('.forum-post-card:not([data-wired])').forEach(card => {
+        card.dataset.wired = '1';
+        const postId      = card.dataset.postId;
+        const isWithdrawn = card.dataset.withdrawn === '1';
+        if (isWithdrawn) return;
+
+        const ackBtn = card.querySelector('.btn-ack');
+        if (ackBtn) {
+            ackBtn.addEventListener('click', async () => {
+                if (ackBtn.dataset.acked === '1') return;
+                ackBtn.disabled = true;
+                try {
+                    await addForumAcknowledgement(postId, currentUser.user_id, currentUser.school_id);
+                    ackBtn.dataset.acked = '1';
+                    ackBtn.classList.replace('btn-secondary', 'btn-primary');
+                    const cur = parseInt(ackBtn.textContent.match(/\d+/)?.[0] ?? '0', 10);
+                    ackBtn.textContent = `✓ Sudah baca (${cur + 1})`;
+                } catch (err) {
+                    alert(fe(err));
+                } finally {
+                    ackBtn.disabled = false;
+                }
+            });
+        }
+
+        const cmtBtn   = card.querySelector('.btn-comments');
+        const cmtPanel = card.querySelector('.forum-comments-panel');
+        if (cmtBtn && cmtPanel) {
+            cmtBtn.addEventListener('click', async () => {
+                const open = cmtPanel.style.display !== 'none';
+                cmtPanel.style.display = open ? 'none' : 'block';
+                if (!open) await loadForumComments(postId, cmtPanel);
+            });
+        }
+
+        const sendBtn  = card.querySelector('.btn-send-comment');
+        const cmtInput = card.querySelector('.forum-comment-input');
+        const cmtErr   = card.querySelector('.forum-comment-err');
+        if (sendBtn && cmtInput) {
+            sendBtn.addEventListener('click', async () => {
+                const body = cmtInput.value.trim();
+                if (!body) return;
+                sendBtn.disabled = true; sendBtn.textContent = '…';
+                cmtErr.style.display = 'none';
+                try {
+                    await addForumComment(postId, body, currentUser.user_id, currentUser.school_id);
+                    cmtInput.value = '';
+                    await loadForumComments(postId, cmtPanel);
+                } catch (err) {
+                    cmtErr.textContent = fe(err, 's');
+                    cmtErr.style.display = 'block';
+                } finally {
+                    sendBtn.disabled = false; sendBtn.textContent = 'Kirim';
+                }
+            });
+        }
+
+        const wdBtn = card.querySelector('.btn-withdraw');
+        if (wdBtn) {
+            wdBtn.addEventListener('click', async () => {
+                if (!confirm('Tarik posting ini? Konten akan disembunyikan dari pembaca.')) return;
+                wdBtn.disabled = true;
+                try {
+                    await supabase.from('forum_posts')
+                        .update({ is_withdrawn: true })
+                        .eq('post_id', postId)
+                        .eq('author_user_id', currentUser.user_id);
+                    _forumOffset = 0;
+                    await loadForumPosts();
+                } catch (err) {
+                    alert(fe(err, 's'));
+                    wdBtn.disabled = false;
+                }
+            });
+        }
+    });
+}
+
+async function loadForumComments(postId, panel) {
+    const listEl = panel.querySelector('.forum-comments-list');
+    listEl.innerHTML = '<span style="color:var(--color-text-muted)">Memuat…</span>';
+    try {
+        const comments = await getForumPostComments(postId);
+        if (!comments.length) {
+            listEl.innerHTML = '<span style="color:var(--color-text-muted)">Belum ada komentar.</span>';
+            return;
+        }
+        listEl.innerHTML = comments.map(c => {
+            const ts = new Date(c.created_at).toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+            return `<div style="margin-bottom:8px;border-bottom:0.5px solid var(--color-border);padding-bottom:8px">
+                <span style="font-weight:600;font-size:12px">${esc(c.author?.full_name ?? '—')}</span>
+                <span style="font-size:11px;color:var(--color-text-muted);margin-left:6px">${ts}</span>
+                <p style="margin:4px 0 0;font-size:13px;white-space:pre-wrap">${esc(c.body)}</p>
+            </div>`;
+        }).join('');
+    } catch (err) {
+        listEl.innerHTML = `<span style="color:var(--color-danger)">${fe(err)}</span>`;
+    }
+}
+
+async function openCreatePostModal() {
+    _forumSelectedStudents = [];
+    _forumSelectedCategory = null;
+
+    const modal = document.getElementById('modal-create-post');
+    modal.style.display = 'flex';
+    document.getElementById('forum-post-content').value = '';
+    document.getElementById('forum-post-error').style.display = 'none';
+    document.getElementById('forum-category-section').style.display = 'none';
+    document.getElementById('forum-audience-warning').style.display = 'none';
+    document.getElementById('forum-audience-select').value = 'STAF_SAJA';
+
+    const studentListEl = document.getElementById('forum-student-list');
+    studentListEl.innerHTML = '<p class="hint" style="margin:0">Memuat…</p>';
+    try {
+        _forumStudents = await getForumStudents(_forumClassId, _forumAcademicYear);
+        if (!_forumStudents.length) {
+            studentListEl.innerHTML = '<p class="hint" style="margin:0">Tidak ada siswa di kelas ini.</p>';
+        } else {
+            renderForumStudentCheckboxes();
+        }
+    } catch (err) {
+        studentListEl.innerHTML = `<p style="color:var(--color-danger);margin:0;font-size:13px">${fe(err)}</p>`;
+    }
+
+    if (!_forumCategories.length) {
+        try { _forumCategories = await getForumCategories(); } catch { /* non-fatal */ }
+    }
+    renderForumCategoryGrid();
+}
+
+function closeCreatePostModal() {
+    document.getElementById('modal-create-post').style.display = 'none';
+}
+
+function renderForumStudentCheckboxes() {
+    const el = document.getElementById('forum-student-list');
+    el.innerHTML = _forumStudents.map(s =>
+        `<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:2px 0">
+            <input type="checkbox" class="forum-student-cb" value="${esc(s.student_id)}"
+                   style="width:15px;height:15px;cursor:pointer">
+            ${esc(s.full_name)}<span style="color:var(--color-text-muted);font-size:11px"> ${esc(s.nis ?? '')}</span>
+        </label>`
+    ).join('');
+
+    el.querySelectorAll('.forum-student-cb').forEach(cb => {
+        cb.addEventListener('change', () => {
+            _forumSelectedStudents = [...el.querySelectorAll('.forum-student-cb:checked')].map(c => c.value);
+            const hasSubjects = _forumSelectedStudents.length > 0;
+            document.getElementById('forum-category-section').style.display = hasSubjects ? 'block' : 'none';
+            if (!hasSubjects) {
+                _forumSelectedCategory = null;
+                renderForumCategoryGrid();
+            }
+            const audienceSel = document.getElementById('forum-audience-select');
+            const subjOpt = audienceSel.querySelector('option[value="ORTU_SISWA_SUBJEK"]');
+            if (subjOpt) subjOpt.disabled = !hasSubjects;
+            if (!hasSubjects && audienceSel.value === 'ORTU_SISWA_SUBJEK') {
+                audienceSel.value = 'STAF_SAJA';
+            }
+            updateAudienceWarning();
+        });
+    });
+}
+
+function renderForumCategoryGrid() {
+    const grid = document.getElementById('forum-category-grid');
+    if (!_forumCategories.length) { grid.innerHTML = ''; return; }
+    grid.innerHTML = _forumCategories.map(cat => {
+        const color = cat.polarity === 'POSITIVE' ? 'var(--color-success,#4ade80)'
+                    : cat.polarity === 'NEGATIVE' ? 'var(--color-danger,#f87171)'
+                    : 'var(--color-info,#60a5fa)';
+        const sel = _forumSelectedCategory === cat.category_code;
+        return `<button type="button" class="btn btn-sm forum-cat-btn ${sel ? 'btn-primary' : 'btn-secondary'}"
+                        data-code="${esc(cat.category_code)}"
+                        style="font-size:12px;border-color:${color};${sel ? `background:${color};color:#fff` : `color:${color}`}">
+                    ${esc(cat.label_sekolah)}
+                </button>`;
+    }).join('');
+
+    grid.querySelectorAll('.forum-cat-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const code = btn.dataset.code;
+            _forumSelectedCategory = _forumSelectedCategory === code ? null : code;
+            renderForumCategoryGrid();
+        });
+    });
+}
+
+function updateAudienceWarning() {
+    const val    = document.getElementById('forum-audience-select').value;
+    const warnEl = document.getElementById('forum-audience-warning');
+    if (val === 'ORTU_SISWA_KELAS') {
+        warnEl.textContent = 'Posting ini akan terlihat oleh semua siswa dan orang tua di kelas ini.';
+        warnEl.style.display = 'block';
+    } else if (val === 'PUBLIK') {
+        warnEl.textContent = 'Posting ini terlihat oleh seluruh anggota forum, termasuk siswa dan semua orang tua.';
+        warnEl.style.display = 'block';
+    } else {
+        warnEl.style.display = 'none';
+    }
+}
+
+async function submitCreatePost() {
+    const errEl     = document.getElementById('forum-post-error');
+    const submitBtn = document.getElementById('btn-submit-post');
+    const content   = document.getElementById('forum-post-content').value.trim();
+    const audience  = document.getElementById('forum-audience-select').value;
+
+    errEl.style.display = 'none';
+
+    if (!content && !_forumSelectedStudents.length) {
+        errEl.textContent = 'Isi catatan atau pilih setidaknya satu siswa.';
+        errEl.style.display = 'block';
+        return;
+    }
+    if (audience === 'ORTU_SISWA_SUBJEK' && !_forumSelectedStudents.length) {
+        errEl.textContent = 'Audiens "Orang tua & siswa yang dibahas" memerlukan minimal satu siswa dipilih.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Menyimpan…';
+    try {
+        await createForumPost(
+            _forumClassId, _forumAcademicYear,
+            content || null,
+            _forumSelectedCategory,
+            _forumSelectedStudents,
+            audience
+        );
+        closeCreatePostModal();
+        _forumOffset = 0;
+        await loadForumPosts();
+    } catch (err) {
+        errEl.textContent = fe(err, 's');
+        errEl.style.display = 'block';
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Simpan';
     }
 }
 
