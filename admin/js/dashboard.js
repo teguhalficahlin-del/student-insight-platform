@@ -906,8 +906,8 @@ async function renderStudentsPanel() {
     ]);
 
     // Fetch semua kelas + enrollment tahun ajaran aktif sekaligus
-    const [{ data: allClasses }, { data: enrollments }, { data: pendingPwUsers }] = await Promise.all([
-        supabase.from('classes').select('class_id, name, grade_level')
+    const [{ data: allClasses }, { data: enrollments }, { data: pendingPwUsers }, programs] = await Promise.all([
+        supabase.from('classes').select('class_id, name, grade_level, program_id')
             .order('grade_level').order('name'),
         supabase.from('class_enrollments')
             .select('class_id, student:students!inner(student_id, full_name, nis, user_id)')
@@ -915,7 +915,11 @@ async function renderStudentsPanel() {
             .is('withdrawn_at', null)
             .eq('students.student_status', 'AKTIF'),
         supabase.from('users').select('user_id').eq('role_type', 'SISWA').eq('must_change_password', true),
+        getPrograms(),
     ]);
+    const programNameById = new Map(
+        (programs ?? []).map(p => [p.program_id, p.name])
+    );
     const pendingPwSet = new Set((pendingPwUsers ?? []).map(u => u.user_id));
 
     // classId → [siswa aktif] terurut per nama
@@ -927,16 +931,54 @@ async function renderStudentsPanel() {
     for (const list of classMap.values()) list.sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
 
     const totalAktif = [...classMap.values()].reduce((s, l) => s + l.length, 0);
-    const aktifHtml  = renderClassAccordion(
-        allClasses ?? [],
-        classMap,
-        ['Nama', 'NIS', 'Aksi'],
-        s => `<tr><td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td><td>${s.user_id
+    // Kelompokkan kelas per program → nested accordion
+    const byProgram = new Map();
+    (allClasses ?? []).forEach(cls => {
+        const progName = programNameById.get(cls.program_id)
+            ?? 'Tanpa Program';
+        if (!byProgram.has(progName)) byProgram.set(progName, []);
+        byProgram.get(progName).push(cls);
+    });
+
+    const rowOf = s => `<tr>
+        <td>${esc(s.full_name)}</td>
+        <td>${esc(s.nis)}</td>
+        <td>${s.user_id
             ? (pendingPwSet.has(s.user_id)
-                ? `<button class="btn btn-sm btn-secondary" disabled style="font-size:11px;padding:3px 8px;opacity:0.6" title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
-                : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${s.user_id}" data-nama="${esc(s.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button>`)
-            : '<span class="hint" style="font-size:11px">belum ada akun</span>'}</td></tr>`,
-    );
+                ? `<button class="btn btn-sm btn-secondary" disabled
+                    style="font-size:11px;padding:3px 8px;opacity:0.6"
+                    title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
+                : `<button class="btn btn-sm btn-secondary user-reset-pw-btn"
+                    data-user-id="${s.user_id}"
+                    data-nama="${esc(s.full_name)}"
+                    style="font-size:11px;padding:3px 8px">Reset PW</button>`)
+            : '<span class="hint" style="font-size:11px">belum ada akun</span>'}
+        </td></tr>`;
+
+    const progNames = [...byProgram.keys()].sort((a, b) => {
+        if (/^Tanpa/i.test(a)) return 1;
+        if (/^Tanpa/i.test(b)) return -1;
+        return a.localeCompare(b, 'id');
+    });
+
+    const aktifHtml = progNames.map(progName => {
+        const progClasses = byProgram.get(progName);
+        const progTotal   = progClasses.reduce(
+            (s, cls) => s + (classMap.get(cls.class_id)?.length ?? 0), 0
+        );
+        const classHtml = renderClassAccordion(
+            progClasses,
+            classMap,
+            ['Nama', 'NIS', 'Aksi'],
+            rowOf,
+        );
+        return `<details style="margin-bottom:8px">
+            <summary style="cursor:pointer;font-weight:600">
+                ${esc(progName)} (${progTotal})
+            </summary>
+            <div style="padding:4px 0 4px 16px">${classHtml}</div>
+        </details>`;
+    }).join('');
 
     const provisionHtml = `
         <div class="card" style="border:1px solid var(--color-border, #dde3e9); border-radius:12px; padding:16px; margin-bottom:16px">
