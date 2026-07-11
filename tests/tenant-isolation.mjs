@@ -1417,6 +1417,93 @@ async function main() {
             log.fail(`CHECK 14 idempotency: ${c14idem[0]?.sentinel_cases} baris sentinel masih ada — ROLLBACK gagal`);
     }
 
+    // ── CHECK 15: Forum Kelas RLS isolation ──────────────────────
+    // Verifikasi: siswa hanya bisa baca posting forum kelasnya sendiri.
+    // - F1: siswa X AKL (Andi Kurniawan) bisa baca posting X AKL → COUNT = 1
+    // - F2: siswa kelas lain (Nanda Fauzan / XI TKRO) tidak bisa baca → COUNT = 0
+    // - F3: anon tidak bisa baca forum_posts → COUNT = 0
+    //
+    // Semua cek via BEGIN...ROLLBACK (DB tidak berubah).
+    log.head('CHECK 15 — Forum Kelas RLS isolation: siswa hanya bisa baca posting forum kelasnya sendiri, anon selalu 0');
+
+    // auth_user_id Andi Kurniawan (siswa X AKL, smkhr)
+    const ANDI_AUTH   = '85addd98-9ef9-4740-8ac9-170e984ace27';
+    // auth_user_id Nanda Fauzan (siswa XI TKRO, smkhr — kelas lain)
+    const NANDA_AUTH  = 'f99ef21a-abff-4afa-814a-2861181f1100';
+    // post_id posting X AKL
+    const FORUM_POST  = 'a47dcc34-8ba4-4e67-87b0-5cc76062d4b7';
+    const SMKHR       = 'cc1e152e-5425-4128-9ea5-d0f5c1d55df9';
+
+    // F1: Andi (siswa X AKL) bisa baca posting X AKL
+    let c15f1 = false, c15f1err = '';
+    try {
+        const r = await mgmtQuery(`
+            BEGIN;
+            SET LOCAL ROLE authenticated;
+            SELECT set_config('request.jwt.claims',
+                '{"sub":"${ANDI_AUTH}","role":"authenticated"}', true);
+            SELECT set_config('request.jwt.claim.sub', '${ANDI_AUTH}', true);
+            SELECT COUNT(*)::int AS cnt
+            FROM forum_posts
+            WHERE post_id = '${FORUM_POST}'
+              AND school_id = '${SMKHR}';
+            ROLLBACK;`);
+        c15f1 = Array.isArray(r) && r.length > 0 && r[0]?.cnt === 1;
+        if (!c15f1) c15f1err = `cnt=${r[0]?.cnt ?? 'null'}`;
+    } catch (e) { c15f1err = e.message; }
+    if (c15f1)
+        log.pass('F1: Andi Kurniawan (X AKL) bisa baca posting forum X AKL (cnt=1)');
+    else
+        log.fail(`F1: Andi Kurniawan (X AKL) gagal baca posting forum X AKL${c15f1err ? ': ' + c15f1err.slice(0, 120) : ''}`);
+
+    // F2: Nanda (siswa XI TKRO) tidak bisa baca posting X AKL
+    let c15f2 = false, c15f2err = '';
+    try {
+        const r = await mgmtQuery(`
+            BEGIN;
+            SET LOCAL ROLE authenticated;
+            SELECT set_config('request.jwt.claims',
+                '{"sub":"${NANDA_AUTH}","role":"authenticated"}', true);
+            SELECT set_config('request.jwt.claim.sub', '${NANDA_AUTH}', true);
+            SELECT COUNT(*)::int AS cnt
+            FROM forum_posts
+            WHERE post_id = '${FORUM_POST}'
+              AND school_id = '${SMKHR}';
+            ROLLBACK;`);
+        c15f2 = Array.isArray(r) && r.length > 0 && r[0]?.cnt === 0;
+        if (!c15f2) c15f2err = `cnt=${r[0]?.cnt ?? 'null'}`;
+    } catch (e) { c15f2err = e.message; }
+    if (c15f2)
+        log.pass('F2: Nanda Fauzan (XI TKRO) tidak bisa baca posting forum X AKL (cnt=0)');
+    else
+        log.fail(`F2: Nanda Fauzan (XI TKRO) bisa baca posting forum kelas lain — ISOLATION BREACH${c15f2err ? ': ' + c15f2err.slice(0, 120) : ''}`);
+
+    // F3: anon tidak bisa baca forum_posts
+    // mgmtQuery melempar exception 42501 ketika anon ditolak — itu perilaku BENAR.
+    let c15f3 = false, c15f3err = '';
+    try {
+        const r = await mgmtQuery(`
+            BEGIN;
+            SET LOCAL ROLE anon;
+            SELECT COUNT(*)::int AS cnt
+            FROM forum_posts
+            WHERE school_id = '${SMKHR}';
+            ROLLBACK;`);
+        c15f3 = Array.isArray(r) && r.length > 0 && r[0]?.cnt === 0;
+        if (!c15f3) c15f3err = `cnt=${r[0]?.cnt ?? 'null'}`;
+    } catch (e) {
+        // 42501 = permission denied → anon ditolak = BENAR
+        if (e.message.includes('42501') || e.message.includes('permission denied')) {
+            c15f3 = true;
+        } else {
+            c15f3err = e.message;
+        }
+    }
+    if (c15f3)
+        log.pass('F3: anon tidak bisa baca forum_posts (ditolak 42501 / cnt=0)');
+    else
+        log.fail(`F3: anon bisa baca forum_posts — EXPOSURE${c15f3err ? ': ' + c15f3err.slice(0, 120) : ''}`);
+
     // ── Ringkasan ────────────────────────────────────────────────
     console.log(`\n${'='.repeat(52)}`);
     if (failures === 0) {
