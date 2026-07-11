@@ -1158,6 +1158,22 @@ export async function getForumStudents(classId, academicYear) {
         .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
 }
 
+export async function getForumMemberDetails(classId, academicYear) {
+    const { data, error } = await supabase.rpc(
+        'fn_get_forum_member_details',
+        {
+            p_class_id:      classId,
+            p_academic_year: academicYear,
+        }
+    );
+    if (error) throw error;
+    return (data ?? []).map(r => ({
+        user_id:   r.user_id,
+        full_name: r.full_name,
+        role_type: r.role_type,
+    }));
+}
+
 export async function createForumPost(
     classId, academicYear, content,
     categoryCode, subjectStudentIds, audienceType,

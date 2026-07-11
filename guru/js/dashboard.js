@@ -3158,6 +3158,8 @@ let _forumHasMore          = false;
 let _forumTabInit          = false;
 let _forumSelectedStudents = [];
 let _forumSelectedCategory = null;
+let _forumAllMembers   = [];   // cache kandidat picker orang tertentu
+let _forumSpecificUsers = [];  // [{user_id, full_name, role_type}] dipilih
 let _forumCategories       = [];
 let _forumStudents         = [];
 
@@ -3420,8 +3422,9 @@ async function loadForumComments(postId, panel) {
 }
 
 async function openCreatePostModal() {
-    _forumSelectedStudents = [];
-    _forumSelectedCategory = null;
+    _forumSelectedStudents  = [];
+    _forumSelectedCategory  = null;
+    _forumSpecificUsers     = [];
 
     const modal = document.getElementById('modal-create-post');
     modal.style.display = 'flex';
@@ -3448,6 +3451,120 @@ async function openCreatePostModal() {
         try { _forumCategories = await getForumCategories(); } catch { /* non-fatal */ }
     }
     renderForumCategoryGrid();
+
+    // Load kandidat picker orang tertentu (sekali per buka modal)
+    _forumAllMembers = [];
+    renderSpecificChips();
+    initForumSpecificPicker();
+    try {
+        _forumAllMembers = await getForumMemberDetails(
+            _forumClassId, _forumAcademicYear
+        );
+    } catch { /* non-fatal: picker tetap muncul, hasil kosong */ }
+}
+
+// ─── Forum: picker orang tertentu ────────────────────────
+
+function renderSpecificChips() {
+    const chipsEl = document.getElementById('forum-specific-chips');
+    if (!chipsEl) return;
+    if (!_forumSpecificUsers.length) {
+        chipsEl.innerHTML = '';
+        return;
+    }
+    chipsEl.innerHTML = _forumSpecificUsers.map(u => `
+        <span style="display:inline-flex;align-items:center;gap:4px;
+                     background:var(--color-primary-subtle,#eff6ff);
+                     color:var(--color-primary,#2563eb);
+                     border:1px solid var(--color-primary-light,#bfdbfe);
+                     border-radius:999px;padding:2px 10px 2px 8px;
+                     font-size:13px;line-height:1.4">
+            ${esc(u.full_name)}
+            <button type="button"
+                    data-uid="${esc(u.user_id)}"
+                    style="background:none;border:none;cursor:pointer;
+                           color:inherit;padding:0;font-size:15px;
+                           line-height:1;margin-left:2px"
+                    aria-label="Hapus ${esc(u.full_name)}">×</button>
+        </span>`).join('');
+    chipsEl.querySelectorAll('button[data-uid]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            _forumSpecificUsers = _forumSpecificUsers
+                .filter(u => u.user_id !== btn.dataset.uid);
+            renderSpecificChips();
+        });
+    });
+}
+
+function initForumSpecificPicker() {
+    const searchEl    = document.getElementById('forum-specific-search');
+    const dropdownEl  = document.getElementById('forum-specific-dropdown');
+    if (!searchEl || !dropdownEl) return;
+
+    // Reset
+    searchEl.value   = '';
+    dropdownEl.style.display = 'none';
+    dropdownEl.innerHTML     = '';
+
+    searchEl.addEventListener('input', () => {
+        const q = searchEl.value.trim().toLowerCase();
+        if (q.length < 1) {
+            dropdownEl.style.display = 'none';
+            dropdownEl.innerHTML = '';
+            return;
+        }
+        const alreadyIds = new Set(_forumSpecificUsers.map(u => u.user_id));
+        const matches = _forumAllMembers.filter(m =>
+            !alreadyIds.has(m.user_id) &&
+            m.full_name.toLowerCase().includes(q)
+        );
+        if (!matches.length) {
+            dropdownEl.innerHTML =
+                '<div style="padding:10px 12px;font-size:13px;' +
+                'color:var(--color-text-muted)">Tidak ditemukan.</div>';
+            dropdownEl.style.display = 'block';
+            return;
+        }
+        dropdownEl.innerHTML = matches.slice(0, 10).map(m => `
+            <div data-uid="${esc(m.user_id)}"
+                 data-name="${esc(m.full_name)}"
+                 data-role="${esc(m.role_type)}"
+                 style="padding:8px 12px;cursor:pointer;font-size:13px;
+                        border-bottom:1px solid var(--color-border-subtle,
+                        var(--color-border))">
+                <span style="font-weight:500">${esc(m.full_name)}</span>
+                <span style="color:var(--color-text-muted);
+                             margin-left:6px;font-size:11px">
+                    ${esc(m.role_type)}
+                </span>
+            </div>`).join('');
+        dropdownEl.style.display = 'block';
+        dropdownEl.querySelectorAll('div[data-uid]').forEach(item => {
+            item.addEventListener('mouseenter', () =>
+                item.style.background = 'var(--color-hover,#f1f5f9)');
+            item.addEventListener('mouseleave', () =>
+                item.style.background = '');
+            item.addEventListener('click', () => {
+                _forumSpecificUsers.push({
+                    user_id:   item.dataset.uid,
+                    full_name: item.dataset.name,
+                    role_type: item.dataset.role,
+                });
+                searchEl.value           = '';
+                dropdownEl.style.display = 'none';
+                dropdownEl.innerHTML     = '';
+                renderSpecificChips();
+            });
+        });
+    });
+
+    // Tutup dropdown jika klik di luar
+    document.addEventListener('click', function closeDrop(e) {
+        if (!searchEl.contains(e.target) &&
+            !dropdownEl.contains(e.target)) {
+            dropdownEl.style.display = 'none';
+        }
+    }, { once: true, capture: false });
 }
 
 function closeCreatePostModal() {
@@ -3549,7 +3666,8 @@ async function submitCreatePost() {
             content || null,
             _forumSelectedCategory,
             _forumSelectedStudents,
-            audience
+            audience,
+            _forumSpecificUsers.map(u => u.user_id)
         );
         closeCreatePostModal();
         _forumOffset = 0;
