@@ -22,6 +22,10 @@ import {
     getUnreadNotifCount,
     getRecentNotifications,
     markNotificationsRead,
+    getMyChildren,
+    getForumPosts,
+    addForumAck,
+    addForumComment,
 } from './api.js';
 
 const portalTitle    = document.getElementById('portal-title');
@@ -60,6 +64,7 @@ const obsDateEnd     = document.getElementById('obs-date-end');
 const btnObsFilter   = document.getElementById('btn-obs-filter');
 const notifBellBtn   = document.getElementById('notif-bell-btn');
 const notifDropdown  = document.getElementById('notif-dropdown');
+const sectionForum   = document.getElementById('section-forum');
 let _notifPollTimer  = null;
 
 let currentUser = null;
@@ -186,10 +191,12 @@ async function loadChildData(index) {
     sectionAtt.style.display    = isInactive ? 'none' : 'block';
     sectionObs.style.display    = 'block';
     sectionCases.style.display  = 'block';
+    sectionForum.style.display  = 'block';
 
     const tasks = [
         loadObservations(child.student_id),
         loadCases(child.student_id),
+        initForumSection(),
     ];
     if (isPkl)     tasks.push(loadPkl(child.student_id));
     if (!isPkl && !isInactive) tasks.push(loadSchedule(child.class_id), loadAttendance(child.student_id));
@@ -552,5 +559,253 @@ logoutBtn.addEventListener('click', async () => {
     await logout();
     window.location.href = getLoginUrl();
 });
+
+// ─── Forum Kelas ──────────────────────────────────────────────
+let forumChildren      = [];
+let forumSelectedChild = null;
+let forumOffset        = 0;
+let forumHasMore       = false;
+let forumInitDone      = false;
+
+const FORUM_LIMIT = 20;
+
+async function initForumSection() {
+    if (forumInitDone) {
+        await loadForumPosts();
+        return;
+    }
+    forumInitDone = true;
+
+    const loadingEl2 = document.getElementById('forum-loading');
+    const selectEl   = document.getElementById('forum-child-select');
+    const listEl     = document.getElementById('forum-posts-list');
+
+    loadingEl2.textContent = 'Memuat data anak…';
+    loadingEl2.style.display = 'block';
+    listEl.innerHTML = '';
+
+    try {
+        forumChildren = await getMyChildren();
+    } catch (err) {
+        loadingEl2.textContent = `Gagal memuat data anak. ${esc(fe(err))}`;
+        return;
+    }
+
+    if (!forumChildren.length) {
+        selectEl.innerHTML = '<option value="">Tidak ada data anak terdaftar</option>';
+        loadingEl2.textContent = 'Tidak ada data anak terdaftar.';
+        return;
+    }
+
+    selectEl.innerHTML = forumChildren.map((c, i) =>
+        `<option value="${i}">${esc(c.full_name)}${c.class_name ? ' — ' + esc(c.class_name) : ''}</option>`
+    ).join('');
+
+    forumSelectedChild = forumChildren[0];
+
+    selectEl.addEventListener('change', async () => {
+        const idx = Number(selectEl.value);
+        forumSelectedChild = forumChildren[idx] ?? null;
+        forumOffset = 0;
+        await loadForumPosts();
+    });
+
+    document.getElementById('btn-load-more-forum')?.addEventListener('click', () => loadForumPosts(true));
+
+    await loadForumPosts();
+}
+
+async function loadForumPosts(loadMore = false) {
+    const loadingEl2 = document.getElementById('forum-loading');
+    const listEl     = document.getElementById('forum-posts-list');
+    const btnMore    = document.getElementById('btn-load-more-forum');
+
+    if (!forumSelectedChild) {
+        loadingEl2.textContent = 'Pilih anak untuk melihat forum kelasnya.';
+        loadingEl2.style.display = 'block';
+        return;
+    }
+    if (!forumSelectedChild.class_id) {
+        loadingEl2.textContent = 'Anak belum terdaftar di kelas pada tahun ajaran ini.';
+        loadingEl2.style.display = 'block';
+        listEl.innerHTML = '';
+        if (btnMore) btnMore.style.display = 'none';
+        return;
+    }
+
+    if (!loadMore) {
+        forumOffset = 0;
+        listEl.innerHTML = '';
+    }
+
+    loadingEl2.textContent = 'Memuat…';
+    loadingEl2.style.display = 'block';
+
+    try {
+        const posts = await getForumPosts(
+            forumSelectedChild.class_id,
+            forumSelectedChild.academic_year,
+            currentUser.user_id,
+            currentUser.school_id,
+            FORUM_LIMIT,
+            forumOffset
+        );
+
+        loadingEl2.style.display = 'none';
+        forumHasMore = posts.length === FORUM_LIMIT;
+        forumOffset += posts.length;
+
+        if (!loadMore && posts.length === 0) {
+            listEl.innerHTML = '<p class="hint">Belum ada posting forum untuk kelas ini.</p>';
+            if (btnMore) btnMore.style.display = 'none';
+            return;
+        }
+
+        posts.forEach(p => listEl.appendChild(renderForumCardParent(p)));
+
+        if (btnMore) btnMore.style.display = forumHasMore ? 'block' : 'none';
+    } catch (err) {
+        loadingEl2.textContent = `Gagal memuat forum. ${esc(fe(err))}`;
+    }
+}
+
+function renderForumCardParent(p) {
+    const card = document.createElement('div');
+    card.className = 'section-card';
+    card.style.marginBottom = '12px';
+
+    // Badge kategori
+    let badgeHtml = '';
+    if (p.category) {
+        const color = p.category.polarity === 'positive'
+            ? 'color:var(--color-success);background:rgba(74,222,128,0.15)'
+            : p.category.polarity === 'concern'
+            ? 'color:var(--color-danger);background:rgba(248,113,113,0.15)'
+            : 'color:#e2e8f0;background:rgba(148,163,184,0.25)';
+        badgeHtml = `<span style="font-size:0.75rem;padding:2px 8px;border-radius:99px;${color}">${esc(p.category.label_sekolah)}</span>`;
+    }
+
+    // Chip nama siswa subjek
+    let subjectsHtml = '';
+    if (p.subjects?.length) {
+        const chips = p.subjects
+            .filter(s => s.student)
+            .map(s => `<span style="font-size:0.75rem;background:var(--color-surface);color:var(--color-text);border-radius:99px;padding:2px 8px">${esc(s.student.full_name)}</span>`)
+            .join(' ');
+        if (chips) subjectsHtml = `<div style="margin:6px 0;display:flex;flex-wrap:wrap;gap:4px">${chips}</div>`;
+    }
+
+    // Acknowledgement
+    const alreadyAck = (p.acknowledgements ?? []).some(a => a.user_id === currentUser.user_id);
+    const ackBtnId   = `ack-${p.post_id}`;
+    const ackHtml    = alreadyAck
+        ? `<button class="btn btn-secondary" disabled style="font-size:0.8rem;padding:4px 12px">✓ Sudah dibaca</button>`
+        : `<button id="${ackBtnId}" class="btn btn-primary" style="font-size:0.8rem;padding:4px 12px">Tandai sudah baca</button>`;
+
+    // Pin
+    const pinHtml = p.is_pinned
+        ? `<span style="font-size:0.75rem;color:var(--color-warning,#d97706)">📌 Disematkan · </span>`
+        : '';
+
+    // Waktu
+    const timeAgo = fmtRelative(p.created_at);
+
+    // Komentar
+    const comments = p.comments ?? [];
+    const commentsId = `comments-${p.post_id}`;
+    const commentsHtml = comments.length
+        ? comments.map(c => `
+            <div style="padding:6px 0;border-top:1px solid var(--color-border,#e5e7eb);font-size:0.85rem">
+                <span style="font-weight:600">${esc(c.author?.full_name ?? '—')}</span>
+                <span style="color:var(--color-text-muted,#6b7280)"> · ${fmtRelative(c.created_at)}</span>
+                <p style="margin:3px 0 0">${esc(c.body)}</p>
+            </div>`).join('')
+        : '';
+
+    const commentFormId  = `comment-form-${p.post_id}`;
+    const commentInputId = `comment-input-${p.post_id}`;
+    const commentBtnId   = `comment-btn-${p.post_id}`;
+
+    card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+            <div>
+                ${pinHtml}
+                <span style="font-weight:600">${esc(p.author?.full_name ?? '—')}</span>
+                <span style="font-size:0.8rem;color:var(--color-text-muted,#6b7280)"> · ${timeAgo}</span>
+            </div>
+            ${badgeHtml}
+        </div>
+        ${subjectsHtml}
+        ${p.title && p.title !== p.body ? `<div style="font-weight:600;margin-bottom:4px">${esc(p.title)}</div>` : ''}
+        <div style="white-space:pre-wrap;font-size:0.9rem">${esc(p.body ?? '')}</div>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:12px">
+            ${ackHtml}
+        </div>
+        <div id="${commentsId}" style="margin-top:10px">
+            ${commentsHtml}
+        </div>
+        <div id="${commentFormId}" style="margin-top:8px;display:flex;gap:8px;align-items:flex-end">
+            <textarea id="${commentInputId}" class="input" rows="2"
+                style="flex:1;resize:vertical;font-size:0.85rem"
+                placeholder="Tulis komentar…"></textarea>
+            <button id="${commentBtnId}" class="btn btn-primary" style="font-size:0.8rem;padding:6px 12px">Kirim</button>
+        </div>
+    `;
+
+    // Ack handler
+    if (!alreadyAck) {
+        card.querySelector(`#${ackBtnId}`)?.addEventListener('click', async function () {
+            this.disabled = true;
+            this.textContent = '…';
+            try {
+                await addForumAck(p.post_id, currentUser.user_id, currentUser.school_id);
+                this.textContent = '✓ Sudah dibaca';
+                this.className = 'btn btn-secondary';
+            } catch {
+                this.disabled = false;
+                this.textContent = 'Tandai sudah baca';
+            }
+        });
+    }
+
+    // Comment handler
+    card.querySelector(`#${commentBtnId}`)?.addEventListener('click', async function () {
+        const input = card.querySelector(`#${commentInputId}`);
+        const body  = input?.value?.trim();
+        if (!body) return;
+        this.disabled = true;
+        this.textContent = '…';
+        try {
+            const c = await addForumComment(p.post_id, currentUser.user_id, currentUser.school_id, body);
+            input.value = '';
+            const commentsEl = card.querySelector(`#${commentsId}`);
+            const newComment = document.createElement('div');
+            newComment.style.cssText = 'padding:6px 0;border-top:1px solid var(--color-border,#e5e7eb);font-size:0.85rem';
+            newComment.innerHTML = `
+                <span style="font-weight:600">${esc(c.author?.full_name ?? currentUser.full_name)}</span>
+                <span style="color:var(--color-text-muted,#6b7280)"> · baru saja</span>
+                <p style="margin:3px 0 0">${esc(c.body)}</p>`;
+            commentsEl.appendChild(newComment);
+        } catch (err) {
+            alert(`Gagal mengirim komentar: ${fe(err)}`);
+        } finally {
+            this.disabled = false;
+            this.textContent = 'Kirim';
+        }
+    });
+
+    return card;
+}
+
+function fmtRelative(isoStr) {
+    if (!isoStr) return '';
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1)  return 'baru saja';
+    if (m < 60) return `${m} mnt lalu`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} jam lalu`;
+    return formatDate(isoStr);
+}
 
 init();
