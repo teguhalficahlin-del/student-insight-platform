@@ -762,7 +762,7 @@ async function renderForumAssignmentStep() {
                 for (const cls of sortedClasses) {
                     const { data: enrollments } = await supabase
                         .from('class_enrollments')
-                        .select('student:students(student_id, full_name, login_identifier)')
+                        .select('student:students(student_id, full_name, nis)')
                         .eq('class_id', cls.class_id)
                         .eq('academic_year', academicYear)
                         .is('withdrawn_at', null);
@@ -777,7 +777,7 @@ async function renderForumAssignmentStep() {
                         rows.push([
                             cls.name,
                             kodeProgram,
-                            stu.login_identifier ?? '',
+                            stu.nis ?? '',
                             stu.full_name ?? '',
                             '', // nip_guru_wali — diisi admin
                         ]);
