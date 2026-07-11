@@ -6,7 +6,7 @@
  */
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getForumGuruWaliCandidates, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -105,52 +105,142 @@ document.getElementById('bottom-menu-btn')?.addEventListener('click', () => {
 
 async function renderForumKelasPanel() {
     panelContent.innerHTML =
-        '<p class="hint">Memuat ringkasan penugasan…</p>';
+        '<p class="hint">Memuat data penugasan…</p>';
     try {
         const config = await getSchoolConfig();
         const academicYear = config?.current_academic_year ?? '—';
 
-        const [classes, bkStaff, bkAsgn, gwAsgn, enrollResult] =
+        const [classes, programs, bkStaff, gwCandidates,
+               bkAsgn, gwAsgn, enrollData] =
             await Promise.all([
                 getClasses(academicYear),
+                getPrograms(),
                 getForumBkStaff(),
+                getForumGuruWaliCandidates(),
                 getBkAssignments(academicYear),
                 getGuruWaliAssignments(academicYear),
                 supabase
                     .from('class_enrollments')
-                    .select('student_id', { count: 'exact', head: false })
+                    .select('class_id, student:students(student_id, full_name, nis)')
                     .eq('academic_year', academicYear)
                     .is('withdrawn_at', null),
             ]);
 
-        const totalStudents = enrollResult.count ?? 0;
+        const programNameById = new Map(
+            programs.map(p => [p.program_id, p.name])
+        );
 
-        // Build lookup BK per kelas
-        const asnMap = new Map();
+        // ── BK per Kelas ─────────────────────────────────
+        const bkAsnMap = new Map();
         bkAsgn.forEach(a => {
-            if (!asnMap.has(a.class_id)) asnMap.set(a.class_id, []);
-            asnMap.get(a.class_id).push(a);
+            if (!bkAsnMap.has(a.class_id)) bkAsnMap.set(a.class_id, []);
+            bkAsnMap.get(a.class_id).push(a);
         });
 
-        const bkRows = classes.map(cls => {
-            const assigned = asnMap.get(cls.class_id) ?? [];
-            const names = assigned
-                .map(a => {
-                    const bk = bkStaff.find(s => s.user_id === a.bk_user_id);
-                    return bk ? esc(bk.full_name) : null;
-                })
-                .filter(Boolean);
-            const cell = names.length > 0
-                ? names.join(', ')
-                : '<span style="color:var(--color-text-muted)">Belum ditugaskan</span>';
-            return `<tr>
-                <td style="font-weight:500">${esc(cls.name)}</td>
-                <td>${cell}</td>
-            </tr>`;
+        // Kelompokkan kelas per program
+        const byProgram = new Map();
+        classes.forEach(cls => {
+            const progName = programNameById.get(cls.program_id)
+                ?? 'Tanpa Program';
+            if (!byProgram.has(progName)) byProgram.set(progName, []);
+            byProgram.get(progName).push(cls);
+        });
+        const progNames = [...byProgram.keys()].sort((a, b) => {
+            if (/^Tanpa/i.test(a)) return 1;
+            if (/^Tanpa/i.test(b)) return -1;
+            return a.localeCompare(b, 'id');
+        });
+
+        const bkAccordion = progNames.map(progName => {
+            const progClasses = byProgram.get(progName);
+            const progRows = progClasses.map(cls => {
+                const assigned = bkAsnMap.get(cls.class_id) ?? [];
+                const names = assigned
+                    .map(a => {
+                        const bk = bkStaff.find(s => s.user_id === a.bk_user_id);
+                        return bk ? esc(bk.full_name) : null;
+                    })
+                    .filter(Boolean);
+                const cell = names.length > 0
+                    ? names.join(', ')
+                    : '<span style="color:var(--color-text-muted)">Belum ditugaskan</span>';
+                return `<tr>
+                    <td style="font-weight:500">${esc(cls.name)}</td>
+                    <td>${cell}</td>
+                </tr>`;
+            }).join('');
+            return `<details style="margin-bottom:8px">
+                <summary style="cursor:pointer;font-weight:600">
+                    ${esc(progName)} (${progClasses.length} kelas)
+                </summary>
+                <table class="data-table" style="width:100%;margin-top:8px">
+                    <thead><tr>
+                        <th style="width:200px">Kelas</th>
+                        <th>BK yang Ditugaskan</th>
+                    </tr></thead>
+                    <tbody>${progRows}</tbody>
+                </table>
+            </details>`;
         }).join('');
 
-        // Hitung siswa dengan Guru Wali
-        const studentsWithGw = new Set(gwAsgn.map(a => a.student_id)).size;
+        // ── Guru Wali per Siswa ───────────────────────────
+        const gwAsnMap = new Map();
+        gwAsgn.forEach(a => {
+            gwAsnMap.set(a.student_id, a.guru_user_id);
+        });
+
+        // class_id → [siswa]
+        const classStudentMap = new Map(classes.map(c => [c.class_id, []]));
+        (enrollData.data ?? []).forEach(e => {
+            if (e.student && classStudentMap.has(e.class_id)) {
+                classStudentMap.get(e.class_id).push(e.student);
+            }
+        });
+        for (const list of classStudentMap.values()) {
+            list.sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
+        }
+
+        const gwAccordion = progNames.map(progName => {
+            const progClasses = byProgram.get(progName);
+            const progTotal = progClasses.reduce(
+                (s, cls) => s + (classStudentMap.get(cls.class_id)?.length ?? 0), 0
+            );
+            const classHtml = progClasses.map(cls => {
+                const students = classStudentMap.get(cls.class_id) ?? [];
+                const clsTotal = students.length;
+                const rows = students.map(stu => {
+                    const gwUserId = gwAsnMap.get(stu.student_id);
+                    const gw = gwCandidates.find(s => s.user_id === gwUserId);
+                    return `<tr>
+                        <td>${esc(stu.full_name)}</td>
+                        <td style="font-size:12px;color:var(--color-text-muted)">${esc(stu.nis)}</td>
+                        <td>${gw
+                            ? esc(gw.full_name)
+                            : '<span style="color:var(--color-text-muted)">Belum ditugaskan</span>'}
+                        </td>
+                    </tr>`;
+                }).join('');
+                return `<details style="margin:4px 0 4px 16px">
+                    <summary style="cursor:pointer;font-weight:600">
+                        ${esc(cls.name)} (${clsTotal})
+                    </summary>
+                    <table class="data-table" style="width:100%;margin-top:8px">
+                        <thead><tr>
+                            <th>Siswa</th>
+                            <th style="width:100px">NIS</th>
+                            <th>Guru Wali</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </details>`;
+            }).join('');
+            return `<details style="margin-bottom:8px">
+                <summary style="cursor:pointer;font-weight:600">
+                    ${esc(progName)} (${progTotal} siswa)
+                </summary>
+                <div style="padding:4px 0">${classHtml}</div>
+            </details>`;
+        }).join('');
 
         panelContent.innerHTML = `
             <h3>Penugasan Forum Kelas — ${esc(academicYear)}</h3>
@@ -158,33 +248,30 @@ async function renderForumKelasPanel() {
                 Untuk mengubah penugasan, buka wizard admin.
             </p>
 
-            <div style="display:grid;gap:20px">
-                <div class="card" style="padding:16px">
-                    <h4 style="margin:0 0 12px">BK per Kelas</h4>
-                    ${classes.length > 0 ? `
-                    <div style="overflow-x:auto">
-                    <table class="data-table" style="width:100%">
-                        <thead>
-                            <tr>
-                                <th style="width:200px">Kelas</th>
-                                <th>BK yang Ditugaskan</th>
-                            </tr>
-                        </thead>
-                        <tbody>${bkRows}</tbody>
-                    </table>
-                    </div>` : '<p class="hint">Belum ada kelas di tahun ajaran ini.</p>'}
-                </div>
+            <h4 style="margin:0 0 12px">BK per Kelas</h4>
+            ${classes.length > 0 ? bkAccordion
+                : '<p class="hint">Belum ada kelas di tahun ajaran ini.</p>'}
 
-                <div class="card" style="padding:16px">
-                    <h4 style="margin:0 0 8px">Guru Wali per Siswa</h4>
-                    <p style="margin:0">
-                        <strong>${studentsWithGw}</strong> siswa sudah memiliki Guru Wali
-                        dari total <strong>${totalStudents}</strong> siswa aktif
-                        di tahun ajaran ini.
-                    </p>
-                </div>
-            </div>
+            <hr style="margin:24px 0;border:none;
+                border-top:1px solid var(--color-border)">
+
+            <h4 style="margin:0 0 12px">Guru Wali per Siswa</h4>
+            ${classes.length > 0 ? gwAccordion
+                : '<p class="hint">Belum ada kelas di tahun ajaran ini.</p>'}
         `;
+
+        // Single-expand: saat satu accordion dibuka, tutup sibling
+        panelContent.querySelectorAll('details').forEach(det => {
+            det.addEventListener('toggle', () => {
+                if (!det.open) return;
+                const parent = det.parentElement;
+                if (!parent) return;
+                parent.querySelectorAll(':scope > details').forEach(sib => {
+                    if (sib !== det) sib.open = false;
+                });
+            });
+        });
+
     } catch (err) {
         panelContent.innerHTML =
             `<p style="color:var(--color-danger)">${fe(err)}</p>`;
