@@ -930,11 +930,11 @@ Migration yang applied:
 
 | ID | Item | Status |
 |----|------|--------|
-| **FORUM-1** | Selesaikan UI "Tambah orang tertentu" di modal buat posting Portal Guru (`specificUserIds` — sudah ada di `createForumPost()`, tinggal bangun UI search-and-add) | ⏳ Pending |
-| **FORUM-2** | Bangun UI Portal Siswa untuk Forum Kelas (baca posting, ack, lihat komentar — siswa tidak bisa komentar per konsep §7.2) | ⏳ Belum dimulai |
-| **FORUM-3** | Bangun UI Portal Ortu untuk Forum Kelas (baca posting, ack, komentar) | ⏳ Belum dimulai |
-| **FORUM-4** | Wizard Admin penugasan Guru Wali dan BK (tabel `guru_wali_assignments`, `bk_class_assignments` sudah ada tapi 0 baris — tidak ada UI admin untuk mengisinya) | ⏳ Belum dimulai |
-| **FORUM-5** | Test end-to-end siklus lengkap: guru posting → siswa/ortu yang relevan bisa baca (perlu FORUM-4 selesai dulu agar ada data Guru Wali/BK untuk diuji) | ⏳ Belum dimulai |
+| **FORUM-1** | UI "Tambah orang tertentu" di modal posting Portal Guru | ✅ SELESAI (11 Juli 2026) |
+| **FORUM-2** | Bangun UI Portal Siswa untuk Forum Kelas | ⏳ Belum dimulai |
+| **FORUM-3** | Bangun UI Portal Ortu untuk Forum Kelas | ⏳ Belum dimulai |
+| **FORUM-4** | Wizard Admin penugasan Guru Wali & BK | ✅ SELESAI (11 Juli 2026) |
+| **FORUM-5** | Test end-to-end siklus lengkap | ⏳ Belum dimulai (butuh FORUM-2/3 selesai) |
 
 **Audit keamanan Fase 3** — masih ditunda, belum dimulai. Item yang menunggu: 14 fungsi `anon=true`, WAKA_HUMAS/PKL, column-restriction `rls_users_read_staff`.
 
@@ -942,6 +942,54 @@ Migration yang applied:
 
 - **`observations` dan `observation_audience_members`:** dibiarkan apa adanya, tidak ada perubahan skema atau UI di sesi ini
 - **Seluruh fitur existing (Kasus, Observasi, Jurnal, Absensi, PKL, dll.):** tidak berubah kecuali bug fix BUG-1/2 yang sudah tercatat
+
+---
+
+## 15. Status Sesi 11 Juli 2026 — Forum Kelas Lanjutan
+
+### Commit-Commit Baru
+
+| Hash | Deskripsi |
+|------|-----------|
+| `d0b5f97` | feat(db): tambah fn_get_forum_member_details untuk picker orang tertentu (FORUM-1) |
+| `98c8925` | feat(guru): UI picker orang tertentu di modal posting Forum Kelas (FORUM-1) |
+| `2569c03` | feat(admin): tambah fungsi API penugasan BK & Guru Wali Forum Kelas (FORUM-4) |
+| `8d7752d` | feat(admin): panel Penugasan Forum Kelas — BK per kelas & Guru Wali per siswa (FORUM-4) |
+| `b9d4f82` | feat(admin): tambah step 12 Penugasan Forum di wizard HTML |
+| `f591668` | feat(admin): renderForumAssignmentStep wizard step 11 + dashboard read-only (FORUM-4) |
+
+### Keputusan Arsitektur Penting
+
+- **Dashboard admin = proyektor wizard.** Semua operasi
+  (termasuk penugasan Forum Kelas) dilakukan di wizard.
+  Dashboard hanya menampilkan ringkasan read-only.
+- **Penugasan Forum masuk wizard sebagai step 11** (setelah
+  Jadwal, sebelum Selesai). `TOTAL_STEPS` naik dari 11 → 12.
+- **Panel dashboard `forum-kelas`** dikonversi ke read-only:
+  menampilkan tabel BK per kelas + ringkasan jumlah siswa
+  yang sudah punya Guru Wali.
+- **`fn_get_forum_member_details`** — fungsi DB baru
+  (SECURITY DEFINER, REVOKE anon/public). Return
+  `user_id + full_name + role_type` semua staf + ortu aktif
+  per kelas untuk picker "orang tertentu" di modal posting.
+- **Guru Wali** = semua staf non-administrative:
+  `GURU, BK, WALI_KELAS, KAPRODI, KEPSEK,
+  WAKA_KURIKULUM, WAKA_KESISWAAN, WAKA_HUMAS`
+- **BK** = filter `role_type = 'BK'` (role tersendiri di
+  enum, bukan flag atau jabatan)
+
+### Status Test Suite
+
+90/90 ✓ — tidak berubah. Tidak ada migration RLS baru
+di sesi ini (hanya migration fungsi helper read-only).
+
+### Backlog Aktif
+
+| ID | Item | Prioritas |
+|----|------|-----------|
+| FORUM-2 | UI Portal Siswa Forum Kelas | Berikutnya |
+| FORUM-3 | UI Portal Ortu Forum Kelas | Setelah FORUM-2 |
+| FORUM-5 | Test end-to-end (butuh data penugasan dari wizard) | Terakhir |
 
 ---
 
