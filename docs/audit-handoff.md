@@ -931,10 +931,10 @@ Migration yang applied:
 | ID | Item | Status |
 |----|------|--------|
 | **FORUM-1** | UI "Tambah orang tertentu" di modal posting Portal Guru | ✅ SELESAI (11 Juli 2026) |
-| **FORUM-2** | Bangun UI Portal Siswa untuk Forum Kelas | ⏳ Belum dimulai |
-| **FORUM-3** | Bangun UI Portal Ortu untuk Forum Kelas | ⏳ Belum dimulai |
+| **FORUM-2** | Bangun UI Portal Siswa untuk Forum Kelas | ✅ SELESAI (11 Juli 2026) |
+| **FORUM-3** | Bangun UI Portal Ortu untuk Forum Kelas | ✅ SELESAI (11 Juli 2026) |
 | **FORUM-4** | Wizard Admin penugasan Guru Wali & BK | ✅ SELESAI (11 Juli 2026) |
-| **FORUM-5** | Test end-to-end siklus lengkap | ⏳ Belum dimulai (butuh FORUM-2/3 selesai) |
+| **FORUM-5** | Test end-to-end siklus lengkap + CHECK 15 permanen | ✅ SELESAI (11 Juli 2026) |
 
 **Audit keamanan Fase 3** — masih ditunda, belum dimulai. Item yang menunggu: 14 fungsi `anon=true`, WAKA_HUMAS/PKL, column-restriction `rls_users_read_staff`.
 
@@ -1027,6 +1027,61 @@ di sesi ini (hanya migration fungsi helper read-only).
 | `5aaed0e` | Fix async renderWzFkGuruWaliTab |
 | `b022b49` | Hapus dropdown tambah BK & Guru Wali — ganti via upload file |
 | `95f2955` | Label "Input Manual" → "Koreksi & Kelola Penugasan" |
+
+---
+
+## 16. Penutup Sesi 11 Juli 2026 — Forum Kelas Selesai
+
+### Status Akhir
+
+Seluruh fitur Forum Kelas (FORUM-1 s/d FORUM-5) selesai
+dalam satu sesi. Test suite: **93/93 ✓** (naik dari 90,
++3 assertion CHECK 15).
+
+### Commit-Commit Forum Kelas (Sesi Ini)
+
+| Hash | Deskripsi |
+|------|-----------|
+| `d0b5f97` | feat(db): fn_get_forum_member_details (FORUM-1) |
+| `98c8925` | feat(guru): UI picker orang tertentu (FORUM-1) |
+| `2569c03` | feat(admin): API penugasan BK & Guru Wali (FORUM-4) |
+| `8d7752d` | feat(admin): panel Penugasan Forum dashboard (FORUM-4) |
+| `b9d4f82` | feat(admin): wizard HTML step 12 (FORUM-4) |
+| `f591668` | feat(admin): renderForumAssignmentStep wizard (FORUM-4) |
+| `a985b1d` | fix(db): cabang SISWA ke fn_can_read_forum_post (FORUM-2) |
+| `b146860` | feat(student): API Forum Kelas Portal Siswa (FORUM-2) |
+| `90958af` | feat(student): tab Forum Kelas Portal Siswa (FORUM-2) |
+| `b95936f` | feat(parent): API Forum Kelas Portal Ortu (FORUM-3) |
+| `0532692` | feat(parent): section Forum Portal Ortu (FORUM-3) |
+| `54e1656` | feat(parent): logic Forum Portal Ortu (FORUM-3) |
+| `5c8de0d` | test: CHECK 15 RLS isolation Forum Kelas (FORUM-5) |
+| `ed8e22a` | fix(db): filter is_withdrawn fn_can_read_forum_post |
+| `7b427ee` | feat(db): kolom is_withdrawn forum_posts |
+| `1d84f8e` | feat(guru): tombol Tarik posting Forum Kelas |
+
+### Keputusan Arsitektur Penting
+
+- **Portal Ortu** menggunakan layout scroll panjang —
+  refactor ke tab layout dicatat sebagai backlog
+  (dikerjakan setelah sesi ini)
+- **is_withdrawn** ditambah ke `forum_posts` — posting
+  yang ditarik tidak terlihat audience, hanya author +
+  KEPSEK/WAKA_KESISWAAN/ADMINISTRATIVE
+- **fn_can_read_forum_post** mencakup 7 cabang:
+  author, wali kelas, guru mapel, guru wali, BK, ortu,
+  siswa (dengan filter audience)
+- **Guru Wali** = semua staf non-administrative
+- **BK** = role_type = 'BK' (role tersendiri di enum)
+- **Penugasan** via import Excel di wizard step 11
+  (30 BK + 300 Guru Wali di sekolah uji)
+
+### Backlog Aktif Sesi Berikutnya
+
+| Item | Prioritas |
+|------|-----------|
+| Refactor Portal Ortu ke tab layout | Tinggi |
+| Tabel BK per Kelas di panel Penugasan Forum (kolom tidak rapi) | Rendah |
+| Fase 3 audit keamanan (14 fungsi anon=true, WAKA_HUMAS/PKL) | Tinggi |
 
 ---
 
