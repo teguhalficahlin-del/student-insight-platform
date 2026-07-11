@@ -1043,13 +1043,7 @@ function renderWzFkBkTab() {
             .map(s => `<option value="${esc(s.user_id)}">${esc(s.full_name)}</option>`)
             .join('');
 
-        const addSelect = options
-            ? `<select class="wzfk-bk-add input" data-cid="${esc(cls.class_id)}"
-                   style="font-size:12px;padding:4px 8px;min-width:160px">
-                   <option value="">+ Tambah BK…</option>
-                   ${options}
-               </select>`
-            : '<span class="hint" style="font-size:12px">Semua BK sudah ditugaskan</span>';
+        const addSelect = '';
 
         return `<tr>
             <td style="font-weight:500">${esc(cls.name)}</td>
@@ -1077,24 +1071,7 @@ function renderWzFkBkTab() {
         <p id="wz-fk-status" class="hint" style="margin-top:8px"></p>
     `;
 
-    tabEl.querySelectorAll('.wzfk-bk-add').forEach(sel => {
-        sel.addEventListener('change', async () => {
-            const bkUserId = sel.value;
-            const classId  = sel.dataset.cid;
-            if (!bkUserId) return;
-            sel.disabled = true;
-            try {
-                await assignBkToClass(classId, bkUserId, _wzFkAcademicYear, _wzFkCurrentUserId);
-                _wzFkBkAssignments = await getBkAssignments(_wzFkAcademicYear);
-                renderWzFkBkTab();
-            } catch (err) {
-                const st = document.getElementById('wz-fk-status');
-                if (st) st.textContent = 'Gagal menyimpan: ' + (err?.message ?? String(err));
-            } finally {
-                sel.disabled = false;
-            }
-        });
-    });
+    // Tambah BK dilakukan via upload file Excel
 
     tabEl.querySelectorAll('.wzfk-bk-revoke').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -1201,14 +1178,7 @@ async function loadWzFkGuruWaliStudents() {
                 .map(s => `<option value="${esc(s.user_id)}">${esc(s.full_name)}</option>`)
                 .join('');
 
-            const addSelect = options
-                ? `<select class="wzfk-gw-add input"
-                       data-sid="${esc(stu.student_id)}"
-                       style="font-size:12px;padding:4px 8px;min-width:180px">
-                       <option value="">+ Tambah Guru Wali…</option>
-                       ${options}
-                   </select>`
-                : '';
+            const addSelect = '';
 
             return `<tr>
                 <td>
@@ -1239,24 +1209,7 @@ async function loadWzFkGuruWaliStudents() {
             <p id="wz-fk-gw-status" class="hint" style="margin-top:8px"></p>
         `;
 
-        el.querySelectorAll('.wzfk-gw-add').forEach(sel => {
-            sel.addEventListener('change', async () => {
-                const guruId    = sel.value;
-                const studentId = sel.dataset.sid;
-                if (!guruId) return;
-                sel.disabled = true;
-                try {
-                    await assignGuruWaliToStudent(studentId, guruId, _wzFkAcademicYear, _wzFkCurrentUserId);
-                    _wzFkGwAssignments = await getGuruWaliAssignments(_wzFkAcademicYear);
-                    await loadWzFkGuruWaliStudents();
-                } catch (err) {
-                    const st = document.getElementById('wz-fk-gw-status');
-                    if (st) st.textContent = 'Gagal menyimpan: ' + (err?.message ?? String(err));
-                } finally {
-                    sel.disabled = false;
-                }
-            });
-        });
+        // Tambah Guru Wali dilakukan via upload file Excel
 
         el.querySelectorAll('.wzfk-gw-revoke').forEach(btn => {
             btn.addEventListener('click', async () => {
