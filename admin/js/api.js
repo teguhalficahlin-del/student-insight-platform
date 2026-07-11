@@ -1112,7 +1112,7 @@ export async function assignBkToClass(classId, bkUserId, academicYear, assignedB
         .eq('academic_year', academicYear)
         .eq('is_active',     true)
         .maybeSingle();
-    if (existing) return existing.assignment_id; // idempoten
+    if (existing) return 'exists'; // idempoten — sinyal ke caller
 
     const { data, error } = await supabase
         .from('bk_class_assignments')
@@ -1152,7 +1152,7 @@ export async function assignGuruWaliToStudent(
         .eq('academic_year', academicYear)
         .eq('is_active',     true)
         .maybeSingle();
-    if (existing) return existing.assignment_id;
+    if (existing) return 'exists'; // idempoten — sinyal ke caller
 
     const { data, error } = await supabase
         .from('guru_wali_assignments')
