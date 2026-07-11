@@ -726,7 +726,8 @@ async function renderForumAssignmentStep() {
             <div id="wz-fk-gw-result" style="margin-bottom:24px"></div>
 
             <hr style="margin:8px 0 24px;border:none;border-top:1px solid var(--color-border)" />
-            <h4 style="margin:0 0 8px">Input Manual</h4>
+            <h4 style="margin:0 0 4px">Koreksi &amp; Kelola Penugasan</h4>
+            <p class="hint" style="margin:0 0 16px">Tambah, ganti, atau cabut penugasan individual tanpa mengimpor ulang seluruh file.</p>
             <div id="wz-forum-manual-shell"></div>
         `;
 
