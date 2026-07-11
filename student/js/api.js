@@ -265,3 +265,87 @@ export async function markNotificationsRead(ids) {
         .in('notification_id', ids);
     if (error) throw error;
 }
+
+/**
+ * Kelas aktif siswa yang login untuk keperluan forum.
+ * Menggunakan students.user_id = auth.uid() via RLS, lalu join class_enrollments.
+ * Return: { class_id, class_name, academic_year } atau null.
+ */
+export async function getMyForumClass(userId) {
+    const { data: student, error: sErr } = await supabase
+        .from('students')
+        .select('student_id')
+        .eq('user_id', userId)
+        .eq('student_status', 'AKTIF')
+        .maybeSingle();
+    if (sErr) throw sErr;
+    if (!student) return null;
+
+    const { data: config } = await supabase
+        .from('school_config')
+        .select('current_academic_year')
+        .single();
+    if (!config?.current_academic_year) return null;
+
+    const { data, error } = await supabase
+        .from('class_enrollments')
+        .select('class_id, academic_year, class:classes ( name )')
+        .eq('student_id', student.student_id)
+        .eq('academic_year', config.current_academic_year)
+        .is('withdrawn_at', null)
+        .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+        class_id:      data.class_id,
+        class_name:    data.class?.name ?? '',
+        academic_year: data.academic_year,
+    };
+}
+
+/**
+ * Posting forum kelas yang dapat dibaca siswa ini
+ * (dibatasi via forum_post_audience + fn_can_read_forum_post di RLS).
+ */
+export async function getForumPosts(classId, academicYear, userId, schoolId, limit = 20, offset = 0) {
+    const { data, error } = await supabase
+        .from('forum_posts')
+        .select(`
+            post_id, title, body, visibility, is_pinned, created_at, updated_at,
+            author_user_id,
+            category:communication_categories ( category_code, label_sekolah, polarity ),
+            author:users!forum_posts_author_user_id_fkey ( user_id, full_name ),
+            subjects:forum_post_subjects (
+                student:students ( student_id, full_name, nis )
+            ),
+            acknowledgements:forum_post_acknowledgements ( user_id ),
+            comments:forum_post_comments ( comment_id ),
+            forum_post_audience!inner ( user_id )
+        `)
+        .eq('class_id', classId)
+        .eq('academic_year', academicYear)
+        .eq('school_id', schoolId)
+        .eq('forum_post_audience.user_id', userId)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+    if (error) throw error;
+    return (data ?? []).map(p => {
+        const { forum_post_audience: _aud, ...rest } = p;
+        return rest;
+    });
+}
+
+/**
+ * Siswa menandai posting sudah dibaca (acknowledgement).
+ * Idempoten — duplikat diabaikan via onConflict ignore.
+ */
+export async function addForumAck(postId, userId, schoolId) {
+    const { error } = await supabase
+        .from('forum_post_acknowledgements')
+        .upsert(
+            { post_id: postId, user_id: userId, school_id: schoolId },
+            { onConflict: 'post_id,user_id', ignoreDuplicates: true }
+        );
+    if (error) throw error;
+}
