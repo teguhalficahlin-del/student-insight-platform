@@ -1095,16 +1095,33 @@ function renderWzFkGuruWaliTab() {
         return;
     }
 
-    const classOptions = _wzFkClasses
-        .map(c =>
-            `<option value="${esc(c.class_id)}"
-                ${_wzFkSelectedClass === c.class_id ? 'selected' : ''}>
-                ${esc(c.name)}
-             </option>`
-        ).join('');
+    // Kelompokkan kelas per program
+    const programMap = new Map();
+    _wzFkClasses.forEach(c => {
+        const pid = c.program_id ?? '__no_program__';
+        if (!programMap.has(pid)) programMap.set(pid, []);
+        programMap.get(pid).push(c);
+    });
+    const programs = await getPrograms();
+    const programNameById = new Map(programs.map(p => [p.program_id, p.name]));
+
+    const classOptions = [...programMap.entries()]
+        .sort(([, a], [, b]) =>
+            (programNameById.get(a[0]?.program_id) ?? '').localeCompare(
+             programNameById.get(b[0]?.program_id) ?? '', 'id'))
+        .map(([pid, classes]) => {
+            const progName = programNameById.get(pid) ?? 'Tanpa Program';
+            const opts = classes
+                .sort((a, b) => a.name.localeCompare(b.name, 'id'))
+                .map(c => `<option value="${esc(c.class_id)}"
+                    ${_wzFkSelectedClass === c.class_id ? 'selected' : ''}>
+                    ${esc(c.name)}
+                </option>`).join('');
+            return `<optgroup label="${esc(progName)}">${opts}</optgroup>`;
+        }).join('');
 
     tabEl.innerHTML = `
-        <div class="field" style="max-width:320px;margin-bottom:16px">
+        <div class="field" style="max-width:400px;margin-bottom:16px">
             <label for="wz-fk-gw-class-select">Pilih Kelas</label>
             <select id="wz-fk-gw-class-select" class="input">
                 <option value="">— Pilih kelas —</option>
@@ -1196,11 +1213,12 @@ async function loadWzFkGuruWaliStudents() {
 
         el.innerHTML = `
             <div style="overflow-x:auto">
-            <table class="data-table" style="width:100%">
+            <table class="data-table" style="width:100%;
+                table-layout:fixed">
                 <thead>
                     <tr>
-                        <th style="width:220px">Siswa</th>
-                        <th>Guru Wali</th>
+                        <th style="width:55%">Siswa</th>
+                        <th style="width:45%">Guru Wali</th>
                     </tr>
                 </thead>
                 <tbody>${rows}</tbody>
