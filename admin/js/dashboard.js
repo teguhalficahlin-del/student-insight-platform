@@ -212,9 +212,13 @@ async function renderForumKelasPanel() {
                     const gwUserId = gwAsnMap.get(stu.student_id);
                     const gw = gwCandidates.find(s => s.user_id === gwUserId);
                     return `<tr>
-                        <td>${esc(stu.full_name)}</td>
-                        <td style="font-size:12px;color:var(--color-text-muted)">${esc(stu.nis)}</td>
-                        <td>${gw
+                        <td style="overflow:hidden;text-overflow:ellipsis;
+                            white-space:nowrap">${esc(stu.full_name)}</td>
+                        <td style="font-size:12px;color:var(--color-text-muted);
+                            overflow:hidden;text-overflow:ellipsis;
+                            white-space:nowrap">${esc(stu.nis)}</td>
+                        <td style="overflow:hidden;text-overflow:ellipsis;
+                            white-space:nowrap">${gw
                             ? esc(gw.full_name)
                             : '<span style="color:var(--color-text-muted)">Belum ditugaskan</span>'}
                         </td>
