@@ -6,7 +6,7 @@
  */
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
-import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList } from './api.js';
+import { getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getForumGuruWaliCandidates, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent } from './api.js';
 import { supabase } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
@@ -40,6 +40,7 @@ const PANEL_RENDERERS = {
     'academic-year':    renderAcademicYearPanel,
     export:             renderExportPanel,
     'activity-log':     renderActivityLogPanel,
+    'forum-kelas':      renderForumKelasPanel,
 };
 
 document.querySelectorAll('.nav-link').forEach(link => {
@@ -99,6 +100,395 @@ document.querySelectorAll('.admin-bottom-nav .nav-tab[data-panel]').forEach(btn 
 document.getElementById('bottom-menu-btn')?.addEventListener('click', () => {
     menuToggle?.click();
 });
+
+// ─── Panel: Penugasan Forum Kelas ────────────────────────
+
+let _fkActiveTab      = 'bk';       // 'bk' | 'guru-wali'
+let _fkAcademicYear   = null;
+let _fkClasses        = [];
+let _fkBkStaff        = [];
+let _fkGuruWaliCands  = [];
+let _fkBkAssignments  = [];
+let _fkGwAssignments  = [];
+let _fkCurrentUserId  = null;
+let _fkSelectedClass  = null;
+let _fkStudents       = [];
+
+async function renderForumKelasPanel() {
+    panelContent.innerHTML =
+        '<p class="hint">Memuat data penugasan…</p>';
+    try {
+        const config = await getSchoolConfig();
+        _fkAcademicYear  = config.current_academic_year;
+        _fkCurrentUserId = currentUser?.user_id ?? null;
+
+        const [classes, bkStaff, gwCands, bkAsgn, gwAsgn] =
+            await Promise.all([
+                getClasses(_fkAcademicYear),
+                getForumBkStaff(),
+                getForumGuruWaliCandidates(),
+                getBkAssignments(_fkAcademicYear),
+                getGuruWaliAssignments(_fkAcademicYear),
+            ]);
+
+        _fkClasses       = classes;
+        _fkBkStaff       = bkStaff;
+        _fkGuruWaliCands = gwCands;
+        _fkBkAssignments = bkAsgn;
+        _fkGwAssignments = gwAsgn;
+
+        renderForumKelasPanelShell();
+    } catch (err) {
+        panelContent.innerHTML =
+            `<p style="color:var(--color-danger)">${fe(err)}</p>`;
+    }
+}
+
+function renderForumKelasPanelShell() {
+    panelContent.innerHTML = `
+        <h3>Penugasan Forum Kelas — ${esc(_fkAcademicYear ?? '')}</h3>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+            <button id="fk-tab-bk"
+                class="btn ${_fkActiveTab === 'bk' ? 'btn-primary' : 'btn-secondary'}"
+                style="min-width:120px">BK per Kelas</button>
+            <button id="fk-tab-gw"
+                class="btn ${_fkActiveTab === 'guru-wali' ? 'btn-primary' : 'btn-secondary'}"
+                style="min-width:120px">Guru Wali per Siswa</button>
+        </div>
+        <div id="fk-tab-content"></div>
+    `;
+    document.getElementById('fk-tab-bk')
+        .addEventListener('click', () => {
+            _fkActiveTab = 'bk';
+            renderForumKelasPanelShell();
+        });
+    document.getElementById('fk-tab-gw')
+        .addEventListener('click', () => {
+            _fkActiveTab = 'guru-wali';
+            renderForumKelasPanelShell();
+        });
+    if (_fkActiveTab === 'bk') renderFkBkTab();
+    else renderFkGuruWaliTab();
+}
+
+// ── Tab BK ───────────────────────────────────────────────
+
+function renderFkBkTab() {
+    const tabEl = document.getElementById('fk-tab-content');
+    if (!_fkClasses.length) {
+        tabEl.innerHTML =
+            '<p class="hint">Belum ada kelas di tahun ajaran ini.</p>';
+        return;
+    }
+    if (!_fkBkStaff.length) {
+        tabEl.innerHTML =
+            '<p class="hint">Belum ada staf dengan peran BK.</p>';
+        return;
+    }
+
+    // Build lookup: class_id → [{assignment_id, bk_user_id}]
+    const asnMap = new Map();
+    _fkBkAssignments.forEach(a => {
+        if (!asnMap.has(a.class_id)) asnMap.set(a.class_id, []);
+        asnMap.get(a.class_id).push(a);
+    });
+
+    const rows = _fkClasses.map(cls => {
+        const assigned = asnMap.get(cls.class_id) ?? [];
+        const assignedIds = new Set(assigned.map(a => a.bk_user_id));
+
+        const chips = assigned.map(a => {
+            const bk = _fkBkStaff.find(s => s.user_id === a.bk_user_id);
+            if (!bk) return '';
+            return `<span style="display:inline-flex;align-items:center;
+                        gap:4px;background:var(--color-primary-subtle,#eff6ff);
+                        color:var(--color-primary,#2563eb);
+                        border:1px solid var(--color-primary-light,#bfdbfe);
+                        border-radius:999px;padding:2px 10px 2px 8px;
+                        font-size:12px">
+                        ${esc(bk.full_name)}
+                        <button type="button"
+                            class="fk-bk-revoke"
+                            data-aid="${esc(a.assignment_id)}"
+                            data-cid="${esc(cls.class_id)}"
+                            style="background:none;border:none;cursor:pointer;
+                                   color:inherit;padding:0;font-size:14px">×
+                        </button>
+                    </span>`;
+        }).join('');
+
+        const options = _fkBkStaff
+            .filter(s => !assignedIds.has(s.user_id))
+            .map(s =>
+                `<option value="${esc(s.user_id)}">${esc(s.full_name)}</option>`
+            ).join('');
+
+        const addSelect = options
+            ? `<select class="fk-bk-add input" data-cid="${esc(cls.class_id)}"
+                   style="font-size:12px;padding:4px 8px;min-width:160px">
+                   <option value="">+ Tambah BK…</option>
+                   ${options}
+               </select>`
+            : '<span class="hint" style="font-size:12px">Semua BK sudah ditugaskan</span>';
+
+        return `<tr>
+            <td style="font-weight:500">${esc(cls.name)}</td>
+            <td>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;
+                            align-items:center">
+                    ${chips}
+                    ${addSelect}
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+
+    tabEl.innerHTML = `
+        <div style="overflow-x:auto">
+        <table class="data-table" style="width:100%">
+            <thead>
+                <tr>
+                    <th style="width:200px">Kelas</th>
+                    <th>BK yang Ditugaskan</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+        </div>
+        <p id="fk-bk-status" class="hint" style="margin-top:8px"></p>
+    `;
+
+    // Event: tambah BK
+    tabEl.querySelectorAll('.fk-bk-add').forEach(sel => {
+        sel.addEventListener('change', async () => {
+            const bkUserId = sel.value;
+            const classId  = sel.dataset.cid;
+            if (!bkUserId) return;
+            sel.disabled = true;
+            try {
+                await assignBkToClass(
+                    classId, bkUserId,
+                    _fkAcademicYear, _fkCurrentUserId
+                );
+                _fkBkAssignments = await getBkAssignments(_fkAcademicYear);
+                renderFkBkTab();
+            } catch (err) {
+                document.getElementById('fk-bk-status').textContent =
+                    'Gagal menyimpan: ' + fe(err);
+            } finally {
+                sel.disabled = false;
+            }
+        });
+    });
+
+    // Event: cabut BK
+    tabEl.querySelectorAll('.fk-bk-revoke').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            try {
+                await revokeBkFromClass(btn.dataset.aid);
+                _fkBkAssignments = await getBkAssignments(_fkAcademicYear);
+                renderFkBkTab();
+            } catch (err) {
+                document.getElementById('fk-bk-status').textContent =
+                    'Gagal mencabut: ' + fe(err);
+            }
+        });
+    });
+}
+
+// ── Tab Guru Wali ─────────────────────────────────────────
+
+function renderFkGuruWaliTab() {
+    const tabEl = document.getElementById('fk-tab-content');
+    if (!_fkClasses.length) {
+        tabEl.innerHTML =
+            '<p class="hint">Belum ada kelas di tahun ajaran ini.</p>';
+        return;
+    }
+
+    const classOptions = _fkClasses
+        .map(c =>
+            `<option value="${esc(c.class_id)}"
+                ${_fkSelectedClass === c.class_id ? 'selected' : ''}>
+                ${esc(c.name)}
+             </option>`
+        ).join('');
+
+    tabEl.innerHTML = `
+        <div class="field" style="max-width:320px;margin-bottom:16px">
+            <label for="fk-gw-class-select">Pilih Kelas</label>
+            <select id="fk-gw-class-select" class="input">
+                <option value="">— Pilih kelas —</option>
+                ${classOptions}
+            </select>
+        </div>
+        <div id="fk-gw-students"></div>
+    `;
+
+    document.getElementById('fk-gw-class-select')
+        .addEventListener('change', async (e) => {
+            _fkSelectedClass = e.target.value || null;
+            await loadFkGuruWaliStudents();
+        });
+
+    if (_fkSelectedClass) loadFkGuruWaliStudents();
+}
+
+async function loadFkGuruWaliStudents() {
+    const el = document.getElementById('fk-gw-students');
+    if (!_fkSelectedClass) {
+        el.innerHTML = '';
+        return;
+    }
+    el.innerHTML = '<p class="hint">Memuat siswa…</p>';
+    try {
+        const { data, error } = await supabase
+            .from('class_enrollments')
+            .select('student:students(student_id, full_name, nis)')
+            .eq('class_id',      _fkSelectedClass)
+            .eq('academic_year', _fkAcademicYear)
+            .is('withdrawn_at',  null);
+        if (error) throw error;
+
+        _fkStudents = (data ?? [])
+            .map(r => r.student)
+            .filter(Boolean)
+            .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
+
+        if (!_fkStudents.length) {
+            el.innerHTML =
+                '<p class="hint">Tidak ada siswa aktif di kelas ini.</p>';
+            return;
+        }
+
+        // Build lookup: student_id → [{assignment_id, guru_user_id}]
+        const asnMap = new Map();
+        _fkGwAssignments.forEach(a => {
+            if (!asnMap.has(a.student_id)) asnMap.set(a.student_id, []);
+            asnMap.get(a.student_id).push(a);
+        });
+
+        const rows = _fkStudents.map(stu => {
+            const assigned  = asnMap.get(stu.student_id) ?? [];
+            const assignedIds = new Set(assigned.map(a => a.guru_user_id));
+
+            const chips = assigned.map(a => {
+                const gw = _fkGuruWaliCands
+                    .find(s => s.user_id === a.guru_user_id);
+                if (!gw) return '';
+                return `<span style="display:inline-flex;align-items:center;
+                            gap:4px;background:var(--color-primary-subtle,
+                            #eff6ff);color:var(--color-primary,#2563eb);
+                            border:1px solid var(--color-primary-light,
+                            #bfdbfe);border-radius:999px;
+                            padding:2px 10px 2px 8px;font-size:12px">
+                            ${esc(gw.full_name)}
+                            <button type="button"
+                                class="fk-gw-revoke"
+                                data-aid="${esc(a.assignment_id)}"
+                                style="background:none;border:none;
+                                       cursor:pointer;color:inherit;
+                                       padding:0;font-size:14px">×
+                            </button>
+                        </span>`;
+            }).join('');
+
+            const options = _fkGuruWaliCands
+                .filter(s => !assignedIds.has(s.user_id))
+                .map(s =>
+                    `<option value="${esc(s.user_id)}">
+                        ${esc(s.full_name)}
+                     </option>`
+                ).join('');
+
+            const addSelect = options
+                ? `<select class="fk-gw-add input"
+                       data-sid="${esc(stu.student_id)}"
+                       style="font-size:12px;padding:4px 8px;
+                              min-width:180px">
+                       <option value="">+ Tambah Guru Wali…</option>
+                       ${options}
+                   </select>`
+                : '';
+
+            return `<tr>
+                <td>
+                    <div style="font-weight:500">${esc(stu.full_name)}</div>
+                    <div style="font-size:11px;color:var(--color-text-muted)">
+                        ${esc(stu.nis)}
+                    </div>
+                </td>
+                <td>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;
+                                align-items:center">
+                        ${chips}
+                        ${addSelect}
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+
+        el.innerHTML = `
+            <div style="overflow-x:auto">
+            <table class="data-table" style="width:100%">
+                <thead>
+                    <tr>
+                        <th style="width:220px">Siswa</th>
+                        <th>Guru Wali</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+            </div>
+            <p id="fk-gw-status" class="hint" style="margin-top:8px"></p>
+        `;
+
+        // Event: tambah Guru Wali
+        el.querySelectorAll('.fk-gw-add').forEach(sel => {
+            sel.addEventListener('change', async () => {
+                const guruId    = sel.value;
+                const studentId = sel.dataset.sid;
+                if (!guruId) return;
+                sel.disabled = true;
+                try {
+                    await assignGuruWaliToStudent(
+                        studentId, guruId,
+                        _fkAcademicYear, _fkCurrentUserId
+                    );
+                    _fkGwAssignments =
+                        await getGuruWaliAssignments(_fkAcademicYear);
+                    await loadFkGuruWaliStudents();
+                } catch (err) {
+                    document.getElementById('fk-gw-status').textContent =
+                        'Gagal menyimpan: ' + fe(err);
+                } finally {
+                    sel.disabled = false;
+                }
+            });
+        });
+
+        // Event: cabut Guru Wali
+        el.querySelectorAll('.fk-gw-revoke').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                btn.disabled = true;
+                try {
+                    await revokeGuruWaliFromStudent(btn.dataset.aid);
+                    _fkGwAssignments =
+                        await getGuruWaliAssignments(_fkAcademicYear);
+                    await loadFkGuruWaliStudents();
+                } catch (err) {
+                    document.getElementById('fk-gw-status').textContent =
+                        'Gagal mencabut: ' + fe(err);
+                }
+            });
+        });
+
+    } catch (err) {
+        el.innerHTML =
+            `<p style="color:var(--color-danger)">${fe(err)}</p>`;
+    }
+}
 
 function renderComingSoon(panel) {
     panelContent.innerHTML = `<p class="hint">Panel "${panel}" belum diimplementasikan.</p>`;
