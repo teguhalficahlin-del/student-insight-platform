@@ -679,10 +679,10 @@ function renderForumCard(p) {
     let badgeHtml = '';
     if (p.category) {
         const color = p.category.polarity === 'positive'
-            ? 'color:var(--color-success,#16a34a);background:var(--color-success-bg,#dcfce7)'
+            ? 'color:var(--color-success);background:var(--color-success-bg)'
             : p.category.polarity === 'concern'
-            ? 'color:var(--color-danger,#dc2626);background:var(--color-danger-bg,#fee2e2)'
-            : 'color:var(--color-text-muted,#6b7280);background:var(--color-surface-2,#f3f4f6)';
+            ? 'color:var(--color-danger);background:var(--color-danger-bg)'
+            : 'color:var(--color-text-muted);background:var(--color-surface)';
         badgeHtml = `<span style="font-size:0.75rem;padding:2px 8px;border-radius:99px;${color}">${esc(p.category.label_sekolah)}</span>`;
     }
 
@@ -727,7 +727,7 @@ function renderForumCard(p) {
             ${badgeHtml}
         </div>
         ${subjectsHtml}
-        ${p.title ? `<div style="font-weight:600;margin-bottom:4px">${esc(p.title)}</div>` : ''}
+        ${p.title && p.title !== p.body ? `<div style="font-weight:600;margin-bottom:4px">${esc(p.title)}</div>` : ''}
         <div style="white-space:pre-wrap;font-size:0.9rem">${esc(p.body ?? '')}</div>
         <div style="margin-top:10px;display:flex;align-items:center;gap:12px">
             ${ackHtml}
