@@ -34,6 +34,15 @@ import {
 
 import { openScheduleBuilder } from './schedule-builder.js';
 
+/** Escape HTML untuk mencegah XSS di innerHTML */
+function esc(s) {
+    return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 const TOTAL_STEPS = 12;
 
 const STEP_NAMES = {
