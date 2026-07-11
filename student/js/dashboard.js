@@ -682,7 +682,7 @@ function renderForumCard(p) {
             ? 'color:var(--color-success);background:rgba(74,222,128,0.15)'
             : p.category.polarity === 'concern'
             ? 'color:var(--color-danger);background:rgba(248,113,113,0.15)'
-            : 'color:var(--color-primary);background:var(--color-primary-bg)';
+            : 'color:#94a3b8;background:rgba(148,163,184,0.15)';
         badgeHtml = `<span style="font-size:0.75rem;padding:2px 8px;border-radius:99px;${color}">${esc(p.category.label_sekolah)}</span>`;
     }
 
