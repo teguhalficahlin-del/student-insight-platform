@@ -679,10 +679,10 @@ function renderForumCard(p) {
     let badgeHtml = '';
     if (p.category) {
         const color = p.category.polarity === 'positive'
-            ? 'color:var(--color-success);background:var(--color-success-bg)'
+            ? 'color:var(--color-success);background:rgba(74,222,128,0.15)'
             : p.category.polarity === 'concern'
-            ? 'color:var(--color-danger);background:var(--color-danger-bg)'
-            : 'color:var(--color-text-muted);background:var(--color-surface)';
+            ? 'color:var(--color-danger);background:rgba(248,113,113,0.15)'
+            : 'color:var(--color-primary);background:var(--color-primary-bg)';
         badgeHtml = `<span style="font-size:0.75rem;padding:2px 8px;border-radius:99px;${color}">${esc(p.category.label_sekolah)}</span>`;
     }
 
@@ -691,7 +691,7 @@ function renderForumCard(p) {
     if (p.subjects?.length) {
         const chips = p.subjects
             .filter(s => s.student)
-            .map(s => `<span style="font-size:0.75rem;background:var(--color-surface-2,#f3f4f6);border-radius:99px;padding:2px 8px">${esc(s.student.full_name)}</span>`)
+            .map(s => `<span style="font-size:0.75rem;background:var(--color-surface);color:var(--color-text);border-radius:99px;padding:2px 8px">${esc(s.student.full_name)}</span>`)
             .join(' ');
         if (chips) subjectsHtml = `<div style="margin:6px 0;display:flex;flex-wrap:wrap;gap:4px">${chips}</div>`;
     }
