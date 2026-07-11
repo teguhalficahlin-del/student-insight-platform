@@ -13,6 +13,7 @@ import {
     getMyPklPlacement, getMyPklAttendance,
     getMyCases,
     getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
+    getMyForumClass, getForumPosts, addForumAck,
 } from './api.js';
 
 // ─── State ───────────────────────────────────────────────────
@@ -132,6 +133,7 @@ function buildTabs() {
     if (!isPkl) tabs.push({ key: 'jadwal', label: 'Jadwal' });
     tabs.push({ key: 'kehadiran', label: 'Kehadiran' });
     tabs.push({ key: 'observasi', label: 'Observasi' });
+    tabs.push({ key: 'forum', label: 'Forum' });
     if (isPkl)  tabs.push({ key: 'pkl', label: 'PKL' });
 
     nav.innerHTML = tabs.map(t =>
@@ -169,12 +171,14 @@ async function loadTabContent(key) {
         case 'kehadiran': await loadAttendance(); break;
         case 'observasi': if (!obsLoaded) await loadObservations(); break;
         case 'pkl':       if (!pklLoaded) await loadPkl(); break;
+        case 'forum':     await loadForumPosts(); break;
     }
 }
 
 // Inisialisasi tab default saat boot (jadwal perlu wiring listener tanggal dulu).
 async function initTab(key) {
     if (key === 'jadwal') return initJadwalTab();
+    if (key === 'forum')  return initForumTab();
     return loadTabContent(key);
 }
 
@@ -586,3 +590,174 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
 
 // ─── Start ───────────────────────────────────────────────────
 init();
+
+// ─── TAB FORUM ───────────────────────────────────────────────
+
+let forumClassId  = null;
+let forumAcadYear = null;
+let forumOffset   = 0;
+let forumHasMore  = false;
+let forumInitDone = false;
+
+async function initForumTab() {
+    if (forumInitDone) { await loadForumPosts(); return; }
+    forumInitDone = true;
+
+    const loadingEl = document.getElementById('forum-loading');
+    loadingEl.textContent = 'Memuat forum…';
+
+    let cls;
+    try {
+        cls = await getMyForumClass(currentUser.user_id);
+    } catch (e) {
+        loadingEl.textContent = 'Gagal memuat data kelas.';
+        return;
+    }
+
+    if (!cls) {
+        loadingEl.textContent = 'Kamu belum terdaftar di kelas manapun.';
+        return;
+    }
+
+    forumClassId  = cls.class_id;
+    forumAcadYear = cls.academic_year;
+
+    document.getElementById('btn-load-more-forum')
+        .addEventListener('click', () => loadForumPosts(true));
+
+    await loadForumPosts();
+}
+
+async function loadForumPosts(loadMore = false) {
+    if (!forumClassId) return;
+
+    const loadingEl  = document.getElementById('forum-loading');
+    const listEl     = document.getElementById('forum-posts-list');
+    const moreBtn    = document.getElementById('btn-load-more-forum');
+
+    if (!loadMore) {
+        forumOffset = 0;
+        listEl.innerHTML = '';
+    }
+    loadingEl.style.display = '';
+    loadingEl.textContent   = 'Memuat…';
+
+    let posts;
+    try {
+        posts = await getForumPosts(
+            forumClassId, forumAcadYear,
+            currentUser.user_id, currentUser.school_id,
+            20, forumOffset
+        );
+    } catch (e) {
+        loadingEl.textContent = 'Gagal memuat posting forum.';
+        return;
+    }
+
+    loadingEl.style.display = 'none';
+
+    if (posts.length === 0 && forumOffset === 0) {
+        loadingEl.style.display = '';
+        loadingEl.textContent   = 'Belum ada posting forum untuk kelasmu.';
+        moreBtn.style.display   = 'none';
+        return;
+    }
+
+    posts.forEach(p => listEl.appendChild(renderForumCard(p)));
+
+    forumOffset  += posts.length;
+    forumHasMore  = posts.length === 20;
+    moreBtn.style.display = forumHasMore ? '' : 'none';
+}
+
+function renderForumCard(p) {
+    const card = document.createElement('div');
+    card.className = 'section-card';
+    card.style.marginBottom = '12px';
+
+    // Badge kategori
+    let badgeHtml = '';
+    if (p.category) {
+        const color = p.category.polarity === 'positive'
+            ? 'color:var(--color-success,#16a34a);background:var(--color-success-bg,#dcfce7)'
+            : p.category.polarity === 'concern'
+            ? 'color:var(--color-danger,#dc2626);background:var(--color-danger-bg,#fee2e2)'
+            : 'color:var(--color-text-muted,#6b7280);background:var(--color-surface-2,#f3f4f6)';
+        badgeHtml = `<span style="font-size:0.75rem;padding:2px 8px;border-radius:99px;${color}">${esc(p.category.label_sekolah)}</span>`;
+    }
+
+    // Chip nama siswa yang menjadi subjek
+    let subjectsHtml = '';
+    if (p.subjects?.length) {
+        const chips = p.subjects
+            .filter(s => s.student)
+            .map(s => `<span style="font-size:0.75rem;background:var(--color-surface-2,#f3f4f6);border-radius:99px;padding:2px 8px">${esc(s.student.full_name)}</span>`)
+            .join(' ');
+        if (chips) subjectsHtml = `<div style="margin:6px 0;display:flex;flex-wrap:wrap;gap:4px">${chips}</div>`;
+    }
+
+    // Acknowledgement
+    const alreadyAck = (p.acknowledgements ?? []).some(a => a.user_id === currentUser.user_id);
+    const ackBtnId   = `ack-${p.post_id}`;
+    const ackHtml    = alreadyAck
+        ? `<button class="btn btn-secondary" disabled style="font-size:0.8rem;padding:4px 12px">✓ Sudah dibaca</button>`
+        : `<button id="${ackBtnId}" class="btn btn-primary" style="font-size:0.8rem;padding:4px 12px">Tandai sudah baca</button>`;
+
+    // Jumlah komentar
+    const commentCount = p.comments?.length ?? 0;
+    const commentHtml  = commentCount > 0
+        ? `<span style="font-size:0.8rem;color:var(--color-text-muted,#6b7280)">${commentCount} komentar</span>`
+        : '';
+
+    // Waktu relatif
+    const timeAgo = fmtRelative(p.created_at);
+
+    // Pin indicator
+    const pinHtml = p.is_pinned
+        ? `<span style="font-size:0.75rem;color:var(--color-warning,#d97706)">📌 Disematkan · </span>`
+        : '';
+
+    card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+            <div>
+                ${pinHtml}
+                <span style="font-weight:600">${esc(p.author?.full_name ?? '—')}</span>
+                <span style="font-size:0.8rem;color:var(--color-text-muted,#6b7280)"> · ${timeAgo}</span>
+            </div>
+            ${badgeHtml}
+        </div>
+        ${subjectsHtml}
+        ${p.title ? `<div style="font-weight:600;margin-bottom:4px">${esc(p.title)}</div>` : ''}
+        <div style="white-space:pre-wrap;font-size:0.9rem">${esc(p.body ?? '')}</div>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:12px">
+            ${ackHtml}
+            ${commentHtml}
+        </div>
+    `;
+
+    if (!alreadyAck) {
+        card.querySelector(`#${ackBtnId}`)?.addEventListener('click', async function () {
+            this.disabled = true;
+            this.textContent = '…';
+            try {
+                await addForumAck(p.post_id, currentUser.user_id, currentUser.school_id);
+                this.textContent = '✓ Sudah dibaca';
+                this.className = 'btn btn-secondary';
+            } catch {
+                this.disabled = false;
+                this.textContent = 'Tandai sudah baca';
+            }
+        });
+    }
+
+    return card;
+}
+
+function fmtRelative(isoStr) {
+    if (!isoStr) return '';
+    const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+    if (diff < 60)   return 'baru saja';
+    if (diff < 3600) return `${Math.floor(diff / 60)} menit lalu`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} jam lalu`;
+    return `${Math.floor(diff / 86400)} hari lalu`;
+}
