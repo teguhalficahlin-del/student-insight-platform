@@ -1045,6 +1045,139 @@ export async function releaseTeacherFromSchedules(user_id) {
     }
 }
 
+// ─── Forum Kelas: penugasan BK & Guru Wali ───────────────
+
+/** Ambil semua staf dengan role BK aktif di sekolah ini. */
+export async function getForumBkStaff() {
+    const { data, error } = await supabase
+        .from('v_users_staff_directory')
+        .select('user_id, full_name, role_type')
+        .eq('role_type', 'BK')
+        .eq('is_active', true)
+        .order('full_name');
+    if (error) throw error;
+    return data ?? [];
+}
+
+/** Ambil semua staf non-admin aktif sebagai kandidat Guru Wali. */
+export async function getForumGuruWaliCandidates() {
+    const INTERNAL_ROLES = [
+        'GURU','BK','WALI_KELAS','KAPRODI','KEPSEK',
+        'WAKA_KURIKULUM','WAKA_KESISWAAN','WAKA_HUMAS',
+    ];
+    const { data, error } = await supabase
+        .from('v_users_staff_directory')
+        .select('user_id, full_name, role_type')
+        .in('role_type', INTERNAL_ROLES)
+        .eq('is_active', true)
+        .order('full_name');
+    if (error) throw error;
+    return data ?? [];
+}
+
+/** Ambil penugasan BK aktif untuk semua kelas di tahun ajaran ini. */
+export async function getBkAssignments(academicYear) {
+    const { data, error } = await supabase
+        .from('bk_class_assignments')
+        .select('assignment_id, class_id, bk_user_id, is_active')
+        .eq('academic_year', academicYear)
+        .eq('is_active', true);
+    if (error) throw error;
+    return data ?? [];
+}
+
+/** Ambil penugasan Guru Wali aktif untuk semua siswa di tahun ajaran ini. */
+export async function getGuruWaliAssignments(academicYear) {
+    const { data, error } = await supabase
+        .from('guru_wali_assignments')
+        .select('assignment_id, student_id, guru_user_id, is_active')
+        .eq('academic_year', academicYear)
+        .eq('is_active', true);
+    if (error) throw error;
+    return data ?? [];
+}
+
+/**
+ * Tetapkan BK ke kelas. Jika sudah ada assignment aktif untuk
+ * kombinasi (class_id, bk_user_id, academic_year), skip (idempoten).
+ * Untuk mencabut: set is_active=false via updateBkAssignment.
+ */
+export async function assignBkToClass(classId, bkUserId, academicYear, assignedByUserId) {
+    // Cek apakah sudah ada
+    const { data: existing } = await supabase
+        .from('bk_class_assignments')
+        .select('assignment_id')
+        .eq('class_id',      classId)
+        .eq('bk_user_id',   bkUserId)
+        .eq('academic_year', academicYear)
+        .eq('is_active',     true)
+        .maybeSingle();
+    if (existing) return existing.assignment_id; // idempoten
+
+    const { data, error } = await supabase
+        .from('bk_class_assignments')
+        .insert({
+            class_id:           classId,
+            bk_user_id:         bkUserId,
+            academic_year:      academicYear,
+            is_active:          true,
+            assigned_by_user_id: assignedByUserId,
+        })
+        .select('assignment_id')
+        .single();
+    if (error) throw error;
+    return data.assignment_id;
+}
+
+/** Cabut penugasan BK dari kelas (soft-delete via is_active=false). */
+export async function revokeBkFromClass(assignmentId) {
+    const { error } = await supabase
+        .from('bk_class_assignments')
+        .update({ is_active: false })
+        .eq('assignment_id', assignmentId);
+    if (error) throw error;
+}
+
+/**
+ * Tetapkan Guru Wali ke siswa. Idempoten — skip jika sudah ada.
+ */
+export async function assignGuruWaliToStudent(
+    studentId, guruUserId, academicYear, assignedByUserId
+) {
+    const { data: existing } = await supabase
+        .from('guru_wali_assignments')
+        .select('assignment_id')
+        .eq('student_id',    studentId)
+        .eq('guru_user_id',  guruUserId)
+        .eq('academic_year', academicYear)
+        .eq('is_active',     true)
+        .maybeSingle();
+    if (existing) return existing.assignment_id;
+
+    const { data, error } = await supabase
+        .from('guru_wali_assignments')
+        .insert({
+            student_id:          studentId,
+            guru_user_id:        guruUserId,
+            academic_year:       academicYear,
+            is_active:           true,
+            assigned_by_user_id: assignedByUserId,
+        })
+        .select('assignment_id')
+        .single();
+    if (error) throw error;
+    return data.assignment_id;
+}
+
+/** Cabut penugasan Guru Wali dari siswa. */
+export async function revokeGuruWaliFromStudent(assignmentId) {
+    const { error } = await supabase
+        .from('guru_wali_assignments')
+        .update({ is_active: false })
+        .eq('assignment_id', assignmentId);
+    if (error) throw error;
+}
+
 /** Kembalikan daftar GURU aktif tanpa teaching_assignment di tahun ajaran aktif. */
 export async function getStaleStaff() {
     const { data, error } = await supabase.rpc('fn_get_stale_staff');
