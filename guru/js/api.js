@@ -1208,13 +1208,9 @@ export async function addForumComment(postId, body, authorUserId, schoolId) {
     return data;
 }
 
-// CATATAN: kolom is_withdrawn belum ada di schema forum_posts/forum_post_comments.
-// Withdraw saat ini = hard DELETE. Tombstone "[Posting ini telah ditarik]"
-// membutuhkan migration follow-up (tambah is_withdrawn, withdrawn_at,
-// withdrawn_by_user_id ke forum_posts dan forum_post_comments).
 export async function withdrawForumPost(postId) {
     const { error } = await supabase.from('forum_posts')
-        .delete()
+        .update({ is_withdrawn: true })
         .eq('post_id', postId);
     if (error) throw error;
 }
