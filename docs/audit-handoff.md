@@ -991,6 +991,26 @@ di sesi ini (hanya migration fungsi helper read-only).
 | FORUM-3 | UI Portal Ortu Forum Kelas | Setelah FORUM-2 |
 | FORUM-5 | Test end-to-end (butuh data penugasan dari wizard) | Terakhir |
 
+### Fix Tambahan Sesi 11 Juli 2026
+
+| Commit | Fix |
+|--------|-----|
+| `5370f88` | RLS write kedua tabel penugasan: KEPSEK+WAKA → ADMINISTRATIVE |
+| `77863aa` | Trigger trg_auto_school_id ke bk/guru_wali_assignments |
+| `6a978bd` | assignBkToClass & assignGuruWaliToStudent return 'exists' idempoten |
+| `1a142a0` | Import Excel BK & Guru Wali di wizard step 11 |
+| `e6835c6` | Tambah esc() di wizard.js (ReferenceError step 11) |
+| `a674cc5` | Template Guru Wali pre-filled data siswa aktif |
+| `55fe93d` | login_identifier → nis di template Guru Wali |
+| `6f412dc` | is_active dihapus dari view + login_identifier → nis di import |
+| `95f2955` | Label "Input Manual" → "Koreksi & Kelola Penugasan" |
+
+**Status FORUM-4:** ✅ SELESAI PENUH (11 Juli 2026)
+- Import BK: 30 penugasan berhasil
+- Import Guru Wali: 300 penugasan berhasil
+- Tab manual untuk koreksi individual tersedia
+- Test suite: 90/90 ✓
+
 ---
 
 ## 15. Backlog Produk — BUKAN Backlog Audit Keamanan
