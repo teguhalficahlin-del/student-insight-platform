@@ -468,6 +468,194 @@ let _wzFkSelectedClass  = null;
 let _wzFkAcademicYear   = null;
 let _wzFkCurrentUserId  = null;
 
+// ── Import BK & Guru Wali ─────────────────────────────────
+
+/**
+ * Import penugasan BK ke kelas dari CSV.
+ * Format kolom: nama_kelas, kode_program, nip_bk
+ * Return: { success, skipped, errors: [{row, reason}] }
+ */
+async function importForumBk(csvText) {
+    const lines = csvText.trim().split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const idxKelas   = headers.indexOf('nama_kelas');
+    const idxProgram = headers.indexOf('kode_program');
+    const idxNip     = headers.indexOf('nip_bk');
+
+    if (idxKelas < 0 || idxProgram < 0 || idxNip < 0) {
+        throw new Error(
+            'Header CSV tidak sesuai. Kolom wajib: nama_kelas, kode_program, nip_bk'
+        );
+    }
+
+    const config = await getSchoolConfig();
+    const academicYear = config.current_academic_year;
+
+    // Fetch semua kelas dan staf BK sekali saja
+    const [classes, programs, bkStaff, currentUserRow] = await Promise.all([
+        getClasses(academicYear),
+        getPrograms(),
+        getForumBkStaff(),
+        getCurrentUserRow(),
+    ]);
+
+    const programByCode = new Map(
+        programs.map(p => [p.code.toLowerCase(), p])
+    );
+    const classByNameProgram = new Map(
+        classes.map(c => [`${c.name.toLowerCase()}::${c.program_id}`, c])
+    );
+    const bkByNip = new Map(
+        bkStaff.map(s => [s.login_identifier ?? '', s])
+    );
+
+    // Fetch login_identifier untuk BK (tidak ada di v_users_staff_directory)
+    const { data: bkUsers } = await supabase
+        .from('users')
+        .select('user_id, login_identifier')
+        .eq('role_type', 'BK')
+        .eq('is_active', true);
+    const bkNipToUserId = new Map(
+        (bkUsers ?? []).map(u => [u.login_identifier, u.user_id])
+    );
+
+    let success = 0, skipped = 0;
+    const errors = [];
+
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const cols = line.split(',').map(c => c.trim());
+        const namaKelas  = cols[idxKelas]   ?? '';
+        const kodeProgram = cols[idxProgram] ?? '';
+        const nipBk      = cols[idxNip]     ?? '';
+
+        if (!namaKelas || !kodeProgram || !nipBk) {
+            errors.push({ row: i + 1, reason: 'Baris tidak lengkap' });
+            continue;
+        }
+
+        const prog = programByCode.get(kodeProgram.toLowerCase());
+        if (!prog) {
+            errors.push({ row: i + 1, reason: `Program "${kodeProgram}" tidak ditemukan` });
+            continue;
+        }
+
+        const cls = classByNameProgram.get(
+            `${namaKelas.toLowerCase()}::${prog.program_id}`
+        );
+        if (!cls) {
+            errors.push({ row: i + 1, reason: `Kelas "${namaKelas}" tidak ditemukan di program "${kodeProgram}"` });
+            continue;
+        }
+
+        const bkUserId = bkNipToUserId.get(nipBk);
+        if (!bkUserId) {
+            errors.push({ row: i + 1, reason: `BK dengan NIP "${nipBk}" tidak ditemukan` });
+            continue;
+        }
+
+        try {
+            const result = await assignBkToClass(
+                cls.class_id, bkUserId, academicYear,
+                currentUserRow?.user_id ?? null
+            );
+            if (result === 'exists') skipped++;
+            else success++;
+        } catch (err) {
+            errors.push({ row: i + 1, reason: err.message ?? 'Gagal menyimpan' });
+        }
+    }
+
+    return { success, skipped, errors };
+}
+
+/**
+ * Import penugasan Guru Wali ke siswa dari CSV.
+ * Format kolom: nis_siswa, nip_guru_wali
+ * Return: { success, skipped, errors: [{row, reason}] }
+ */
+async function importForumGuruWali(csvText) {
+    const lines = csvText.trim().split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const idxNis  = headers.indexOf('nis_siswa');
+    const idxNip  = headers.indexOf('nip_guru_wali');
+
+    if (idxNis < 0 || idxNip < 0) {
+        throw new Error(
+            'Header CSV tidak sesuai. Kolom wajib: nis_siswa, nip_guru_wali'
+        );
+    }
+
+    const config = await getSchoolConfig();
+    const academicYear = config.current_academic_year;
+    const currentUserRow = await getCurrentUserRow();
+
+    // Fetch semua siswa aktif dan staf internal sekali saja
+    const [{ data: students }, { data: gwStaff }] = await Promise.all([
+        supabase
+            .from('students')
+            .select('student_id, login_identifier')
+            .eq('is_active', true),
+        supabase
+            .from('users')
+            .select('user_id, login_identifier')
+            .in('role_type', [
+                'GURU','BK','WALI_KELAS','KAPRODI','KEPSEK',
+                'WAKA_KURIKULUM','WAKA_KESISWAAN','WAKA_HUMAS',
+            ])
+            .eq('is_active', true),
+    ]);
+
+    const studentByNis = new Map(
+        (students ?? []).map(s => [s.login_identifier, s.student_id])
+    );
+    const gwByNip = new Map(
+        (gwStaff ?? []).map(u => [u.login_identifier, u.user_id])
+    );
+
+    let success = 0, skipped = 0;
+    const errors = [];
+
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const cols = line.split(',').map(c => c.trim());
+        const nisSiswa   = cols[idxNis] ?? '';
+        const nipGuru    = cols[idxNip] ?? '';
+
+        if (!nisSiswa || !nipGuru) {
+            errors.push({ row: i + 1, reason: 'Baris tidak lengkap' });
+            continue;
+        }
+
+        const studentId = studentByNis.get(nisSiswa);
+        if (!studentId) {
+            errors.push({ row: i + 1, reason: `Siswa dengan NIS "${nisSiswa}" tidak ditemukan` });
+            continue;
+        }
+
+        const guruUserId = gwByNip.get(nipGuru);
+        if (!guruUserId) {
+            errors.push({ row: i + 1, reason: `Guru dengan NIP "${nipGuru}" tidak ditemukan` });
+            continue;
+        }
+
+        try {
+            const result = await assignGuruWaliToStudent(
+                studentId, guruUserId, academicYear,
+                currentUserRow?.user_id ?? null
+            );
+            if (result === 'exists') skipped++;
+            else success++;
+        } catch (err) {
+            errors.push({ row: i + 1, reason: err.message ?? 'Gagal menyimpan' });
+        }
+    }
+
+    return { success, skipped, errors };
+}
+
 async function renderForumAssignmentStep() {
     contentEl.innerHTML = '<p class="hint">Memuat data penugasan…</p>';
     try {
@@ -492,7 +680,191 @@ async function renderForumAssignmentStep() {
         _wzFkBkAssignments = bkAsgn;
         _wzFkGwAssignments = gwAsgn;
 
-        renderWzFkShell();
+        const bkCount = bkAsgn?.length ?? 0;
+        const gwCount = gwAsgn?.length ?? 0;
+
+        const tmpl11 = EXCEL_TEMPLATES[11];
+
+        contentEl.innerHTML = `
+            <div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
+            <h3>Penugasan Forum Kelas</h3>
+            <p class="hint">Tugaskan BK ke kelas dan Guru Wali ke siswa via
+                file Excel/CSV, atau isi manual di tab di bawah.</p>
+
+            <div style="background:var(--color-surface-raised,#f8fafc);
+                        border:1px solid var(--color-border);border-radius:8px;
+                        padding:16px;margin-bottom:24px">
+                <p class="hint" style="margin:0 0 4px">Ringkasan penugasan aktif:</p>
+                <p style="margin:0">
+                    BK: <strong>${bkCount}</strong> penugasan &nbsp;|&nbsp;
+                    Guru Wali: <strong>${gwCount}</strong> penugasan
+                </p>
+            </div>
+
+            <h4 style="margin:0 0 8px">BK per Kelas</h4>
+            <p class="hint">Template berisi kolom: <code>nama_kelas, kode_program, nip_bk</code></p>
+            <button type="button" class="btn btn-secondary" id="wz-fk-bk-tpl-btn"
+                style="margin-bottom:12px">↓ Unduh Template BK</button>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+                <input type="file" class="input" id="wz-fk-bk-file"
+                    accept=".xlsx,.xls,.csv" style="padding:6px" />
+                <button type="button" class="btn btn-primary" id="wz-fk-bk-import-btn"
+                    disabled>Impor BK</button>
+            </div>
+            <div id="wz-fk-bk-result" style="margin-bottom:24px"></div>
+
+            <h4 style="margin:0 0 8px">Guru Wali per Siswa</h4>
+            <p class="hint">Template berisi kolom: <code>nis_siswa, nip_guru_wali</code></p>
+            <button type="button" class="btn btn-secondary" id="wz-fk-gw-tpl-btn"
+                style="margin-bottom:12px">↓ Unduh Template Guru Wali</button>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+                <input type="file" class="input" id="wz-fk-gw-file"
+                    accept=".xlsx,.xls,.csv" style="padding:6px" />
+                <button type="button" class="btn btn-primary" id="wz-fk-gw-import-btn"
+                    disabled>Impor Guru Wali</button>
+            </div>
+            <div id="wz-fk-gw-result" style="margin-bottom:24px"></div>
+
+            <hr style="margin:8px 0 24px;border:none;border-top:1px solid var(--color-border)" />
+            <h4 style="margin:0 0 8px">Input Manual</h4>
+            <div id="wz-forum-manual-shell"></div>
+        `;
+
+        // ── Tombol unduh template BK ──
+        document.getElementById('wz-fk-bk-tpl-btn').addEventListener('click', () => {
+            const sheet = tmpl11?.sheets?.bk;
+            if (!sheet) return;
+            generateExcelTemplate(
+                'template_penugasan_bk.xlsx',
+                sheet.headers, sheet.exampleRows, sheet.guide
+            );
+        });
+
+        // ── Tombol unduh template Guru Wali ──
+        document.getElementById('wz-fk-gw-tpl-btn').addEventListener('click', () => {
+            const sheet = tmpl11?.sheets?.gw;
+            if (!sheet) return;
+            generateExcelTemplate(
+                'template_penugasan_guru_wali.xlsx',
+                sheet.headers, sheet.exampleRows, sheet.guide
+            );
+        });
+
+        // ── Import BK ──
+        const bkFileInput  = document.getElementById('wz-fk-bk-file');
+        const bkImportBtn  = document.getElementById('wz-fk-bk-import-btn');
+        const bkResultEl   = document.getElementById('wz-fk-bk-result');
+        let bkCsvText = null;
+
+        bkFileInput.addEventListener('change', async () => {
+            bkResultEl.innerHTML = '';
+            const file = bkFileInput.files?.[0];
+            if (!file) { bkCsvText = null; bkImportBtn.disabled = true; return; }
+            try {
+                bkCsvText = stripEmptyCsvLines(await fileToCsv(file));
+                bkImportBtn.disabled = !bkCsvText.trim();
+            } catch (err) {
+                bkCsvText = null;
+                bkImportBtn.disabled = true;
+                bkResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal membaca file.')}</div>`;
+            }
+        });
+
+        bkImportBtn.addEventListener('click', async () => {
+            if (!bkCsvText) return;
+            bkImportBtn.disabled = true;
+            bkImportBtn.textContent = 'Mengimpor…';
+            bkResultEl.innerHTML = '';
+            try {
+                const res = await importForumBk(bkCsvText);
+                bkResultEl.innerHTML = renderForumImportResult(res);
+                if (res.success > 0) {
+                    _wzFkBkAssignments = await getBkAssignments(_wzFkAcademicYear);
+                    bkImportBtn.textContent = '✓ Selesai';
+                    bkImportBtn.classList.replace('btn-primary', 'btn-success');
+                } else {
+                    bkImportBtn.textContent = 'Impor BK';
+                    bkImportBtn.disabled = false;
+                }
+            } catch (err) {
+                bkResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Impor gagal.')}</div>`;
+                bkImportBtn.textContent = 'Impor BK';
+                bkImportBtn.disabled = false;
+            }
+        });
+
+        // ── Import Guru Wali ──
+        const gwFileInput  = document.getElementById('wz-fk-gw-file');
+        const gwImportBtn  = document.getElementById('wz-fk-gw-import-btn');
+        const gwResultEl   = document.getElementById('wz-fk-gw-result');
+        let gwCsvText = null;
+
+        gwFileInput.addEventListener('change', async () => {
+            gwResultEl.innerHTML = '';
+            const file = gwFileInput.files?.[0];
+            if (!file) { gwCsvText = null; gwImportBtn.disabled = true; return; }
+            try {
+                gwCsvText = stripEmptyCsvLines(await fileToCsv(file));
+                gwImportBtn.disabled = !gwCsvText.trim();
+            } catch (err) {
+                gwCsvText = null;
+                gwImportBtn.disabled = true;
+                gwResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal membaca file.')}</div>`;
+            }
+        });
+
+        gwImportBtn.addEventListener('click', async () => {
+            if (!gwCsvText) return;
+            gwImportBtn.disabled = true;
+            gwImportBtn.textContent = 'Mengimpor…';
+            gwResultEl.innerHTML = '';
+            try {
+                const res = await importForumGuruWali(gwCsvText);
+                gwResultEl.innerHTML = renderForumImportResult(res);
+                if (res.success > 0) {
+                    _wzFkGwAssignments = await getGuruWaliAssignments(_wzFkAcademicYear);
+                    gwImportBtn.textContent = '✓ Selesai';
+                    gwImportBtn.classList.replace('btn-primary', 'btn-success');
+                } else {
+                    gwImportBtn.textContent = 'Impor Guru Wali';
+                    gwImportBtn.disabled = false;
+                }
+            } catch (err) {
+                gwResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Impor gagal.')}</div>`;
+                gwImportBtn.textContent = 'Impor Guru Wali';
+                gwImportBtn.disabled = false;
+            }
+        });
+
+        // ── Tab manual ──
+        const manualShell = document.getElementById('wz-forum-manual-shell');
+        _wzFkTab = _wzFkTab ?? 'bk';
+        manualShell.innerHTML = `
+            <div style="display:flex;gap:8px;margin-bottom:16px">
+                <button id="wz-fk-tab-bk"
+                    class="btn ${_wzFkTab === 'bk' ? 'btn-primary' : 'btn-secondary'}"
+                    style="min-width:120px">BK per Kelas</button>
+                <button id="wz-fk-tab-gw"
+                    class="btn ${_wzFkTab === 'guru-wali' ? 'btn-primary' : 'btn-secondary'}"
+                    style="min-width:140px">Guru Wali per Siswa</button>
+            </div>
+            <div id="wz-forum-tab-content"></div>
+        `;
+        document.getElementById('wz-fk-tab-bk').addEventListener('click', () => {
+            _wzFkTab = 'bk';
+            document.getElementById('wz-fk-tab-bk').classList.replace('btn-secondary', 'btn-primary');
+            document.getElementById('wz-fk-tab-gw').classList.replace('btn-primary', 'btn-secondary');
+            renderWzFkBkTab();
+        });
+        document.getElementById('wz-fk-tab-gw').addEventListener('click', () => {
+            _wzFkTab = 'guru-wali';
+            document.getElementById('wz-fk-tab-gw').classList.replace('btn-secondary', 'btn-primary');
+            document.getElementById('wz-fk-tab-bk').classList.replace('btn-primary', 'btn-secondary');
+            renderWzFkGuruWaliTab();
+        });
+        if (_wzFkTab === 'bk') renderWzFkBkTab();
+        else renderWzFkGuruWaliTab();
+
     } catch (err) {
         contentEl.innerHTML =
             `<div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
@@ -500,6 +872,26 @@ async function renderForumAssignmentStep() {
              <p style="color:var(--color-danger)">${esc(err?.message ?? String(err))}</p>`;
     }
     nextBtn.disabled = false;
+}
+
+/** Render hasil import Forum (BK atau Guru Wali) ke dalam elemen hasil. */
+function renderForumImportResult({ success = 0, skipped = 0, errors = [] }) {
+    let html = '';
+    if (success > 0) {
+        html += `<div class="alert alert-success">${success} penugasan berhasil ditambahkan.</div>`;
+    }
+    if (skipped > 0) {
+        html += `<div class="alert alert-warning">${skipped} baris dilewati (sudah ada).</div>`;
+    }
+    if (errors.length > 0) {
+        html += `<div class="alert alert-danger">
+            ${errors.map(e => `Baris ${e.row}: ${escapeHtml(e.reason ?? '')}`).join('<br>')}
+        </div>`;
+    }
+    if (!html) {
+        html = `<div class="alert alert-warning">Tidak ada baris yang diproses.</div>`;
+    }
+    return html;
 }
 
 function renderWzFkShell() {
@@ -1339,6 +1731,48 @@ const EXCEL_TEMPLATES = {
              ['•', '', 'kode_program harus sudah ada di langkah Program Keahlian. Bila diisi tapi kode tidak dikenal, baris tersebut ditolak.'],
              ['•', '', 'Upload ulang file yang sama akan memperbarui nama usaha, penanggung jawab, dan program.'],
          ] },
+    11: {
+        filename: 'template_penugasan_forum.xlsx',
+        sheets: {
+            bk: {
+                name: 'Template BK',
+                headers: ['nama_kelas', 'kode_program', 'nip_bk'],
+                exampleRows: [
+                    ['X TKJ 1', 'TKJ', '202620270001'],
+                ],
+                guide: [
+                    ['PETUNJUK PENGISIAN — PENUGASAN BK KE KELAS', '', ''],
+                    ['', '', ''],
+                    ['Kolom', 'Wajib?', 'Penjelasan'],
+                    ['nama_kelas', 'Wajib', 'Nama kelas. Contoh: X TKJ 1. Harus sudah ada di langkah Kelas & Rombel.'],
+                    ['kode_program', 'Wajib', 'Kode program keahlian. Contoh: TKJ. Harus sudah ada di langkah Program Keahlian.'],
+                    ['nip_bk', 'Wajib', 'NIP guru BK yang ditugaskan ke kelas ini.'],
+                    ['', '', ''],
+                    ['PENTING', '', ''],
+                    ['•', '', 'Satu kelas boleh ditugaskan ke lebih dari satu BK (tambah baris terpisah).'],
+                    ['•', '', 'Upload ulang baris yang sama akan dilewati (tidak diduplikasi).'],
+                ],
+            },
+            gw: {
+                name: 'Template Guru Wali',
+                headers: ['nis_siswa', 'nip_guru_wali'],
+                exampleRows: [
+                    ['0091234567', '202620270075'],
+                ],
+                guide: [
+                    ['PETUNJUK PENGISIAN — PENUGASAN GURU WALI KE SISWA', '', ''],
+                    ['', '', ''],
+                    ['Kolom', 'Wajib?', 'Penjelasan'],
+                    ['nis_siswa', 'Wajib', 'NIS siswa. Harus sudah ada di langkah Siswa.'],
+                    ['nip_guru_wali', 'Wajib', 'NIP guru yang menjadi Guru Wali siswa tersebut.'],
+                    ['', '', ''],
+                    ['PENTING', '', ''],
+                    ['•', '', 'Satu siswa hanya boleh punya satu Guru Wali aktif per tahun ajaran.'],
+                    ['•', '', 'Upload ulang baris yang sama akan dilewati (tidak diduplikasi).'],
+                ],
+            },
+        },
+    },
 };
 
 /** HTML tombol unduh template untuk langkah tertentu (kosong jika tak ada config). */
@@ -1406,6 +1840,10 @@ const IMPORT_STEP_INFO = {
          desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
     8: { title: 'DUDI',
          desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
+    11: {
+        title: 'Penugasan Forum Kelas',
+        desc: 'Impor penugasan BK per kelas dan Guru Wali per siswa. Gunakan dua template terpisah.',
+    },
 };
 
 /** Fungsi impor (edge function) untuk tiap langkah. Guru menyuntikkan
@@ -1418,6 +1856,8 @@ function importFnForStep(step) {
         case 6: return importStudents;
         case 7: return importParents;
         case 8: return importDudi;
+        case 11: // ditangani manual di renderForumAssignmentStep
+            return null;
         default: throw new Error(`Tidak ada importer untuk langkah ${step}`);
     }
 }
@@ -1852,6 +2292,24 @@ const STEP_LIST = {
                     s.teacher?.full_name ?? '—',
                 ],
             }));
+        },
+    },
+    11: {
+        fetch: async (ay) => {
+            const [bkAsgn, gwAsgn] = await Promise.all([
+                getBkAssignments(ay),
+                getGuruWaliAssignments(ay),
+            ]);
+            return { bkAsgn, gwAsgn };
+        },
+        render: (data) => {
+            if (!data) return '<p class="hint">Memuat…</p>';
+            const bkCount = data.bkAsgn?.length ?? 0;
+            const gwCount = data.gwAsgn?.length ?? 0;
+            return `<p class="hint" style="margin:0">
+                BK: <strong>${bkCount}</strong> penugasan aktif &nbsp;|&nbsp;
+                Guru Wali: <strong>${gwCount}</strong> penugasan aktif
+            </p>`;
         },
     },
 };
