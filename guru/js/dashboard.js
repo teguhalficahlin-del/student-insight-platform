@@ -19,7 +19,7 @@ import {
     getAttendanceSummaryByStudents,
     fetchAllPklStudents, fetchAllDudiPartners,
     createPlacement, finishPlacement, bulkImportPkl,
-    getSchoolStats, getKepsekMonitoring, getAbsentTeachersToday,
+    getSchoolStats, getKepsekMonitoring, getPendingAttendanceSessions,
     getAttendanceRecapPerClass, getOpenCases,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
     getMyObservations, updateObsVisibility, getStudentUserId, getStudentParents,
@@ -1528,31 +1528,77 @@ async function initKpPlacementForm(programId) {
 
 // ─── TAB WAKA KURIKULUM ───────────────────────────────────────
 
+let _wkKurTableVisible = false;
+
 async function initWakaKurTab() {
-    const hintEl = document.getElementById('waka-kur-hint');
-    const tableEl = document.getElementById('waka-kur-table');
-    const tbody   = document.getElementById('waka-kur-body');
-    hintEl.textContent = 'Memuat data hari ini…';
-    tableEl.style.display = 'none';
+    const monday = localDateStr((() => {
+        const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d;
+    })());
+    const friday = localDateStr((() => {
+        const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 4); return d;
+    })());
+
+    document.getElementById('wk-kur-start').value = monday;
+    document.getElementById('wk-kur-end').value   = friday;
+
+    document.getElementById('wk-kur-load-btn').onclick   = loadWkKurTable;
+    document.getElementById('wk-kur-toggle-btn').onclick = toggleWkKurTable;
+}
+
+async function loadWkKurTable() {
+    const hintEl     = document.getElementById('waka-kur-hint');
+    const wrapEl     = document.getElementById('wk-kur-table-wrap');
+    const tbody      = document.getElementById('waka-kur-body');
+    const toggleBtn  = document.getElementById('wk-kur-toggle-btn');
+    const loadBtn    = document.getElementById('wk-kur-load-btn');
+    const dateStart  = document.getElementById('wk-kur-start').value;
+    const dateEnd    = document.getElementById('wk-kur-end').value;
+
+    hintEl.style.display = 'none';
+    wrapEl.style.display = 'none';
+    toggleBtn.style.display = 'none';
+    loadBtn.disabled = true;
+    loadBtn.textContent = 'Memuat…';
 
     try {
-        const rows = await getAbsentTeachersToday();
+        const rows = await getPendingAttendanceSessions(dateStart || null, dateEnd || null);
+        loadBtn.disabled = false;
+        loadBtn.textContent = 'Tampilkan';
+
         if (rows.length === 0) {
-            hintEl.textContent = '✓ Tidak ada sesi yang menunggu pengisian absensi hari ini.';
+            hintEl.textContent = '✓ Tidak ada sesi yang menunggu pengisian absensi pada rentang ini.';
+            hintEl.style.display = 'block';
+            _wkKurTableVisible = false;
             return;
         }
-        hintEl.style.display = 'none';
-        tableEl.style.display = '';
+
         tbody.innerHTML = rows.map((r, i) => `<tr>
             <td style="text-align:center">${i + 1}</td>
             <td>${esc(r.teacher?.full_name ?? '—')}</td>
             <td>${esc(r.subject?.name ?? '—')}</td>
             <td>${esc(r.class?.name ?? '—')}</td>
+            <td>${esc(r.session_date ?? '—')}</td>
             <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
         </tr>`).join('');
+
+        wrapEl.style.display = '';
+        toggleBtn.style.display = '';
+        toggleBtn.textContent = 'Sembunyikan';
+        _wkKurTableVisible = true;
     } catch (err) {
+        loadBtn.disabled = false;
+        loadBtn.textContent = 'Tampilkan';
         hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
+        hintEl.style.display = 'block';
     }
+}
+
+function toggleWkKurTable() {
+    const wrapEl    = document.getElementById('wk-kur-table-wrap');
+    const toggleBtn = document.getElementById('wk-kur-toggle-btn');
+    _wkKurTableVisible = !_wkKurTableVisible;
+    wrapEl.style.display    = _wkKurTableVisible ? '' : 'none';
+    toggleBtn.textContent   = _wkKurTableVisible ? 'Sembunyikan' : 'Tampilkan';
 }
 
 // ─── TAB WAKA HUMAS ──────────────────────────────────────────
