@@ -1028,36 +1028,90 @@ async function initWaliTab() {
 }
 
 async function loadWaliSummary() {
-    const classId = currentUser.wali_kelas_class_id;
-    const start   = document.getElementById('wali-date-start').value;
-    const end     = document.getElementById('wali-date-end').value;
-    const tbody   = document.getElementById('wali-att-body');
-    const emptyEl = document.getElementById('wali-empty');
-    tbody.innerHTML = '<tr><td colspan="6" class="hint">Memuat…</td></tr>';
-    emptyEl.style.display = 'none';
+    const classId   = currentUser.wali_kelas_class_id;
+    const dateStart = document.getElementById('wali-date-start').value || null;
+    const dateEnd   = document.getElementById('wali-date-end').value   || null;
+    const container = document.getElementById('wali-att-recap');
+    container.innerHTML = '<p class="hint">Memuat…</p>';
 
     try {
-        const rows = await getWaliAttendanceSummary(classId, config.current_academic_year, start, end);
-        if (rows.length === 0) {
-            tbody.innerHTML = '';
-            emptyEl.style.display = 'block';
+        const students = await getWaliAttendanceSummary(
+            classId, config.current_academic_year, dateStart, dateEnd
+        );
+        if (!students.length) {
+            container.innerHTML = '<p class="hint">Belum ada siswa di kelas ini.</p>';
             return;
         }
-        tbody.innerHTML = rows.map(r => {
-            const pctDenom = r.HADIR + r.IZIN + r.TIDAK_HADIR;
-            const pct   = pctDenom > 0 ? Math.round(r.HADIR / pctDenom * 100) : 0;
-            const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
-            return `<tr>
-                <td><span style="font-weight:500">${esc(r.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted)">${esc(r.nis)}</span></td>
-                <td style="text-align:center">${r.HADIR}</td>
-                <td style="text-align:center">${r.IZIN}</td>
-                <td style="text-align:center">${r.SAKIT}</td>
-                <td style="text-align:center">${r.TIDAK_HADIR}</td>
-                <td style="text-align:center;font-weight:600;color:${color}">${r.total > 0 ? pct + '%' : '—'}</td>
-            </tr>`;
-        }).join('');
+
+        container.innerHTML = students
+            .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'))
+            .map(s => {
+                const pct   = s.total > 0 ? Math.round(s.HADIR / s.total * 100) : null;
+                const color = pct === null ? 'var(--color-text-muted)' : pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+                return `
+                <details class="att-accordion" style="margin-bottom:6px"
+                         data-student-id="${esc(s.student_id)}"
+                         data-date-start="${esc(dateStart ?? '')}"
+                         data-date-end="${esc(dateEnd ?? '')}">
+                    <summary class="att-accordion-summary">
+                        <span>
+                            ${esc(s.full_name)}
+                            <span class="sub-label" style="margin-left:4px">${esc(s.nis)}</span>
+                        </span>
+                        <span style="color:${color};font-weight:600">
+                            ${pct !== null ? pct + '%' : '—'}
+                        </span>
+                    </summary>
+                    <div style="padding:4px 0">
+                        <p class="hint" style="padding:8px 16px">Memuat sesi…</p>
+                    </div>
+                </details>`;
+            }).join('');
+
+        // Lazy load sesi per siswa
+        container.querySelectorAll('details[data-student-id]').forEach(det => {
+            det.addEventListener('toggle', async () => {
+                if (!det.open) return;
+                const body = det.querySelector('div');
+                if (!body || body.dataset.loaded) return;
+                body.dataset.loaded = '1';
+                const sid = det.dataset.studentId;
+                const ds  = det.dataset.dateStart || null;
+                const de  = det.dataset.dateEnd   || null;
+                try {
+                    const sessions = await getStudentAttendanceSessions(sid, ds, de);
+                    if (!sessions.length) {
+                        body.innerHTML = '<p class="hint" style="padding:8px 16px">Belum ada sesi tercatat.</p>';
+                        return;
+                    }
+                    const STATUS_COLOR = {
+                        HADIR: 'var(--color-success)',
+                        IZIN:  'var(--color-warning,#f59e0b)',
+                        SAKIT: 'var(--color-primary)',
+                        TIDAK_HADIR: 'var(--color-danger)',
+                    };
+                    body.innerHTML = sessions.map(s => `
+                        <div style="display:flex;align-items:center;gap:8px;
+                            padding:7px 16px;border-top:0.5px solid var(--color-border)">
+                            <span style="font-size:12px;color:var(--color-text-muted);min-width:90px">
+                                ${esc(s.schedule.session_date)} ${fmtTime(s.schedule.session_start)}
+                            </span>
+                            <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
+                                ${esc(s.schedule.subject?.name ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
+                            </span>
+                            <span style="font-size:11px;font-weight:600;
+                                color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
+                                ${esc(s.status)}
+                            </span>
+                        </div>`).join('');
+                } catch(err) {
+                    body.innerHTML = `<div class="alert alert-danger" style="margin:8px 16px">${esc(fe(err))}</div>`;
+                }
+            });
+        });
+
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
+        container.innerHTML = `<div class="alert alert-danger">${esc(fe(err))}</div>`;
     }
 }
 
