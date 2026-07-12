@@ -2,7 +2,7 @@
  * @file parent/js/portal.js
  *
  * Main logic for the parent portal.
- * Loads children, lets parent pick one, shows attendance + observations.
+ * Loads children, lets parent pick one, shows attendance + catatan siswa.
  */
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
@@ -415,7 +415,7 @@ async function loadObservations(studentId) {
     if (cached) {
         renderObsRows(cached);
     } else {
-        obsListEl.innerHTML = '<p class="hint">Memuat...</p>';
+        obsListEl.innerHTML = '<p class="hint">Memuat catatan…</p>';
         obsEmpty.style.display = 'none';
     }
 
