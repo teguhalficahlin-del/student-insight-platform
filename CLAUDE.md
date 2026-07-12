@@ -13,7 +13,7 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
 3. **Missing RLS policy bukan otomatis celah.** RLS default-deny: tidak ada policy = akses ditolak. Verifikasi live dulu (simulasi cross-tenant nyata) SEBELUM fix, jangan asumsi dari pola kode saja.
 4. Lihat `docs/audit-handoff.md §3a` untuk daftar lengkap standing rules.
 
-## Status Singkat (terakhir diperbarui: 9 Juli 2026)
+## Status Singkat (terakhir diperbarui: 12 Juli 2026)
 
 - **Fase 1**: ✅ Selesai
 - **Fase 2**: ✅ **SELESAI (9 Juli 2026).** Kelompok A-E selesai 100%,
@@ -24,12 +24,19 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
   `achievements`) diinvestigasi dan dikonfirmasi Romo: keduanya **tidak ada
   isu keamanan**, dicatat sebagai backlog fitur produk. Lihat
   docs/audit-handoff.md §6 dan §13.
-- **Fase 3**: ⏳ BELUM DIMULAI. Item yang sudah menumpuk menunggu Fase 3:
-  FINDING 4 (14 fungsi helper anon=true, perlu refactor 19 policy dari
-  `roles={public}` ke `TO authenticated`), kemungkinan analisis akses
-  WAKA_HUMAS/PKL (lihat §10 backlog), **BARU: column-restriction
-  `rls_users_read_staff`** — GURU/SISWA/ORTU masih bisa pilih kolom sensitif
-  via REST API langsung (keputusan Romo: ditunda ke Fase 3, lihat §13).
+- **Fase 3**: ✅ **SELESAI (12 Juli 2026).** Tiga item diinvestigasi dan
+  ditutup: (1) 14 fungsi anon=true — query live ke `pg_proc` mengembalikan
+  0 rows, semua REVOKE sudah bersih; (2) WAKA_HUMAS/PKL scope — 6 policy
+  dikonfirmasi konsisten dengan desain; (3) column-restriction
+  `rls_users_read_staff` — investigasi 19 titik `.from('users')` di seluruh
+  portal menunjukkan tidak ada cross-user read kolom sensitif, semua
+  pembacaan sensitif adalah self-read via `auth_user_id = auth.uid()`.
+  Documented risk acceptance. Lihat docs/audit-handoff.md Fase 3.
+
+**Fitur selesai sesi 12 Juli 2026:**
+- Refactor Portal Ortu → tab layout (lazy load per tab, reset per anak).
+  Commit `0dee5f5`.
+- Test suite: 93/93 ✓. HEAD: `d314175`.
 - **✅ GAP rls_case_events_read_student — SELESAI (9 Juli 2026):**
   Investigasi selesai: ketiga policy (`rls_case_events_read_student`,
   `rls_case_events_read_parent`, `rls_student_updates_read_student`) BERDIRI
