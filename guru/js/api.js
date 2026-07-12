@@ -565,7 +565,7 @@ export async function getAbsentTeachersToday() {
     const today = new Date().toISOString().slice(0, 10);
     const { data, error } = await supabase
         .from('teaching_schedules')
-        .select('schedule_id, session_start, session_end, scheduled_teacher_id, class:classes(name), teacher:users(full_name)')
+        .select('schedule_id, session_start, session_end, scheduled_teacher_id, class:classes(name), teacher:users(full_name), subject:subjects(name)')
         .eq('session_date', today)
         .eq('teacher_indicator', 'PENDING_EVALUATION');
     if (error) throw error;

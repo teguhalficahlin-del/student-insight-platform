@@ -1538,13 +1538,15 @@ async function initWakaKurTab() {
     try {
         const rows = await getAbsentTeachersToday();
         if (rows.length === 0) {
-            hintEl.textContent = '✓ Tidak ada guru tidak hadir hari ini.';
+            hintEl.textContent = '✓ Tidak ada sesi yang menunggu pengisian absensi hari ini.';
             return;
         }
         hintEl.style.display = 'none';
         tableEl.style.display = '';
-        tbody.innerHTML = rows.map(r => `<tr>
+        tbody.innerHTML = rows.map((r, i) => `<tr>
+            <td style="text-align:center">${i + 1}</td>
             <td>${esc(r.teacher?.full_name ?? '—')}</td>
+            <td>${esc(r.subject?.name ?? '—')}</td>
             <td>${esc(r.class?.name ?? '—')}</td>
             <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
         </tr>`).join('');
