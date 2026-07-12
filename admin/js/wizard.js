@@ -464,7 +464,6 @@ let _wzFkBkStaff        = [];
 let _wzFkGuruWaliCands  = [];
 let _wzFkBkAssignments  = [];
 let _wzFkGwAssignments  = [];
-let _wzFkSelectedClass  = null;
 let _wzFkAcademicYear   = null;
 let _wzFkCurrentUserId  = null;
 
@@ -680,227 +679,12 @@ async function renderForumAssignmentStep() {
         _wzFkBkAssignments = bkAsgn;
         _wzFkGwAssignments = gwAsgn;
 
-        const tmpl11 = EXCEL_TEMPLATES[11];
-
+        _wzFkTab = _wzFkTab ?? 'bk';
         contentEl.innerHTML = `
             <div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
             <h3>Penugasan Forum Kelas</h3>
             <p class="hint">Tugaskan BK ke kelas dan Guru Wali ke siswa via
                 file Excel/CSV, atau isi manual di tab di bawah.</p>
-
-            <h4 style="margin:0 0 8px">BK per Kelas</h4>
-            <p class="hint">Template berisi kolom: <code>nama_kelas, kode_program, nip_bk</code></p>
-            <button type="button" class="btn btn-secondary" id="wz-fk-bk-tpl-btn"
-                style="margin-bottom:12px">↓ Unduh Template BK</button>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
-                <input type="file" class="input" id="wz-fk-bk-file"
-                    accept=".xlsx,.xls,.csv" style="padding:6px" />
-                <button type="button" class="btn btn-primary" id="wz-fk-bk-import-btn"
-                    disabled>Impor BK</button>
-            </div>
-            <div id="wz-fk-bk-result" style="margin-bottom:24px"></div>
-
-            <h4 style="margin:0 0 8px">Guru Wali per Siswa</h4>
-            <p class="hint">Template berisi kolom: <code>nis_siswa, nip_guru_wali</code></p>
-            <button type="button" class="btn btn-secondary" id="wz-fk-gw-tpl-btn"
-                style="margin-bottom:12px">↓ Unduh Template Guru Wali</button>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
-                <input type="file" class="input" id="wz-fk-gw-file"
-                    accept=".xlsx,.xls,.csv" style="padding:6px" />
-                <button type="button" class="btn btn-primary" id="wz-fk-gw-import-btn"
-                    disabled>Impor Guru Wali</button>
-            </div>
-            <div id="wz-fk-gw-result" style="margin-bottom:24px"></div>
-
-            <hr style="margin:8px 0 24px;border:none;border-top:1px solid var(--color-border)" />
-            <h4 style="margin:0 0 4px">Koreksi &amp; Kelola Penugasan</h4>
-            <p class="hint" style="margin:0 0 16px">Tambah, ganti, atau cabut penugasan individual tanpa mengimpor ulang seluruh file.</p>
-            <div id="wz-forum-manual-shell"></div>
-        `;
-
-        // ── Tombol unduh template BK ──
-        document.getElementById('wz-fk-bk-tpl-btn').addEventListener('click', () => {
-            const sheet = tmpl11?.sheets?.bk;
-            if (!sheet) return;
-            generateExcelTemplate(
-                'template_penugasan_bk.xlsx',
-                sheet.headers, sheet.exampleRows, sheet.guide
-            );
-        });
-
-        // ── Tombol unduh template Guru Wali (pre-filled siswa aktif) ──
-        document.getElementById('wz-fk-gw-tpl-btn').addEventListener('click', async () => {
-            const btn = document.getElementById('wz-fk-gw-tpl-btn');
-            const gwResultEl = document.getElementById('wz-fk-gw-result');
-            btn.disabled = true;
-            btn.textContent = 'Memuat data siswa…';
-            try {
-                const [config, classes, programs] = await Promise.all([
-                    getSchoolConfig(),
-                    getClasses(_wzFkAcademicYear),
-                    getPrograms(),
-                ]);
-                const academicYear = _wzFkAcademicYear ?? config?.current_academic_year;
-                const programByCode = new Map(programs.map(p => [p.program_id, p.code]));
-
-                const rows = [];
-                const sortedClasses = [...classes].sort((a, b) =>
-                    a.name.localeCompare(b.name, 'id'));
-
-                for (const cls of sortedClasses) {
-                    const { data: enrollments } = await supabase
-                        .from('class_enrollments')
-                        .select('student:students(student_id, full_name, nis)')
-                        .eq('class_id', cls.class_id)
-                        .eq('academic_year', academicYear)
-                        .is('withdrawn_at', null);
-
-                    const students = (enrollments ?? [])
-                        .map(e => e.student)
-                        .filter(Boolean)
-                        .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
-
-                    const kodeProgram = programByCode.get(cls.program_id) ?? '';
-                    for (const stu of students) {
-                        rows.push([
-                            cls.name,
-                            kodeProgram,
-                            stu.nis ?? '',
-                            stu.full_name ?? '',
-                            '', // nip_guru_wali — diisi admin
-                        ]);
-                    }
-                }
-
-                if (typeof XLSX === 'undefined') {
-                    throw new Error('Pustaka Excel gagal dimuat. Periksa koneksi internet.');
-                }
-
-                const headers = ['nama_kelas', 'kode_program', 'nis_siswa', 'nama_siswa', 'nip_guru_wali'];
-                const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-
-                ws['!cols'] = [
-                    { wch: 15 }, // nama_kelas
-                    { wch: 14 }, // kode_program
-                    { wch: 14 }, // nis_siswa
-                    { wch: 25 }, // nama_siswa
-                    { wch: 18 }, // nip_guru_wali
-                ];
-
-                // Format semua sel sebagai teks agar NIS/NIP tidak diubah ke angka
-                const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1');
-                for (let R = range.s.r; R <= range.e.r; R++) {
-                    for (let C = range.s.c; C <= range.e.c; C++) {
-                        const addr = XLSX.utils.encode_cell({ r: R, c: C });
-                        const cell = ws[addr] ?? { t: 's', v: '' };
-                        cell.t = 's';
-                        cell.z = '@';
-                        ws[addr] = cell;
-                    }
-                }
-
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, 'Guru Wali');
-                XLSX.writeFile(wb, 'template_guru_wali.xlsx');
-
-            } catch (err) {
-                gwResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal mengunduh template.')}</div>`;
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '↓ Unduh Template Guru Wali';
-            }
-        });
-
-        // ── Import BK ──
-        const bkFileInput  = document.getElementById('wz-fk-bk-file');
-        const bkImportBtn  = document.getElementById('wz-fk-bk-import-btn');
-        const bkResultEl   = document.getElementById('wz-fk-bk-result');
-        let bkCsvText = null;
-
-        bkFileInput.addEventListener('change', async () => {
-            bkResultEl.innerHTML = '';
-            const file = bkFileInput.files?.[0];
-            if (!file) { bkCsvText = null; bkImportBtn.disabled = true; return; }
-            try {
-                bkCsvText = stripEmptyCsvLines(await fileToCsv(file));
-                bkImportBtn.disabled = !bkCsvText.trim();
-            } catch (err) {
-                bkCsvText = null;
-                bkImportBtn.disabled = true;
-                bkResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal membaca file.')}</div>`;
-            }
-        });
-
-        bkImportBtn.addEventListener('click', async () => {
-            if (!bkCsvText) return;
-            bkImportBtn.disabled = true;
-            bkImportBtn.textContent = 'Mengimpor…';
-            bkResultEl.innerHTML = '';
-            try {
-                const res = await importForumBk(bkCsvText);
-                bkResultEl.innerHTML = renderForumImportResult(res);
-                if (res.success > 0) {
-                    _wzFkBkAssignments = await getBkAssignments(_wzFkAcademicYear);
-                    bkImportBtn.textContent = '✓ Selesai';
-                    bkImportBtn.classList.replace('btn-primary', 'btn-success');
-                } else {
-                    bkImportBtn.textContent = 'Impor BK';
-                    bkImportBtn.disabled = false;
-                }
-            } catch (err) {
-                bkResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Impor gagal.')}</div>`;
-                bkImportBtn.textContent = 'Impor BK';
-                bkImportBtn.disabled = false;
-            }
-        });
-
-        // ── Import Guru Wali ──
-        const gwFileInput  = document.getElementById('wz-fk-gw-file');
-        const gwImportBtn  = document.getElementById('wz-fk-gw-import-btn');
-        const gwResultEl   = document.getElementById('wz-fk-gw-result');
-        let gwCsvText = null;
-
-        gwFileInput.addEventListener('change', async () => {
-            gwResultEl.innerHTML = '';
-            const file = gwFileInput.files?.[0];
-            if (!file) { gwCsvText = null; gwImportBtn.disabled = true; return; }
-            try {
-                gwCsvText = stripEmptyCsvLines(await fileToCsv(file));
-                gwImportBtn.disabled = !gwCsvText.trim();
-            } catch (err) {
-                gwCsvText = null;
-                gwImportBtn.disabled = true;
-                gwResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal membaca file.')}</div>`;
-            }
-        });
-
-        gwImportBtn.addEventListener('click', async () => {
-            if (!gwCsvText) return;
-            gwImportBtn.disabled = true;
-            gwImportBtn.textContent = 'Mengimpor…';
-            gwResultEl.innerHTML = '';
-            try {
-                const res = await importForumGuruWali(gwCsvText);
-                gwResultEl.innerHTML = renderForumImportResult(res);
-                if (res.success > 0) {
-                    _wzFkGwAssignments = await getGuruWaliAssignments(_wzFkAcademicYear);
-                    gwImportBtn.textContent = '✓ Selesai';
-                    gwImportBtn.classList.replace('btn-primary', 'btn-success');
-                } else {
-                    gwImportBtn.textContent = 'Impor Guru Wali';
-                    gwImportBtn.disabled = false;
-                }
-            } catch (err) {
-                gwResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Impor gagal.')}</div>`;
-                gwImportBtn.textContent = 'Impor Guru Wali';
-                gwImportBtn.disabled = false;
-            }
-        });
-
-        // ── Tab manual ──
-        const manualShell = document.getElementById('wz-forum-manual-shell');
-        _wzFkTab = _wzFkTab ?? 'bk';
-        manualShell.innerHTML = `
             <div style="display:flex;gap:8px;margin-bottom:16px">
                 <button id="wz-fk-tab-bk"
                     class="btn ${_wzFkTab === 'bk' ? 'btn-primary' : 'btn-secondary'}"
@@ -911,20 +695,21 @@ async function renderForumAssignmentStep() {
             </div>
             <div id="wz-forum-tab-content"></div>
         `;
-        document.getElementById('wz-fk-tab-bk').addEventListener('click', () => {
+
+        document.getElementById('wz-fk-tab-bk').addEventListener('click', async () => {
             _wzFkTab = 'bk';
             document.getElementById('wz-fk-tab-bk').classList.replace('btn-secondary', 'btn-primary');
             document.getElementById('wz-fk-tab-gw').classList.replace('btn-primary', 'btn-secondary');
-            renderWzFkBkTab();
+            await renderWzFkBkTab();
         });
-        document.getElementById('wz-fk-tab-gw').addEventListener('click', () => {
+        document.getElementById('wz-fk-tab-gw').addEventListener('click', async () => {
             _wzFkTab = 'guru-wali';
             document.getElementById('wz-fk-tab-gw').classList.replace('btn-secondary', 'btn-primary');
             document.getElementById('wz-fk-tab-bk').classList.replace('btn-primary', 'btn-secondary');
-            renderWzFkGuruWaliTab();
+            await renderWzFkGuruWaliTab();
         });
-        if (_wzFkTab === 'bk') renderWzFkBkTab();
-        else renderWzFkGuruWaliTab();
+        if (_wzFkTab === 'bk') await renderWzFkBkTab();
+        else await renderWzFkGuruWaliTab();
 
     } catch (err) {
         contentEl.innerHTML =
@@ -955,37 +740,7 @@ function renderForumImportResult({ success = 0, skipped = 0, errors = [] }) {
     return html;
 }
 
-function renderWzFkShell() {
-    contentEl.innerHTML = `
-        <div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
-        <h3>Penugasan Forum Kelas</h3>
-        <p class="hint">Tugaskan BK ke kelas dan Guru Wali ke siswa.
-            Langkah ini opsional — bisa dilengkapi setelah wizard selesai.</p>
-        <div style="display:flex;gap:8px;margin-bottom:16px">
-            <button id="wz-fk-tab-bk"
-                class="btn ${_wzFkTab === 'bk' ? 'btn-primary' : 'btn-secondary'}"
-                style="min-width:120px">BK per Kelas</button>
-            <button id="wz-fk-tab-gw"
-                class="btn ${_wzFkTab === 'guru-wali' ? 'btn-primary' : 'btn-secondary'}"
-                style="min-width:140px">Guru Wali per Siswa</button>
-        </div>
-        <div id="wz-forum-tab-content"></div>
-    `;
-
-    document.getElementById('wz-fk-tab-bk').addEventListener('click', () => {
-        _wzFkTab = 'bk';
-        renderWzFkShell();
-    });
-    document.getElementById('wz-fk-tab-gw').addEventListener('click', () => {
-        _wzFkTab = 'guru-wali';
-        renderWzFkShell();
-    });
-
-    if (_wzFkTab === 'bk') renderWzFkBkTab();
-    else renderWzFkGuruWaliTab();
-}
-
-function renderWzFkBkTab() {
+async function renderWzFkBkTab() {
     const tabEl = document.getElementById('wz-forum-tab-content');
     if (!_wzFkClasses.length) {
         tabEl.innerHTML = '<p class="hint">Belum ada kelas di tahun ajaran ini.</p>';
@@ -996,69 +751,125 @@ function renderWzFkBkTab() {
         return;
     }
 
+    const programs = await getPrograms();
+    const programNameById = new Map(programs.map(p => [p.program_id, p.name]));
+
+    const programMap = new Map();
+    _wzFkClasses.forEach(c => {
+        const pid = c.program_id ?? '__no_program__';
+        if (!programMap.has(pid)) programMap.set(pid, []);
+        programMap.get(pid).push(c);
+    });
+
     const asnMap = new Map();
     _wzFkBkAssignments.forEach(a => {
         if (!asnMap.has(a.class_id)) asnMap.set(a.class_id, []);
         asnMap.get(a.class_id).push(a);
     });
 
-    const rows = _wzFkClasses.map(cls => {
-        const assigned    = asnMap.get(cls.class_id) ?? [];
-        const assignedIds = new Set(assigned.map(a => a.bk_user_id));
+    const total = _wzFkBkAssignments.length;
 
-        const chips = assigned.map(a => {
-            const bk = _wzFkBkStaff.find(s => s.user_id === a.bk_user_id);
-            if (!bk) return '';
-            return `<span style="display:inline-flex;align-items:center;
-                        gap:4px;background:var(--color-primary-subtle,#eff6ff);
-                        color:var(--color-primary,#2563eb);
-                        border:1px solid var(--color-primary-light,#bfdbfe);
-                        border-radius:999px;padding:2px 10px 2px 8px;
-                        font-size:12px">
-                        ${esc(bk.full_name)}
-                        <button type="button"
-                            class="wzfk-bk-revoke"
-                            data-aid="${esc(a.assignment_id)}"
-                            style="background:none;border:none;cursor:pointer;
-                                   color:inherit;padding:0;font-size:14px">×
-                        </button>
-                    </span>`;
+    const sortedPids = [...programMap.keys()].sort((a, b) =>
+        (programNameById.get(a) ?? 'Tanpa Program').localeCompare(
+         programNameById.get(b) ?? 'Tanpa Program', 'id'));
+
+    const accordions = sortedPids.map(pid => {
+        const progName = programNameById.get(pid) ?? 'Tanpa Program';
+        const classes = programMap.get(pid).slice().sort((a, b) => a.name.localeCompare(b.name, 'id'));
+
+        const rows = classes.map(cls => {
+            const assigned = asnMap.get(cls.class_id) ?? [];
+            const chips = assigned.map(a => {
+                const bk = _wzFkBkStaff.find(s => s.user_id === a.bk_user_id);
+                if (!bk) return '';
+                return `<span style="display:inline-flex;align-items:center;
+                            gap:4px;background:var(--color-primary-subtle,#eff6ff);
+                            color:var(--color-primary,#2563eb);
+                            border:1px solid var(--color-primary-light,#bfdbfe);
+                            border-radius:999px;padding:2px 10px 2px 8px;
+                            font-size:12px">
+                            ${esc(bk.full_name)}
+                            <button type="button"
+                                class="wzfk-bk-revoke"
+                                data-aid="${esc(a.assignment_id)}"
+                                style="background:none;border:none;cursor:pointer;
+                                       color:inherit;padding:0;font-size:14px">×
+                            </button>
+                        </span>`;
+            }).join('');
+
+            const aidList = assigned.map(a => a.assignment_id);
+            const checkCell = `<td style="width:36px"><input type="checkbox"
+                class="wzfk-bk-check" ${aidList.length ? '' : 'disabled'}
+                data-aids='${JSON.stringify(aidList)}'></td>`;
+
+            return `<tr>
+                ${checkCell}
+                <td style="font-weight:500">${esc(cls.name)}</td>
+                <td><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${chips}</div></td>
+            </tr>`;
         }).join('');
 
-        const options = _wzFkBkStaff
-            .filter(s => !assignedIds.has(s.user_id))
-            .map(s => `<option value="${esc(s.user_id)}">${esc(s.full_name)}</option>`)
-            .join('');
-
-        const addSelect = '';
-
-        return `<tr>
-            <td style="font-weight:500">${esc(cls.name)}</td>
-            <td>
-                <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-                    ${chips}
-                    ${addSelect}
-                </div>
-            </td>
-        </tr>`;
+        return `
+            <details class="wz-accordion" style="margin-bottom:8px">
+                <summary class="wz-accordion-header">${esc(progName)} (${classes.length} kelas)</summary>
+                <table class="data-table" style="width:100%;margin-top:4px">
+                    <thead><tr>
+                        <th style="width:36px"></th>
+                        <th style="width:200px">Kelas</th>
+                        <th>BK yang Ditugaskan</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </details>`;
     }).join('');
 
     tabEl.innerHTML = `
-        <div style="overflow-x:auto">
-        <table class="data-table" style="width:100%">
-            <thead>
-                <tr>
-                    <th style="width:200px">Kelas</th>
-                    <th>BK yang Ditugaskan</th>
-                </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-        </table>
+        <button type="button" class="btn btn-secondary wz-template-btn" id="wz-fk-bk-tpl-btn"
+            style="margin-bottom:16px">↓ Unduh Template BK</button>
+
+        <h4 style="margin:0 0 8px">BK aktif (${total})</h4>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+            <button type="button" class="btn btn-danger wzfk-bk-del-selected" disabled
+                style="padding:6px 12px">Hapus Terpilih (0)</button>
+            <button type="button" class="btn btn-secondary wzfk-bk-del-all"
+                style="padding:6px 12px">Hapus Semua (${total})</button>
         </div>
+        ${accordions}
         <p id="wz-fk-status" class="hint" style="margin-top:8px"></p>
+
+        <hr style="margin:16px 0;border:none;border-top:1px solid var(--color-border)">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+            <input type="file" class="input" id="wz-fk-bk-file"
+                accept=".xlsx,.xls,.csv" style="padding:6px" />
+            <button type="button" class="btn btn-primary wz-import-btn" id="wz-fk-bk-import-btn"
+                disabled>Impor BK</button>
+        </div>
+        <div id="wz-fk-bk-result"></div>
     `;
 
-    // Tambah BK dilakukan via upload file Excel
+    // ── Unduh template BK ──
+    tabEl.querySelector('#wz-fk-bk-tpl-btn').addEventListener('click', () => {
+        const sheet = EXCEL_TEMPLATES[11]?.sheets?.bk;
+        if (!sheet) return;
+        generateExcelTemplate(
+            'template_penugasan_bk.xlsx',
+            sheet.headers, sheet.exampleRows, sheet.guide
+        );
+    });
+
+    // ── Hapus terpilih / semua ──
+    const selBtn  = tabEl.querySelector('.wzfk-bk-del-selected');
+    const allBtn  = tabEl.querySelector('.wzfk-bk-del-all');
+    const checks  = () => Array.from(tabEl.querySelectorAll('.wzfk-bk-check:not(:disabled)'));
+
+    function syncSelBtn() {
+        const n = checks().filter(c => c.checked).length;
+        selBtn.textContent = `Hapus Terpilih (${n})`;
+        selBtn.disabled = n === 0;
+    }
+
+    tabEl.querySelectorAll('.wzfk-bk-check').forEach(c => c.addEventListener('change', syncSelBtn));
 
     tabEl.querySelectorAll('.wzfk-bk-revoke').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -1066,12 +877,86 @@ function renderWzFkBkTab() {
             try {
                 await revokeBkFromClass(btn.dataset.aid);
                 _wzFkBkAssignments = await getBkAssignments(_wzFkAcademicYear);
-                renderWzFkBkTab();
+                await renderWzFkBkTab();
             } catch (err) {
                 const st = document.getElementById('wz-fk-status');
                 if (st) st.textContent = 'Gagal mencabut: ' + (err?.message ?? String(err));
             }
         });
+    });
+
+    selBtn.addEventListener('click', async () => {
+        const selected = checks().filter(c => c.checked);
+        const aids = selected.flatMap(c => JSON.parse(c.dataset.aids));
+        if (!aids.length) return;
+        if (!confirm(`Hapus ${aids.length} penugasan BK terpilih?`)) return;
+        selBtn.disabled = true;
+        try {
+            for (const aid of aids) await revokeBkFromClass(aid);
+            _wzFkBkAssignments = await getBkAssignments(_wzFkAcademicYear);
+            await renderWzFkBkTab();
+        } catch (err) {
+            const st = document.getElementById('wz-fk-status');
+            if (st) st.textContent = 'Gagal menghapus: ' + (err?.message ?? String(err));
+            selBtn.disabled = false;
+        }
+    });
+
+    allBtn.addEventListener('click', async () => {
+        if (!_wzFkBkAssignments.length) return;
+        if (!confirm(`Hapus SEMUA ${_wzFkBkAssignments.length} penugasan BK?`)) return;
+        allBtn.disabled = true;
+        try {
+            for (const a of _wzFkBkAssignments) await revokeBkFromClass(a.assignment_id);
+            _wzFkBkAssignments = await getBkAssignments(_wzFkAcademicYear);
+            await renderWzFkBkTab();
+        } catch (err) {
+            const st = document.getElementById('wz-fk-status');
+            if (st) st.textContent = 'Gagal menghapus: ' + (err?.message ?? String(err));
+            allBtn.disabled = false;
+        }
+    });
+
+    // ── Import BK ──
+    const bkFileInput = tabEl.querySelector('#wz-fk-bk-file');
+    const bkImportBtn = tabEl.querySelector('#wz-fk-bk-import-btn');
+    const bkResultEl  = tabEl.querySelector('#wz-fk-bk-result');
+    let bkCsvText = null;
+
+    bkFileInput.addEventListener('change', async () => {
+        bkResultEl.innerHTML = '';
+        const file = bkFileInput.files?.[0];
+        if (!file) { bkCsvText = null; bkImportBtn.disabled = true; return; }
+        try {
+            bkCsvText = stripEmptyCsvLines(await fileToCsv(file));
+            bkImportBtn.disabled = !bkCsvText.trim();
+        } catch (err) {
+            bkCsvText = null;
+            bkImportBtn.disabled = true;
+            bkResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal membaca file.')}</div>`;
+        }
+    });
+
+    bkImportBtn.addEventListener('click', async () => {
+        if (!bkCsvText) return;
+        bkImportBtn.disabled = true;
+        bkImportBtn.textContent = 'Mengimpor…';
+        bkResultEl.innerHTML = '';
+        try {
+            const res = await importForumBk(bkCsvText);
+            bkResultEl.innerHTML = renderForumImportResult(res);
+            if (res.success > 0) {
+                _wzFkBkAssignments = await getBkAssignments(_wzFkAcademicYear);
+                await renderWzFkBkTab();
+            } else {
+                bkImportBtn.textContent = 'Impor BK';
+                bkImportBtn.disabled = false;
+            }
+        } catch (err) {
+            bkResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Impor gagal.')}</div>`;
+            bkImportBtn.textContent = 'Impor BK';
+            bkImportBtn.disabled = false;
+        }
     });
 }
 
@@ -1082,157 +967,335 @@ async function renderWzFkGuruWaliTab() {
         return;
     }
 
-    // Kelompokkan kelas per program
+    tabEl.innerHTML = '<p class="hint">Memuat siswa…</p>';
+
+    let allEnrollments;
+    try {
+        const results = await Promise.all(_wzFkClasses.map(cls =>
+            supabase
+                .from('class_enrollments')
+                .select('student:students(student_id, full_name, nis)')
+                .eq('class_id',      cls.class_id)
+                .eq('academic_year', _wzFkAcademicYear)
+                .is('withdrawn_at',  null)
+                .then(({ data, error }) => {
+                    if (error) throw error;
+                    return {
+                        class_id: cls.class_id,
+                        students: (data ?? [])
+                            .map(r => r.student)
+                            .filter(Boolean)
+                            .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id')),
+                    };
+                })
+        ));
+        allEnrollments = new Map(results.map(r => [r.class_id, r.students]));
+    } catch (err) {
+        tabEl.innerHTML = `<p style="color:var(--color-danger)">${esc(err?.message ?? String(err))}</p>`;
+        return;
+    }
+
+    const programs = await getPrograms();
+    const programNameById = new Map(programs.map(p => [p.program_id, p.name]));
+
     const programMap = new Map();
     _wzFkClasses.forEach(c => {
         const pid = c.program_id ?? '__no_program__';
         if (!programMap.has(pid)) programMap.set(pid, []);
         programMap.get(pid).push(c);
     });
-    const programs = await getPrograms();
-    const programNameById = new Map(programs.map(p => [p.program_id, p.name]));
 
-    const classOptions = [...programMap.entries()]
-        .sort(([, a], [, b]) =>
-            (programNameById.get(a[0]?.program_id) ?? '').localeCompare(
-             programNameById.get(b[0]?.program_id) ?? '', 'id'))
-        .map(([pid, classes]) => {
-            const progName = programNameById.get(pid) ?? 'Tanpa Program';
-            const opts = classes
-                .sort((a, b) => a.name.localeCompare(b.name, 'id'))
-                .map(c => `<option value="${esc(c.class_id)}"
-                    ${_wzFkSelectedClass === c.class_id ? 'selected' : ''}>
-                    ${esc(c.name)}
-                </option>`).join('');
-            return `<optgroup label="${esc(progName)}">${opts}</optgroup>`;
-        }).join('');
-
-    tabEl.innerHTML = `
-        <div class="field" style="max-width:400px;margin-bottom:16px">
-            <label for="wz-fk-gw-class-select">Pilih Kelas</label>
-            <select id="wz-fk-gw-class-select" class="input">
-                <option value="">— Pilih kelas —</option>
-                ${classOptions}
-            </select>
-        </div>
-        <div id="wz-fk-gw-students"></div>
-    `;
-
-    document.getElementById('wz-fk-gw-class-select').addEventListener('change', async (e) => {
-        _wzFkSelectedClass = e.target.value || null;
-        await loadWzFkGuruWaliStudents();
+    const asnMap = new Map();
+    _wzFkGwAssignments.forEach(a => {
+        if (!asnMap.has(a.student_id)) asnMap.set(a.student_id, []);
+        asnMap.get(a.student_id).push(a);
     });
 
-    if (_wzFkSelectedClass) loadWzFkGuruWaliStudents();
-}
+    const total = _wzFkGwAssignments.length;
 
-async function loadWzFkGuruWaliStudents() {
-    const el = document.getElementById('wz-fk-gw-students');
-    if (!_wzFkSelectedClass) { el.innerHTML = ''; return; }
-    el.innerHTML = '<p class="hint">Memuat siswa…</p>';
-    try {
-        const { data, error } = await supabase
-            .from('class_enrollments')
-            .select('student:students(student_id, full_name, nis)')
-            .eq('class_id',      _wzFkSelectedClass)
-            .eq('academic_year', _wzFkAcademicYear)
-            .is('withdrawn_at',  null);
-        if (error) throw error;
+    const sortedPids = [...programMap.keys()].sort((a, b) =>
+        (programNameById.get(a) ?? 'Tanpa Program').localeCompare(
+         programNameById.get(b) ?? 'Tanpa Program', 'id'));
 
-        const students = (data ?? [])
-            .map(r => r.student)
-            .filter(Boolean)
-            .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
+    const accordions = sortedPids.map(pid => {
+        const progName = programNameById.get(pid) ?? 'Tanpa Program';
+        const classes  = programMap.get(pid).slice().sort((a, b) => a.name.localeCompare(b.name, 'id'));
 
-        if (!students.length) {
-            el.innerHTML = '<p class="hint">Tidak ada siswa aktif di kelas ini.</p>';
-            return;
-        }
+        let progStudentTotal = 0;
+        const classAccordions = classes.map(cls => {
+            const students = allEnrollments.get(cls.class_id) ?? [];
+            progStudentTotal += students.length;
 
-        const asnMap = new Map();
-        _wzFkGwAssignments.forEach(a => {
-            if (!asnMap.has(a.student_id)) asnMap.set(a.student_id, []);
-            asnMap.get(a.student_id).push(a);
-        });
+            if (!students.length) {
+                return `
+                    <details class="wz-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
+                        <summary class="wz-accordion-header">${esc(cls.name)} (0 siswa)</summary>
+                        <p class="hint" style="margin:8px 16px">Tidak ada siswa aktif.</p>
+                    </details>`;
+            }
 
-        const rows = students.map(stu => {
-            const assigned    = asnMap.get(stu.student_id) ?? [];
-            const assignedIds = new Set(assigned.map(a => a.guru_user_id));
+            const rows = students.map(stu => {
+                const assigned = asnMap.get(stu.student_id) ?? [];
+                const chips = assigned.map(a => {
+                    const gw = _wzFkGuruWaliCands.find(s => s.user_id === a.guru_user_id);
+                    if (!gw) return '';
+                    return `<span style="display:inline-flex;align-items:center;
+                                gap:4px;background:var(--color-primary-subtle,#eff6ff);
+                                color:var(--color-primary,#2563eb);
+                                border:1px solid var(--color-primary-light,#bfdbfe);
+                                border-radius:999px;padding:2px 10px 2px 8px;font-size:12px">
+                                ${esc(gw.full_name)}
+                                <button type="button"
+                                    class="wzfk-gw-revoke"
+                                    data-aid="${esc(a.assignment_id)}"
+                                    style="background:none;border:none;cursor:pointer;
+                                           color:inherit;padding:0;font-size:14px">×
+                                </button>
+                            </span>`;
+                }).join('');
 
-            const chips = assigned.map(a => {
-                const gw = _wzFkGuruWaliCands.find(s => s.user_id === a.guru_user_id);
-                if (!gw) return '';
-                return `<span style="display:inline-flex;align-items:center;
-                            gap:4px;background:var(--color-primary-subtle,#eff6ff);
-                            color:var(--color-primary,#2563eb);
-                            border:1px solid var(--color-primary-light,#bfdbfe);
-                            border-radius:999px;padding:2px 10px 2px 8px;font-size:12px">
-                            ${esc(gw.full_name)}
-                            <button type="button"
-                                class="wzfk-gw-revoke"
-                                data-aid="${esc(a.assignment_id)}"
-                                style="background:none;border:none;cursor:pointer;
-                                       color:inherit;padding:0;font-size:14px">×
-                            </button>
-                        </span>`;
+                const aidList   = assigned.map(a => a.assignment_id);
+                const checkCell = `<td style="width:36px"><input type="checkbox"
+                    class="wzfk-gw-check" ${aidList.length ? '' : 'disabled'}
+                    data-aids='${JSON.stringify(aidList)}'></td>`;
+
+                return `<tr>
+                    ${checkCell}
+                    <td>
+                        <div style="font-weight:500">${esc(stu.full_name)}</div>
+                        <div style="font-size:11px;color:var(--color-text-muted)">${esc(stu.nis)}</div>
+                    </td>
+                    <td><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${chips}</div></td>
+                </tr>`;
             }).join('');
 
-            const options = _wzFkGuruWaliCands
-                .filter(s => !assignedIds.has(s.user_id))
-                .map(s => `<option value="${esc(s.user_id)}">${esc(s.full_name)}</option>`)
-                .join('');
-
-            const addSelect = '';
-
-            return `<tr>
-                <td>
-                    <div style="font-weight:500">${esc(stu.full_name)}</div>
-                    <div style="font-size:11px;color:var(--color-text-muted)">${esc(stu.nis)}</div>
-                </td>
-                <td>
-                    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-                        ${chips}
-                        ${addSelect}
-                    </div>
-                </td>
-            </tr>`;
+            return `
+                <details class="wz-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
+                    <summary class="wz-accordion-header">${esc(cls.name)} (${students.length} siswa)</summary>
+                    <table class="data-table" style="width:100%;table-layout:fixed;margin-top:4px">
+                        <thead><tr>
+                            <th style="width:36px"></th>
+                            <th style="width:55%">Siswa</th>
+                            <th style="width:45%">Guru Wali</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </details>`;
         }).join('');
 
-        el.innerHTML = `
-            <div style="overflow-x:auto">
-            <table class="data-table" style="width:100%;
-                table-layout:fixed">
-                <thead>
-                    <tr>
-                        <th style="width:55%">Siswa</th>
-                        <th style="width:45%">Guru Wali</th>
-                    </tr>
-                </thead>
-                <tbody>${rows}</tbody>
-            </table>
-            </div>
-            <p id="wz-fk-gw-status" class="hint" style="margin-top:8px"></p>
-        `;
+        return `
+            <details class="wz-accordion" style="margin-bottom:8px">
+                <summary class="wz-accordion-header">${esc(progName)} (${progStudentTotal} siswa)</summary>
+                <div style="padding:4px 0">${classAccordions}</div>
+            </details>`;
+    }).join('');
 
-        // Tambah Guru Wali dilakukan via upload file Excel
+    tabEl.innerHTML = `
+        <button type="button" class="btn btn-secondary wz-template-btn" id="wz-fk-gw-tpl-btn"
+            style="margin-bottom:16px">↓ Unduh Template Guru Wali</button>
 
-        el.querySelectorAll('.wzfk-gw-revoke').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                btn.disabled = true;
-                try {
-                    await revokeGuruWaliFromStudent(btn.dataset.aid);
-                    _wzFkGwAssignments = await getGuruWaliAssignments(_wzFkAcademicYear);
-                    await loadWzFkGuruWaliStudents();
-                } catch (err) {
-                    const st = document.getElementById('wz-fk-gw-status');
-                    if (st) st.textContent = 'Gagal mencabut: ' + (err?.message ?? String(err));
+        <h4 style="margin:0 0 8px">Guru Wali aktif (${total})</h4>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+            <button type="button" class="btn btn-danger wzfk-gw-del-selected" disabled
+                style="padding:6px 12px">Hapus Terpilih (0)</button>
+            <button type="button" class="btn btn-secondary wzfk-gw-del-all"
+                style="padding:6px 12px">Hapus Semua (${total})</button>
+        </div>
+        ${accordions}
+        <p id="wz-fk-gw-status" class="hint" style="margin-top:8px"></p>
+
+        <hr style="margin:16px 0;border:none;border-top:1px solid var(--color-border)">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+            <input type="file" class="input" id="wz-fk-gw-file"
+                accept=".xlsx,.xls,.csv" style="padding:6px" />
+            <button type="button" class="btn btn-primary wz-import-btn" id="wz-fk-gw-import-btn"
+                disabled>Impor Guru Wali</button>
+        </div>
+        <div id="wz-fk-gw-result"></div>
+    `;
+
+    // ── Unduh template Guru Wali (pre-filled siswa aktif) ──
+    tabEl.querySelector('#wz-fk-gw-tpl-btn').addEventListener('click', async () => {
+        const btn = tabEl.querySelector('#wz-fk-gw-tpl-btn');
+        const gwResultEl = tabEl.querySelector('#wz-fk-gw-result');
+        btn.disabled = true;
+        btn.textContent = 'Memuat data siswa…';
+        try {
+            const [config, classes, programs] = await Promise.all([
+                getSchoolConfig(),
+                getClasses(_wzFkAcademicYear),
+                getPrograms(),
+            ]);
+            const academicYear = _wzFkAcademicYear ?? config?.current_academic_year;
+            const programByCode = new Map(programs.map(p => [p.program_id, p.code]));
+
+            const rows = [];
+            const sortedClasses = [...classes].sort((a, b) =>
+                a.name.localeCompare(b.name, 'id'));
+
+            for (const cls of sortedClasses) {
+                const { data: enrollments } = await supabase
+                    .from('class_enrollments')
+                    .select('student:students(student_id, full_name, nis)')
+                    .eq('class_id', cls.class_id)
+                    .eq('academic_year', academicYear)
+                    .is('withdrawn_at', null);
+
+                const students = (enrollments ?? [])
+                    .map(e => e.student)
+                    .filter(Boolean)
+                    .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
+
+                const kodeProgram = programByCode.get(cls.program_id) ?? '';
+                for (const stu of students) {
+                    rows.push([
+                        cls.name,
+                        kodeProgram,
+                        stu.nis ?? '',
+                        stu.full_name ?? '',
+                        '', // nip_guru_wali — diisi admin
+                    ]);
                 }
-            });
-        });
+            }
 
-    } catch (err) {
-        el.innerHTML = `<p style="color:var(--color-danger)">${esc(err?.message ?? String(err))}</p>`;
+            if (typeof XLSX === 'undefined') {
+                throw new Error('Pustaka Excel gagal dimuat. Periksa koneksi internet.');
+            }
+
+            const headers = ['nama_kelas', 'kode_program', 'nis_siswa', 'nama_siswa', 'nip_guru_wali'];
+            const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+            ws['!cols'] = [
+                { wch: 15 }, // nama_kelas
+                { wch: 14 }, // kode_program
+                { wch: 14 }, // nis_siswa
+                { wch: 25 }, // nama_siswa
+                { wch: 18 }, // nip_guru_wali
+            ];
+
+            const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1');
+            for (let R = range.s.r; R <= range.e.r; R++) {
+                for (let C = range.s.c; C <= range.e.c; C++) {
+                    const addr = XLSX.utils.encode_cell({ r: R, c: C });
+                    const cell = ws[addr] ?? { t: 's', v: '' };
+                    cell.t = 's';
+                    cell.z = '@';
+                    ws[addr] = cell;
+                }
+            }
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Guru Wali');
+            XLSX.writeFile(wb, 'template_guru_wali.xlsx');
+
+        } catch (err) {
+            gwResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal mengunduh template.')}</div>`;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '↓ Unduh Template Guru Wali';
+        }
+    });
+
+    // ── Hapus terpilih / semua ──
+    const selBtn = tabEl.querySelector('.wzfk-gw-del-selected');
+    const allBtn = tabEl.querySelector('.wzfk-gw-del-all');
+    const checks = () => Array.from(tabEl.querySelectorAll('.wzfk-gw-check:not(:disabled)'));
+
+    function syncSelBtn() {
+        const n = checks().filter(c => c.checked).length;
+        selBtn.textContent = `Hapus Terpilih (${n})`;
+        selBtn.disabled = n === 0;
     }
+
+    tabEl.querySelectorAll('.wzfk-gw-check').forEach(c => c.addEventListener('change', syncSelBtn));
+
+    tabEl.querySelectorAll('.wzfk-gw-revoke').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            try {
+                await revokeGuruWaliFromStudent(btn.dataset.aid);
+                _wzFkGwAssignments = await getGuruWaliAssignments(_wzFkAcademicYear);
+                await renderWzFkGuruWaliTab();
+            } catch (err) {
+                const st = document.getElementById('wz-fk-gw-status');
+                if (st) st.textContent = 'Gagal mencabut: ' + (err?.message ?? String(err));
+            }
+        });
+    });
+
+    selBtn.addEventListener('click', async () => {
+        const selected = checks().filter(c => c.checked);
+        const aids = selected.flatMap(c => JSON.parse(c.dataset.aids));
+        if (!aids.length) return;
+        if (!confirm(`Hapus ${aids.length} penugasan Guru Wali terpilih?`)) return;
+        selBtn.disabled = true;
+        try {
+            for (const aid of aids) await revokeGuruWaliFromStudent(aid);
+            _wzFkGwAssignments = await getGuruWaliAssignments(_wzFkAcademicYear);
+            await renderWzFkGuruWaliTab();
+        } catch (err) {
+            const st = document.getElementById('wz-fk-gw-status');
+            if (st) st.textContent = 'Gagal menghapus: ' + (err?.message ?? String(err));
+            selBtn.disabled = false;
+        }
+    });
+
+    allBtn.addEventListener('click', async () => {
+        if (!_wzFkGwAssignments.length) return;
+        if (!confirm(`Hapus SEMUA ${_wzFkGwAssignments.length} penugasan Guru Wali?`)) return;
+        allBtn.disabled = true;
+        try {
+            for (const a of _wzFkGwAssignments) await revokeGuruWaliFromStudent(a.assignment_id);
+            _wzFkGwAssignments = await getGuruWaliAssignments(_wzFkAcademicYear);
+            await renderWzFkGuruWaliTab();
+        } catch (err) {
+            const st = document.getElementById('wz-fk-gw-status');
+            if (st) st.textContent = 'Gagal menghapus: ' + (err?.message ?? String(err));
+            allBtn.disabled = false;
+        }
+    });
+
+    // ── Import Guru Wali ──
+    const gwFileInput = tabEl.querySelector('#wz-fk-gw-file');
+    const gwImportBtn = tabEl.querySelector('#wz-fk-gw-import-btn');
+    const gwResultEl  = tabEl.querySelector('#wz-fk-gw-result');
+    let gwCsvText = null;
+
+    gwFileInput.addEventListener('change', async () => {
+        gwResultEl.innerHTML = '';
+        const file = gwFileInput.files?.[0];
+        if (!file) { gwCsvText = null; gwImportBtn.disabled = true; return; }
+        try {
+            gwCsvText = stripEmptyCsvLines(await fileToCsv(file));
+            gwImportBtn.disabled = !gwCsvText.trim();
+        } catch (err) {
+            gwCsvText = null;
+            gwImportBtn.disabled = true;
+            gwResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal membaca file.')}</div>`;
+        }
+    });
+
+    gwImportBtn.addEventListener('click', async () => {
+        if (!gwCsvText) return;
+        gwImportBtn.disabled = true;
+        gwImportBtn.textContent = 'Mengimpor…';
+        gwResultEl.innerHTML = '';
+        try {
+            const res = await importForumGuruWali(gwCsvText);
+            gwResultEl.innerHTML = renderForumImportResult(res);
+            if (res.success > 0) {
+                _wzFkGwAssignments = await getGuruWaliAssignments(_wzFkAcademicYear);
+                await renderWzFkGuruWaliTab();
+            } else {
+                gwImportBtn.textContent = 'Impor Guru Wali';
+                gwImportBtn.disabled = false;
+            }
+        } catch (err) {
+            gwResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Impor gagal.')}</div>`;
+            gwImportBtn.textContent = 'Impor Guru Wali';
+            gwImportBtn.disabled = false;
+        }
+    });
 }
 
 async function renderScheduleStep() {
@@ -1248,11 +1311,11 @@ async function renderScheduleStep() {
         <p class="hint" style="margin:0 0 8px">Kolom yang diharapkan: <code>kode_guru, nama_mapel, nama_kelas, hari, start_time, end_time</code><br>
         Hari: SENIN/SELASA/RABU/KAMIS/JUMAT/SABTU &nbsp;|&nbsp; Waktu: HH:MM (contoh: 07:00)<br>
         <em>kode_guru</em> = kode singkat guru dari daftar staf (contoh: BSS, ADF). <em>nama_mapel</em> = nama mata pelajaran.</p>
-        <button type="button" class="btn btn-secondary" id="wz-schedule-template-dl" style="padding:6px 14px;font-size:13px;margin-bottom:12px">⬇ Unduh Template Excel</button>
+        <button type="button" class="btn btn-secondary wz-template-btn" id="wz-schedule-template-dl" style="margin-bottom:12px">⬇ Unduh Template Excel</button>
         <div class="field" style="margin-bottom:8px">
             <input type="file" id="wz-schedule-file" accept=".csv,.xlsx" class="input" style="padding:6px">
         </div>
-        <button type="button" class="btn btn-secondary" id="wz-schedule-import" style="padding:8px 18px">Unggah &amp; Impor</button>
+        <button type="button" class="btn btn-primary wz-import-btn" id="wz-schedule-import">Unggah &amp; Impor</button>
         <div id="wz-schedule-import-status" style="margin-top:10px"></div>
 
         <div id="wz-data-list" style="margin-top:16px"><p class="hint">Memuat data…</p></div>
@@ -2536,8 +2599,8 @@ function renderDataTable(cfg, rows) {
     const canDelete = !!cfg.deleteTable;
     const toolbar = canDelete ? `
         <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap">
-            <button type="button" class="btn btn-danger wz-del-selected" disabled style="padding:6px 12px">Hapus Terpilih (0)</button>
-            <button type="button" class="btn btn-secondary wz-del-all" style="padding:6px 12px">Hapus Semua (${rows.length})</button>
+            <button type="button" class="btn btn-danger wz-del-selected" disabled>Hapus Terpilih (0)</button>
+            <button type="button" class="btn btn-secondary wz-del-all">Hapus Semua (${rows.length})</button>
         </div>` : '';
 
     const allIdsJson = canDelete ? `<script type="application/json" class="wz-all-ids">${JSON.stringify(rows.map(r => r.id))}</script>` : '';
