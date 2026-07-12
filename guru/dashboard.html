@@ -272,9 +272,15 @@
     <div class="tab-panel" id="tab-bk">
         <div class="page-body">
             <div class="section-card">
-                <h3>Semua Observasi</h3>
-                <p class="hint" id="bk-obs-hint">Memuat…</p>
-                <div id="bk-obs-list"></div>
+                <h3>Kehadiran Per Kelas</h3>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+                    <label for="bk-att-start" style="font-size:13px;color:var(--color-text-muted)">Dari:</label>
+                    <input type="date" id="bk-att-start" class="input" style="width:auto">
+                    <label for="bk-att-end" style="font-size:13px;color:var(--color-text-muted)">s/d:</label>
+                    <input type="date" id="bk-att-end" class="input" style="width:auto">
+                    <button class="btn btn-secondary btn-sm" id="bk-att-filter-btn">Filter</button>
+                </div>
+                <div id="bk-att-recap"><p class="hint">Pilih rentang tanggal lalu klik Filter.</p></div>
             </div>
         </div>
     </div>

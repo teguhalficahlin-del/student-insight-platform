@@ -1064,35 +1064,174 @@ async function loadWaliSummary() {
 // ─── TAB BK ──────────────────────────────────────────────────
 
 async function initBkTab() {
-    const hintEl = document.getElementById('bk-obs-hint');
-    const listEl = document.getElementById('bk-obs-list');
-    hintEl.textContent = 'Memuat observasi…';
-    listEl.innerHTML = '';
+    const today        = localDateStr();
+    const firstOfMonth = today.slice(0, 8) + '01';
+    document.getElementById('bk-att-start').value = firstOfMonth;
+    document.getElementById('bk-att-end').value   = today;
+    document.getElementById('bk-att-filter-btn').onclick = loadBkAttendanceRecap;
+    await loadBkAttendanceRecap();
+}
 
+async function loadBkAttendanceRecap() {
+    const dateStart = document.getElementById('bk-att-start').value || null;
+    const dateEnd   = document.getElementById('bk-att-end').value   || null;
+    const container = document.getElementById('bk-att-recap');
+    container.innerHTML = '<p class="hint">Memuat…</p>';
     try {
-        const { data, error } = await supabase
-            .from('observations')
-            .select(`observation_id, sentiment, dimension, content, observed_at, created_at,
-                student:students(full_name, nis),
-                author:users!observations_author_user_id_fkey(full_name)`)
-            .order('created_at', { ascending: false })
-            .limit(100);
-        if (error) throw error;
+        const [programs, rows] = await Promise.all([
+            getPrograms(),
+            getAttendanceRecapPerClass(dateStart, dateEnd),
+        ]);
 
-        if (!data?.length) { hintEl.textContent = 'Belum ada observasi.'; return; }
-        hintEl.style.display = 'none';
-        listEl.innerHTML = data.map(r => `
-            <div class="obs-card obs-${(r.sentiment ?? '').toLowerCase()}">
-                <div class="obs-meta">
-                    <strong>${esc(r.student?.full_name ?? '—')}</strong> (${esc(r.student?.nis ?? '—')})
-                    &middot; ${esc(DIMENSION_LABELS[r.dimension] ?? r.dimension)}
-                    &middot; oleh ${esc(r.author?.full_name ?? '—')}
-                    &middot; ${fmt(r.observed_at ?? r.created_at)}
-                </div>
-                <p class="obs-content">${esc(r.content)}</p>
-            </div>`).join('');
+        if (!rows.length) {
+            container.innerHTML = '<p class="hint">Belum ada data kehadiran.</p>';
+            return;
+        }
+
+        const classMap = new Map(rows.map(r => [r.class_id, r]));
+        const progMap  = new Map();
+        for (const prog of programs) progMap.set(prog.program_id, { ...prog, classes: [] });
+
+        const { data: classProgData } = await supabase
+            .from('classes')
+            .select('class_id, program_id')
+            .in('class_id', rows.map(r => r.class_id));
+
+        for (const cp of classProgData ?? []) {
+            const prog = progMap.get(cp.program_id);
+            const cls  = classMap.get(cp.class_id);
+            if (prog && cls) prog.classes.push(cls);
+        }
+
+        const activeProgs = [...progMap.values()].filter(p => p.classes.length > 0);
+
+        const html = activeProgs.map(prog => {
+            const classAccordions = prog.classes
+                .sort((a, b) => a.name.localeCompare(b.name, 'id'))
+                .map(r => {
+                    const pctDenom = r.HADIR + r.IZIN + r.TIDAK_HADIR;
+                    const pct    = pctDenom > 0 ? Math.round(r.HADIR / pctDenom * 100) : 0;
+                    const color  = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+                    return `
+                    <details class="att-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
+                        <summary class="att-accordion-summary">
+                            <span>${esc(r.name)}</span>
+                            <span class="att-acc-names" style="color:${color};font-weight:600">
+                                ${pctDenom > 0 ? pct + '%' : '—'} hadir
+                            </span>
+                        </summary>
+                        <div data-class-id="${esc(r.class_id)}"
+                             data-date-start="${esc(dateStart ?? '')}"
+                             data-date-end="${esc(dateEnd ?? '')}"
+                             style="padding:4px 0">
+                            <p class="hint" style="padding:8px 16px">Memuat siswa…</p>
+                        </div>
+                    </details>`;
+                }).join('');
+
+            return `
+            <details class="att-accordion" style="margin-bottom:8px">
+                <summary class="att-accordion-summary">
+                    <span>${esc(prog.name)}</span>
+                    <span class="att-acc-names">${prog.classes.length} kelas</span>
+                </summary>
+                <div style="padding:4px 0">${classAccordions}</div>
+            </details>`;
+        }).join('');
+
+        container.innerHTML = html;
+
+        container.querySelectorAll('details.wz-accordion-inner').forEach(det => {
+            det.addEventListener('toggle', async () => {
+                if (!det.open) return;
+                const body = det.querySelector('[data-class-id]');
+                if (!body || body.dataset.loaded) return;
+                body.dataset.loaded = '1';
+                const classId = body.dataset.classId;
+                const dStart  = body.dataset.dateStart || null;
+                const dEnd    = body.dataset.dateEnd   || null;
+                try {
+                    const students = await getWaliAttendanceSummary(
+                        classId, config.current_academic_year, dStart, dEnd
+                    );
+                    if (!students.length) {
+                        body.innerHTML = '<p class="hint" style="padding:8px 16px">Belum ada data kehadiran siswa.</p>';
+                        return;
+                    }
+                    body.innerHTML = students
+                        .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'))
+                        .map(s => {
+                            const pct   = s.total > 0 ? Math.round(s.HADIR / s.total * 100) : null;
+                            const color = pct === null ? 'var(--color-text-muted)' : pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+                            return `
+                            <details class="att-accordion wz-accordion-inner"
+                                     style="margin:4px 8px 4px 24px"
+                                     data-student-id="${esc(s.student_id)}"
+                                     data-date-start="${esc(dStart ?? '')}"
+                                     data-date-end="${esc(dEnd ?? '')}">
+                                <summary class="att-accordion-summary">
+                                    <span>
+                                        ${esc(s.full_name)}
+                                        <span class="sub-label" style="margin-left:4px">${esc(s.nis)}</span>
+                                    </span>
+                                    <span style="color:${color};font-weight:600">
+                                        ${pct !== null ? pct + '%' : '—'}
+                                    </span>
+                                </summary>
+                                <div style="padding:4px 0">
+                                    <p class="hint" style="padding:8px 24px">Memuat sesi…</p>
+                                </div>
+                            </details>`;
+                        }).join('');
+
+                    body.querySelectorAll('details[data-student-id]').forEach(stuDet => {
+                        stuDet.addEventListener('toggle', async () => {
+                            if (!stuDet.open) return;
+                            const sBody = stuDet.querySelector('div');
+                            if (!sBody || sBody.dataset.loaded) return;
+                            sBody.dataset.loaded = '1';
+                            const sid = stuDet.dataset.studentId;
+                            const ds  = stuDet.dataset.dateStart || null;
+                            const de  = stuDet.dataset.dateEnd   || null;
+                            try {
+                                const sessions = await getStudentAttendanceSessions(sid, ds, de);
+                                if (!sessions.length) {
+                                    sBody.innerHTML = '<p class="hint" style="padding:8px 24px">Belum ada sesi tercatat.</p>';
+                                    return;
+                                }
+                                const STATUS_COLOR = {
+                                    HADIR: 'var(--color-success)',
+                                    IZIN:  'var(--color-warning,#f59e0b)',
+                                    SAKIT: 'var(--color-primary)',
+                                    TIDAK_HADIR: 'var(--color-danger)',
+                                };
+                                sBody.innerHTML = sessions.map(s => `
+                                    <div style="display:flex;align-items:center;gap:8px;
+                                        padding:7px 24px;border-top:0.5px solid var(--color-border)">
+                                        <span style="font-size:12px;color:var(--color-text-muted);min-width:90px">
+                                            ${esc(s.schedule.session_date)} ${fmtTime(s.schedule.session_start)}
+                                        </span>
+                                        <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
+                                            ${esc(s.schedule.subject?.name ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
+                                        </span>
+                                        <span style="font-size:11px;font-weight:600;
+                                            color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
+                                            ${esc(s.status)}
+                                        </span>
+                                    </div>`).join('');
+                            } catch(err) {
+                                sBody.innerHTML = `<div class="alert alert-danger" style="margin:8px 24px">${esc(fe(err))}</div>`;
+                            }
+                        });
+                    });
+                } catch (err) {
+                    body.innerHTML = `<div class="alert alert-danger" style="margin:8px 16px">${esc(fe(err))}</div>`;
+                }
+            });
+        });
+
     } catch (err) {
-        hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
+        container.innerHTML = `<div class="alert alert-danger">${esc(fe(err))}</div>`;
     }
 }
 
