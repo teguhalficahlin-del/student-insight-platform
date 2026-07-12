@@ -21,6 +21,35 @@ function generateTempPassword() {
     return Array.from(arr, b => chars[b % chars.length]).join('');
 }
 
+function showPwModal(nama, pw) {
+    const id = 'pw-result-modal';
+    document.getElementById(id)?.remove();
+    const el = document.createElement('div');
+    el.id = id;
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
+    el.innerHTML = `
+      <div style="background:var(--color-surface,#1e293b);border:1px solid var(--color-border,#334155);border-radius:10px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.4)">
+        <h3 style="margin:0 0 8px;font-size:16px">Password berhasil direset</h3>
+        <p style="margin:0 0 16px;font-size:13px;color:var(--color-text-muted,#94a3b8)">Password sementara untuk <strong>${esc(nama)}</strong>:</p>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+          <input id="pw-copy-input" type="text" value="${esc(pw)}" readonly
+            style="flex:1;font-family:monospace;font-size:18px;font-weight:700;letter-spacing:2px;padding:10px 12px;border-radius:6px;border:1px solid var(--color-border,#334155);background:var(--color-bg,#0f172a);color:var(--color-text,#f1f5f9);cursor:text" />
+          <button id="pw-copy-btn" class="btn btn-primary" style="white-space:nowrap">Salin</button>
+        </div>
+        <p style="margin:0 0 20px;font-size:12px;color:var(--color-text-muted,#94a3b8)">Catat dan bagikan ke pengguna. Password ini tidak akan ditampilkan lagi.</p>
+        <button id="pw-close-btn" class="btn btn-secondary" style="width:100%">Tutup</button>
+      </div>`;
+    document.body.appendChild(el);
+    const input = el.querySelector('#pw-copy-input');
+    input.select();
+    el.querySelector('#pw-copy-btn').addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(pw); } catch { input.select(); document.execCommand('copy'); }
+        el.querySelector('#pw-copy-btn').textContent = 'Tersalin ✓';
+    });
+    el.querySelector('#pw-close-btn').addEventListener('click', () => el.remove());
+    el.addEventListener('click', e => { if (e.target === el) el.remove(); });
+}
+
 const panelContent = document.getElementById('panel-content');
 let schoolSlug = null; // diisi saat init, dipakai panel renderers
 
@@ -883,7 +912,7 @@ async function renderStaffPanel() {
             try {
                 const newPw = generateTempPassword();
                 await adminResetUserPassword(userId, newPw);
-                alert(`Password ${nama} berhasil direset.\n\nPassword sementara: ${newPw}\n\nCatat dan bagikan ke pengguna. Password ini tidak akan ditampilkan lagi.`);
+                showPwModal(nama, newPw);
                 resetBtn.classList.remove('staff-reset-pw-btn');
                 resetBtn.textContent = 'Menunggu ganti PW';
                 resetBtn.title = 'Menunggu pengguna ganti password';
@@ -2166,7 +2195,7 @@ async function renderExportPanel() {
         try {
             const newPw = generateTempPassword();
             await adminResetUserPassword(userId, newPw);
-            alert(`Password ${nama} berhasil direset.\n\nPassword sementara: ${newPw}\n\nCatat dan bagikan ke pengguna. Password ini tidak akan ditampilkan lagi.`);
+            showPwModal(nama, newPw);
             btn.classList.remove('user-reset-pw-btn');
             btn.textContent = 'Menunggu ganti PW';
             btn.title = 'Menunggu pengguna ganti password';
