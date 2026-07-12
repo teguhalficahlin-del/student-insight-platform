@@ -497,18 +497,43 @@
     ════════════════════════════════════════════════════════ -->
     <div class="tab-panel" id="tab-waka_kurikulum">
         <div class="page-body">
+
+            <!-- Tabel 1: Hari Ini (auto-load) -->
             <div class="section-card">
-                <h3>Sesi Belum Diisi Absensi</h3>
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+                    <h3 style="margin:0">Sesi Belum Diisi — Hari Ini</h3>
+                    <button class="btn" id="wk-kur1-btn" style="display:none">Sembunyikan</button>
+                </div>
+                <p class="hint" id="wk-kur1-hint" style="display:none"></p>
+                <div class="table-wrapper" id="wk-kur1-wrap" style="display:none">
+                    <table class="table">
+                        <thead><tr>
+                            <th style="text-align:center;width:40px">No</th>
+                            <th>Nama Guru</th>
+                            <th>Mata Pelajaran</th>
+                            <th>Kelas</th>
+                            <th>Sesi</th>
+                        </tr></thead>
+                        <tbody id="wk-kur1-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tabel 2: Rentang Waktu -->
+            <div class="section-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+                    <h3 style="margin:0">Sesi Belum Diisi — Rentang Waktu</h3>
+                    <button class="btn" id="wk-kur2-btn">Tampilkan</button>
+                </div>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
                     <label style="font-size:13px;color:var(--color-text-muted)">Dari</label>
                     <input type="date" id="wk-kur-start" class="input" style="width:auto">
                     <label style="font-size:13px;color:var(--color-text-muted)">s/d</label>
                     <input type="date" id="wk-kur-end" class="input" style="width:auto">
-                    <button class="btn btn-primary" id="wk-kur-btn">Tampilkan</button>
                 </div>
-                <p class="hint" id="waka-kur-hint" style="display:none"></p>
-                <div class="table-wrapper" id="wk-kur-table-wrap" style="display:none">
-                    <table class="table" id="waka-kur-table">
+                <p class="hint" id="wk-kur2-hint" style="display:none"></p>
+                <div class="table-wrapper" id="wk-kur2-wrap" style="display:none">
+                    <table class="table">
                         <thead><tr>
                             <th style="text-align:center;width:40px">No</th>
                             <th>Nama Guru</th>
@@ -517,10 +542,11 @@
                             <th>Tanggal</th>
                             <th>Sesi</th>
                         </tr></thead>
-                        <tbody id="waka-kur-body"></tbody>
+                        <tbody id="wk-kur2-body"></tbody>
                     </table>
                 </div>
             </div>
+
         </div>
     </div>
 

@@ -1528,41 +1528,88 @@ async function initKpPlacementForm(programId) {
 
 // ─── TAB WAKA KURIKULUM ───────────────────────────────────────
 
-let _wkKurTableVisible = false;
+let _wkKur1Visible = false;
+let _wkKur2Visible = false;
 
 async function initWakaKurTab() {
-    const today = localDateStr();
-    document.getElementById('wk-kur-start').value = today;
-    document.getElementById('wk-kur-end').value   = today;
-    document.getElementById('wk-kur-btn').onclick = handleWkKurBtn;
-    await loadWkKurTable();
+    const today  = localDateStr();
+    const monday = localDateStr((() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; })());
+    const sunday = localDateStr((() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 6); return d; })());
+
+    document.getElementById('wk-kur-start').value = monday;
+    document.getElementById('wk-kur-end').value   = sunday;
+    document.getElementById('wk-kur1-btn').onclick = handleWkKur1Btn;
+    document.getElementById('wk-kur2-btn').onclick = handleWkKur2Btn;
+
+    await loadWkKur1(today);
 }
 
-async function loadWkKurTable() {
-    const hintEl    = document.getElementById('waka-kur-hint');
-    const wrapEl    = document.getElementById('wk-kur-table-wrap');
-    const tbody     = document.getElementById('waka-kur-body');
-    const btn       = document.getElementById('wk-kur-btn');
+async function loadWkKur1(date) {
+    const hintEl = document.getElementById('wk-kur1-hint');
+    const wrapEl = document.getElementById('wk-kur1-wrap');
+    const tbody  = document.getElementById('wk-kur1-body');
+    const btn    = document.getElementById('wk-kur1-btn');
+
+    hintEl.style.display = 'none';
+    wrapEl.style.display = 'none';
+    btn.style.display    = 'none';
+
+    try {
+        const rows = await getPendingAttendanceSessions(date, date);
+        if (rows.length === 0) {
+            hintEl.textContent   = '✓ Tidak ada sesi yang menunggu pengisian absensi hari ini.';
+            hintEl.style.display = 'block';
+            _wkKur1Visible = false;
+            return;
+        }
+        tbody.innerHTML = rows.map((r, i) => `<tr>
+            <td style="text-align:center">${i + 1}</td>
+            <td>${esc(r.teacher?.full_name ?? '—')}</td>
+            <td>${esc(r.subject?.name ?? '—')}</td>
+            <td>${esc(r.class?.name ?? '—')}</td>
+            <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
+        </tr>`).join('');
+        wrapEl.style.display = '';
+        btn.style.display    = '';
+        btn.textContent      = 'Sembunyikan';
+        _wkKur1Visible = true;
+    } catch (err) {
+        hintEl.textContent   = `Gagal memuat data. ${fe(err)}`;
+        hintEl.style.display = 'block';
+    }
+}
+
+function handleWkKur1Btn() {
+    const wrapEl = document.getElementById('wk-kur1-wrap');
+    const btn    = document.getElementById('wk-kur1-btn');
+    _wkKur1Visible = !_wkKur1Visible;
+    wrapEl.style.display = _wkKur1Visible ? '' : 'none';
+    btn.textContent      = _wkKur1Visible ? 'Sembunyikan' : 'Tampilkan';
+}
+
+async function loadWkKur2() {
+    const hintEl    = document.getElementById('wk-kur2-hint');
+    const wrapEl    = document.getElementById('wk-kur2-wrap');
+    const tbody     = document.getElementById('wk-kur2-body');
+    const btn       = document.getElementById('wk-kur2-btn');
     const dateStart = document.getElementById('wk-kur-start').value;
     const dateEnd   = document.getElementById('wk-kur-end').value;
 
     hintEl.style.display = 'none';
     wrapEl.style.display = 'none';
-    btn.disabled = true;
-    btn.textContent = 'Memuat…';
+    btn.disabled         = true;
+    btn.textContent      = 'Memuat…';
 
     try {
         const rows = await getPendingAttendanceSessions(dateStart || null, dateEnd || null);
-
+        btn.disabled = false;
         if (rows.length === 0) {
-            hintEl.textContent = '✓ Tidak ada sesi yang menunggu pengisian absensi pada rentang ini.';
+            hintEl.textContent   = '✓ Tidak ada sesi yang menunggu pengisian absensi pada rentang ini.';
             hintEl.style.display = 'block';
-            _wkKurTableVisible = false;
-            btn.disabled = false;
-            btn.textContent = 'Tampilkan';
+            btn.textContent      = 'Tampilkan';
+            _wkKur2Visible = false;
             return;
         }
-
         tbody.innerHTML = rows.map((r, i) => `<tr>
             <td style="text-align:center">${i + 1}</td>
             <td>${esc(r.teacher?.full_name ?? '—')}</td>
@@ -1571,28 +1618,24 @@ async function loadWkKurTable() {
             <td>${esc(r.session_date ?? '—')}</td>
             <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
         </tr>`).join('');
-
         wrapEl.style.display = '';
-        _wkKurTableVisible = true;
-        btn.disabled = false;
-        btn.textContent = 'Sembunyikan';
+        btn.textContent      = 'Sembunyikan';
+        _wkKur2Visible = true;
     } catch (err) {
-        hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
+        btn.disabled         = false;
+        btn.textContent      = 'Tampilkan';
+        hintEl.textContent   = `Gagal memuat data. ${fe(err)}`;
         hintEl.style.display = 'block';
-        btn.disabled = false;
-        btn.textContent = 'Tampilkan';
     }
 }
 
-function handleWkKurBtn() {
-    if (_wkKurTableVisible) {
-        // Sembunyikan
-        document.getElementById('wk-kur-table-wrap').style.display = 'none';
-        _wkKurTableVisible = false;
-        document.getElementById('wk-kur-btn').textContent = 'Tampilkan';
+function handleWkKur2Btn() {
+    if (_wkKur2Visible) {
+        document.getElementById('wk-kur2-wrap').style.display = 'none';
+        _wkKur2Visible = false;
+        document.getElementById('wk-kur2-btn').textContent = 'Tampilkan';
     } else {
-        // Tampilkan ulang atau load baru
-        loadWkKurTable();
+        loadWkKur2();
     }
 }
 
