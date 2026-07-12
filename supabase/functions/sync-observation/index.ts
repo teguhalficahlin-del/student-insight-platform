@@ -20,7 +20,7 @@ import { validatePayload,
          OBSERVATION_SCHEMA }          from '../_shared/validate.ts';
 import { getAdminClient }              from '../_shared/db.ts';
 
-const STAFF_ROLES = ['GURU','WALI_KELAS','BK','KAPRODI','KEPSEK','WAKA_KURIKULUM','WAKA_KESISWAAN','ADMINISTRATIVE'];
+const ALLOWED_ROLES = ['GURU'];
 
 Deno.serve(async (req: Request): Promise<Response> => {
     if (req.method === 'OPTIONS') return handleCors();
@@ -37,8 +37,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (isAuthError(authResult)) return authResult;
         const { user } = authResult;
 
-        if (!STAFF_ROLES.includes(user.role_type)) {
-            return forbidden('Hanya staf sekolah yang dapat menyimpan observasi');
+        if (!ALLOWED_ROLES.includes(user.role_type)) {
+            return forbidden('Hanya guru mata pelajaran yang dapat menyimpan catatan siswa');
         }
 
         let body: Record<string, unknown>;
