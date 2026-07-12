@@ -767,7 +767,7 @@ async function renderStaffPanel() {
     function staffRow(u) {
         const rowStyle = u.is_active === false ? 'opacity:.5' : '';
         const badge    = u.is_active === false
-            ? '<span style="font-size:11px;background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 6px;margin-left:6px">Nonaktif</span>'
+            ? '<span class="badge badge-warning" style="margin-left:6px">Nonaktif</span>'
             : '';
         const btn = u.is_active === false
             ? `<button class="btn btn-sm btn-secondary staff-toggle-btn" data-user-id="${u.user_id}" data-active="false">Aktifkan</button>`
@@ -1768,10 +1768,7 @@ async function renderJadwalPanel() {
                     <td style="padding:6px 8px">${esc(expire)}</td>
                     <td style="padding:6px 8px">
                         <code style="font-size:11px;background:var(--color-input-bg,#1e293b);padding:2px 6px;border-radius:4px;user-select:all">${esc(token)}</code>
-                        <button onclick="navigator.clipboard.writeText('${token}').then(()=>{this.textContent='✓ Disalin';setTimeout(()=>this.textContent='Salin',2000)})"
-                            style="margin-left:6px;font-size:11px;padding:2px 8px;cursor:pointer;border:1px solid var(--color-border,#dde3e9);border-radius:4px;background:transparent;color:inherit">
-                            Salin
-                        </button>
+                        <button class="btn btn-sm btn-secondary" style="margin-left:6px" onclick="navigator.clipboard.writeText('${token}').then(()=>{this.textContent='✓ Disalin';setTimeout(()=>this.textContent='Salin',2000)})">Salin</button>
                     </td>
                 </tr>`;
             }).join('')}</tbody>
@@ -1978,7 +1975,7 @@ async function renderActivityLogPanel() {
                     <td>${esc(o.student?.full_name ?? '—')}</td>
                     <td>${esc(o.author?.full_name ?? '—')}</td>
                     <td>${o.is_void
-                        ? `<span class="hint" title="${esc(o.void_reason ?? '')}" style="font-size:11px;color:#b45309">Dibatalkan</span>`
+                        ? `<span class="badge badge-warning" title="${esc(o.void_reason ?? '')}">Dibatalkan</span>`
                         : `<button class="btn btn-sm btn-warning obs-void-btn" data-obs-id="${o.observation_id}" data-obs-content="${esc((o.content ?? '').slice(0, 80))}">Batalkan</button>`}</td>
                 </tr>`).join('')}
             </tbody>
