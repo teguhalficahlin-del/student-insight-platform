@@ -330,7 +330,7 @@ async function initGuruTab() {
             const body    = document.getElementById('guru-recap-body');
             const btn     = document.getElementById('guru-recap-toggle');
             const isOpen  = body.style.display !== 'none';
-            body.style.display = isOpen ? 'none' : 'block';
+            body.style.display = isOpen ? 'none' : '';
             btn.textContent    = isOpen ? 'Tampilkan' : 'Sembunyikan';
         });
         // Default rentang: awal bulan ini s/d hari ini
