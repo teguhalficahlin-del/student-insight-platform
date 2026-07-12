@@ -155,6 +155,7 @@ async function goToStep(n) {
     if (n < 1 || n > TOTAL_STEPS) return;
     clearError();
     state.currentStep = n;
+    history.replaceState(null, '', '#' + n);
     activeNameEl.textContent = STEP_NAMES[n];
     syncSidebar();
     syncFooter();
@@ -3015,5 +3016,6 @@ window.addEventListener('beforeunload', (e) => {
         return;
     }
 
-    await goToStep(1);
+    const hashStep = parseInt(location.hash.slice(1), 10);
+    await goToStep((hashStep >= 1 && hashStep <= TOTAL_STEPS) ? hashStep : 1);
 })();
