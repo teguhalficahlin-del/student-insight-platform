@@ -185,9 +185,9 @@ export async function getMyCases(studentId) {
 }
 
 /**
- * Observasi RESTRICTED yang boleh dilihat siswa (opt-in via observation_audience_members).
- * RLS rls_observations_read_student membatasi ke baris di mana siswa ada di OAM.
- * Filter eksplisit di sini sebagai pertahanan berlapis.
+ * Catatan siswa yang boleh dilihat siswa ini.
+ * RLS rls_observations_read_student membatasi ke visibility
+ * SISWA_SAJA atau SISWA_DAN_ORTU untuk student_id yang cocok.
  */
 export async function getMyObservations(studentId, dateStart = null, dateEnd = null) {
     let query = supabase
@@ -197,7 +197,6 @@ export async function getMyObservations(studentId, dateStart = null, dateEnd = n
             author:users!observations_author_user_id_fkey ( full_name )
         `)
         .eq('student_id', studentId)
-        .eq('visibility', 'RESTRICTED')
         .order('observed_at', { ascending: false })
         .limit(100);
     if (dateStart) query = query.gte('observed_at', dateStart);

@@ -122,8 +122,8 @@ async function init() {
 }
 
 // ─── Tab navigation ──────────────────────────────────────────
-const TAB_SHORT = { jadwal: 'Jadwal', kehadiran: 'Hadir', observasi: 'Observasi', pkl: 'PKL' };
-const TAB_ICON  = { jadwal: 'ti-calendar', kehadiran: 'ti-clipboard-check', observasi: 'ti-eye', pkl: 'ti-briefcase' };
+const TAB_SHORT = { jadwal: 'Jadwal', kehadiran: 'Hadir', observasi: 'Catatan', pkl: 'PKL' };
+const TAB_ICON  = { jadwal: 'ti-calendar', kehadiran: 'ti-clipboard-check', observasi: 'ti-notes', pkl: 'ti-briefcase' };
 
 function buildTabs() {
     const nav    = document.getElementById('tab-nav');
@@ -132,7 +132,7 @@ function buildTabs() {
     const tabs   = [];
     if (!isPkl) tabs.push({ key: 'jadwal', label: 'Jadwal' });
     tabs.push({ key: 'kehadiran', label: 'Kehadiran' });
-    tabs.push({ key: 'observasi', label: 'Observasi' });
+    tabs.push({ key: 'observasi', label: 'Catatan' });
     tabs.push({ key: 'forum', label: 'Forum' });
     if (isPkl)  tabs.push({ key: 'pkl', label: 'PKL' });
 
@@ -317,7 +317,7 @@ async function loadAttendance() {
 function renderObservations(rows, hintEl, listEl) {
     if (rows.length === 0) {
         hintEl.style.display = 'block';
-        hintEl.textContent   = 'Belum ada observasi yang dibagikan untukmu.';
+        hintEl.textContent   = 'Belum ada catatan dari guru untukmu.';
         listEl.innerHTML     = '';
         return;
     }
@@ -332,7 +332,7 @@ function renderObservations(rows, hintEl, listEl) {
                 &middot; ${fmt(r.observed_at ?? r.created_at)}
             </div>
             <p class="obs-content">${esc(r.content)}</p>
-        </div>`).join('') + (rows.length >= 100 ? '<p class="hint" style="margin-top:12px">Menampilkan 100 observasi terbaru.</p>' : '');
+        </div>`).join('') + (rows.length >= 100 ? '<p class="hint" style="margin-top:12px">Menampilkan 100 catatan terbaru.</p>' : '');
 }
 
 let obsFilterInit = false;
@@ -367,7 +367,7 @@ async function loadObservations() {
         renderObservations(cached, hintEl, listEl);
     } else {
         hintEl.style.display = 'block';
-        hintEl.textContent   = 'Memuat observasi…';
+        hintEl.textContent   = 'Memuat catatan…';
         listEl.innerHTML     = '';
     }
     casesHintEl.textContent   = 'Memuat…';
@@ -384,7 +384,7 @@ async function loadObservations() {
         LC.set(cacheKey, obsResult.value);
         renderObservations(obsResult.value, hintEl, listEl);
     } else if (!cached) {
-        hintEl.textContent = `Gagal memuat observasi. ${fe(obsResult.reason)}`;
+        hintEl.textContent = `Gagal memuat catatan. ${fe(obsResult.reason)}`;
     }
 
     if (casesResult.status === 'fulfilled') {
@@ -401,7 +401,7 @@ async function loadObsOnly() {
     const dateEnd   = document.getElementById('obs-date-end').value   || null;
     const cacheKey  = `stu-obs-${student.student_id}-${dateStart}-${dateEnd}`;
     hintEl.style.display = 'block';
-    hintEl.textContent   = 'Memuat observasi…';
+    hintEl.textContent   = 'Memuat catatan…';
     listEl.innerHTML     = '';
     try {
         const rows = await getMyObservations(student.student_id, dateStart, dateEnd);
@@ -409,7 +409,7 @@ async function loadObsOnly() {
         renderObservations(rows, hintEl, listEl);
     } catch (err) {
         hintEl.style.display = 'block';
-        hintEl.textContent   = `Gagal memuat observasi. ${fe(err)}`;
+        hintEl.textContent   = `Gagal memuat catatan. ${fe(err)}`;
     }
 }
 
