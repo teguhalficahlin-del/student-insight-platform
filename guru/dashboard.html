@@ -26,7 +26,7 @@
         </div>
         <!-- Lonceng notifikasi -->
         <div style="position:relative;margin-left:8px">
-            <button id="notif-bell-btn" class="btn btn-secondary btn-sm" title="Notifikasi" aria-label="Buka notifikasi" style="font-size:16px;padding:6px 10px">🔔</button>
+            <button id="notif-bell-btn" class="btn btn-secondary btn-sm" title="Notifikasi" aria-label="Buka notifikasi">🔔</button>
             <div id="notif-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 6px);width:300px;max-height:380px;overflow-y:auto;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:500"></div>
         </div>
         <button class="btn btn-secondary btn-sm" id="logout-btn" style="margin-left:8px">Keluar</button>
@@ -189,8 +189,8 @@
         </div>
 
         <!-- Modal: buat posting -->
-        <div id="modal-create-post" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;align-items:center;justify-content:center">
-            <div class="modal-box" style="background:var(--color-surface);border-radius:var(--radius);padding:24px;width:min(560px,96vw);max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.4)">
+        <div id="modal-create-post" class="modal-overlay">
+            <div class="modal-box">
                 <h3 style="margin:0 0 16px">Buat Posting</h3>
 
                 <!-- Subjek siswa -->
@@ -467,10 +467,10 @@
     </div>
 
     <!-- Modal drill-down kehadiran siswa per kelas (Waka Kesiswaan) -->
-    <div id="wk-class-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.6);padding:24px;overflow-y:auto" role="dialog" aria-modal="true">
-        <div style="max-width:860px;margin:0 auto;background:var(--color-surface,#1e2330);border-radius:8px;padding:24px;position:relative">
+    <div id="wk-class-modal" class="modal-overlay" role="dialog" aria-modal="true">
+        <div class="modal-box">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h3 id="wk-modal-title" style="margin:0;color:var(--color-primary,#4ade80)"></h3>
+                <h3 id="wk-modal-title" style="margin:0;color:var(--color-primary)"></h3>
                 <button id="wk-modal-close" class="btn btn-secondary btn-sm" style="padding:4px 12px">✕ Tutup</button>
             </div>
             <div id="wk-modal-body"><p class="hint">Memuat…</p></div>
@@ -610,10 +610,10 @@
                     </form>
                 </details>
 
-                <div id="ks-new-admin-result" style="display:none; margin-top:16px; padding:12px; background:var(--color-bg-alt,#f5f5f5); border-radius:8px; border:1px solid var(--color-border)">
+                <div id="ks-new-admin-result" style="display:none; margin-top:16px; padding:12px; background:var(--color-bg-alt); border-radius:8px; border:1px solid var(--color-border)">
                     <p style="font-weight:600; margin:0 0 8px">Akun berhasil dibuat — catat sekarang, tidak bisa ditampilkan ulang</p>
                     <p style="margin:4px 0">Login ID: <code id="ks-result-loginid" style="font-weight:700"></code></p>
-                    <p style="margin:4px 0">Password sementara: <code id="ks-result-password" style="font-weight:700; background:var(--color-warn-bg,#fff8e1); padding:2px 6px; border-radius:4px"></code></p>
+                    <p style="margin:4px 0">Password sementara: <code id="ks-result-password" style="font-weight:700; background:var(--color-warning-bg); padding:2px 6px; border-radius:4px"></code></p>
                     <p class="hint" style="margin-top:8px">Admin baru harus mengganti password setelah login pertama.</p>
                 </div>
             </div>
@@ -664,7 +664,7 @@
             <!-- List view -->
             <div id="kasus-list-view">
                 <div class="section-card">
-                    <div id="kasus-offline-banner" style="display:none; background:var(--color-warning,#fff3cd); color:#856404; border:1px solid #ffc107; border-radius:6px; padding:8px 12px; font-size:13px; margin-bottom:12px">
+                    <div id="kasus-offline-banner" style="display:none; background:var(--color-warning-bg); color:var(--color-warning); border:1px solid var(--color-warning); border-radius:6px; padding:8px 12px; font-size:13px; margin-bottom:12px">
                         ⚠ Tidak ada koneksi — membuat kasus membutuhkan internet.
                     </div>
                     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:8px">
@@ -721,7 +721,7 @@
                     <div id="kasus-escalate-block" style="margin-bottom:16px; display:none">
                         <label for="kasus-escalate-to">Teruskan kasus ke</label>
                         <select id="kasus-escalate-to" class="input" style="margin-bottom:6px; width:auto"></select>
-                        <div id="kasus-escalate-warn" style="display:none; font-size:12px; color:var(--color-warning); margin-bottom:6px; padding:6px 8px; background:rgba(var(--color-warning-rgb,255,165,0),.1); border-radius:var(--radius)"></div>
+                        <div id="kasus-escalate-warn" style="display:none; font-size:12px; color:var(--color-warning); margin-bottom:6px; padding:6px 8px; background:var(--color-warning-bg); border-radius:var(--radius)"></div>
                         <textarea id="kasus-escalate-note" class="input" rows="2" placeholder="Catatan (opsional)…" style="margin-bottom:8px"></textarea>
                         <button class="btn btn-primary btn-sm" id="kasus-escalate-btn">Teruskan</button>
                         <span id="kasus-escalate-msg" style="font-size:13px; margin-left:8px"></span>
@@ -762,7 +762,7 @@
             </div>
 
             <!-- Create modal -->
-            <div id="kasus-create-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:200; align-items:center; justify-content:center; padding:16px">
+            <div id="kasus-create-modal" class="modal-overlay">
                 <div style="background:var(--color-surface); border-radius:var(--radius-lg); padding:24px; width:100%; max-width:520px; max-height:90vh; overflow-y:auto">
                     <h3 style="margin-bottom:16px">Buat Kasus Baru</h3>
                     <form id="kasus-create-form">
@@ -824,7 +824,7 @@
 </script>
 
 <!-- Modal Absensi -->
-<div id="att-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:300; align-items:flex-start; justify-content:center; padding:16px; overflow-y:auto">
+<div id="att-modal" class="modal-overlay" style="align-items:flex-start; overflow-y:auto">
     <div style="background:var(--color-surface); border-radius:var(--radius-lg); padding:24px; width:100%; max-width:600px; margin:auto; position:relative">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px">
             <h3 id="att-modal-title" style="margin:0">Kehadiran</h3>

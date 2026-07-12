@@ -19,6 +19,9 @@
     --color-warning:      #fbbf24;
     --color-warning-bg:   rgba(180, 83, 9, 0.15);
     --color-gold:         #F59E0B;
+    --color-bg-alt:       #1e2a45;
+    --color-surface-alt:  #1e2a45;
+    --color-warning-rgb:  180,83,9;
 
     --radius:    8px;
     --radius-lg: 12px;
@@ -51,6 +54,10 @@ p { margin: 0 0 8px; color: var(--color-text-muted); }
 .ks-period-btn { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
 .ks-period-btn.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
 .btn-xs { padding: 4px 8px; font-size: 12px; min-height: 44px; }
+.btn-warning { background: var(--color-warning-bg); color: var(--color-warning); border-color: var(--color-warning); }
+.btn-warning:hover { background: var(--color-warning); color: #fff; }
+.hint-success { font-size: 13px; color: var(--color-success); font-weight: 600; margin-top: 4px; }
+.sub-label { font-size: 11px; color: var(--color-text-muted); }
 
 /* ── Form ────────────────────────────────────────────────── */
 label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
@@ -167,7 +174,7 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
     display: flex; align-items: center; gap: 10px;
     padding: 8px 12px; cursor: pointer;
     font-size: 13px; font-weight: 600;
-    background: var(--color-surface-alt, var(--color-surface, #1e2533));
+    background: var(--color-surface-alt);
     user-select: none; list-style: none;
 }
 .att-accordion-summary::-webkit-details-marker { display: none; }
@@ -191,6 +198,29 @@ details[open] .att-accordion-summary::before { transform: rotate(90deg); }
 .alert-danger  { background: var(--color-danger-bg);  color: var(--color-danger);  border-color: #fecaca; }
 .alert-success { background: var(--color-success-bg); color: var(--color-success); border-color: #bbf7d0; }
 .alert-warning { background: var(--color-warning-bg); color: var(--color-warning); border-color: #fde68a; }
+.alert-info    { background: var(--color-primary-bg); color: var(--color-primary); border-color: rgba(29,78,216,0.4); }
+
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 200; align-items: center; justify-content: center; }
+.modal-overlay.is-open { display: flex; }
+.modal-box { background: var(--color-surface); border-radius: var(--radius-lg); padding: 24px; width: min(560px,96vw); max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-md); }
+
+/* ── Notif badge ─────────────────────────────────────────── */
+.notif-badge-count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; line-height: 18px; border-radius: 9px; background: var(--color-danger); color: #fff; font-size: 11px; font-weight: 700; text-align: center; padding: 0 3px; pointer-events: none; }
+.kasus-notif-badge { display: inline-block; min-width: 18px; height: 18px; line-height: 18px; border-radius: 9px; background: var(--color-danger); color: #fff; font-size: 11px; font-weight: 700; text-align: center; padding: 0 4px; margin-left: 5px; vertical-align: middle; }
+
+/* ── Sync banner ─────────────────────────────────────────── */
+.sync-banner { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2000; padding: 8px 14px; font-size: 13px; text-align: center; display: none; background: var(--color-warning-bg); color: var(--color-warning); border-top: 1px solid var(--color-warning); }
+
+/* ── Audience chip ───────────────────────────────────────── */
+.audience-chip { display: inline-flex; align-items: center; gap: 4px; margin: 2px 4px 2px 0; padding: 2px 8px; border: 1px solid var(--color-border); border-radius: 20px; font-size: 12px; }
+.chip-remove-btn { background: none; border: none; cursor: pointer; color: var(--color-danger); font-size: 14px; line-height: 1; padding: 0 2px; }
+
+/* ── Kasus row ───────────────────────────────────────────── */
+.kasus-row { border: 1px solid var(--color-border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; cursor: pointer; transition: background .12s; }
+.kasus-row:hover { background: var(--color-bg); }
+
+/* ── Case event item ─────────────────────────────────────── */
+.case-event-item { border-left: 3px solid var(--color-border); padding: 10px 14px; margin-bottom: 10px; }
 
 /* ── Loading ─────────────────────────────────────────────── */
 #loading { padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 14px; }
@@ -348,11 +378,13 @@ details[open] .att-accordion-summary::before { transform: rotate(90deg); }
 #obs-student-list { left: 0; right: 0; top: 100%; }
 
 /* ── Kasus status badges ─────────────────────────────────── */
-.kasus-badge-open         { background: #eff6ff; color: #1d4ed8; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
-.kasus-badge-under_review { background: #fefce8; color: #854d0e; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
-.kasus-badge-intervention { background: var(--color-danger-bg); color: var(--color-danger); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
-.kasus-badge-monitoring   { background: #f5f3ff; color: #6d28d9; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
-.kasus-badge-closed       { background: var(--color-bg); color: var(--color-text-muted); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
+.kasus-badge-open, .kasus-badge-under_review, .kasus-badge-intervention,
+.kasus-badge-monitoring, .kasus-badge-closed { border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
+.kasus-badge-open         { background: #eff6ff; color: #1d4ed8; }
+.kasus-badge-under_review { background: #fefce8; color: #854d0e; }
+.kasus-badge-intervention { background: var(--color-danger-bg); color: var(--color-danger); }
+.kasus-badge-monitoring   { background: #f5f3ff; color: #6d28d9; }
+.kasus-badge-closed       { background: var(--color-bg); color: var(--color-text-muted); }
 
 
 /* ── Print styles (P5-A) ─────────────────────────────────── */

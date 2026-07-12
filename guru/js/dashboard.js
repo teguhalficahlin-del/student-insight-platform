@@ -48,7 +48,7 @@ function _setBellBadge(n) {
         if (!badge) {
             badge = document.createElement('span');
             badge.className = 'notif-badge-count';
-            badge.style.cssText = 'position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--color-danger,#dc2626);color:#fff;font-size:11px;font-weight:700;text-align:center;padding:0 3px;pointer-events:none';
+            badge.className = 'notif-badge-count';
             btn.style.position = 'relative';
             btn.appendChild(badge);
         }
@@ -56,7 +56,7 @@ function _setBellBadge(n) {
         // Badge kecil di tab Kasus juga (backward compat)
         document.querySelectorAll('[data-tab="kasus"]').forEach(t => {
             let b = t.querySelector('.kasus-notif-badge');
-            if (!b) { b = document.createElement('span'); b.className = 'kasus-notif-badge'; b.style.cssText = 'display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--color-danger,#dc2626);color:#fff;font-size:11px;font-weight:700;text-align:center;padding:0 4px;margin-left:5px;vertical-align:middle'; t.appendChild(b); }
+            if (!b) { b = document.createElement('span'); b.className = 'kasus-notif-badge'; t.appendChild(b); }
             b.textContent = n > 99 ? '99+' : String(n);
         });
     } else {
@@ -387,7 +387,7 @@ async function loadGuruRecap() {
             const pct = pctDenom > 0 ? Math.round((s.HADIR / pctDenom) * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
             return `<tr>
-                <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted,#9ca3af)">${esc(s.nis)}</span></td>
+                <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted)">${esc(s.nis)}</span></td>
                 <td style="text-align:center">${s.HADIR}</td>
                 <td style="text-align:center">${s.IZIN}</td>
                 <td style="text-align:center">${s.SAKIT}</td>
@@ -398,7 +398,7 @@ async function loadGuruRecap() {
         }).join('');
         content.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
-                <p style="font-size:0.82rem;color:var(--color-text-muted,#9ca3af);margin:0">
+                <p style="font-size:0.82rem;color:var(--color-text-muted);margin:0">
                     ${esc(className)} · ${rows.length} siswa · akumulasi ${dateStart || '—'} s/d ${dateEnd || '—'}
                 </p>
                 <button class="btn btn-secondary btn-sm" id="guru-recap-export">Unduh CSV</button>
@@ -431,7 +431,7 @@ async function loadGuruRecap() {
             URL.revokeObjectURL(a.href);
         });
     } catch (err) {
-        content.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat rekap. ${esc(fe(err))}</p>`;
+        content.innerHTML = `<div class="status-err">Gagal memuat rekap. ${esc(fe(err))}</div>`;
     }
 }
 
@@ -445,7 +445,7 @@ function fmtDayLabel(dateStr) {
 }
 
 function renderScheduleRows(rows, contentEl, date) {
-    const dayLabel = `<p style="font-size:0.85rem;color:var(--color-text-muted,#9ca3af);margin-bottom:8px">${fmtDayLabel(date)}</p>`;
+    const dayLabel = `<p style="font-size:0.85rem;color:var(--color-text-muted);margin-bottom:8px">${fmtDayLabel(date)}</p>`;
     if (rows.length === 0) {
         contentEl.innerHTML = dayLabel + '<p class="hint">Tidak ada jadwal mengajar pada tanggal ini.</p>';
         return;
@@ -491,7 +491,7 @@ function openAttModal(btn) {
     document.getElementById('att-modal-title').textContent =
         isPast ? `Koreksi Kehadiran — ${btn.dataset.classname}` : `Kehadiran — ${btn.dataset.classname}`;
     document.getElementById('att-modal-body').innerHTML =
-        (isPast ? '<p class="hint" style="background:var(--color-bg-alt,#f3f4f6);padding:8px 10px;border-radius:6px;margin-bottom:12px">Data kehadiran sebelumnya sudah ditampilkan. Ubah jika perlu lalu klik Simpan.</p>' : '') +
+        (isPast ? '<p class="hint" style="background:var(--color-bg-alt);padding:8px 10px;border-radius:6px;margin-bottom:12px">Data kehadiran sebelumnya sudah ditampilkan. Ubah jika perlu lalu klik Simpan.</p>' : '') +
         '<p class="hint">Memuat daftar siswa…</p>';
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
@@ -522,7 +522,7 @@ async function loadSchedule() {
         renderScheduleRows(rows, contentEl, date);
     } catch (err) {
         if (!cached) {
-            contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
+            contentEl.innerHTML = `<div class="status-err">Gagal memuat data. ${esc(fe(err))}</div>`;
         }
         // Jika ada cache, biarkan data lama tetap tampil — jangan overwrite dengan error
     }
@@ -598,7 +598,7 @@ async function loadWeekSchedule() {
             btn.addEventListener('click', () => openAttModal(btn));
         });
     } catch (err) {
-        contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat. ${esc(fe(err))}</p>`;
+        contentEl.innerHTML = `<div class="status-err">Gagal memuat. ${esc(fe(err))}</div>`;
     }
 }
 
@@ -675,7 +675,7 @@ async function loadAttModalContent(scheduleId, classId, className) {
 
         panel.querySelector('.att-save').addEventListener('click', () => saveAttendance(scheduleId, students));
     } catch (err) {
-        panel.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
+        panel.innerHTML = `<div class="status-err">Gagal memuat data. ${esc(fe(err))}</div>`;
     }
 }
 
@@ -741,9 +741,7 @@ async function updateSyncBanner() {
     if (!el) {
         el = document.createElement('div');
         el.id = 'sync-banner';
-        el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2000;padding:8px 14px;' +
-            'font-size:13px;text-align:center;display:none;background:var(--color-warning-bg,#fffbeb);' +
-            'color:var(--color-warning,#b45309);border-top:1px solid var(--color-warning,#d97706)';
+        el.className = 'sync-banner';
         document.body.appendChild(el);
     }
     let n = 0;
@@ -827,9 +825,9 @@ async function initObsForm() {
         }
         const OBS_ROLE_LBL = { GURU:'Guru', BK:'BK', WALI_KELAS:'Wali Kelas', KAPRODI:'Kaprodi', WAKA_KESISWAAN:'Waka Kesiswaan', KEPSEK:'Kepala Sekolah' };
         formMembersEl.innerHTML = pendingMembers.map(m =>
-            `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;padding:2px 8px;border:1px solid var(--color-border);border-radius:20px;font-size:12px">
+            `<span class="audience-chip">
                 ${esc(m.full_name)} <span style="color:var(--color-text-muted)">(${esc(OBS_ROLE_LBL[m.role_type] ?? m.role_type)})</span>
-                <button data-uid="${m.user_id}" style="background:none;border:none;cursor:pointer;color:var(--color-danger);font-size:14px;line-height:1;padding:0 2px" title="Hapus">×</button>
+                <button data-uid="${m.user_id}" class="chip-remove-btn" title="Hapus">×</button>
             </span>`
         ).join('');
         formMembersEl.querySelectorAll('button[data-uid]').forEach(btn => {
@@ -1062,7 +1060,7 @@ async function loadObsHistory() {
         LC.set(cacheKey, rows);
         renderObsHistory(rows, listEl);
     } catch (err) {
-        if (!cached) listEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat. ${esc(fe(err))}</p>`;
+        if (!cached) listEl.innerHTML = `<div class="status-err">Gagal memuat. ${esc(fe(err))}</div>`;
     }
 }
 
@@ -1090,7 +1088,7 @@ function renderObsHistory(rows, listEl) {
         const vis       = r.visibility ?? 'PUBLIC';
         const visLabel  = OBS_VIS_LABEL[vis] ?? vis;
         const visColor  = vis === 'PUBLIC' ? 'var(--color-success,#4ade80)'
-                        : vis === 'RESTRICTED' ? 'var(--color-info,#60a5fa)'
+                        : vis === 'RESTRICTED' ? 'var(--color-primary)'
                         : 'var(--color-text-muted)';
         return `
         <div data-obs-id="${esc(r.observation_id)}" data-obs-vis="${esc(vis)}"
@@ -1103,12 +1101,12 @@ function renderObsHistory(rows, listEl) {
                 <span style="font-size:11px;color:var(--color-text-muted)">${fmt(r.observed_at)}</span>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center">
-                <span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--color-bg-alt,#f3f4f6)">${esc(dim)}</span>
-                <span style="font-size:11px;padding:2px 8px;border-radius:20px;color:${sentColor};background:var(--color-bg-alt,#f3f4f6)">${esc(sent)}</span>
-                <span class="obs-vis-badge" style="font-size:11px;padding:2px 8px;border-radius:20px;color:${visColor};background:var(--color-bg-alt,#f3f4f6);cursor:pointer" title="Klik untuk ubah visibilitas">${visLabel}</span>
+                <span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--color-bg-alt)">${esc(dim)}</span>
+                <span style="font-size:11px;padding:2px 8px;border-radius:20px;color:${sentColor};background:var(--color-bg-alt)">${esc(sent)}</span>
+                <span class="obs-vis-badge" style="font-size:11px;padding:2px 8px;border-radius:20px;color:${visColor};background:var(--color-bg-alt);cursor:pointer" title="Klik untuk ubah visibilitas">${visLabel}</span>
             </div>
             <p style="margin:0 0 6px;white-space:pre-wrap;color:var(--color-text)">${esc(r.content)}</p>
-            <div class="obs-vis-panel" style="display:none;margin-top:8px;padding:10px;border-radius:6px;background:var(--color-bg-alt,#2a3145)">
+            <div class="obs-vis-panel" style="display:none;margin-top:8px;padding:10px;border-radius:6px;background:var(--color-bg-alt)">
                 <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
                     ${['PRIVATE','RESTRICTED','PUBLIC'].map(a =>
                         `<button class="btn btn-sm obs-vis-btn ${a === vis ? 'btn-primary' : 'btn-secondary'}" data-vis="${a}">${OBS_VIS_LABEL[a]}</button>`
@@ -1166,7 +1164,7 @@ function renderObsHistory(rows, listEl) {
                     card.dataset.obsVis = newVis;
                     LC.remove(`obs-history-${currentUser.user_id}`);
                     const newColor = newVis === 'PUBLIC' ? 'var(--color-success,#4ade80)'
-                                   : newVis === 'RESTRICTED' ? 'var(--color-info,#60a5fa)'
+                                   : newVis === 'RESTRICTED' ? 'var(--color-primary)'
                                    : 'var(--color-text-muted)';
                     badge.textContent = OBS_VIS_LABEL[newVis];
                     badge.style.color = newColor;
@@ -1258,9 +1256,9 @@ function renderObsHistory(rows, listEl) {
                         const name = m.users?.full_name ?? m.user_id;
                         const role = OBS_ROLE_LABEL[m.users?.role_type] ?? m.users?.role_type ?? '';
                         const removeBtn = isAuthor
-                            ? `<button data-uid="${m.user_id}" style="background:none;border:none;cursor:pointer;color:var(--color-danger);font-size:14px;line-height:1;padding:0 2px" title="Hapus">×</button>`
+                            ? `<button data-uid="${m.user_id}" class="chip-remove-btn" title="Hapus">×</button>`
                             : '';
-                        return `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;padding:2px 8px;border:1px solid var(--color-border);border-radius:20px;font-size:12px">
+                        return `<span class="audience-chip">
                             ${esc(name)} <span style="color:var(--color-text-muted)">(${esc(role)})</span>${removeBtn}
                         </span>`;
                     }).join('');
@@ -1369,7 +1367,7 @@ async function loadWaliSummary() {
             const pct   = pctDenom > 0 ? Math.round(r.HADIR / pctDenom * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
             return `<tr>
-                <td><span style="font-weight:500">${esc(r.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted,#9ca3af)">${esc(r.nis)}</span></td>
+                <td><span style="font-weight:500">${esc(r.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted)">${esc(r.nis)}</span></td>
                 <td style="text-align:center">${r.HADIR}</td>
                 <td style="text-align:center">${r.IZIN}</td>
                 <td style="text-align:center">${r.SAKIT}</td>
@@ -1498,7 +1496,7 @@ async function wkOpenClassModal(tr, dateStart, dateEnd) {
             const pct   = pctDenom > 0 ? Math.round(s.HADIR / pctDenom * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
             return `<tr>
-                <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted,#9ca3af)">${esc(s.nis)}</span></td>
+                <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted)">${esc(s.nis)}</span></td>
                 <td style="text-align:center">${s.HADIR}</td>
                 <td style="text-align:center">${s.IZIN}</td>
                 <td style="text-align:center">${s.SAKIT}</td>
@@ -1740,7 +1738,7 @@ async function loadKpRecap() {
             const pct   = a.total > 0 ? Math.round(a.HADIR / a.total * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
             return `<tr>
-                <td><span style="font-weight:500">${esc(a.name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted,#9ca3af)">${esc(a.nis ?? '—')}</span></td>
+                <td><span style="font-weight:500">${esc(a.name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted)">${esc(a.nis ?? '—')}</span></td>
                 <td style="text-align:center">${a.HADIR}</td>
                 <td style="text-align:center">${a.IZIN}</td>
                 <td style="text-align:center">${a.SAKIT}</td>
@@ -1778,7 +1776,7 @@ async function loadKpClsRecap() {
             const pct   = s.total > 0 ? Math.round(s.HADIR / s.total * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
             return `<tr>
-                <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted,#9ca3af)">${esc(s.nis)}</span></td>
+                <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted)">${esc(s.nis)}</span></td>
                 <td style="text-align:center">${s.HADIR}</td>
                 <td style="text-align:center">${s.IZIN}</td>
                 <td style="text-align:center">${s.SAKIT}</td>
@@ -1811,7 +1809,7 @@ async function loadKpObs() {
                 <p class="obs-content">${esc(r.content)}</p>
             </div>`).join('');
     } catch (err) {
-        listEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">${esc(fe(err))}</p>`;
+        listEl.innerHTML = `<div class="status-err">${esc(fe(err))}</div>`;
     }
 }
 
@@ -2029,7 +2027,7 @@ async function loadWhObs() {
                 <p class="obs-content">${esc(r.content)}</p>
             </div>`).join('');
     } catch (err) {
-        listEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">${esc(fe(err))}</p>`;
+        listEl.innerHTML = `<div class="status-err">${esc(fe(err))}</div>`;
     }
 }
 
@@ -2483,7 +2481,7 @@ async function loadKasusList() {
         _kasusAllCases = await getCases();
         renderKasusList();
     } catch (err) {
-        contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">${esc(fe(err))}</p>`;
+        contentEl.innerHTML = `<div class="status-err">${esc(fe(err))}</div>`;
     }
 }
 
@@ -2502,7 +2500,7 @@ function renderKasusList() {
     }
 
     contentEl.innerHTML = rows.map(r => `
-        <div class="kasus-row" data-id="${r.case_id}" style="border:1px solid var(--color-border); border-radius:var(--radius); padding:14px 16px; margin-bottom:10px; cursor:pointer; transition:background .12s">
+        <div class="kasus-row" data-id="${r.case_id}">
             <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px; flex-wrap:wrap">
                 <strong style="font-size:14px; flex:1">${esc(r.title)}</strong>
                 <span class="badge kasus-badge-${(r.status||'').toLowerCase()}">${esc(CASE_STATUS_LABEL[r.status] ?? r.status)}</span>
@@ -2517,8 +2515,6 @@ function renderKasusList() {
     `).join('');
 
     contentEl.querySelectorAll('.kasus-row').forEach(el => {
-        el.addEventListener('mouseenter', () => { el.style.background = 'var(--color-bg)'; });
-        el.addEventListener('mouseleave', () => { el.style.background = ''; });
         el.addEventListener('click', () => openKasusDetail(el.dataset.id));
     });
 }
@@ -2544,7 +2540,7 @@ async function openKasusDetail(caseId) {
         renderKasusActions(kasus);
     } catch (err) {
         document.getElementById('kasus-detail-header').innerHTML =
-            `<p class="hint" style="color:var(--color-danger)">${esc(fe(err))}</p>`;
+            `<div class="status-err">${esc(fe(err))}</div>`;
     }
 }
 
@@ -2582,7 +2578,7 @@ function renderKasusEvents(events) {
         if (ev.event_type === 'STATUS_CHANGED' || ev.event_type === 'DECISION_CLOSE' || ev.event_type === 'FINAL_DECISION_MADE')
             detail = `${esc(CASE_STATUS_LABEL[ev.previous_status] ?? ev.previous_status ?? '?')} → ${esc(CASE_STATUS_LABEL[ev.new_status] ?? ev.new_status ?? '?')}`;
         return `
-            <div style="border-left:3px solid var(--color-border); padding:10px 14px; margin-bottom:10px">
+            <div class="case-event-item">
                 <div style="font-size:12px; color:var(--color-text-muted); margin-bottom:4px">
                     <strong>${esc(label)}</strong>
                     ${detail ? `<span style="margin-left:6px">${detail}</span>` : ''}
@@ -2666,7 +2662,7 @@ function renderKasusActions(kasus) {
         const cur   = kasus.audience ?? 'PRIVATE';
         badge.textContent = AUDIENCE_LABEL[cur] ?? cur;
         badge.style.background = cur === 'PUBLIC' ? 'var(--color-success-bg, #d4edda)'
-            : cur === 'RESTRICTED' ? 'var(--color-info-bg, #d1ecf1)'
+            : cur === 'RESTRICTED' ? 'var(--color-primary-bg)'
             : 'var(--color-bg)';
         audienceBlock.style.display = 'block';
         renderAudiencePanel(kasus, cur);
@@ -3285,7 +3281,7 @@ function renderForumPostCard(post) {
     const catPol    = post.category?.polarity ?? null;
     const catColor  = catPol === 'POSITIVE' ? 'var(--color-success,#4ade80)'
                     : catPol === 'NEGATIVE' ? 'var(--color-danger,#f87171)'
-                    : 'var(--color-info,#60a5fa)';
+                    : 'var(--color-primary)';
 
     const ackCount = (post.acknowledgements ?? []).length;
     const cmtCount = (post.comments ?? []).length;
@@ -3307,7 +3303,7 @@ function renderForumPostCard(post) {
         </div>
 
         ${subjects.length ? `<p style="font-size:12px;color:var(--color-text-muted);margin:0 0 4px">Siswa: ${esc(subjects.join(', '))}</p>` : ''}
-        ${catLabel ? `<span style="font-size:11px;padding:2px 8px;border-radius:20px;color:${catColor};background:var(--color-bg-alt,#2a3145);margin-bottom:6px;display:inline-block">${esc(catLabel)}</span>` : ''}
+        ${catLabel ? `<span style="font-size:11px;padding:2px 8px;border-radius:20px;color:${catColor};background:var(--color-bg-alt);margin-bottom:6px;display:inline-block">${esc(catLabel)}</span>` : ''}
 
         ${bodyHtml}
 
@@ -3322,7 +3318,7 @@ function renderForumPostCard(post) {
             </button>
             ${isAuthor ? `<button class="btn btn-sm btn-secondary btn-withdraw" style="font-size:12px;color:var(--color-danger)">Tarik posting</button>` : ''}
         </div>
-        <div class="forum-comments-panel" style="display:none;margin-top:12px;padding:10px;background:var(--color-bg-alt,#2a3145);border-radius:var(--radius)">
+        <div class="forum-comments-panel" style="display:none;margin-top:12px;padding:10px;background:var(--color-bg-alt);border-radius:var(--radius)">
             <div class="forum-comments-list" style="margin-bottom:8px;font-size:13px"></div>
             <div style="display:flex;gap:6px">
                 <input type="text" class="input forum-comment-input" placeholder="Tulis komentar…" style="flex:1;font-size:13px">
@@ -3621,7 +3617,7 @@ function renderForumCategoryGrid() {
     grid.innerHTML = _forumCategories.map(cat => {
         const color = cat.polarity === 'POSITIVE' ? 'var(--color-success,#4ade80)'
                     : cat.polarity === 'NEGATIVE' ? 'var(--color-danger,#f87171)'
-                    : 'var(--color-info,#60a5fa)';
+                    : 'var(--color-primary)';
         const sel = _forumSelectedCategory === cat.category_code;
         return `<button type="button" class="btn btn-sm forum-cat-btn ${sel ? 'btn-primary' : 'btn-secondary'}"
                         data-code="${esc(cat.category_code)}"
