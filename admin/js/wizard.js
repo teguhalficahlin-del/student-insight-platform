@@ -680,9 +680,6 @@ async function renderForumAssignmentStep() {
         _wzFkBkAssignments = bkAsgn;
         _wzFkGwAssignments = gwAsgn;
 
-        const bkCount = bkAsgn?.length ?? 0;
-        const gwCount = gwAsgn?.length ?? 0;
-
         const tmpl11 = EXCEL_TEMPLATES[11];
 
         contentEl.innerHTML = `
@@ -690,16 +687,6 @@ async function renderForumAssignmentStep() {
             <h3>Penugasan Forum Kelas</h3>
             <p class="hint">Tugaskan BK ke kelas dan Guru Wali ke siswa via
                 file Excel/CSV, atau isi manual di tab di bawah.</p>
-
-            <div style="background:var(--color-surface-raised,#f8fafc);
-                        border:1px solid var(--color-border);border-radius:8px;
-                        padding:16px;margin-bottom:24px">
-                <p class="hint" style="margin:0 0 4px">Ringkasan penugasan aktif:</p>
-                <p style="margin:0">
-                    BK: <strong>${bkCount}</strong> penugasan &nbsp;|&nbsp;
-                    Guru Wali: <strong>${gwCount}</strong> penugasan
-                </p>
-            </div>
 
             <h4 style="margin:0 0 8px">BK per Kelas</h4>
             <p class="hint">Template berisi kolom: <code>nama_kelas, kode_program, nip_bk</code></p>
@@ -2337,24 +2324,6 @@ const STEP_LIST = {
                     s.teacher?.full_name ?? '—',
                 ],
             }));
-        },
-    },
-    11: {
-        fetch: async (ay) => {
-            const [bkAsgn, gwAsgn] = await Promise.all([
-                getBkAssignments(ay),
-                getGuruWaliAssignments(ay),
-            ]);
-            return { bkAsgn, gwAsgn };
-        },
-        render: (data) => {
-            if (!data) return '<p class="hint">Memuat…</p>';
-            const bkCount = data.bkAsgn?.length ?? 0;
-            const gwCount = data.gwAsgn?.length ?? 0;
-            return `<p class="hint" style="margin:0">
-                BK: <strong>${bkCount}</strong> penugasan aktif &nbsp;|&nbsp;
-                Guru Wali: <strong>${gwCount}</strong> penugasan aktif
-            </p>`;
         },
     },
 };
