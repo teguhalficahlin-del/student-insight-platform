@@ -1556,13 +1556,9 @@ async function loadWkKur1(date) {
 
     try {
         const rows = await getPendingAttendanceSessions(date, date);
-        if (rows.length === 0) {
-            hintEl.textContent   = '✓ Tidak ada sesi yang menunggu pengisian absensi hari ini.';
-            hintEl.style.display = 'block';
-            _wkKur1Visible = false;
-            return;
-        }
-        tbody.innerHTML = rows.map((r, i) => `<tr>
+        tbody.innerHTML = rows.length === 0
+            ? `<tr><td colspan="5" class="hint" style="text-align:center;padding:12px">✓ Tidak ada sesi yang menunggu pengisian absensi hari ini.</td></tr>`
+            : rows.map((r, i) => `<tr>
             <td style="text-align:center">${i + 1}</td>
             <td>${esc(r.teacher?.full_name ?? '—')}</td>
             <td>${esc(r.subject?.name ?? '—')}</td>
