@@ -325,13 +325,16 @@ async function initGuruTab() {
 
     if (!_guruTabInit) {
         _guruTabInit = true;
-        document.getElementById('guru-recap-btn').onclick = loadGuruRecap;
-        document.getElementById('guru-recap-toggle').addEventListener('click', () => {
-            const body    = document.getElementById('guru-recap-body');
-            const btn     = document.getElementById('guru-recap-toggle');
-            const isOpen  = body.style.display !== 'none';
-            body.style.display = isOpen ? 'none' : '';
-            btn.textContent    = isOpen ? 'Tampilkan' : 'Sembunyikan';
+        const recapBtn = document.getElementById('guru-recap-btn');
+        recapBtn.addEventListener('click', async () => {
+            const content = document.getElementById('guru-recap-content');
+            if (recapBtn.textContent.trim() === 'Sembunyikan') {
+                content.style.display = 'none';
+                recapBtn.textContent = 'Tampilkan';
+                return;
+            }
+            content.style.display = '';
+            await loadGuruRecap();
         });
         // Default rentang: awal bulan ini s/d hari ini
         const today = localDateStr();
@@ -472,6 +475,7 @@ async function loadGuruRecap() {
         });
 
         renderGuruRekapPage();
+        document.getElementById('guru-recap-btn').textContent = 'Sembunyikan';
     } catch (err) {
         content.innerHTML = `<div class="status-err">Gagal memuat rekap. ${esc(fe(err))}</div>`;
     }
