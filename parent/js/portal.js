@@ -65,6 +65,10 @@ const btnObsFilter   = document.getElementById('btn-obs-filter');
 const notifBellBtn   = document.getElementById('notif-bell-btn');
 const notifDropdown  = document.getElementById('notif-dropdown');
 const sectionForum   = document.getElementById('section-forum');
+const tabNav         = document.getElementById('tab-nav');
+const tabBtns        = document.querySelectorAll('.tab-btn');
+const ALL_SECTIONS   = [sectionPkl, sectionSched, sectionAtt,
+                        sectionObs, sectionCases, sectionForum];
 let _notifPollTimer  = null;
 
 let currentUser = null;
@@ -84,6 +88,8 @@ const LC = {
     },
 };
 let children    = [];
+let tabLoaded = { pkl:false, schedule:false, attendance:false,
+                  observations:false, cases:false, forum:false };
 
 const STATUS_LABELS = {
     HADIR:       'Hadir',
@@ -128,6 +134,10 @@ async function init() {
     applyBrandingById(currentUser.school_id, supabase);
     await checkMustChangePassword(supabase, currentUser);
     await initLoginGuard(supabase, currentUser);
+    // Tab click handler
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => showTab(btn.dataset.tab));
+    });
     registerLoginDevice(supabase); // fire-and-forget
     portalUserName.textContent = currentUser.full_name;
 
@@ -166,6 +176,47 @@ async function init() {
     await loadChildData(0);
 }
 
+function getTabKey(sectionId) {
+    const map = {
+        'section-pkl':          'pkl',
+        'section-schedule':     'schedule',
+        'section-attendance':   'attendance',
+        'section-observations': 'observations',
+        'section-cases':        'cases',
+        'section-forum':        'forum'
+    };
+    return map[sectionId] ?? null;
+}
+
+async function showTab(sectionId) {
+    // Sembunyikan semua section
+    ALL_SECTIONS.forEach(s => {
+        s.classList.remove('active');
+        s.style.display = 'none';
+    });
+    // Tampilkan section target
+    const target = document.getElementById(sectionId);
+    if (!target) return;
+    target.style.display = 'block';
+    target.classList.add('active');
+    // Update tombol aktif
+    tabBtns.forEach(b => b.classList.toggle('active',
+        b.dataset.tab === sectionId));
+    // Lazy load — hanya load sekali per anak
+    const key = getTabKey(sectionId);
+    if (!key || tabLoaded[key]) return;
+    tabLoaded[key] = true;
+    const idx   = Number(selectChild.value);
+    const child = children[idx];
+    if (!child) return;
+    if (key === 'pkl')          await loadPkl(child.student_id);
+    if (key === 'schedule')     await loadSchedule(child.class_id);
+    if (key === 'attendance')   await loadAttendance(child.student_id);
+    if (key === 'observations') await loadObservations(child.student_id);
+    if (key === 'cases')        await loadCases(child.student_id);
+    if (key === 'forum')        await initForumSection();
+}
+
 const STATUS_STUDENT_LABEL = { AKTIF: 'Aktif', PKL: 'Sedang PKL', LULUS: 'Lulus', KELUAR: 'Tidak aktif' };
 const STATUS_STUDENT_CLASS = { AKTIF: 'badge-status-aktif', PKL: 'badge-status-pkl', LULUS: 'badge-status-lulus', KELUAR: 'badge-status-keluar' };
 
@@ -182,26 +233,28 @@ async function loadChildData(index) {
         childStatusBadge.style.display = 'none';
     }
 
-    const isPkl     = child.status === 'PKL';
+    const isPkl      = child.status === 'PKL';
     const isInactive = child.status === 'LULUS' || child.status === 'KELUAR';
 
-    // Tampilkan/sembunyikan section sesuai status
-    sectionPkl.style.display    = isPkl ? 'block' : 'none';
-    sectionSched.style.display  = isPkl || isInactive ? 'none' : 'block';
-    sectionAtt.style.display    = isInactive ? 'none' : 'block';
-    sectionObs.style.display    = 'block';
-    sectionCases.style.display  = 'block';
-    sectionForum.style.display  = 'block';
+    // Reset lazy-load flags untuk anak baru
+    tabLoaded = { pkl:false, schedule:false, attendance:false,
+                  observations:false, cases:false, forum:false };
+    forumInitDone = false;
 
-    const tasks = [
-        loadObservations(child.student_id),
-        loadCases(child.student_id),
-        initForumSection(),
-    ];
-    if (isPkl)     tasks.push(loadPkl(child.student_id));
-    if (!isPkl && !isInactive) tasks.push(loadSchedule(child.class_id), loadAttendance(child.student_id));
+    // Tampilkan tab-nav, atur tombol mana yang visible
+    tabNav.style.display = 'flex';
+    document.querySelector('[data-tab="section-pkl"]')
+        .toggleAttribute('hidden', !isPkl);
+    document.querySelector('[data-tab="section-schedule"]')
+        .toggleAttribute('hidden', isPkl || isInactive);
+    document.querySelector('[data-tab="section-attendance"]')
+        .toggleAttribute('hidden', isInactive);
 
-    await Promise.allSettled(tasks);
+    // Tentukan tab default berdasarkan status anak
+    const defaultTab = isPkl          ? 'section-pkl'
+                     : isInactive     ? 'section-observations'
+                     :                  'section-schedule';
+    await showTab(defaultTab);
 }
 
 async function loadSchedule(classId) {

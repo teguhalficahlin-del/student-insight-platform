@@ -456,3 +456,45 @@ label {
         border-color: rgba(0, 0, 0, 0.15);
     }
 }
+
+/* ── Tab Navigation (refactor Juli 2026) ── */
+.tab-nav {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 8px 0 0;
+  margin-bottom: 12px;
+  border-bottom: 2px solid var(--border, #e2e8f0);
+}
+.tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-btn:hover {
+  color: var(--text, #1e293b);
+  background: var(--surface-hover, #f1f5f9);
+}
+.tab-btn.active {
+  color: var(--primary, #2563eb);
+  border-bottom-color: var(--primary, #2563eb);
+  font-weight: 600;
+}
+.tab-btn[hidden] {
+  display: none;
+}
+.section.tab-content {
+  display: none;
+}
+.section.tab-content.active {
+  display: block;
+}
