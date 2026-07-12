@@ -813,7 +813,7 @@ async function renderWzFkBkTab() {
         return `
             <details class="wz-accordion" style="margin-bottom:8px">
                 <summary class="wz-accordion-header">${esc(progName)} (${classes.length} kelas)</summary>
-                <table class="data-table" style="width:100%;margin-top:4px">
+                <table class="table" style="width:100%;margin-top:4px">
                     <thead><tr>
                         <th style="width:36px"></th>
                         <th style="width:200px">Kelas</th>
@@ -1072,7 +1072,7 @@ async function renderWzFkGuruWaliTab() {
             return `
                 <details class="wz-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
                     <summary class="wz-accordion-header">${esc(cls.name)} (${students.length} siswa)</summary>
-                    <table class="data-table" style="width:100%;table-layout:fixed;margin-top:4px">
+                    <table class="table" style="width:100%;table-layout:fixed;margin-top:4px">
                         <thead><tr>
                             <th style="width:36px"></th>
                             <th style="width:55%">Siswa</th>
