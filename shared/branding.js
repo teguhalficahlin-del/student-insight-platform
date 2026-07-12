@@ -36,12 +36,12 @@ function adjustColor(hex, amount) {
  * @returns {object|null} branding data atau null jika tidak ditemukan
  */
 /**
- * Kembalikan URL halaman login dengan slug sekolah yang tersimpan di sessionStorage.
+ * Kembalikan URL halaman login dengan slug sekolah yang tersimpan di localStorage.
  * Dipakai semua portal untuk redirect logout / sesi habis.
  */
 export function getLoginUrl(page = 'index.html') {
     try {
-        const slug = sessionStorage.getItem('school_slug');
+        const slug = localStorage.getItem('school_slug');
         return slug ? `${page}?school=${encodeURIComponent(slug)}` : page;
     } catch { return page; }
 }
@@ -49,7 +49,7 @@ export function getLoginUrl(page = 'index.html') {
 export async function applyBranding(slug = null) {
     const resolvedSlug = slug ?? getSlugFromURL();
     if (!resolvedSlug) return null;
-    try { sessionStorage.setItem('school_slug', resolvedSlug); } catch { /* private mode */ }
+    try { localStorage.setItem('school_slug', resolvedSlug); } catch { /* private mode */ }
 
     let branding = null;
     try {
@@ -95,7 +95,7 @@ export async function applyBrandingById(schoolId, supabaseClient) {
             .eq('school_id', schoolId)
             .single();
         if (!data) return null;
-        if (data.slug) try { sessionStorage.setItem('school_slug', data.slug); } catch { /* private mode */ }
+        if (data.slug) try { localStorage.setItem('school_slug', data.slug); } catch { /* private mode */ }
         return _applyToDom(data);
     } catch {
         return null;
