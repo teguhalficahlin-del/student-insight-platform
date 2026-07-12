@@ -1790,7 +1790,7 @@ async function renderJadwalPanel() {
     panelContent.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
             <h3 style="margin:0">Jadwal ${ay ? `${ay} Sem ${sem}` : ''}</h3>
-            <a href="${wizardUrl}#step10" class="btn btn-secondary btn-sm" style="font-size:12px">✎ Edit di Wizard</a>
+            <a href="${wizardUrl}#10" class="btn btn-secondary btn-sm" style="font-size:12px">✎ Edit di Wizard</a>
         </div>
 
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="jadwal-grade-tabs">
