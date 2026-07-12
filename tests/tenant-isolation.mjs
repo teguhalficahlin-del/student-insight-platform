@@ -1683,6 +1683,276 @@ async function main() {
         }
     }
 
+    // ══════════════════════════════════════════════════════
+    // CHECK 17 — Forum Kelas: isolasi per-aktor & per-kelas
+    // ══════════════════════════════════════════════════════
+    // Skenario yang diuji (semua via BEGIN...ROLLBACK):
+    // F4: Guru penulis bisa baca posting di kelasnya sendiri
+    // F5: Guru mapel di kelas itu (bukan penulis) bisa baca
+    // F6: Guru yang TIDAK ditugaskan di kelas itu tidak bisa baca
+    // F7: Ortu siswa di kelas itu bisa baca (jika PARENT_VISIBLE)
+    // F8: Ortu siswa dari kelas LAIN tidak bisa baca
+    // F9: Siswa yang sudah is_withdrawn tidak bisa baca
+    // F10: INSERT post oleh non-anggota forum ditolak (guru kelas lain)
+    log.head('CHECK 17 — Forum Kelas: isolasi per-aktor (guru/ortu/siswa withdrawn) & INSERT guard');
+    {
+        // ── Setup: ambil data dinamis dari DB ──
+        const d17 = await mgmtQuery(`
+            WITH target_post AS (
+                SELECT fp.post_id, fp.class_id, fp.school_id,
+                       fp.academic_year, fp.author_user_id, fp.visibility
+                FROM forum_posts fp
+                ORDER BY fp.created_at DESC
+                LIMIT 1
+            ),
+            author_info AS (
+                SELECT u.auth_user_id AS guru_auth, u.user_id AS guru_uid
+                FROM users u
+                JOIN target_post tp ON u.user_id = tp.author_user_id
+            ),
+            -- Guru lain yang mengajar di kelas yang SAMA (bukan penulis)
+            guru_same_class AS (
+                SELECT u.auth_user_id, u.user_id
+                FROM teaching_schedules ts
+                JOIN users u ON u.user_id = ts.scheduled_teacher_id
+                JOIN target_post tp ON ts.class_id = tp.class_id
+                   AND ts.academic_year = tp.academic_year
+                   AND ts.school_id     = tp.school_id
+                WHERE u.user_id != tp.author_user_id
+                  AND u.auth_user_id IS NOT NULL
+                  AND u.is_active
+                LIMIT 1
+            ),
+            -- Guru yang tidak ada di kelas target sama sekali
+            guru_diff_class AS (
+                SELECT u.auth_user_id, u.user_id
+                FROM users u
+                JOIN target_post tp ON u.school_id = tp.school_id
+                WHERE u.role_type = 'GURU'
+                  AND u.is_active
+                  AND u.auth_user_id IS NOT NULL
+                  AND u.user_id != tp.author_user_id
+                  AND NOT EXISTS (
+                      SELECT 1 FROM teaching_schedules ts2
+                      WHERE ts2.scheduled_teacher_id = u.user_id
+                        AND ts2.class_id     = tp.class_id
+                        AND ts2.academic_year = tp.academic_year
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM bk_class_assignments bk
+                      WHERE bk.bk_user_id = u.user_id
+                        AND bk.class_id   = tp.class_id
+                        AND bk.is_active
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM guru_wali_assignments gw
+                      JOIN class_enrollments ce ON ce.student_id = gw.student_id
+                      WHERE gw.guru_user_id = u.user_id
+                        AND ce.class_id     = tp.class_id
+                        AND gw.is_active
+                  )
+                LIMIT 1
+            ),
+            -- Ortu siswa aktif di kelas target
+            ortu_same_class AS (
+                SELECT u.auth_user_id, u.user_id
+                FROM class_enrollments ce
+                JOIN student_parents sp ON sp.student_id = ce.student_id
+                JOIN users u ON u.user_id = sp.parent_user_id
+                JOIN target_post tp ON ce.class_id = tp.class_id
+                   AND ce.academic_year = tp.academic_year
+                WHERE ce.withdrawn_at IS NULL
+                  AND u.auth_user_id IS NOT NULL
+                  AND u.is_active
+                LIMIT 1
+            ),
+            -- Ortu siswa dari kelas LAIN
+            ortu_diff_class AS (
+                SELECT u.auth_user_id, u.user_id
+                FROM class_enrollments ce
+                JOIN student_parents sp ON sp.student_id = ce.student_id
+                JOIN users u ON u.user_id = sp.parent_user_id
+                JOIN target_post tp ON ce.class_id != tp.class_id
+                   AND ce.academic_year = tp.academic_year
+                   AND u.school_id      = tp.school_id
+                WHERE ce.withdrawn_at IS NULL
+                  AND u.auth_user_id IS NOT NULL
+                  AND u.is_active
+                LIMIT 1
+            ),
+            -- Siswa withdrawn dari kelas target
+            siswa_withdrawn AS (
+                SELECT u.auth_user_id, u.user_id
+                FROM class_enrollments ce
+                JOIN students s ON s.student_id = ce.student_id
+                JOIN users u ON u.user_id = s.user_id
+                JOIN target_post tp ON ce.class_id = tp.class_id
+                   AND ce.academic_year = tp.academic_year
+                WHERE ce.withdrawn_at IS NOT NULL
+                  AND u.auth_user_id IS NOT NULL
+                LIMIT 1
+            )
+            SELECT
+                tp.post_id, tp.class_id, tp.school_id,
+                tp.academic_year, tp.visibility,
+                ai.guru_auth, ai.guru_uid,
+                gsc.auth_user_id AS guru_same_auth, gsc.user_id AS guru_same_uid,
+                gdc.auth_user_id AS guru_diff_auth, gdc.user_id AS guru_diff_uid,
+                osc.auth_user_id AS ortu_same_auth,
+                odc.auth_user_id AS ortu_diff_auth,
+                sw.auth_user_id  AS withdrawn_auth
+            FROM target_post tp
+            LEFT JOIN author_info     ai  ON true
+            LEFT JOIN guru_same_class gsc ON true
+            LEFT JOIN guru_diff_class gdc ON true
+            LEFT JOIN ortu_same_class osc ON true
+            LEFT JOIN ortu_diff_class odc ON true
+            LEFT JOIN siswa_withdrawn sw  ON true
+            LIMIT 1;
+        `);
+
+        const d = d17[0];
+        if (!d?.post_id) {
+            console.log('  ⚠ SKIP — tidak ada forum post di database');
+        } else {
+            const postId   = d.post_id;
+            const schoolId = d.school_id;
+            const vis      = d.visibility;
+
+            const asUser = async (authUid, sql) => {
+                const claims = `{"sub":"${authUid}","role":"authenticated"}`;
+                return mgmtQuery(
+                    `BEGIN; SET LOCAL ROLE authenticated;` +
+                    ` SELECT set_config('request.jwt.claims', $c$${claims}$c$, true);` +
+                    ` SELECT set_config('request.jwt.claim.sub', '${authUid}', true);` +
+                    ` ${sql}` +
+                    ` ROLLBACK;`
+                );
+            };
+
+            const countPost = `SELECT COUNT(*)::int AS cnt FROM forum_posts WHERE post_id = '${postId}';`;
+
+            // F4: Guru penulis bisa baca posting sendiri
+            if (d.guru_auth) {
+                let ok = false, err = '';
+                try {
+                    const r = await asUser(d.guru_auth, countPost);
+                    ok = r[0]?.cnt === 1;
+                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'}`;
+                } catch(e) { err = e.message.slice(0,120); }
+                if (ok) log.pass('F4: guru penulis bisa baca posting forum miliknya sendiri');
+                else    log.fail(`F4: guru penulis tidak bisa baca posting sendiri — ${err}`);
+            }
+
+            // F5: Guru mapel di kelas yang sama bisa baca
+            if (d.guru_same_auth) {
+                let ok = false, err = '';
+                try {
+                    const r = await asUser(d.guru_same_auth, countPost);
+                    ok = r[0]?.cnt === 1;
+                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'}`;
+                } catch(e) { err = e.message.slice(0,120); }
+                if (ok) log.pass('F5: guru mapel kelas yang sama bisa baca posting forum');
+                else    log.fail(`F5: guru mapel kelas sama tidak bisa baca — ${err}`);
+            } else {
+                console.log('  ⚠ F5: SKIP — tidak ada guru lain di kelas yang sama');
+            }
+
+            // F6: Guru yang tidak ditugaskan di kelas ini tidak bisa baca
+            if (d.guru_diff_auth) {
+                let ok = false, err = '';
+                try {
+                    const r = await asUser(d.guru_diff_auth, countPost);
+                    ok = r[0]?.cnt === 0;
+                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'} — ISOLATION BREACH`;
+                } catch(e) { err = e.message.slice(0,120); }
+                if (ok) log.pass('F6: guru tidak ditugaskan di kelas ini tidak bisa baca posting (isolasi per-kelas)');
+                else    log.fail(`F6: guru kelas lain bisa baca posting — ${err}`);
+            } else {
+                console.log('  ⚠ F6: SKIP — tidak ditemukan guru yang tidak ada di kelas ini');
+            }
+
+            // F7: Ortu siswa di kelas ini bisa baca (jika PARENT_VISIBLE)
+            if (d.ortu_same_auth) {
+                if (vis === 'PARENT_VISIBLE') {
+                    let ok = false, err = '';
+                    try {
+                        const r = await asUser(d.ortu_same_auth, countPost);
+                        ok = r[0]?.cnt === 1;
+                        if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'}`;
+                    } catch(e) { err = e.message.slice(0,120); }
+                    if (ok) log.pass('F7: ortu siswa di kelas ini bisa baca posting PARENT_VISIBLE');
+                    else    log.fail(`F7: ortu siswa kelas ini tidak bisa baca posting PARENT_VISIBLE — ${err}`);
+                } else {
+                    let ok = false, err = '';
+                    try {
+                        const r = await asUser(d.ortu_same_auth, countPost);
+                        ok = r[0]?.cnt === 0;
+                        if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'} — ortu bisa baca posting non-PARENT_VISIBLE`;
+                    } catch(e) { err = e.message.slice(0,120); }
+                    if (ok) log.pass(`F7: ortu siswa kelas ini tidak bisa baca posting visibility=${vis} (bukan PARENT_VISIBLE — benar)`);
+                    else    log.fail(`F7: ortu siswa bisa baca posting ${vis} — ISOLATION BREACH: ${err}`);
+                }
+            } else {
+                console.log('  ⚠ F7: SKIP — tidak ada ortu siswa di kelas ini');
+            }
+
+            // F8: Ortu siswa dari kelas lain tidak bisa baca
+            if (d.ortu_diff_auth) {
+                let ok = false, err = '';
+                try {
+                    const r = await asUser(d.ortu_diff_auth, countPost);
+                    ok = r[0]?.cnt === 0;
+                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'} — ISOLATION BREACH`;
+                } catch(e) { err = e.message.slice(0,120); }
+                if (ok) log.pass('F8: ortu siswa kelas lain tidak bisa baca posting (isolasi per-kelas)');
+                else    log.fail(`F8: ortu kelas lain bisa baca posting — ${err}`);
+            } else {
+                console.log('  ⚠ F8: SKIP — tidak ada ortu dari kelas lain');
+            }
+
+            // F9: Siswa withdrawn tidak bisa baca
+            if (d.withdrawn_auth) {
+                let ok = false, err = '';
+                try {
+                    const r = await asUser(d.withdrawn_auth, countPost);
+                    ok = r[0]?.cnt === 0;
+                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'} — withdrawn siswa masih bisa baca`;
+                } catch(e) { err = e.message.slice(0,120); }
+                if (ok) log.pass('F9: siswa withdrawn dari kelas ini tidak bisa baca posting forum');
+                else    log.fail(`F9: siswa withdrawn masih bisa baca forum — ISOLATION BREACH: ${err}`);
+            } else {
+                console.log('  ⚠ F9: SKIP — tidak ada siswa withdrawn di kelas ini');
+            }
+
+            // F10: INSERT post oleh guru yang tidak di kelas ini ditolak
+            if (d.guru_diff_auth && d.guru_diff_uid) {
+                let ok = false, err = '';
+                const fakeId = '00000000-0000-0000-0000-000000000088';
+                const ay     = d.academic_year;
+                try {
+                    await asUser(d.guru_diff_auth,
+                        `INSERT INTO forum_posts (post_id, school_id, class_id, academic_year,
+                             author_user_id, body, visibility)
+                         VALUES ('${fakeId}','${schoolId}','${d.class_id}','${ay}',
+                                 '${d.guru_diff_uid}','test isolasi insert','INTERNAL');`);
+                    err = 'INSERT tidak ditolak — ISOLATION BREACH';
+                } catch(e) {
+                    if (e.message.includes('42501') || e.message.includes('permission') ||
+                        e.message.includes('violates') || e.message.includes('new row')) {
+                        ok = true;
+                    } else {
+                        err = e.message.slice(0,120);
+                    }
+                }
+                if (ok) log.pass('F10: guru tidak ditugaskan di kelas ini ditolak INSERT post forum');
+                else    log.fail(`F10: guru kelas lain bisa INSERT post — RLS BYPASS: ${err}`);
+            } else {
+                console.log('  ⚠ F10: SKIP — tidak ada guru luar kelas untuk uji INSERT');
+            }
+        }
+    }
+
     // ── Ringkasan ────────────────────────────────────────────────
     console.log(`\n${'='.repeat(52)}`);
     if (failures === 0) {
