@@ -187,7 +187,19 @@ async function initTab(key) {
 async function initJadwalTab() {
     const dateEl = document.getElementById('sched-date');
     if (!dateEl.value) dateEl.value = localDateStr();
-    dateEl.addEventListener('change', loadSchedule);
+
+    document.querySelectorAll('.sched-view-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            document.querySelectorAll('.sched-view-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const isWeek = btn.dataset.view === 'minggu';
+            document.getElementById('sched-view-hari-panel').style.display  = isWeek ? 'none' : 'block';
+            document.getElementById('sched-view-minggu-panel').style.display = isWeek ? 'block' : 'none';
+            if (isWeek) await loadWeekSchedule();
+            else await loadSchedule();
+        });
+    });
+
     await loadSchedule();
 }
 
@@ -201,26 +213,36 @@ function fmtDayLabel(dateStr) {
 }
 
 function renderScheduleRows(rows, contentEl, date) {
-    const dayLabel = `<p style="font-size:0.85rem;color:var(--color-text-muted,#9ca3af);margin-bottom:8px">${fmtDayLabel(date)}</p>`;
-    if (rows.length === 0) {
-        contentEl.innerHTML = dayLabel + '<p class="hint">Tidak ada jadwal pada tanggal ini.</p>';
-        return;
-    }
-    contentEl.innerHTML = dayLabel + `
-        <div class="table-wrapper">
-        <table class="table">
-            <thead><tr><th>Jam</th><th>Mata Pelajaran</th><th>Guru</th></tr></thead>
-            <tbody>
-            ${rows.map(r => `
-                <tr>
-                    <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
-                    <td>${esc(r.subject?.name ?? '—')}</td>
-                    <td>${esc(r.teacher?.full_name ?? '—')}</td>
-                </tr>
-            `).join('')}
-            </tbody>
-        </table>
-        </div>`;
+    const today     = localDateStr();
+    const isToday   = date === today;
+    const label     = fmtDayLabel(date);
+    const sesiCount = rows.length;
+
+    const tableHtml = sesiCount === 0
+        ? '<p class="hint" style="margin:8px 0 4px">Tidak ada jadwal pada tanggal ini.</p>'
+        : `<div class="table-wrapper">
+           <table class="table">
+               <thead><tr><th>Jam</th><th>Mata Pelajaran</th><th>Guru</th></tr></thead>
+               <tbody>
+               ${rows.map(r => `
+                   <tr>
+                       <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
+                       <td>${esc(r.subject?.name ?? '—')}</td>
+                       <td>${esc(r.teacher?.full_name ?? '—')}</td>
+                   </tr>
+               `).join('')}
+               </tbody>
+           </table>
+           </div>`;
+
+    contentEl.innerHTML = `
+        <details class="att-accordion" ${isToday || sesiCount > 0 ? 'open' : ''}>
+            <summary class="att-accordion-summary">
+                <span>${esc(label)}</span>
+                <span class="att-acc-names">${sesiCount > 0 ? `${sesiCount} sesi` : 'tidak ada jadwal'}</span>
+            </summary>
+            <div style="padding:0 12px 8px">${tableHtml}</div>
+        </details>`;
 }
 
 async function loadSchedule() {
@@ -246,8 +268,80 @@ async function loadSchedule() {
         renderScheduleRows(rows, contentEl, date);
     } catch (err) {
         if (!cached) {
-            contentEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
+            contentEl.innerHTML = `<div class="status-err">Gagal memuat data. ${esc(fe(err))}</div>`;
         }
+    }
+}
+
+async function loadWeekSchedule() {
+    const contentEl = document.getElementById('sched-week-content');
+    contentEl.innerHTML = '<p class="hint">Memuat jadwal minggu ini…</p>';
+
+    if (!myClass?.class_id) {
+        contentEl.innerHTML = '<p class="hint">Data kelas belum tersedia. Hubungi admin sekolah.</p>';
+        return;
+    }
+
+    const today  = new Date();
+    const dow    = today.getDay();
+    const diff   = dow === 0 ? -6 : 1 - dow;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diff);
+
+    const days = Array.from({ length: 5 }, (_, i) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        return localDateStr(d);
+    });
+
+    try {
+        const results = await Promise.all(
+            days.map(d => getScheduleForDate(myClass.class_id, d)
+                .then(rows => ({ date: d, rows }))
+                .catch(() => ({ date: d, rows: [] }))
+            )
+        );
+
+        const hasAny = results.some(r => r.rows.length > 0);
+        if (!hasAny) {
+            contentEl.innerHTML = '<p class="hint">Tidak ada jadwal pelajaran minggu ini.</p>';
+            return;
+        }
+
+        const DAY_NAMES = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
+        const todayStr  = localDateStr();
+        contentEl.innerHTML = results.map((r, idx) => {
+            const dayLabel  = `${DAY_NAMES[idx]}, ${fmtDayLabel(r.date).split(',')[1]?.trim() ?? r.date}`;
+            const isToday   = r.date === todayStr;
+            const sesiCount = r.rows.length;
+
+            const tableHtml = sesiCount === 0
+                ? '<p class="hint" style="margin:8px 0 4px">Tidak ada jadwal</p>'
+                : `<div class="table-wrapper">
+                   <table class="table">
+                       <thead><tr><th>Jam</th><th>Mata Pelajaran</th><th>Guru</th></tr></thead>
+                       <tbody>${r.rows.map(s => `
+                           <tr>
+                               <td>${fmtTime(s.session_start)} – ${fmtTime(s.session_end)}</td>
+                               <td>${esc(s.subject?.name ?? '—')}</td>
+                               <td>${esc(s.teacher?.full_name ?? '—')}</td>
+                           </tr>`).join('')}
+                       </tbody>
+                   </table>
+                   </div>`;
+
+            return `
+                <details class="att-accordion" ${isToday || sesiCount > 0 ? 'open' : ''}>
+                    <summary class="att-accordion-summary">
+                        <span>${esc(dayLabel)}</span>
+                        <span class="att-acc-names">${sesiCount > 0 ? `${sesiCount} sesi` : 'tidak ada jadwal'}</span>
+                    </summary>
+                    <div style="padding:0 12px 8px">${tableHtml}</div>
+                </details>`;
+        }).join('');
+
+    } catch (err) {
+        contentEl.innerHTML = `<div class="status-err">Gagal memuat. ${esc(fe(err))}</div>`;
     }
 }
 

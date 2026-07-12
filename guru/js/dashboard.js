@@ -326,6 +326,13 @@ async function initGuruTab() {
     if (!_guruTabInit) {
         _guruTabInit = true;
         document.getElementById('guru-recap-btn').onclick = loadGuruRecap;
+        document.getElementById('guru-recap-toggle').addEventListener('click', () => {
+            const body    = document.getElementById('guru-recap-body');
+            const btn     = document.getElementById('guru-recap-toggle');
+            const isOpen  = body.style.display !== 'none';
+            body.style.display = isOpen ? 'none' : 'block';
+            btn.textContent    = isOpen ? 'Tampilkan' : 'Sembunyikan';
+        });
         // Default rentang: awal bulan ini s/d hari ini
         const today = localDateStr();
         const firstOfMonth = today.slice(0, 8) + '01';
