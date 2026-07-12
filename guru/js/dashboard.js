@@ -1163,15 +1163,21 @@ async function loadBkAttendanceRecap() {
             const classAccordions = prog.classes
                 .sort((a, b) => a.name.localeCompare(b.name, 'id'))
                 .map(r => {
-                    const pctDenom = r.HADIR + r.IZIN + r.TIDAK_HADIR;
-                    const pct    = pctDenom > 0 ? Math.round(r.HADIR / pctDenom * 100) : 0;
-                    const color  = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+                    const tot  = r.HADIR + r.IZIN + r.SAKIT + r.TIDAK_HADIR;
+                    const pctH = tot > 0 ? Math.round(r.HADIR       / tot * 100) : 0;
+                    const pctI = tot > 0 ? Math.round(r.IZIN        / tot * 100) : 0;
+                    const pctS = tot > 0 ? Math.round(r.SAKIT       / tot * 100) : 0;
+                    const pctA = tot > 0 ? Math.round(r.TIDAK_HADIR / tot * 100) : 0;
+                    const colH = pctH >= 80 ? 'var(--color-success)' : pctH >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
                     return `
                     <details class="att-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
                         <summary class="att-accordion-summary">
                             <span>${esc(r.name)}</span>
-                            <span class="att-acc-names" style="color:${color};font-weight:600">
-                                ${pctDenom > 0 ? pct + '%' : '—'} hadir
+                            <span class="att-acc-names" style="display:flex;gap:10px;font-size:11px;font-weight:500">
+                                <span style="color:${colH}">${pctH}%H</span>
+                                <span style="color:var(--color-warning,#f59e0b)">${pctI}%I</span>
+                                <span style="color:var(--color-primary)">${pctS}%S</span>
+                                <span style="color:var(--color-danger)">${pctA}%A</span>
                             </span>
                         </summary>
                         <div data-class-id="${esc(r.class_id)}"
@@ -1344,16 +1350,23 @@ async function loadWkAttendanceRecap() {
             const classAccordions = prog.classes
                 .sort((a, b) => a.name.localeCompare(b.name, 'id'))
                 .map(r => {
-                    const pctDenom = r.HADIR + r.IZIN + r.TIDAK_HADIR;
-                    const pct    = pctDenom > 0 ? Math.round(r.HADIR / pctDenom * 100) : 0;
-                    const color  = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+                    const tot  = r.HADIR + r.IZIN + r.SAKIT + r.TIDAK_HADIR;
+                    const pctH = tot > 0 ? Math.round(r.HADIR       / tot * 100) : 0;
+                    const pctI = tot > 0 ? Math.round(r.IZIN        / tot * 100) : 0;
+                    const pctS = tot > 0 ? Math.round(r.SAKIT       / tot * 100) : 0;
+                    const pctA = tot > 0 ? Math.round(r.TIDAK_HADIR / tot * 100) : 0;
+                    const colH = pctH >= 80 ? 'var(--color-success)' : pctH >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
                     const safeId = r.class_id.replace(/[^a-z0-9]/gi, '_');
                     return `
                     <details class="att-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
                         <summary class="att-accordion-summary">
                             <span>${esc(r.name)}</span>
-                            <span class="att-acc-names" style="color:${color};font-weight:600">
-                                ${pctDenom > 0 ? pct + '%' : '—'} hadir
+                            <span class="att-acc-names" style="display:flex;gap:10px;font-size:11px;font-weight:500">
+                                <span style="color:${colH}">${pctH}%H</span>
+                                <span style="color:var(--color-warning,#f59e0b)">${pctI}%I</span>
+                                <span style="color:var(--color-primary)">${pctS}%S</span>
+                                <span style="color:var(--color-danger)">${pctA}%A</span>
+                            </span>
                             </span>
                         </summary>
                         <div id="wkdet-body-${safeId}"
@@ -1684,15 +1697,21 @@ async function loadKpClsRecap() {
         const html = rows
             .sort((a, b) => a.name.localeCompare(b.name, 'id'))
             .map(r => {
-                const pctDenom = r.HADIR + r.IZIN + r.TIDAK_HADIR;
-                const pct    = pctDenom > 0 ? Math.round(r.HADIR / pctDenom * 100) : 0;
-                const color  = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+                const tot  = r.HADIR + r.IZIN + r.SAKIT + r.TIDAK_HADIR;
+                const pctH = tot > 0 ? Math.round(r.HADIR       / tot * 100) : 0;
+                const pctI = tot > 0 ? Math.round(r.IZIN        / tot * 100) : 0;
+                const pctS = tot > 0 ? Math.round(r.SAKIT       / tot * 100) : 0;
+                const pctA = tot > 0 ? Math.round(r.TIDAK_HADIR / tot * 100) : 0;
+                const colH = pctH >= 80 ? 'var(--color-success)' : pctH >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
                 return `
                 <details class="att-accordion" style="margin-bottom:8px">
                     <summary class="att-accordion-summary">
                         <span>${esc(r.name)}</span>
-                        <span class="att-acc-names" style="color:${color};font-weight:600">
-                            ${pctDenom > 0 ? pct + '%' : '—'} hadir
+                        <span class="att-acc-names" style="display:flex;gap:10px;font-size:11px;font-weight:500">
+                            <span style="color:${colH}">${pctH}%H</span>
+                            <span style="color:var(--color-warning,#f59e0b)">${pctI}%I</span>
+                            <span style="color:var(--color-primary)">${pctS}%S</span>
+                            <span style="color:var(--color-danger)">${pctA}%A</span>
                         </span>
                     </summary>
                     <div data-class-id="${esc(r.class_id)}"
