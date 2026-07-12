@@ -72,12 +72,19 @@ const PANEL_RENDERERS = {
     'forum-kelas':      renderForumKelasPanel,
 };
 
+function navigateToPanel(panelId) {
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('is-active'));
+    const link = document.querySelector(`.nav-link[data-panel="${panelId}"]`);
+    if (link) link.classList.add('is-active');
+    history.replaceState(null, '', '#' + panelId);
+    syncBottomNav(panelId);
+    (PANEL_RENDERERS[panelId] ?? renderComingSoon)(panelId);
+}
+
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', () => {
-        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('is-active'));
-        link.classList.add('is-active');
         const panel = link.dataset.panel;
-        (PANEL_RENDERERS[panel] ?? renderComingSoon)(panel);
+        navigateToPanel(panel);
     });
 });
 
@@ -105,7 +112,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', () => {
         sidebar.classList.remove('open');
         document.querySelector('.sidebar-backdrop')?.remove();
-        syncBottomNav(link.dataset.panel);
     });
 });
 
@@ -2206,5 +2212,6 @@ async function renderExportPanel() {
         }
     });
 
-    renderSetupPanel();
+    const hashPanel = location.hash.slice(1);
+    navigateToPanel(hashPanel in PANEL_RENDERERS ? hashPanel : 'setup');
 })();
