@@ -783,18 +783,12 @@ async function renderWzFkBkTab() {
                 const bk = _wzFkBkStaff.find(s => s.user_id === a.bk_user_id);
                 if (!bk) return '';
                 return `<span style="display:inline-flex;align-items:center;
-                            gap:4px;background:var(--color-primary-subtle,#eff6ff);
+                            background:var(--color-primary-subtle,#eff6ff);
                             color:var(--color-primary,#2563eb);
                             border:1px solid var(--color-primary-light,#bfdbfe);
-                            border-radius:999px;padding:2px 10px 2px 8px;
+                            border-radius:999px;padding:2px 10px;
                             font-size:12px">
                             ${esc(bk.full_name)}
-                            <button type="button"
-                                class="wzfk-bk-revoke"
-                                data-aid="${esc(a.assignment_id)}"
-                                style="background:none;border:none;cursor:pointer;
-                                       color:inherit;padding:0;font-size:14px">×
-                            </button>
                         </span>`;
             }).join('');
 
@@ -870,20 +864,6 @@ async function renderWzFkBkTab() {
     }
 
     tabEl.querySelectorAll('.wzfk-bk-check').forEach(c => c.addEventListener('change', syncSelBtn));
-
-    tabEl.querySelectorAll('.wzfk-bk-revoke').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            btn.disabled = true;
-            try {
-                await revokeBkFromClass(btn.dataset.aid);
-                _wzFkBkAssignments = await getBkAssignments(_wzFkAcademicYear);
-                await renderWzFkBkTab();
-            } catch (err) {
-                const st = document.getElementById('wz-fk-status');
-                if (st) st.textContent = 'Gagal mencabut: ' + (err?.message ?? String(err));
-            }
-        });
-    });
 
     selBtn.addEventListener('click', async () => {
         const selected = checks().filter(c => c.checked);
@@ -1040,17 +1020,11 @@ async function renderWzFkGuruWaliTab() {
                     const gw = _wzFkGuruWaliCands.find(s => s.user_id === a.guru_user_id);
                     if (!gw) return '';
                     return `<span style="display:inline-flex;align-items:center;
-                                gap:4px;background:var(--color-primary-subtle,#eff6ff);
+                                background:var(--color-primary-subtle,#eff6ff);
                                 color:var(--color-primary,#2563eb);
                                 border:1px solid var(--color-primary-light,#bfdbfe);
-                                border-radius:999px;padding:2px 10px 2px 8px;font-size:12px">
+                                border-radius:999px;padding:2px 10px;font-size:12px">
                                 ${esc(gw.full_name)}
-                                <button type="button"
-                                    class="wzfk-gw-revoke"
-                                    data-aid="${esc(a.assignment_id)}"
-                                    style="background:none;border:none;cursor:pointer;
-                                           color:inherit;padding:0;font-size:14px">×
-                                </button>
                             </span>`;
                 }).join('');
 
@@ -1208,20 +1182,6 @@ async function renderWzFkGuruWaliTab() {
     }
 
     tabEl.querySelectorAll('.wzfk-gw-check').forEach(c => c.addEventListener('change', syncSelBtn));
-
-    tabEl.querySelectorAll('.wzfk-gw-revoke').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            btn.disabled = true;
-            try {
-                await revokeGuruWaliFromStudent(btn.dataset.aid);
-                _wzFkGwAssignments = await getGuruWaliAssignments(_wzFkAcademicYear);
-                await renderWzFkGuruWaliTab();
-            } catch (err) {
-                const st = document.getElementById('wz-fk-gw-status');
-                if (st) st.textContent = 'Gagal mencabut: ' + (err?.message ?? String(err));
-            }
-        });
-    });
 
     selBtn.addEventListener('click', async () => {
         const selected = checks().filter(c => c.checked);
