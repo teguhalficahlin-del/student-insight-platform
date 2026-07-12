@@ -247,13 +247,13 @@ const TAB_SHORT = {
     guru: 'Beranda', wali_kelas: 'Wali', bk: 'BK', kaprodi: 'Prodi',
     waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', waka_humas: 'Humas',
     kepsek: 'Monitor', ks_admin: 'Admin',
-    kasus: 'Pembinaan', jurnal: 'Jurnal', observasi: 'Observasi', forum: 'Forum',
+    kasus: 'Pembinaan', jurnal: 'Jurnal', observasi: 'Catatan', forum: 'Forum',
 };
 const TAB_ICON = {
     guru: 'ti-home', wali_kelas: 'ti-users', bk: 'ti-heart-handshake', kaprodi: 'ti-building',
     waka_kesiswaan: 'ti-school', waka_kurikulum: 'ti-book', waka_humas: 'ti-briefcase',
     kepsek: 'ti-chart-line', ks_admin: 'ti-shield-check',
-    kasus: 'ti-alert-triangle', jurnal: 'ti-notebook', observasi: 'ti-eye', forum: 'ti-messages',
+    kasus: 'ti-alert-triangle', jurnal: 'ti-notebook', observasi: 'ti-notes', forum: 'ti-messages',
 };
 
 function buildTabs() {
@@ -963,7 +963,7 @@ const OBS_VIS_LABEL = {
 
 function renderObsHistory(rows, listEl) {
     if (!rows.length) {
-        listEl.innerHTML = '<p class="hint">Belum ada observasi yang ditulis.</p>';
+        listEl.innerHTML = '<p class="hint">Belum ada catatan yang ditulis.</p>';
         return;
     }
     listEl.innerHTML = rows.map(r => {
