@@ -2650,7 +2650,7 @@ function renderKasusList() {
                 <span class="badge kasus-badge-${(r.status||'').toLowerCase()}">${esc(CASE_STATUS_LABEL[r.status] ?? r.status)}</span>
             </div>
             <div style="font-size:12px; color:var(--color-text-muted); margin-top:4px">
-                ${esc(r.student?.full_name ?? '—')} (${esc(r.student?.nis ?? '—')})
+                ${esc(r.student?.full_name ?? 'Siswa tidak dapat ditampilkan')}${r.student?.nis ? ' (' + esc(r.student.nis) + ')' : ''}
                 &middot; ${esc(CASE_TRACK_LABEL[r.track] ?? r.track)}
                 &middot; Handler: ${esc(ROLE_LABEL[r.current_handler_role] ?? r.current_handler_role ?? '—')}
                 &middot; ${fmt(r.created_at)}
