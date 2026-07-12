@@ -1217,3 +1217,59 @@ yang sama terhitung di dua grup.
 bug query/agregasi data. Perlu ANALYZE tersendiri sebelum diagnosis.
 
 **Status investigasi:** Belum diinvestigasi.
+
+---
+
+## Fase 3 — Column-Restriction `rls_users_read_staff`
+
+**Tanggal investigasi:** 12 Juli 2026
+
+**Temuan:** Setelah investigasi mendalam terhadap 19 titik
+`.from('users')` di seluruh portal (guru, admin, student,
+parent, dudi, stakeholder, shared), disimpulkan:
+
+1. Semua pembacaan kolom sensitif (`last_seen_at`,
+   `last_seen_ua`, `must_change_password`, `auth_user_id`)
+   adalah **self-read** — dilindungi oleh klausa
+   `auth_user_id = auth.uid()` di `rls_users_read_staff`.
+
+2. Semua cross-user read (staf membaca data staf lain)
+   sudah menggunakan `v_users_staff_directory` yang hanya
+   mengekspos 8 kolom aman.
+
+3. Tidak ada query client yang membaca kolom sensitif
+   milik user lain.
+
+**Keputusan:** Documented risk acceptance. Column-level
+restriction dan view `v_users_staff_safe` tidak diperlukan.
+Attack surface aktual: nihil.
+
+**Status:** CLOSED — tidak ada tindakan lanjut.
+
+---
+
+## Fase 3 — Fungsi `anon=true` (14 fungsi technical debt)
+
+**Tanggal investigasi:** 12 Juli 2026
+
+**Temuan:** Query live ke Supabase (`pg_proc` + `proacl`)
+mengembalikan **0 rows** untuk fungsi executable oleh `anon`
+di luar allowlist. Semua REVOKE dari sesi Juli 7–9 sudah
+bersih diterapkan.
+
+**Status:** CLOSED — tidak ada tindakan lanjut.
+
+---
+
+## Fase 3 — WAKA_HUMAS/PKL Scope
+
+**Tanggal investigasi:** 12 Juli 2026
+
+**Temuan:** 6 policy menyebut `WAKA_HUMAS`:
+`rls_audit_log_read`, `rls_cases_insert`,
+`rls_pkl_attendance_read_staff`, `rls_pkl_read_staff`,
+`rls_pkl_write_admin`, `rls_users_read_staff`.
+Semua konsisten dengan desain di `project_actor_roles.md`.
+Tidak ada anomali.
+
+**Status:** CLOSED — tidak ada tindakan lanjut.
