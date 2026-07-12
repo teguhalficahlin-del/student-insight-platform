@@ -129,6 +129,8 @@ label {
 }
 
 .hint { font-size: 13px; color: #4b5563; margin-top: 4px; }
+.hint-success { font-size: 13px; color: var(--color-success); font-weight: 600; margin-top: 4px; }
+.sub-label { font-size: 11px; color: var(--color-text-muted); }
 
 /* ── Alerts ──────────────────────────────────────────────── */
 
@@ -155,6 +157,7 @@ label {
 .badge-success { background: var(--color-success-bg); color: var(--color-success); }
 .badge-danger  { background: var(--color-danger-bg);  color: var(--color-danger); }
 .badge-muted   { background: var(--color-bg); color: var(--color-text-muted); }
+.badge-warning { background: var(--color-warning-bg); color: var(--color-warning); }
 
 /* ── Login page ──────────────────────────────────────────── */
 
@@ -408,6 +411,7 @@ label {
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     overflow: hidden;
+    margin-bottom: 8px;
 }
 
 .wz-accordion-header {
@@ -441,6 +445,7 @@ label {
 
 .wz-accordion-inner {
     border-color: var(--color-border);
+    margin: 4px 0 4px 16px;
 }
 
 .wz-accordion-inner > .wz-accordion-header {
@@ -786,6 +791,12 @@ label {
 }
 
 .btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-warning { background: var(--color-warning-bg); color: var(--color-warning); border-color: var(--color-warning); }
+.btn-warning:hover { background: var(--color-warning); color: #fff; }
+
+.alert-info { background: var(--color-primary-bg); color: var(--color-primary); border-color: rgba(29,78,216,0.4); }
 
 /* ── Welcome screen (first-time setup) ──────────────────── */
 

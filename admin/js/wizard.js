@@ -233,7 +233,7 @@ async function renderStep2() {
         contentEl.innerHTML = `
             <div class="step-label">Langkah 2 dari ${TOTAL_STEPS}</div>
             <h3>Tahun Ajaran</h3>
-            <div class="alert" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:8px;padding:14px 16px;margin-bottom:20px">
+            <div class="alert alert-info" style="margin-bottom:20px">
                 <strong>Periode akademik dikelola otomatis.</strong><br>
                 Tahun ajaran berubah melalui <strong>Tutup Semester</strong> dan
                 <strong>Tutup Tahun Ajaran</strong> di dashboard — bukan di sini.
@@ -689,10 +689,10 @@ async function renderForumAssignmentStep() {
             <div style="display:flex;gap:8px;margin-bottom:16px">
                 <button id="wz-fk-tab-bk"
                     class="btn ${_wzFkTab === 'bk' ? 'btn-primary' : 'btn-secondary'}"
-                    style="min-width:120px">BK per Kelas</button>
+                    style="min-width:130px">BK per Kelas</button>
                 <button id="wz-fk-tab-gw"
                     class="btn ${_wzFkTab === 'guru-wali' ? 'btn-primary' : 'btn-secondary'}"
-                    style="min-width:140px">Guru Wali per Siswa</button>
+                    style="min-width:130px">Guru Wali per Siswa</button>
             </div>
             <div id="wz-forum-tab-content"></div>
         `;
@@ -716,7 +716,7 @@ async function renderForumAssignmentStep() {
         contentEl.innerHTML =
             `<div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
              <h3>Penugasan Forum Kelas</h3>
-             <p style="color:var(--color-danger)">${esc(err?.message ?? String(err))}</p>`;
+             <div class="alert alert-danger">${esc(err?.message ?? String(err))}</div>`;
     }
     nextBtn.disabled = false;
 }
@@ -799,7 +799,7 @@ async function renderWzFkBkTab() {
         }).join('');
 
         return `
-            <details class="wz-accordion" style="margin-bottom:8px">
+            <details class="wz-accordion">
                 <summary class="wz-accordion-header">${esc(progName)} (${classes.length} kelas)</summary>
                 <table class="table" style="width:100%;margin-top:4px">
                     <thead><tr>
@@ -818,10 +818,8 @@ async function renderWzFkBkTab() {
 
         <h4 style="margin:0 0 8px">BK aktif (${total})</h4>
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-            <button type="button" class="btn btn-danger wzfk-bk-del-selected" disabled
-                style="padding:6px 12px">Hapus Terpilih (0)</button>
-            <button type="button" class="btn btn-secondary wzfk-bk-del-all"
-                style="padding:6px 12px">Hapus Semua (${total})</button>
+            <button type="button" class="btn btn-sm btn-danger wzfk-bk-del-selected" disabled>Hapus Terpilih (0)</button>
+            <button type="button" class="btn btn-sm btn-secondary wzfk-bk-del-all">Hapus Semua (${total})</button>
         </div>
         ${accordions}
         <p id="wz-fk-status" class="hint" style="margin-top:8px"></p>
@@ -965,7 +963,7 @@ async function renderWzFkGuruWaliTab() {
         ));
         allEnrollments = new Map(results.map(r => [r.class_id, r.students]));
     } catch (err) {
-        tabEl.innerHTML = `<p style="color:var(--color-danger)">${esc(err?.message ?? String(err))}</p>`;
+        tabEl.innerHTML = `<div class="alert alert-danger">${esc(err?.message ?? String(err))}</div>`;
         return;
     }
 
@@ -1002,7 +1000,7 @@ async function renderWzFkGuruWaliTab() {
 
             if (!students.length) {
                 return `
-                    <details class="wz-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
+                    <details class="wz-accordion wz-accordion-inner">
                         <summary class="wz-accordion-header">${esc(cls.name)} (0 siswa)</summary>
                         <p class="hint" style="margin:8px 16px">Tidak ada siswa aktif.</p>
                     </details>`;
@@ -1025,14 +1023,14 @@ async function renderWzFkGuruWaliTab() {
                     ${checkCell}
                     <td>
                         <div style="font-weight:500">${esc(stu.full_name)}</div>
-                        <div style="font-size:11px;color:var(--color-text-muted)">${esc(stu.nis)}</div>
+                        <div class="sub-label">${esc(stu.nis)}</div>
                     </td>
                     <td>${chips}</td>
                 </tr>`;
             }).join('');
 
             return `
-                <details class="wz-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
+                <details class="wz-accordion wz-accordion-inner">
                     <summary class="wz-accordion-header">${esc(cls.name)} (${students.length} siswa)</summary>
                     <table class="table" style="width:100%;table-layout:fixed;margin-top:4px">
                         <thead><tr>
@@ -1046,7 +1044,7 @@ async function renderWzFkGuruWaliTab() {
         }).join('');
 
         return `
-            <details class="wz-accordion" style="margin-bottom:8px">
+            <details class="wz-accordion">
                 <summary class="wz-accordion-header">${esc(progName)} (${progStudentTotal} siswa)</summary>
                 <div style="padding:4px 0">${classAccordions}</div>
             </details>`;
@@ -1058,10 +1056,8 @@ async function renderWzFkGuruWaliTab() {
 
         <h4 style="margin:0 0 8px">Guru Wali aktif (${total})</h4>
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-            <button type="button" class="btn btn-danger wzfk-gw-del-selected" disabled
-                style="padding:6px 12px">Hapus Terpilih (0)</button>
-            <button type="button" class="btn btn-secondary wzfk-gw-del-all"
-                style="padding:6px 12px">Hapus Semua (${total})</button>
+            <button type="button" class="btn btn-sm btn-danger wzfk-gw-del-selected" disabled>Hapus Terpilih (0)</button>
+            <button type="button" class="btn btn-sm btn-secondary wzfk-gw-del-all">Hapus Semua (${total})</button>
         </div>
         ${accordions}
         <p id="wz-fk-gw-status" class="hint" style="margin-top:8px"></p>
@@ -1251,8 +1247,8 @@ async function renderScheduleStep() {
         <div class="step-label">Langkah 10 dari ${TOTAL_STEPS}</div>
         <h3>Jadwal</h3>
         <p class="hint">Susun jadwal mengajar secara visual, atau impor dari file CSV. Staf (langkah 5) dan kelas (langkah 4) harus sudah ada.</p>
-        <p class="hint" style="color:var(--color-success);font-weight:600">✓ Langkah ini opsional — bisa dilewati dan disusun nanti setelah wizard selesai.</p>
-        <button type="button" class="btn btn-primary" id="wz-open-schedule" style="margin-bottom:16px;padding:10px 20px;font-size:14px">Susun Jadwal Visual</button>
+        <p class="hint-success">✓ Langkah ini opsional — bisa dilewati dan disusun nanti setelah wizard selesai.</p>
+        <button type="button" class="btn btn-primary" id="wz-open-schedule" style="margin-bottom:16px">Susun Jadwal Visual</button>
 
         <hr style="margin:16px 0;border-color:var(--color-border)">
         <h4 style="margin:0 0 6px">Impor dari file CSV / Excel</h4>
@@ -1383,7 +1379,7 @@ async function renderScheduleStep() {
         const statusEl   = document.getElementById('wz-schedule-import-status');
         const btn        = document.getElementById('wz-schedule-import');
         const file       = fileInput.files?.[0];
-        if (!file) { statusEl.innerHTML = '<p class="hint" style="color:var(--color-danger)">Pilih file CSV atau Excel terlebih dahulu.</p>'; return; }
+        if (!file) { statusEl.innerHTML = '<div class="alert alert-danger">Pilih file CSV atau Excel terlebih dahulu.</div>'; return; }
 
         btn.disabled = true;
         btn.textContent = 'Mengimpor…';
@@ -1441,7 +1437,7 @@ async function renderScheduleStep() {
             }
             await refreshDataList(10);
         } catch (err) {
-            statusEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal: ${err.message}</p>`;
+            statusEl.innerHTML = `<div class="alert alert-danger">Gagal: ${err.message}</div>`;
         } finally {
             btn.disabled = false;
             btn.textContent = 'Unggah & Impor';
@@ -2441,7 +2437,7 @@ async function renderAlumniParentsSection(parentEl) {
     const accordions = sortedYears.map(year => {
         const list = byYear.get(year);
         return `
-            <details class="wz-accordion" style="margin-bottom:8px">
+            <details class="wz-accordion">
                 <summary class="wz-accordion-header">Lulusan ${escapeHtml(year)} (${list.length} orang tua)</summary>
                 <table class="table" style="margin-top:4px">
                     <thead><tr><th>Nama</th><th>NIK</th><th>Anak</th></tr></thead>
@@ -2495,7 +2491,7 @@ async function renderAlumniSection(parentEl) {
         const programSections = [...byProgram.entries()]
             .sort(([a], [b]) => a.localeCompare(b, 'id'))
             .map(([prog, list]) => `
-                <details class="wz-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
+                <details class="wz-accordion wz-accordion-inner">
                     <summary class="wz-accordion-header">${escapeHtml(prog)} (${list.length})</summary>
                     <table class="table" style="margin-top:4px">
                         <thead><tr><th>Nama</th><th>NIS</th></tr></thead>
@@ -2505,7 +2501,7 @@ async function renderAlumniSection(parentEl) {
             `).join('');
 
         return `
-            <details class="wz-accordion" style="margin-bottom:8px">
+            <details class="wz-accordion">
                 <summary class="wz-accordion-header">Lulusan ${escapeHtml(year)} (${students.length})</summary>
                 <div style="padding:4px 0">${programSections}</div>
             </details>`;
@@ -2586,7 +2582,7 @@ function renderRow(r, canDelete, hasEdit) {
         : '';
     const cells = r.cells.map(c => `<td>${escapeHtml(String(c ?? ''))}</td>`).join('');
     const editTd = hasEdit
-        ? `<td><button type="button" class="btn btn-secondary wz-edit-btn" data-id="${escapeAttr(r.id)}" data-edit='${escapeAttr(JSON.stringify(r.editData ?? {}))}' style="padding:2px 8px;font-size:12px">✎</button></td>`
+        ? `<td><button type="button" class="btn btn-sm btn-secondary wz-edit-btn" data-id="${escapeAttr(r.id)}" data-edit='${escapeAttr(JSON.stringify(r.editData ?? {}))}'>✎</button></td>`
         : '';
     return `<tr>${checkTd}${cells}${editTd}</tr>`;
 }
@@ -2612,7 +2608,7 @@ function renderGroupedAccordion(cfg, rows) {
         const groupRows = groups.get(key);
         const body = groupRows.map(r => renderRow(r, canDelete, hasEdit)).join('');
         return `
-            <details class="wz-accordion" style="margin-bottom:8px">
+            <details class="wz-accordion">
                 <summary class="wz-accordion-header">${escapeHtml(key)} (${groupRows.length})</summary>
                 <table class="table" style="margin-top:4px"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
             </details>`;
@@ -2651,14 +2647,14 @@ function renderNestedAccordion(cfg, rows) {
             const classRows = classMap.get(kls);
             const body = classRows.map(r => renderRow(r, canDelete, hasEdit)).join('');
             return `
-                <details class="wz-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
+                <details class="wz-accordion wz-accordion-inner">
                     <summary class="wz-accordion-header">${escapeHtml(kls)} (${classRows.length})</summary>
                     <table class="table" style="margin-top:4px"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
                 </details>`;
         }).join('');
 
         return `
-            <details class="wz-accordion" style="margin-bottom:8px">
+            <details class="wz-accordion">
                 <summary class="wz-accordion-header">${escapeHtml(prog)} (${progTotal})</summary>
                 <div style="padding:4px 0">${classAccordions}</div>
             </details>`;

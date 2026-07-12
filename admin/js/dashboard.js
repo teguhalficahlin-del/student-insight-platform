@@ -313,7 +313,7 @@ async function renderForumKelasPanel() {
 
     } catch (err) {
         panelContent.innerHTML =
-            `<p style="color:var(--color-danger)">${fe(err)}</p>`;
+            `<div class="alert alert-danger">${fe(err)}</div>`;
     }
 }
 
@@ -345,31 +345,31 @@ function renderSharePortalPanel() {
         return `
         <tr>
             <td style="padding:10px 8px;white-space:nowrap;font-weight:500">${p.label}</td>
-            <td style="padding:10px 8px;word-break:break-all;font-size:0.82rem;color:var(--text-muted,#9ca3af)">${url}</td>
+            <td style="padding:10px 8px;word-break:break-all;font-size:0.82rem;color:var(--color-text-muted)">${url}</td>
             <td style="padding:10px 8px;white-space:nowrap">
-                <button class="btn btn-secondary btn-sm copy-link-btn" data-url="${url}" style="font-size:0.78rem;padding:4px 12px">Salin</button>
+                <button class="btn btn-sm btn-secondary copy-link-btn" data-url="${url}">Salin</button>
             </td>
         </tr>`;
     }).join('');
 
     panelContent.innerHTML = `
         <h3 style="margin-bottom:4px">Bagikan Portal</h3>
-        <p style="margin-bottom:16px;color:var(--text-muted,#9ca3af);font-size:0.875rem">
+        <p class="hint" style="margin-bottom:16px">
             Salin link di bawah lalu kirim ke pengguna masing-masing (WhatsApp, email, dll).
         </p>
         <div class="card" style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse">
                 <thead>
-                    <tr style="border-bottom:1px solid var(--border-color,#374151)">
-                        <th style="padding:8px;text-align:left;font-size:0.8rem;color:var(--text-muted,#9ca3af)">Portal</th>
-                        <th style="padding:8px;text-align:left;font-size:0.8rem;color:var(--text-muted,#9ca3af)">Link</th>
+                    <tr style="border-bottom:1px solid var(--color-border)">
+                        <th style="padding:8px;text-align:left;font-size:0.8rem;color:var(--color-text-muted)">Portal</th>
+                        <th style="padding:8px;text-align:left;font-size:0.8rem;color:var(--color-text-muted)">Link</th>
                         <th style="padding:8px"></th>
                     </tr>
                 </thead>
                 <tbody>${rows}</tbody>
             </table>
         </div>
-        <p id="copy-toast" style="display:none;margin-top:12px;color:#10b981;font-size:0.875rem">✓ Link disalin ke clipboard!</p>
+        <p id="copy-toast" class="hint-success" style="display:none;margin-top:12px">✓ Link disalin ke clipboard!</p>
     `;
 
     panelContent.querySelectorAll('.copy-link-btn').forEach(btn => {
@@ -446,11 +446,11 @@ async function renderSetupPanel() {
                 <tr style="cursor:pointer" class="setup-row" data-panel="${i.panel}">
                     <td>${i.label}</td>
                     <td><span class="badge ${i.count > 0 ? 'badge-success' : 'badge-muted'}">${i.count ?? 0}</span></td>
-                    <td>${i.portal ? `<button class="btn btn-secondary btn-sm copy-portal-btn" data-url="${i.portal}" style="font-size:0.75rem;padding:3px 10px" onclick="event.stopPropagation()">Salin Link</button>` : ''}</td>
+                    <td>${i.portal ? `<button class="btn btn-sm btn-secondary copy-portal-btn" data-url="${i.portal}" onclick="event.stopPropagation()">Salin Link</button>` : ''}</td>
                 </tr>
             `).join('')}</tbody>
         </table>
-        <p id="copy-portal-toast" style="display:none;margin-top:10px;color:#10b981;font-size:0.875rem">✓ Link disalin ke clipboard!</p>
+        <p id="copy-portal-toast" class="hint-success" style="display:none;margin-top:10px">✓ Link disalin ke clipboard!</p>
     `;
 
     panelContent.querySelectorAll('.setup-row').forEach(row => {
@@ -770,11 +770,11 @@ async function renderStaffPanel() {
             ? '<span style="font-size:11px;background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 6px;margin-left:6px">Nonaktif</span>'
             : '';
         const btn = u.is_active === false
-            ? `<button class="btn btn-sm btn-secondary staff-toggle-btn" data-user-id="${u.user_id}" data-active="false" style="font-size:11px;padding:3px 8px">Aktifkan</button>`
-            : `<button class="btn btn-sm staff-toggle-btn" data-user-id="${u.user_id}" data-active="true" style="font-size:11px;padding:3px 8px;background:#b45309;color:#fff;border-color:#b45309">Nonaktifkan</button>`;
+            ? `<button class="btn btn-sm btn-secondary staff-toggle-btn" data-user-id="${u.user_id}" data-active="false">Aktifkan</button>`
+            : `<button class="btn btn-sm btn-warning staff-toggle-btn" data-user-id="${u.user_id}" data-active="true">Nonaktifkan</button>`;
         const resetBtn = u.must_change_password
-            ? `<button class="btn btn-sm btn-secondary" disabled style="font-size:11px;padding:3px 8px;margin-left:4px;opacity:0.6" title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
-            : `<button class="btn btn-sm btn-secondary staff-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px;margin-left:4px">Reset PW</button>`;
+            ? `<span class="badge badge-muted" style="margin-left:4px" title="Menunggu pengguna ganti password">Menunggu ganti PW</span>`
+            : `<button class="btn btn-sm btn-secondary staff-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="margin-left:4px">Reset PW</button>`;
         return `<tr style="${rowStyle}">
             <td>${esc(u.full_name)}${badge}</td>
             <td>${esc(u.login_identifier)}</td>
@@ -806,7 +806,7 @@ async function renderStaffPanel() {
         try {
             const stale = await getStaleStaff();
             if (stale.length === 0) {
-                panel.innerHTML = '<p class="hint" style="color:var(--color-success)">✓ Semua guru aktif memiliki jadwal di tahun ajaran ini.</p>';
+                panel.innerHTML = '<p class="hint-success">✓ Semua guru aktif memiliki jadwal di tahun ajaran ini.</p>';
             } else {
                 panel.innerHTML = `
                     <div class="alert alert-warning" style="display:block;margin-bottom:10px">
@@ -817,7 +817,7 @@ async function renderStaffPanel() {
                         <thead><tr><th>Nama</th><th>NIP/NIK</th><th>Kode</th></tr></thead>
                         <tbody>${stale.map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td>${esc(u.teacher_code ?? '—')}</td></tr>`).join('')}</tbody>
                     </table>
-                    <button id="btn-stale-confirm" class="btn btn-sm" style="background:#b45309;color:#fff;border-color:#b45309">
+                    <button id="btn-stale-confirm" class="btn btn-sm btn-warning">
                         Nonaktifkan ${stale.length} staf ini
                     </button>
                     <button id="btn-stale-cancel" class="btn btn-sm btn-secondary" style="margin-left:8px">Batal</button>
@@ -831,16 +831,16 @@ async function renderStaffPanel() {
                     confirmBtn.disabled = true; confirmBtn.textContent = 'Memproses…';
                     try {
                         const count = await deactivateStaleStaff();
-                        panel.innerHTML = `<p class="hint" style="color:var(--color-success)">✓ ${count} staf berhasil dinonaktifkan.</p>`;
+                        panel.innerHTML = `<p class="hint-success">✓ ${count} staf berhasil dinonaktifkan.</p>`;
                         await renderStaffPanel();
                     } catch (err) {
-                        panel.innerHTML = `<p style="color:var(--color-danger)">Gagal: ${esc(err.message)}</p>`;
+                        panel.innerHTML = `<div class="alert alert-danger">Gagal: ${esc(err.message)}</div>`;
                     }
                 });
             }
             panel.style.display = 'block';
         } catch (err) {
-            panel.innerHTML = `<p style="color:var(--color-danger)">Gagal memeriksa: ${esc(err.message)}</p>`;
+            panel.innerHTML = `<div class="alert alert-danger">Gagal memeriksa: ${esc(err.message)}</div>`;
             panel.style.display = 'block';
         } finally {
             btn.disabled = false; btn.textContent = 'Cek Staf Tanpa Jadwal Aktif…';
@@ -856,7 +856,7 @@ async function renderStaffPanel() {
         try {
             const deleted = await getDeletedUsers();
             if (deleted.length === 0) {
-                panel.innerHTML = '<p class="hint" style="color:var(--color-success)">✓ Tidak ada pengguna dalam recycle bin.</p>';
+                panel.innerHTML = '<p class="hint-success">✓ Tidak ada pengguna dalam recycle bin.</p>';
             } else {
                 const fmt = iso => new Date(iso).toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
                 const daysLeft = iso => Math.max(0, 30 - Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
@@ -875,9 +875,9 @@ async function renderStaffPanel() {
                             <td>${daysLeft(u.deleted_at)} hari</td>
                             <td style="white-space:nowrap">
                                 ${daysLeft(u.deleted_at) > 0
-                                    ? `<button class="btn btn-sm btn-secondary rb-restore-btn" data-uid="${u.user_id}" style="font-size:11px;margin-right:4px">Pulihkan</button>`
+                                    ? `<button class="btn btn-sm btn-secondary rb-restore-btn" data-uid="${u.user_id}" style="margin-right:4px">Pulihkan</button>`
                                     : ''}
-                                <button class="btn btn-sm rb-purge-btn" data-uid="${u.user_id}" style="font-size:11px;background:#dc2626;color:#fff;border-color:#dc2626">Purge</button>
+                                <button class="btn btn-sm btn-danger rb-purge-btn" data-uid="${u.user_id}">Purge</button>
                             </td>
                         </tr>`).join('')}
                         </tbody>
@@ -900,7 +900,7 @@ async function renderStaffPanel() {
             }
             panel.style.display = 'block';
         } catch (err) {
-            panel.innerHTML = `<p style="color:var(--color-danger)">Gagal memuat: ${esc(err.message)}</p>`;
+            panel.innerHTML = `<div class="alert alert-danger">Gagal memuat: ${esc(err.message)}</div>`;
             panel.style.display = 'block';
         } finally {
             btn.disabled = false;
@@ -987,12 +987,11 @@ async function renderStaffPanel() {
                         Sesi hari ini dan data absensi yang sudah tercatat <em>tidak</em> ikut terhapus.
                     </span>
                     <div style="margin-top:8px;display:flex;gap:8px">
-                        <button class="btn btn-sm staff-confirm-deactivate"
-                            data-user-id="${userId}" data-nama="${esc(nama)}"
-                            style="background:#b45309;color:#fff;border-color:#b45309;font-size:12px">
+                        <button class="btn btn-sm btn-warning staff-confirm-deactivate"
+                            data-user-id="${userId}" data-nama="${esc(nama)}">
                             Hapus jadwal &amp; Nonaktifkan
                         </button>
-                        <button class="btn btn-sm btn-secondary staff-cancel-deactivate" style="font-size:12px">Batal</button>
+                        <button class="btn btn-sm btn-secondary staff-cancel-deactivate">Batal</button>
                     </div>
                 </td>`;
             row.insertAdjacentElement('afterend', warnRow);
@@ -1071,13 +1070,11 @@ async function renderStudentsPanel() {
         <td>${esc(s.nis)}</td>
         <td>${s.user_id
             ? (pendingPwSet.has(s.user_id)
-                ? `<button class="btn btn-sm btn-secondary" disabled
-                    style="font-size:11px;padding:3px 8px;opacity:0.6"
-                    title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
+                ? `<span class="badge badge-muted"
+                    title="Menunggu pengguna ganti password">Menunggu ganti PW</span>`
                 : `<button class="btn btn-sm btn-secondary user-reset-pw-btn"
                     data-user-id="${s.user_id}"
-                    data-nama="${esc(s.full_name)}"
-                    style="font-size:11px;padding:3px 8px">Reset PW</button>`)
+                    data-nama="${esc(s.full_name)}">Reset PW</button>`)
             : '<span class="hint" style="font-size:11px">belum ada akun</span>'}
         </td></tr>`;
 
@@ -1230,12 +1227,10 @@ async function renderParentsPanel() {
         <td>${esc(u.full_name)}</td>
         <td>${esc(u.login_identifier)}</td>
         <td>${u.must_change_password
-            ? `<button class="btn btn-sm btn-secondary" disabled
-                style="font-size:11px;padding:3px 8px;opacity:0.6"
-                title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
+            ? `<span class="badge badge-muted"
+                title="Menunggu pengguna ganti password">Menunggu ganti PW</span>`
             : `<button class="btn btn-sm btn-secondary user-reset-pw-btn"
-                data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}"
-                style="font-size:11px;padding:3px 8px">Reset PW</button>`}
+                data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}">Reset PW</button>`}
         </td></tr>`;
 
     // Kelompokkan kelas per program
@@ -1358,11 +1353,9 @@ async function renderAlumniPanel() {
             <td>${esc(s.nis)}</td>
             <td>${esc(CAREER_LABEL[s.alumni_career_track] ?? '—')}</td>
             <td style="display:flex;gap:4px;flex-wrap:wrap">
-                <button class="btn btn-sm alumni-recap-btn" data-student-id="${s.student_id}" data-name="${esc(s.full_name)}"
-                    style="font-size:11px;padding:3px 8px">Cetak Rekap</button>
-                <button class="btn btn-sm alumni-career-btn" data-student-id="${s.student_id}"
-                    data-track="${esc(s.alumni_career_track ?? '')}" data-note="${esc(s.alumni_career_note ?? '')}"
-                    style="font-size:11px;padding:3px 8px;background:var(--color-secondary,#6b7280);color:#fff">Karir</button>
+                <button class="btn btn-sm btn-secondary alumni-recap-btn" data-student-id="${s.student_id}" data-name="${esc(s.full_name)}">Cetak Rekap</button>
+                <button class="btn btn-sm btn-secondary alumni-career-btn" data-student-id="${s.student_id}"
+                    data-track="${esc(s.alumni_career_track ?? '')}" data-note="${esc(s.alumni_career_note ?? '')}">Karir</button>
             </td></tr>`);
 
     const ortuHtml = renderNestedYearProgramClass(ortuRows, ['Nama', 'NIK'],
@@ -1377,8 +1370,7 @@ async function renderAlumniPanel() {
         <tbody>${keluarRaw.map(s => `<tr>
             <td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td><td>${esc(s.program?.name ?? '—')}</td>
             <td>${s.keluar_at ? new Date(s.keluar_at).toLocaleDateString('id-ID') : '—'}</td>
-            <td><button class="btn btn-sm alumni-reenroll-btn" data-student-id="${s.student_id}" data-name="${esc(s.full_name)}"
-                style="font-size:11px;padding:3px 8px;background:var(--color-success,#15803d);color:#fff">Re-enroll</button></td>
+            <td><button class="btn btn-sm btn-success alumni-reenroll-btn" data-student-id="${s.student_id}" data-name="${esc(s.full_name)}">Re-enroll</button></td>
         </tr>`).join('')}</tbody></table>` : '<p class="hint">Tidak ada siswa dengan status Keluar.</p>';
 
     panelContent.innerHTML = `
@@ -1514,12 +1506,11 @@ async function renderAlumniPanel() {
                             <td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td>
                             <td>${esc(statusLabel[s.student_status] ?? s.student_status)}</td>
                             <td>${esc(tanggal)}</td>
-                            <td><button class="btn btn-sm purge-student-btn" data-student-id="${s.student_id}" data-name="${esc(s.full_name)}"
-                                style="font-size:11px;padding:3px 8px;background:#dc2626;color:#fff;border-color:#dc2626">Hapus Permanen</button></td>
+                            <td><button class="btn btn-sm btn-danger purge-student-btn" data-student-id="${s.student_id}" data-name="${esc(s.full_name)}">Hapus Permanen</button></td>
                         </tr>`;
                     }).join('')}</tbody></table>
                     <div style="margin-top:12px;text-align:right">
-                        <button id="purge-all-btn" class="btn btn-sm" style="background:#dc2626;color:#fff;border-color:#dc2626;font-size:12px">
+                        <button id="purge-all-btn" class="btn btn-sm btn-danger">
                             Hapus Semua (${candidates.length}) — Tidak Dapat Dipulihkan
                         </button>
                     </div>`;
@@ -1539,7 +1530,7 @@ async function renderAlumniPanel() {
                             await purgeExpiredStudents([ab.dataset.studentId]);
                             ab.closest('tr').remove();
                             const remaining = resultDiv.querySelectorAll('.purge-student-btn').length;
-                            if (remaining === 0) resultDiv.innerHTML = '<p class="hint" style="color:var(--color-success)">✓ Semua kandidat telah dihapus.</p>';
+                            if (remaining === 0) resultDiv.innerHTML = '<p class="hint-success">✓ Semua kandidat telah dihapus.</p>';
                         } catch (err) {
                             alert(`Gagal: ${err.message}`);
                             ab.disabled = false; ab.textContent = 'Hapus Permanen';
@@ -1559,7 +1550,7 @@ async function renderAlumniPanel() {
                     try {
                         const ids = candidates.map(c => c.student_id);
                         const result = await purgeExpiredStudents(ids);
-                        resultDiv.innerHTML = `<p class="hint" style="color:var(--color-success)">✓ ${result.purged} siswa berhasil dihapus permanen.</p>`;
+                        resultDiv.innerHTML = `<p class="hint-success">✓ ${result.purged} siswa berhasil dihapus permanen.</p>`;
                     } catch (err) {
                         alert(`Gagal: ${err.message}`);
                         if (allBtn) { allBtn.disabled = false; allBtn.textContent = `Hapus Semua (${n}) — Tidak Dapat Dipulihkan`; }
@@ -1653,8 +1644,8 @@ async function renderDudiPanel() {
         u => u.program_id ? (pn.get(u.program_id) ?? '—') : 'Tanpa Program / Lintas Program',
         ['Nama Usaha', 'Penanggung Jawab', 'Aksi'],
         u => `<tr><td>${u.dudi_org_name ?? '—'}</td><td>${u.full_name}</td><td>${u.must_change_password
-            ? `<button class="btn btn-sm btn-secondary" disabled style="font-size:11px;padding:3px 8px;opacity:0.6" title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
-            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button>`}</td></tr>`,
+            ? `<span class="badge badge-muted" title="Menunggu pengguna ganti password">Menunggu ganti PW</span>`
+            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}">Reset PW</button>`}</td></tr>`,
     );
     panelContent.innerHTML = `
         <h3>DUDI (${(users ?? []).length})</h3>
@@ -1669,8 +1660,8 @@ async function renderStakeholdersPanel() {
         <table class="table">
             <thead><tr><th>Nama</th><th>Kode Login</th><th>Aksi</th></tr></thead>
             <tbody>${(users ?? []).map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td>${u.must_change_password
-            ? `<button class="btn btn-sm btn-secondary" disabled style="font-size:11px;padding:3px 8px;opacity:0.6" title="Menunggu pengguna ganti password">Menunggu ganti PW</button>`
-            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="font-size:11px;padding:3px 8px">Reset PW</button>`}</td></tr>`).join('')}</tbody>
+            ? `<span class="badge badge-muted" title="Menunggu pengguna ganti password">Menunggu ganti PW</span>`
+            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}">Reset PW</button>`}</td></tr>`).join('')}</tbody>
         </table>
     `;
 }
@@ -1905,8 +1896,7 @@ async function renderAcademicYearPanel() {
                 <li>Mengembalikan tahun ajaran aktif ke tahun sebelumnya</li>
             </ul>
             <p class="hint" style="margin:0 0 10px;color:#7f1d1d">Status kelulusan siswa (LULUS) <em>tidak</em> berubah — itu langkah terpisah.</p>
-            <button class="btn btn-sm" id="cancel-year-btn"
-                style="background:#dc2626;color:#fff;border-color:#dc2626">Batalkan Tahun Ajaran ${esc(cfg?.current_academic_year ?? '')}</button>
+            <button class="btn btn-sm btn-danger" id="cancel-year-btn">Batalkan Tahun Ajaran ${esc(cfg?.current_academic_year ?? '')}</button>
             <div id="cancel-year-result" class="alert" style="display:none;margin-top:10px"></div>
         </div>
     `;
@@ -1989,7 +1979,7 @@ async function renderActivityLogPanel() {
                     <td>${esc(o.author?.full_name ?? '—')}</td>
                     <td>${o.is_void
                         ? `<span class="hint" title="${esc(o.void_reason ?? '')}" style="font-size:11px;color:#b45309">Dibatalkan</span>`
-                        : `<button class="btn btn-sm obs-void-btn" data-obs-id="${o.observation_id}" data-obs-content="${esc((o.content ?? '').slice(0, 80))}" style="font-size:11px;padding:3px 8px;background:#b45309;color:#fff;border-color:#b45309">Batalkan</button>`}</td>
+                        : `<button class="btn btn-sm btn-warning obs-void-btn" data-obs-id="${o.observation_id}" data-obs-content="${esc((o.content ?? '').slice(0, 80))}">Batalkan</button>`}</td>
                 </tr>`).join('')}
             </tbody>
            </table>`;
