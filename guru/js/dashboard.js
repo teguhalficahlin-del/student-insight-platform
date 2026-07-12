@@ -1043,7 +1043,7 @@ async function loadWaliSummary() {
             return;
         }
 
-        container.innerHTML = students
+        container.innerHTML = buildAttStatCards(students) + students
             .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'))
             .map(s => {
                 const pct   = s.total > 0 ? Math.round(s.HADIR / s.total * 100) : null;
@@ -1199,7 +1199,7 @@ async function loadBkAttendanceRecap() {
             </details>`;
         }).join('');
 
-        container.innerHTML = html;
+        container.innerHTML = buildAttStatCards(rows) + html;
 
         container.querySelectorAll('details.wz-accordion-inner').forEach(det => {
             det.addEventListener('toggle', async () => {
@@ -1307,6 +1307,38 @@ async function initWakaKesiswaanTab() {
     await loadWkAttendanceRecap();
 }
 
+function buildAttStatCards(rows) {
+    const tot  = rows.reduce((s,r) => s + r.HADIR + r.IZIN + r.SAKIT + r.TIDAK_HADIR, 0);
+    const h    = rows.reduce((s,r) => s + r.HADIR,       0);
+    const i    = rows.reduce((s,r) => s + r.IZIN,        0);
+    const sk   = rows.reduce((s,r) => s + r.SAKIT,       0);
+    const a    = rows.reduce((s,r) => s + r.TIDAK_HADIR, 0);
+    const pctH = tot > 0 ? Math.round(h  / tot * 100) : 0;
+    const pctI = tot > 0 ? Math.round(i  / tot * 100) : 0;
+    const pctS = tot > 0 ? Math.round(sk / tot * 100) : 0;
+    const pctA = tot > 0 ? Math.round(a  / tot * 100) : 0;
+    const colH = pctH >= 80 ? 'var(--color-success)' : pctH >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+    return `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+        <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+            <div style="font-size:20px;font-weight:500;color:${colH}">${pctH}%</div>
+            <div style="font-size:11px;color:var(--color-text-muted);margin-top:2px">Hadir</div>
+        </div>
+        <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+            <div style="font-size:20px;font-weight:500;color:var(--color-warning,#f59e0b)">${pctI}%</div>
+            <div style="font-size:11px;color:var(--color-text-muted);margin-top:2px">Izin</div>
+        </div>
+        <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+            <div style="font-size:20px;font-weight:500;color:var(--color-primary)">${pctS}%</div>
+            <div style="font-size:11px;color:var(--color-text-muted);margin-top:2px">Sakit</div>
+        </div>
+        <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+            <div style="font-size:20px;font-weight:500;color:var(--color-danger)">${pctA}%</div>
+            <div style="font-size:11px;color:var(--color-text-muted);margin-top:2px">Alpa</div>
+        </div>
+    </div>`;
+}
+
 async function loadWkAttendanceRecap() {
     const dateStart = document.getElementById('wk-att-start').value || null;
     const dateEnd   = document.getElementById('wk-att-end').value   || null;
@@ -1389,7 +1421,7 @@ async function loadWkAttendanceRecap() {
             </details>`;
         }).join('');
 
-        container.innerHTML = html;
+        container.innerHTML = buildAttStatCards(rows) + html;
 
         // Lazy load siswa saat accordion kelas dibuka
         container.querySelectorAll('details.wz-accordion-inner').forEach(det => {
@@ -1723,7 +1755,7 @@ async function loadKpClsRecap() {
                 </details>`;
             }).join('');
 
-        container.innerHTML = html;
+        container.innerHTML = buildAttStatCards(rows) + html;
 
         // Lazy load siswa saat accordion kelas dibuka
         container.querySelectorAll('details.att-accordion').forEach(det => {
