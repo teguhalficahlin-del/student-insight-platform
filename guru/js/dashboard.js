@@ -1104,11 +1104,7 @@ async function initWakaKesiswaanTab() {
     document.getElementById('wk-att-end').value   = today;
     document.getElementById('wk-att-filter-btn').onclick = loadWkAttendanceRecap;
 
-    await Promise.all([
-        loadWkAttendanceRecap(),
-        loadWkObservations(),
-        loadWkOpenCases(),
-    ]);
+    await loadWkAttendanceRecap();
 }
 
 async function loadWkAttendanceRecap() {
@@ -1130,45 +1126,58 @@ async function loadWkAttendanceRecap() {
             const pctDenom = r.HADIR + r.IZIN + r.TIDAK_HADIR;
             const pct   = pctDenom > 0 ? Math.round(r.HADIR / pctDenom * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
-            return `<tr class="wk-class-row" data-class-id="${esc(r.class_id)}" data-class-name="${esc(r.name)}" style="cursor:pointer" title="Klik untuk lihat detail siswa">
-                <td style="color:var(--color-primary,#4ade80)">${esc(r.name)}</td>
+            const safeId = r.class_id.replace(/[^a-z0-9]/gi, '_');
+            return `<tr class="wk-class-row" data-class-id="${esc(r.class_id)}" data-class-name="${esc(r.name)}" style="cursor:pointer">
+                <td style="color:var(--color-primary)">
+                    <span style="display:inline-flex;align-items:center;gap:6px">
+                        <span class="wk-chevron" id="wkchv-${safeId}" style="font-size:10px;color:var(--color-text-muted);transition:transform .2s">▶</span>
+                        ${esc(r.name)}
+                    </span>
+                </td>
                 <td style="text-align:center">${r.HADIR}</td>
                 <td style="text-align:center">${r.IZIN}</td>
                 <td style="text-align:center">${r.SAKIT}</td>
                 <td style="text-align:center">${r.TIDAK_HADIR}</td>
                 <td style="text-align:center">${r.total}</td>
                 <td style="text-align:center;font-weight:600;color:${color}">${r.total > 0 ? pct + '%' : '—'}</td>
+            </tr>
+            <tr class="wk-detail-row" id="wkdet-${safeId}" style="display:none">
+                <td colspan="7" style="padding:0 0 8px 24px;background:var(--color-bg)">
+                    <div id="wkdet-body-${safeId}"><p class="hint" style="padding:8px 0">Memuat detail…</p></div>
+                </td>
             </tr>`;
         }).join('');
 
         tbody.querySelectorAll('tr.wk-class-row').forEach(tr => {
-            tr.addEventListener('click', () => wkOpenClassModal(tr, dateStart, dateEnd));
+            tr.addEventListener('click', () => wkToggleClassDetail(tr, dateStart, dateEnd));
         });
-
-        // Setup tombol tutup & backdrop
-        const modal = document.getElementById('wk-class-modal');
-        document.getElementById('wk-modal-close').onclick = () => { modal.style.display = 'none'; };
-        modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
 
-async function wkOpenClassModal(tr, dateStart, dateEnd) {
-    const classId   = tr.dataset.classId;
-    const className = tr.dataset.className;
-    const modal     = document.getElementById('wk-class-modal');
-    const title     = document.getElementById('wk-modal-title');
-    const body      = document.getElementById('wk-modal-body');
+async function wkToggleClassDetail(tr, dateStart, dateEnd) {
+    const classId = tr.dataset.classId;
+    const safeId  = classId.replace(/[^a-z0-9]/gi, '_');
+    const detRow  = document.getElementById(`wkdet-${safeId}`);
+    const detBody = document.getElementById(`wkdet-body-${safeId}`);
+    const chevron = document.getElementById(`wkchv-${safeId}`);
 
-    title.textContent = `Detail Kehadiran — ${className}`;
-    body.innerHTML = '<p class="hint">Memuat detail siswa…</p>';
-    modal.style.display = '';
+    const isOpen = detRow.style.display !== 'none';
+    detRow.style.display = isOpen ? 'none' : 'table-row';
+    chevron.style.transform = isOpen ? '' : 'rotate(90deg)';
+
+    // Sudah pernah dimuat — tidak perlu fetch ulang
+    if (isOpen || detBody.dataset.loaded) return;
+    detBody.dataset.loaded = '1';
 
     try {
-        const students = await getWaliAttendanceSummary(classId, config.current_academic_year, dateStart || null, dateEnd || null);
+        const students = await getWaliAttendanceSummary(
+            classId, config.current_academic_year,
+            dateStart || null, dateEnd || null
+        );
         if (students.length === 0) {
-            body.innerHTML = '<p class="hint">Belum ada data kehadiran siswa pada rentang ini.</p>';
+            detBody.innerHTML = '<p class="hint" style="padding:8px 0">Belum ada data kehadiran siswa pada rentang ini.</p>';
             return;
         }
         const tableRows = students.map(s => {
@@ -1176,7 +1185,7 @@ async function wkOpenClassModal(tr, dateStart, dateEnd) {
             const pct   = pctDenom > 0 ? Math.round(s.HADIR / pctDenom * 100) : 0;
             const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
             return `<tr>
-                <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted)">${esc(s.nis)}</span></td>
+                <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span class="sub-label">${esc(s.nis)}</span></td>
                 <td style="text-align:center">${s.HADIR}</td>
                 <td style="text-align:center">${s.IZIN}</td>
                 <td style="text-align:center">${s.SAKIT}</td>
@@ -1185,56 +1194,26 @@ async function wkOpenClassModal(tr, dateStart, dateEnd) {
                 <td style="text-align:center;font-weight:600;color:${color}">${pctDenom > 0 ? pct + '%' : '—'}</td>
             </tr>`;
         }).join('');
-        body.innerHTML = `
-            <div class="table-wrapper">
+        detBody.innerHTML = `
+            <div class="table-wrapper" style="margin-top:8px">
             <table class="table" style="margin:0">
                 <thead><tr>
                     <th>Nama / NIS</th>
-                    <th style="text-align:center">Hadir</th><th style="text-align:center">Izin</th>
-                    <th style="text-align:center">Sakit</th><th style="text-align:center">Alpa</th>
-                    <th style="text-align:center">Total Sesi</th><th style="text-align:center">% Hadir</th>
+                    <th style="text-align:center">Hadir</th>
+                    <th style="text-align:center">Izin</th>
+                    <th style="text-align:center">Sakit</th>
+                    <th style="text-align:center">Alpa</th>
+                    <th style="text-align:center">Total Sesi</th>
+                    <th style="text-align:center">% Hadir</th>
                 </tr></thead>
                 <tbody>${tableRows}</tbody>
             </table>
             </div>`;
     } catch (err) {
-        body.innerHTML = `<p style="color:var(--color-danger)">${esc(fe(err))}</p>`;
+        detBody.innerHTML = `<div class="alert alert-danger">${esc(fe(err))}</div>`;
     }
 }
 
-async function loadWkObservations() {
-    const hintEl = document.getElementById('wk-obs-hint');
-    const listEl = document.getElementById('wk-obs-list');
-    hintEl.textContent = 'Memuat…';
-    listEl.innerHTML = '';
-
-    try {
-        const { data, error } = await supabase
-            .from('observations')
-            .select(`observation_id, sentiment, dimension, content, observed_at, created_at,
-                student:students(full_name, nis),
-                author:users!observations_author_user_id_fkey(full_name)`)
-            .eq('school_id', currentUser.school_id)
-            .order('created_at', { ascending: false })
-            .limit(50);
-        if (error) throw error;
-
-        if (!data?.length) { hintEl.textContent = 'Belum ada observasi.'; return; }
-        hintEl.style.display = 'none';
-        listEl.innerHTML = data.map(r => `
-            <div class="obs-card obs-${(r.sentiment ?? '').toLowerCase()}">
-                <div class="obs-meta">
-                    <strong>${esc(r.student?.full_name ?? '—')}</strong> (${esc(r.student?.nis ?? '—')})
-                    &middot; ${esc(DIMENSION_LABELS[r.dimension] ?? r.dimension)}
-                    &middot; oleh ${esc(r.author?.full_name ?? '—')}
-                    &middot; ${fmt(r.observed_at ?? r.created_at)}
-                </div>
-                <p class="obs-content">${esc(r.content)}</p>
-            </div>`).join('');
-    } catch (err) {
-        hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
-    }
-}
 
 const HANDLER_ROLE_LABELS = {
     GURU: 'Guru', WALI_KELAS: 'Wali Kelas', BK: 'BK', KAPRODI: 'Kaprodi',
@@ -1242,29 +1221,6 @@ const HANDLER_ROLE_LABELS = {
     WAKA_KURIKULUM: 'Waka Kurikulum', DUDI: 'DUDI',
 };
 
-async function loadWkOpenCases() {
-    const tbody   = document.getElementById('wk-cases-body');
-    const emptyEl = document.getElementById('wk-cases-empty');
-    tbody.innerHTML = '<tr><td colspan="4" class="hint">Memuat…</td></tr>';
-    emptyEl.style.display = 'none';
-
-    try {
-        const rows = await getOpenCases(currentUser.school_id);
-        if (rows.length === 0) {
-            tbody.innerHTML = '';
-            emptyEl.style.display = 'block';
-            return;
-        }
-        tbody.innerHTML = rows.map(c => `<tr>
-            <td>${esc(c.student?.full_name ?? '—')} (${esc(c.student?.nis ?? '—')})</td>
-            <td>${esc(c.title)}</td>
-            <td>${esc(HANDLER_ROLE_LABELS[c.current_handler_role] ?? c.current_handler_role ?? '—')}</td>
-            <td>${fmt(c.created_at)}</td>
-        </tr>`).join('');
-    } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="4" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
-    }
-}
 
 // ─── TAB KAPRODI ─────────────────────────────────────────────
 
@@ -2236,7 +2192,6 @@ function renderKasusDetail(k) {
             &middot; Track: <strong>${esc(CASE_TRACK_LABEL[k.track] ?? k.track)}</strong>
             &middot; Dibuka oleh: ${esc(ROLE_LABEL[k.initiated_by_role] ?? k.initiated_by_role)}
             &middot; Handler saat ini: <strong>${esc(ROLE_LABEL[k.current_handler_role] ?? k.current_handler_role ?? '—')}</strong>
-            &middot; ${esc(AUDIENCE_LABEL[k.audience] ?? k.audience ?? 'Privat')}
             ${k.is_locked ? '&middot; <span style="color:var(--color-warning)">🔒 Terkunci</span>' : ''}
         </div>
         <p style="font-size:14px; color:var(--color-text); margin:0">${esc(k.description)}</p>
