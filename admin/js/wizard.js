@@ -782,15 +782,8 @@ async function renderWzFkBkTab() {
             const chips = assigned.map(a => {
                 const bk = _wzFkBkStaff.find(s => s.user_id === a.bk_user_id);
                 if (!bk) return '';
-                return `<span style="display:inline-flex;align-items:center;
-                            background:var(--color-primary-subtle,#eff6ff);
-                            color:var(--color-primary,#2563eb);
-                            border:1px solid var(--color-primary-light,#bfdbfe);
-                            border-radius:999px;padding:2px 10px;
-                            font-size:12px">
-                            ${esc(bk.full_name)}
-                        </span>`;
-            }).join('');
+                return esc(bk.full_name);
+            }).filter(Boolean).join(', ');
 
             const aidList = assigned.map(a => a.assignment_id);
             const checkCell = `<td style="width:36px"><input type="checkbox"
@@ -800,7 +793,7 @@ async function renderWzFkBkTab() {
             return `<tr>
                 ${checkCell}
                 <td style="font-weight:500">${esc(cls.name)}</td>
-                <td><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${chips}</div></td>
+                <td>${chips}</td>
             </tr>`;
         }).join('');
 
@@ -1019,14 +1012,8 @@ async function renderWzFkGuruWaliTab() {
                 const chips = assigned.map(a => {
                     const gw = _wzFkGuruWaliCands.find(s => s.user_id === a.guru_user_id);
                     if (!gw) return '';
-                    return `<span style="display:inline-flex;align-items:center;
-                                background:var(--color-primary-subtle,#eff6ff);
-                                color:var(--color-primary,#2563eb);
-                                border:1px solid var(--color-primary-light,#bfdbfe);
-                                border-radius:999px;padding:2px 10px;font-size:12px">
-                                ${esc(gw.full_name)}
-                            </span>`;
-                }).join('');
+                    return esc(gw.full_name);
+                }).filter(Boolean).join(', ');
 
                 const aidList   = assigned.map(a => a.assignment_id);
                 const checkCell = `<td style="width:36px"><input type="checkbox"
@@ -1039,7 +1026,7 @@ async function renderWzFkGuruWaliTab() {
                         <div style="font-weight:500">${esc(stu.full_name)}</div>
                         <div style="font-size:11px;color:var(--color-text-muted)">${esc(stu.nis)}</div>
                     </td>
-                    <td><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${chips}</div></td>
+                    <td>${chips}</td>
                 </tr>`;
             }).join('');
 
