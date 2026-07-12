@@ -23,7 +23,7 @@ import {
     getAttendanceRecapPerClass, getOpenCases,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
     getMyObservations, updateObsVisibility, getStudentUserId, getStudentParents,
-    getObsAudienceMembers, addObsAudienceMember, removeObsAudienceMember,
+    getObsAudienceMembers, removeObsAudienceMember,
     getCases, getCase, getCaseEvents, createCase,
     addCaseComment, escalateCase, changeCaseStatus, closeCase,
     updateCaseAudience, getCaseAudienceMembers,
@@ -264,7 +264,7 @@ function buildTabs() {
     jabatan.forEach(j => tabs.push({ key: j, label: jabatanLabel(j) }));
     tabs.push({ key: 'kasus', label: 'Pembinaan Siswa' });
     if (jabatan.includes('kepsek')) tabs.push({ key: 'ks_admin', label: 'Kelola Admin' });
-    if (isTeacher) tabs.push({ key: 'observasi', label: 'Observasi Siswa' });
+    if (isTeacher) tabs.push({ key: 'observasi', label: 'Catatan Siswa' });
     if (isTeacher) tabs.push({ key: 'jurnal', label: 'Jurnal Mengajar' });
     tabs.push({ key: 'forum', label: 'Forum Kelas' });
 
@@ -316,14 +316,15 @@ async function loadTabContent(key) {
 
 // ─── TAB GURU ────────────────────────────────────────────────
 
-let _guruTabInit = false;
+let _guruTabInit     = false;
+let _guruRekapRows   = [];
+let _guruRekapPage   = 0;
 async function initGuruTab() {
     const dateEl = document.getElementById('sched-date');
     if (!dateEl.value) dateEl.value = localDateStr();
 
     if (!_guruTabInit) {
         _guruTabInit = true;
-        dateEl.addEventListener('change', loadSchedule);
         document.getElementById('guru-recap-btn').onclick = loadGuruRecap;
         // Default rentang: awal bulan ini s/d hari ini
         const today = localDateStr();
@@ -332,7 +333,7 @@ async function initGuruTab() {
         document.getElementById('guru-recap-end').value   = today;
         await initGuruRekapDropdown();
 
-        // Toggle hari / minggu
+        // Toggle hari / minggu — auto-load saat switch
         document.querySelectorAll('.sched-view-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 document.querySelectorAll('.sched-view-btn').forEach(b => b.classList.remove('active'));
@@ -341,6 +342,7 @@ async function initGuruTab() {
                 document.getElementById('sched-view-hari-panel').style.display  = isWeek ? 'none' : 'block';
                 document.getElementById('sched-view-minggu-panel').style.display = isWeek ? 'block' : 'none';
                 if (isWeek) await loadWeekSchedule();
+                else await loadSchedule();
             });
         });
     }
@@ -365,6 +367,36 @@ async function initGuruRekapDropdown() {
     }
 }
 
+function renderGuruRekapPage() {
+    const PAGE_SIZE = 5;
+    const start = _guruRekapPage * PAGE_SIZE;
+    const slice = _guruRekapRows.slice(start, start + PAGE_SIZE);
+    const total = _guruRekapRows.length;
+
+    const tbody = document.getElementById('guru-recap-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = slice.map(s => {
+        const pctDenom = s.HADIR + s.IZIN + s.TIDAK_HADIR;
+        const pct = pctDenom > 0 ? Math.round((s.HADIR / pctDenom) * 100) : 0;
+        const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning)' : 'var(--color-danger)';
+        return `<tr>
+            <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted)">${esc(s.nis)}</span></td>
+            <td style="text-align:center">${s.HADIR}</td>
+            <td style="text-align:center">${s.IZIN}</td>
+            <td style="text-align:center">${s.SAKIT}</td>
+            <td style="text-align:center">${s.TIDAK_HADIR}</td>
+            <td style="text-align:center">${s.total}</td>
+            <td style="text-align:center;font-weight:600;color:${color}">${s.total > 0 ? pct + '%' : '—'}</td>
+        </tr>`;
+    }).join('');
+
+    const end = Math.min(start + PAGE_SIZE, total);
+    document.getElementById('guru-rekap-nav-info').textContent = `Siswa ${start + 1}–${end} dari ${total}`;
+    document.getElementById('guru-rekap-prev').disabled = _guruRekapPage === 0;
+    document.getElementById('guru-rekap-next').disabled = end >= total;
+}
+
 async function loadGuruRecap() {
     const classId   = document.getElementById('guru-recap-class').value;
     const dateStart = document.getElementById('guru-recap-start').value;
@@ -382,20 +414,10 @@ async function loadGuruRecap() {
             return;
         }
         const rows = await getAttendanceSummaryByStudents(students, dateStart || null, dateEnd || null, currentUser.user_id);
-        const tbody = rows.map(s => {
-            const pctDenom = s.HADIR + s.IZIN + s.TIDAK_HADIR;
-            const pct = pctDenom > 0 ? Math.round((s.HADIR / pctDenom) * 100) : 0;
-            const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
-            return `<tr>
-                <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span style="font-size:0.78rem;color:var(--color-text-muted)">${esc(s.nis)}</span></td>
-                <td style="text-align:center">${s.HADIR}</td>
-                <td style="text-align:center">${s.IZIN}</td>
-                <td style="text-align:center">${s.SAKIT}</td>
-                <td style="text-align:center">${s.TIDAK_HADIR}</td>
-                <td style="text-align:center">${s.total}</td>
-                <td style="text-align:center;font-weight:600;color:${color}">${s.total > 0 ? pct + '%' : '—'}</td>
-            </tr>`;
-        }).join('');
+
+        _guruRekapRows = rows;
+        _guruRekapPage = 0;
+
         content.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
                 <p style="font-size:0.82rem;color:var(--color-text-muted);margin:0">
@@ -403,19 +425,30 @@ async function loadGuruRecap() {
                 </p>
                 <button class="btn btn-secondary btn-sm" id="guru-recap-export">Unduh CSV</button>
             </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;margin-bottom:4px">
+                <button id="guru-rekap-prev" class="btn btn-secondary btn-sm" disabled>‹</button>
+                <span id="guru-rekap-nav-info" style="font-size:13px;color:var(--color-text-muted)"></span>
+                <button id="guru-rekap-next" class="btn btn-secondary btn-sm">›</button>
+            </div>
             <div class="table-wrapper">
-            <table class="table">
-                <thead><tr>
-                    <th>Nama / NIS</th>
-                    <th style="text-align:center">Hadir</th><th style="text-align:center">Izin</th>
-                    <th style="text-align:center">Sakit</th><th style="text-align:center">Alpa</th>
-                    <th style="text-align:center">Total Sesi</th><th style="text-align:center">% Hadir</th>
-                </tr></thead>
-                <tbody>${tbody}</tbody>
-            </table>
+                <table class="table">
+                    <thead><tr>
+                        <th>Nama / NIS</th>
+                        <th style="text-align:center">Hadir</th>
+                        <th style="text-align:center">Izin</th>
+                        <th style="text-align:center">Sakit</th>
+                        <th style="text-align:center">Alpa</th>
+                        <th style="text-align:center">Total</th>
+                        <th style="text-align:center">% Hadir</th>
+                    </tr></thead>
+                    <tbody id="guru-recap-tbody"></tbody>
+                </table>
             </div>`;
 
-        document.getElementById('guru-recap-export')?.addEventListener('click', () => {
+        document.getElementById('guru-rekap-prev').addEventListener('click', () => { _guruRekapPage--; renderGuruRekapPage(); });
+        document.getElementById('guru-rekap-next').addEventListener('click', () => { _guruRekapPage++; renderGuruRekapPage(); });
+
+        document.getElementById('guru-recap-export').addEventListener('click', () => {
             const header = 'Nama,NIS,Hadir,Izin,Sakit,Alpa,Total Sesi,% Hadir';
             const csvRows = rows.map(s => {
                 const pctDenom = s.HADIR + s.IZIN + s.TIDAK_HADIR;
@@ -430,6 +463,8 @@ async function loadGuruRecap() {
             a.click();
             URL.revokeObjectURL(a.href);
         });
+
+        renderGuruRekapPage();
     } catch (err) {
         content.innerHTML = `<div class="status-err">Gagal memuat rekap. ${esc(fe(err))}</div>`;
     }
@@ -445,40 +480,49 @@ function fmtDayLabel(dateStr) {
 }
 
 function renderScheduleRows(rows, contentEl, date) {
-    const dayLabel = `<p style="font-size:0.85rem;color:var(--color-text-muted);margin-bottom:8px">${fmtDayLabel(date)}</p>`;
-    if (rows.length === 0) {
-        contentEl.innerHTML = dayLabel + '<p class="hint">Tidak ada jadwal mengajar pada tanggal ini.</p>';
-        return;
-    }
-    const isPast = date < localDateStr();
-    contentEl.innerHTML = dayLabel + `
-        <div class="table-wrapper">
-        <table class="table">
-            <thead><tr><th>Jam</th><th>Kelas</th><th>Kehadiran</th></tr></thead>
-            <tbody>
-            ${rows.map(r => `
-                <tr>
-                    <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
-                    <td>${esc(r.class?.name ?? '—')}</td>
-                    <td>
-                        <button class="btn ${isPast ? 'btn-secondary' : 'btn-primary'} btn-xs att-open-btn"
-                            data-schedule="${r.schedule_id}"
-                            data-class="${r.class?.class_id}"
-                            data-classname="${esc(r.class?.name ?? '')}"
-                            data-ispast="${isPast}">
-                            ${isPast ? 'Koreksi Kehadiran' : 'Input Kehadiran'}
-                        </button>
-                    </td>
-                </tr>
-            `).join('')}
-            </tbody>
-        </table>
-        </div>`;
+    const today     = localDateStr();
+    const isPast    = date < today;
+    const isToday   = date === today;
+    const label     = fmtDayLabel(date);
+    const sesiCount = rows.length;
+
+    const tableHtml = sesiCount === 0
+        ? '<p class="hint" style="margin:8px 0 4px">Tidak ada jadwal mengajar pada tanggal ini.</p>'
+        : `<div class="table-wrapper">
+           <table class="table">
+               <thead><tr><th>Jam</th><th>Kelas</th><th>Kehadiran</th></tr></thead>
+               <tbody>
+               ${rows.map(r => `
+                   <tr>
+                       <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
+                       <td>${esc(r.class?.name ?? '—')}</td>
+                       <td>
+                           <button class="btn ${isPast ? 'btn-secondary' : 'btn-primary'} btn-xs att-open-btn"
+                               data-schedule="${r.schedule_id}"
+                               data-class="${r.class?.class_id}"
+                               data-classname="${esc(r.class?.name ?? '')}"
+                               data-ispast="${isPast}">
+                               ${isPast ? 'Koreksi Kehadiran' : 'Input Kehadiran'}
+                           </button>
+                       </td>
+                   </tr>
+               `).join('')}
+               </tbody>
+           </table>
+           </div>`;
+
+    contentEl.innerHTML = `
+        <details class="att-accordion" ${isToday || sesiCount > 0 ? 'open' : ''}>
+            <summary class="att-accordion-summary">
+                <span>${esc(label)}</span>
+                <span class="att-acc-names">${sesiCount > 0 ? `${sesiCount} sesi` : 'tidak ada jadwal'}</span>
+            </summary>
+            <div style="padding:0 12px 8px">${tableHtml}</div>
+        </details>`;
+
     contentEl.querySelectorAll('.att-open-btn').forEach(btn => {
         btn.addEventListener('click', () => openAttModal(btn));
     });
-
-    // Tombol tutup modal
     document.getElementById('att-modal-close').onclick = closeAttModal;
     document.getElementById('att-modal').addEventListener('click', e => {
         if (e.target === e.currentTarget) closeAttModal();
@@ -560,38 +604,34 @@ async function loadWeekSchedule() {
         }
 
         const DAY_NAMES = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
+        const todayStr  = localDateStr();
         contentEl.innerHTML = results.map((r, idx) => {
-            const dayLabel = `${DAY_NAMES[idx]}, ${fmtDayLabel(r.date).split(',')[1]?.trim() ?? r.date}`;
-            if (r.rows.length === 0) {
-                return `<div style="margin-bottom:12px">
-                    <p style="font-size:0.82rem;font-weight:500;color:var(--color-text-muted);margin:0 0 4px">${esc(dayLabel)}</p>
-                    <p class="hint" style="margin:0;font-size:13px">Tidak ada jadwal</p>
-                </div>`;
-            }
-            const dayIsPast = r.date < localDateStr();
-            const rowsHtml = r.rows.map(s => `
-                <tr>
-                    <td>${fmtTime(s.session_start)} – ${fmtTime(s.session_end)}</td>
-                    <td>${esc(s.class?.name ?? '—')}</td>
-                    <td>
-                        <button class="btn ${dayIsPast ? 'btn-secondary' : 'btn-primary'} btn-xs att-open-btn"
-                            data-schedule="${s.schedule_id}"
-                            data-class="${s.class?.class_id}"
-                            data-classname="${esc(s.class?.name ?? '')}"
-                            data-ispast="${dayIsPast}">
-                            ${dayIsPast ? 'Koreksi Kehadiran' : 'Input Kehadiran'}
-                        </button>
-                    </td>
-                </tr>`).join('');
-            return `<div style="margin-bottom:14px">
-                <p style="font-size:0.82rem;font-weight:500;color:var(--color-text);margin:0 0 4px">${esc(dayLabel)}</p>
-                <div class="table-wrapper">
-                <table class="table">
-                    <thead><tr><th>Jam</th><th>Kelas</th><th>Kehadiran</th></tr></thead>
-                    <tbody>${rowsHtml}</tbody>
-                </table>
-                </div>
-            </div>`;
+            const dayLabel  = `${DAY_NAMES[idx]}, ${fmtDayLabel(r.date).split(',')[1]?.trim() ?? r.date}`;
+            const isToday   = r.date === todayStr;
+            const sesiCount = r.rows.length;
+
+            const tableHtml = sesiCount === 0
+                ? '<p class="hint" style="margin:8px 0 4px">Tidak ada jadwal</p>'
+                : `<div class="table-wrapper">
+                   <table class="table">
+                       <thead><tr><th>Jam</th><th>Kelas</th></tr></thead>
+                       <tbody>${r.rows.map(s => `
+                           <tr>
+                               <td>${fmtTime(s.session_start)} – ${fmtTime(s.session_end)}</td>
+                               <td>${esc(s.class?.name ?? '—')}</td>
+                           </tr>`).join('')}
+                       </tbody>
+                   </table>
+                   </div>`;
+
+            return `
+                <details class="att-accordion" ${isToday || sesiCount > 0 ? 'open' : ''}>
+                    <summary class="att-accordion-summary">
+                        <span>${esc(dayLabel)}</span>
+                        <span class="att-acc-names">${sesiCount > 0 ? `${sesiCount} sesi` : 'tidak ada jadwal'}</span>
+                    </summary>
+                    <div style="padding:0 12px 8px">${tableHtml}</div>
+                </details>`;
         }).join('');
 
         contentEl.querySelectorAll('.att-open-btn').forEach(btn => {
@@ -804,133 +844,11 @@ async function initObsForm() {
     const obsContentEl  = document.getElementById('obs-content');
     const obsCharCountEl= document.getElementById('obs-char-count');
     const visSelect     = document.getElementById('obs-visibility');
-    const restrictedForm= document.getElementById('obs-restricted-form');
-    const formMembersEl = document.getElementById('obs-form-members');
-    const formMemberSearch = document.getElementById('obs-form-member-search');
-    const formMemberDrop   = document.getElementById('obs-form-member-drop');
-    const formMemberMsg    = document.getElementById('obs-form-member-msg');
-
     obsContentEl.addEventListener('input', () => {
         obsCharCountEl.textContent = obsContentEl.value.length;
     });
 
-    // ── Anggota audiens lokal (RESTRICTED, sebelum simpan) ──
-    let pendingMembers = []; // [{ user_id, full_name, role_type }] — hanya staf
-    let pendingSubjectMembers = new Map(); // userId → { user_id, full_name, role_type } — siswa/ortu
-
-    function renderPendingMembers() {
-        if (!pendingMembers.length) {
-            formMembersEl.innerHTML = '<em style="color:var(--color-text-muted);font-size:12px">Belum ada anggota dipilih.</em>';
-            return;
-        }
-        const OBS_ROLE_LBL = { GURU:'Guru', BK:'BK', WALI_KELAS:'Wali Kelas', KAPRODI:'Kaprodi', WAKA_KESISWAAN:'Waka Kesiswaan', KEPSEK:'Kepala Sekolah' };
-        formMembersEl.innerHTML = pendingMembers.map(m =>
-            `<span class="audience-chip">
-                ${esc(m.full_name)} <span style="color:var(--color-text-muted)">(${esc(OBS_ROLE_LBL[m.role_type] ?? m.role_type)})</span>
-                <button data-uid="${m.user_id}" class="chip-remove-btn" title="Hapus">×</button>
-            </span>`
-        ).join('');
-        formMembersEl.querySelectorAll('button[data-uid]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                pendingMembers = pendingMembers.filter(m => m.user_id !== btn.dataset.uid);
-                renderPendingMembers();
-            });
-        });
-    }
-
-    async function renderObsSubjectToggles() {
-        const studentId = hiddenEl.value;
-        let subjectPanel = document.getElementById('obs-form-subject-panel');
-        if (!subjectPanel) {
-            subjectPanel = document.createElement('div');
-            subjectPanel.id = 'obs-form-subject-panel';
-            subjectPanel.style.marginBottom = '8px';
-            restrictedForm.insertBefore(subjectPanel, document.getElementById('obs-form-members'));
-        }
-        if (visSelect.value !== 'RESTRICTED' || !studentId) {
-            subjectPanel.style.display = 'none';
-            return;
-        }
-        subjectPanel.style.display = 'block';
-        subjectPanel.innerHTML = '<em style="color:var(--color-text-muted);font-size:12px">Memuat data siswa &amp; ortu…</em>';
-        try {
-            const subject = await fetchStudentSubject(studentId);
-            const rows = [];
-            if (subject.userId) {
-                rows.push({ uid: subject.userId, label: esc(searchEl.value || 'Siswa'), role: 'Siswa' });
-            }
-            subject.parents.forEach(p => {
-                rows.push({ uid: p.parent_user_id, label: esc(p.users?.full_name ?? p.parent_user_id), role: 'Ortu' });
-            });
-            if (!rows.length) { subjectPanel.style.display = 'none'; return; }
-            subjectPanel.innerHTML = `
-                <div style="font-size:12px;font-weight:600;color:var(--color-text-muted);margin-bottom:6px">Siswa &amp; Orang Tua Terkait</div>
-                ${rows.map(row => `
-                    <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;cursor:pointer">
-                        <input type="checkbox" data-uid="${row.uid}" ${pendingSubjectMembers.has(row.uid) ? 'checked' : ''}
-                            style="width:14px;height:14px;accent-color:var(--color-primary,#6366f1);cursor:pointer">
-                        ${row.label} <span style="color:var(--color-text-muted)">(${row.role})</span>
-                    </label>
-                `).join('')}
-                <div style="border-bottom:1px solid var(--color-border);margin:6px 0 8px"></div>`;
-            subjectPanel.querySelectorAll('input[type=checkbox][data-uid]').forEach(cb => {
-                cb.addEventListener('change', () => {
-                    const uid = cb.dataset.uid;
-                    const found = rows.find(row => row.uid === uid);
-                    if (cb.checked) {
-                        pendingSubjectMembers.set(uid, { user_id: uid, full_name: found?.label ?? uid, role_type: found?.role === 'Siswa' ? 'SISWA' : 'ORTU' });
-                    } else {
-                        pendingSubjectMembers.delete(uid);
-                    }
-                });
-            });
-        } catch (_) {
-            subjectPanel.innerHTML = '<em style="color:var(--color-danger);font-size:12px">Gagal memuat data siswa/ortu.</em>';
-        }
-    }
-
-    visSelect.addEventListener('change', () => {
-        restrictedForm.style.display = visSelect.value === 'RESTRICTED' ? 'block' : 'none';
-        if (visSelect.value !== 'RESTRICTED') {
-            pendingMembers = [];
-            pendingSubjectMembers.clear();
-            renderPendingMembers();
-        } else {
-            renderPendingMembers();
-        }
-        renderObsSubjectToggles();
-    });
-
-    let formMemberSeq = 0;
-    formMemberSearch.addEventListener('input', async () => {
-        const q = formMemberSearch.value.trim();
-        if (q.length < 2) { formMemberDrop.style.display = 'none'; return; }
-        const seq = ++formMemberSeq;
-        try {
-            const users = await searchInternalUsers(q);
-            if (seq !== formMemberSeq) return;
-            const filtered = users.filter(u => !pendingMembers.find(m => m.user_id === u.user_id));
-            if (!filtered.length) { formMemberDrop.style.display = 'none'; return; }
-            formMemberDrop.innerHTML = filtered.map(u =>
-                `<div class="obs-form-hit" data-id="${u.user_id}" data-name="${esc(u.full_name)}" data-role="${esc(u.role_type)}"
-                     style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--color-border)">
-                     ${esc(u.full_name)} <span style="color:var(--color-text-muted);font-size:11px">(${esc(u.role_type)})</span>
-                 </div>`
-            ).join('');
-            formMemberDrop.style.display = 'block';
-            formMemberDrop.querySelectorAll('.obs-form-hit').forEach(el => {
-                el.addEventListener('mousedown', () => {
-                    pendingMembers.push({ user_id: el.dataset.id, full_name: el.dataset.name, role_type: el.dataset.role });
-                    formMemberSearch.value = '';
-                    formMemberDrop.style.display = 'none';
-                    renderPendingMembers();
-                });
-            });
-        } catch(e) { console.error('[obs-member-search]', e); formMemberDrop.style.display = 'none'; }
-    });
-    document.addEventListener('click', e => {
-        if (!formMemberDrop.contains(e.target) && e.target !== formMemberSearch) formMemberDrop.style.display = 'none';
-    });
+    // Audience ditentukan oleh select obs-visibility — tidak ada picker.
 
     // Observer berjangkauan luas (BK/Kaprodi/Waka Kesiswaan/Kepsek) bisa
     // mengamati siswa di luar kelas yang ia ajar — bahkan saat tak mengajar
@@ -952,8 +870,6 @@ async function initObsForm() {
                 hiddenEl.value       = item.dataset.id;
                 searchEl.value       = item.dataset.name;
                 listEl.style.display = 'none';
-                pendingSubjectMembers.clear();
-                renderObsSubjectToggles();
             });
         });
     }
@@ -979,11 +895,6 @@ async function initObsForm() {
             return;
         }
         const visibility = visSelect.value;
-        if (visibility === 'RESTRICTED' && pendingMembers.length === 0 && pendingSubjectMembers.size === 0) {
-            formMemberMsg.textContent = 'Tambahkan minimal satu orang sebelum menyimpan.';
-            return;
-        }
-        formMemberMsg.textContent = '';
         statusEl.style.display = 'none';
         submitBtn.disabled = true;
         submitBtn.textContent = 'Menyimpan…';
@@ -997,37 +908,13 @@ async function initObsForm() {
                 content:    document.getElementById('obs-content').value,
             });
             if (r.status === 'error') throw new Error(r.error);
-            // Jika synced dan RESTRICTED, simpan anggota audiens ke DB
-            let audienceFailCount = 0;
-            let audienceTotalCount = 0;
-            if (r.status === 'synced' && visibility === 'RESTRICTED') {
-                const allMembers = [...pendingMembers, ...pendingSubjectMembers.values()];
-                audienceTotalCount = allMembers.length;
-                if (allMembers.length) {
-                    const results = await Promise.allSettled(allMembers.map(m =>
-                        addObsAudienceMember({ obsId: r.observation_id, userId: m.user_id, schoolId: currentUser.school_id, addedByUserId: currentUser.user_id })
-                    ));
-                    audienceFailCount = results.filter(res => res.status === 'rejected').length;
-                }
-            }
-            if (audienceFailCount > 0) {
-                statusEl.textContent = `Observasi tersimpan. ${audienceFailCount} dari ${audienceTotalCount} anggota audiens gagal ditambahkan — buka riwayat untuk menambahkan manual.`;
-                statusEl.className   = 'status-msg status-warn';
-            } else {
-                statusEl.textContent = r.status === 'queued'
-                    ? '⏳ Observasi disimpan lokal — akan dikirim saat online.'
-                    : '✓ Observasi berhasil disimpan.';
-                statusEl.className   = 'status-msg status-ok';
-            }
+            statusEl.textContent = r.status === 'queued'
+                ? '⏳ Catatan disimpan lokal — akan dikirim saat online.'
+                : '✓ Catatan berhasil disimpan.';
+            statusEl.className = 'status-msg status-ok';
             statusEl.style.display = 'block';
             form.reset();
-            hiddenEl.value   = '';
-            pendingMembers   = [];
-            pendingSubjectMembers.clear();
-            restrictedForm.style.display = 'none';
-            renderPendingMembers();
-            const _sp = document.getElementById('obs-form-subject-panel');
-            if (_sp) { _sp.innerHTML = ''; _sp.style.display = 'none'; }
+            hiddenEl.value = '';
             if (r.status === 'synced') await loadObsHistory();
         } catch (err) {
             statusEl.textContent   = `✗ ${fe(err, 's')}`;
@@ -1035,7 +922,7 @@ async function initObsForm() {
             statusEl.style.display = 'block';
         } finally {
             submitBtn.disabled    = false;
-            submitBtn.textContent = 'Simpan Observasi';
+            submitBtn.textContent = 'Simpan Catatan';
         }
     });
 }
@@ -1069,9 +956,9 @@ const SENTIMENT_LABELS = { POSITIF:'Positif', NETRAL:'Netral', NEGATIF:'Perlu Pe
 const SENTIMENT_COLOR  = { POSITIF:'var(--color-success)', NETRAL:'var(--color-text-muted)', NEGATIF:'var(--color-danger)' };
 
 const OBS_VIS_LABEL = {
-    PRIVATE:    '🔒 Privat',
-    RESTRICTED: '👥 Orang Tertentu',
-    PUBLIC:     '🌐 Semua Internal',
+    SISWA_SAJA:    '🎓 Siswa saja',
+    ORTU_SAJA:     '👨‍👩‍👧 Orang Tua saja',
+    SISWA_DAN_ORTU:'👨‍👩‍👦 Siswa & Orang Tua',
 };
 
 function renderObsHistory(rows, listEl) {
@@ -1085,11 +972,9 @@ function renderObsHistory(rows, listEl) {
         const dim       = DIMENSION_LABELS_OBS[r.dimension] ?? r.dimension;
         const sent      = SENTIMENT_LABELS[r.sentiment]  ?? r.sentiment;
         const sentColor = SENTIMENT_COLOR[r.sentiment] ?? 'inherit';
-        const vis       = r.visibility ?? 'PUBLIC';
-        const visLabel  = OBS_VIS_LABEL[vis] ?? vis;
-        const visColor  = vis === 'PUBLIC' ? 'var(--color-success,#4ade80)'
-                        : vis === 'RESTRICTED' ? 'var(--color-primary)'
-                        : 'var(--color-text-muted)';
+        const vis      = r.visibility ?? 'SISWA_DAN_ORTU';
+        const visLabel = OBS_VIS_LABEL[vis] ?? vis;
+        const visColor = 'var(--color-primary)';
         return `
         <div data-obs-id="${esc(r.observation_id)}" data-obs-vis="${esc(vis)}"
              data-student-id="${esc(r.student_id ?? '')}"
@@ -1103,228 +988,12 @@ function renderObsHistory(rows, listEl) {
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center">
                 <span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--color-bg-alt)">${esc(dim)}</span>
                 <span style="font-size:11px;padding:2px 8px;border-radius:20px;color:${sentColor};background:var(--color-bg-alt)">${esc(sent)}</span>
-                <span class="obs-vis-badge" style="font-size:11px;padding:2px 8px;border-radius:20px;color:${visColor};background:var(--color-bg-alt);cursor:pointer" title="Klik untuk ubah visibilitas">${visLabel}</span>
+                <span style="font-size:11px;padding:2px 8px;border-radius:20px;color:${visColor};background:var(--color-bg-alt)">${visLabel}</span>
             </div>
             <p style="margin:0 0 6px;white-space:pre-wrap;color:var(--color-text)">${esc(r.content)}</p>
-            <div class="obs-vis-panel" style="display:none;margin-top:8px;padding:10px;border-radius:6px;background:var(--color-bg-alt)">
-                <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
-                    ${['PRIVATE','RESTRICTED','PUBLIC'].map(a =>
-                        `<button class="btn btn-sm obs-vis-btn ${a === vis ? 'btn-primary' : 'btn-secondary'}" data-vis="${a}">${OBS_VIS_LABEL[a]}</button>`
-                    ).join('')}
-                </div>
-                <div class="obs-vis-err" style="font-size:11px;color:var(--color-danger);margin-bottom:4px"></div>
-                <div class="obs-restricted-panel" style="display:${vis === 'RESTRICTED' ? 'block' : 'none'}">
-                    <div class="obs-subject-panel" style="margin-bottom:6px"></div>
-                    <div style="font-size:12px;margin-bottom:6px;color:var(--color-text-muted)">Staf yang bisa melihat:</div>
-                    <div class="obs-members-list" style="margin-bottom:6px;font-size:12px"></div>
-                    <div style="position:relative">
-                        <input type="text" class="input obs-member-search" placeholder="Cari nama staf…" style="font-size:12px;padding:6px 10px" autocomplete="off">
-                        <div class="obs-member-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--color-surface,#1e2330);border:1px solid var(--color-border);border-radius:6px;z-index:50;max-height:160px;overflow-y:auto"></div>
-                    </div>
-                    <div class="obs-audience-msg" style="font-size:11px;margin-top:4px;color:var(--color-danger)"></div>
-                </div>
-            </div>
         </div>`;
     }).join('');
 
-    // Wire up interactivity for each observation card
-    listEl.querySelectorAll('[data-obs-id]').forEach(card => {
-        const obsId         = card.dataset.obsId;
-        let   curVis        = card.dataset.obsVis;
-        const obsStudentId  = card.dataset.studentId  || null;
-        const obsAuthorId   = card.dataset.authorId   || '';
-        const obsStudentName = card.dataset.studentName || 'Siswa';
-        const badge     = card.querySelector('.obs-vis-badge');
-        const panel     = card.querySelector('.obs-vis-panel');
-        const rPanel    = card.querySelector('.obs-restricted-panel');
-        const sPanel    = card.querySelector('.obs-subject-panel');
-        const mList     = card.querySelector('.obs-members-list');
-        const mSearch   = card.querySelector('.obs-member-search');
-        const mDrop     = card.querySelector('.obs-member-drop');
-        const mMsg      = card.querySelector('.obs-audience-msg');
-        const visErrEl  = card.querySelector('.obs-vis-err'); // Bug 2: error visibilitas terpisah
-        const isAuthor  = obsAuthorId === currentUser.user_id;
-
-        badge.addEventListener('click', () => {
-            const open = panel.style.display !== 'none';
-            panel.style.display = open ? 'none' : 'block';
-            if (!open && curVis === 'RESTRICTED') loadObsMembers();
-        });
-
-        const OBS_ROLE_LABEL = { GURU:'Guru', BK:'BK', WALI_KELAS:'Wali Kelas', KAPRODI:'Kaprodi', WAKA_KESISWAAN:'Waka Kesiswaan', KEPSEK:'Kepala Sekolah' };
-
-        card.querySelectorAll('.obs-vis-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const newVis = btn.dataset.vis;
-                if (newVis === curVis) return;
-                visErrEl.style.color = ''; visErrEl.textContent = 'Menyimpan…';
-                try {
-                    await updateObsVisibility({ obsId, visibility: newVis });
-                    curVis = newVis;
-                    card.dataset.obsVis = newVis;
-                    LC.remove(`obs-history-${currentUser.user_id}`);
-                    const newColor = newVis === 'PUBLIC' ? 'var(--color-success,#4ade80)'
-                                   : newVis === 'RESTRICTED' ? 'var(--color-primary)'
-                                   : 'var(--color-text-muted)';
-                    badge.textContent = OBS_VIS_LABEL[newVis];
-                    badge.style.color = newColor;
-                    card.querySelectorAll('.obs-vis-btn').forEach(b => {
-                        b.className = `btn btn-sm obs-vis-btn ${b.dataset.vis === newVis ? 'btn-primary' : 'btn-secondary'}`;
-                    });
-                    rPanel.style.display = newVis === 'RESTRICTED' ? 'block' : 'none';
-                    if (newVis === 'RESTRICTED') loadObsMembers();
-                    // [1] Pesan sukses dulu (seperti kasus), lalu reload
-                    visErrEl.style.color = 'var(--color-success,#4ade80)';
-                    visErrEl.textContent = `Visibilitas diubah ke: ${OBS_VIS_LABEL[newVis]}.`;
-                    await loadObsHistory();
-                } catch (err) {
-                    visErrEl.style.color = 'var(--color-danger)';
-                    visErrEl.textContent = fe(err);
-                }
-            });
-        });
-
-        async function loadObsMembers() {
-            mList.textContent = 'Memuat…';
-            if (mMsg) { mMsg.style.color = ''; mMsg.textContent = ''; }
-            try {
-                const [members, subject] = await Promise.all([
-                    getObsAudienceMembers(obsId),
-                    obsStudentId ? fetchStudentSubject(obsStudentId) : Promise.resolve(null),
-                ]);
-                const memberSet = new Set(members.map(m => m.user_id));
-
-                // ── Toggle siswa & ortu ──
-                if (sPanel && subject) {
-                    const rows = [];
-                    if (subject.userId) {
-                        rows.push({ uid: subject.userId, label: esc(obsStudentName || 'Siswa'), role: 'Siswa' });
-                    }
-                    subject.parents.forEach(p => {
-                        rows.push({ uid: p.parent_user_id, label: esc(p.users?.full_name ?? p.parent_user_id), role: 'Ortu' });
-                    });
-                    if (rows.length) {
-                        sPanel.innerHTML = `
-                            <div style="font-size:12px;font-weight:600;color:var(--color-text-muted);margin-bottom:6px">Siswa &amp; Orang Tua Terkait</div>
-                            ${rows.map(row => `
-                                <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;${isAuthor ? 'cursor:pointer' : 'opacity:0.65'}">
-                                    <input type="checkbox" data-uid="${row.uid}"
-                                        ${memberSet.has(row.uid) ? 'checked' : ''}
-                                        ${isAuthor ? '' : 'disabled'}
-                                        style="width:14px;height:14px;accent-color:var(--color-primary,#6366f1);cursor:${isAuthor ? 'pointer' : 'default'}">
-                                    ${row.label} <span style="color:var(--color-text-muted)">(${row.role})</span>
-                                </label>
-                            `).join('')}
-                            <div style="border-bottom:1px solid var(--color-border);margin:6px 0 8px"></div>`;
-                        if (isAuthor) {
-                            sPanel.querySelectorAll('input[type=checkbox][data-uid]').forEach(cb => {
-                                cb.addEventListener('change', async () => {
-                                    const uid = cb.dataset.uid;
-                                    const nowChecked = cb.checked;
-                                    cb.disabled = true;
-                                    try {
-                                        if (nowChecked) {
-                                            await addObsAudienceMember({ obsId, userId: uid, schoolId: currentUser.school_id, addedByUserId: currentUser.user_id });
-                                        } else {
-                                            await removeObsAudienceMember({ obsId, userId: uid });
-                                        }
-                                        await loadObsMembers();
-                                    } catch (err) {
-                                        if (err?.code === '23505') {
-                                            await loadObsMembers();
-                                        } else {
-                                            cb.checked = !nowChecked;
-                                            cb.disabled = false;
-                                            if (mMsg) mMsg.textContent = fe(err);
-                                        }
-                                    }
-                                });
-                            });
-                        }
-                    } else {
-                        sPanel.innerHTML = '';
-                    }
-                } else if (sPanel) {
-                    sPanel.innerHTML = '';
-                }
-
-                // ── Chip staf ──
-                if (!members.length) {
-                    mList.innerHTML = '<em style="color:var(--color-text-muted)">Belum ada staf yang ditambahkan.</em>';
-                } else {
-                    mList.innerHTML = members.map(m => {
-                        const name = m.users?.full_name ?? m.user_id;
-                        const role = OBS_ROLE_LABEL[m.users?.role_type] ?? m.users?.role_type ?? '';
-                        const removeBtn = isAuthor
-                            ? `<button data-uid="${m.user_id}" class="chip-remove-btn" title="Hapus">×</button>`
-                            : '';
-                        return `<span class="audience-chip">
-                            ${esc(name)} <span style="color:var(--color-text-muted)">(${esc(role)})</span>${removeBtn}
-                        </span>`;
-                    }).join('');
-                    if (isAuthor) {
-                        mList.querySelectorAll('button[data-uid]').forEach(btn => {
-                            btn.addEventListener('click', async () => {
-                                try {
-                                    await removeObsAudienceMember({ obsId, userId: btn.dataset.uid });
-                                    await loadObsMembers();
-                                } catch (err) { if (mMsg) mMsg.textContent = fe(err); }
-                            });
-                        });
-                    }
-                }
-
-                // ── Hint non-penulis ──
-                if (!isAuthor && mMsg) {
-                    mMsg.style.color = 'var(--color-text-muted)';
-                    mMsg.textContent = 'Hanya penulis observasi ini yang bisa mengubah daftar anggota.';
-                    if (mSearch) mSearch.parentElement.style.display = 'none';
-                } else if (mSearch) {
-                    mSearch.parentElement.style.display = '';
-                }
-            } catch (err) { mList.textContent = fe(err); }
-        }
-
-        let obsSearchSeq = 0;
-        mSearch?.addEventListener('input', async () => {
-            const q = mSearch.value.trim();
-            if (q.length < 2) { mDrop.style.display = 'none'; return; }
-            const seq = ++obsSearchSeq;
-            try {
-                const users = await searchInternalUsers(q);
-                if (seq !== obsSearchSeq) return;
-                if (!users.length) { mDrop.style.display = 'none'; return; }
-                mDrop.innerHTML = users.map(u =>
-                    `<div class="obs-member-hit" data-id="${u.user_id}" data-name="${esc(u.full_name)}"
-                         style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--color-border)">
-                         ${esc(u.full_name)}
-                     </div>`
-                ).join('');
-                mDrop.style.display = 'block';
-                mDrop.querySelectorAll('.obs-member-hit').forEach(el => {
-                    el.addEventListener('mousedown', async () => {
-                        mDrop.style.display = 'none';
-                        mSearch.value = '';
-                        try {
-                            await addObsAudienceMember({ obsId, userId: el.dataset.id, schoolId: currentUser.school_id, addedByUserId: currentUser.user_id });
-                            await loadObsMembers();
-                        } catch (err) { mMsg.textContent = fe(err); }
-                    });
-                });
-            } catch { mDrop.style.display = 'none'; }
-        });
-    });
-
-    // Bug 1: listener didaftarkan sekali (flag modul) — tidak menumpuk tiap re-render
-    if (!renderObsHistory._clickBound) {
-        renderObsHistory._clickBound = true;
-        document.addEventListener('click', e => {
-            document.querySelectorAll('#obs-history-list .obs-member-drop').forEach(drop => {
-                const search = drop.closest('[data-obs-id]')?.querySelector('.obs-member-search');
-                if (!drop.contains(e.target) && e.target !== search) drop.style.display = 'none';
-            });
-        });
-    }
 }
 
 // ─── TAB WALI KELAS ──────────────────────────────────────────

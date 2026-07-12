@@ -54,13 +54,8 @@
                     </div>
                 </div>
                 <div id="sched-view-hari-panel">
-                    <div class="date-row">
-                        <label for="sched-date">Tanggal:</label>
-                        <input type="date" id="sched-date" class="input" style="width:auto">
-                    </div>
-                    <div id="sched-content">
-                        <p class="hint">Pilih tanggal lalu klik Muat.</p>
-                    </div>
+                    <input type="date" id="sched-date" style="display:none">
+                    <div id="sched-content"><p class="hint">Memuat jadwal…</p></div>
                 </div>
                 <div id="sched-view-minggu-panel" style="display:none">
                     <div id="sched-week-content"><p class="hint">Memuat jadwal minggu ini…</p></div>
@@ -70,20 +65,22 @@
             <!-- Rekap Kehadiran Kelas Diampu -->
             <div class="section-card">
                 <h3>Rekap Kehadiran Siswa</h3>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
-                    <div class="field" style="margin:0;min-width:160px">
+                <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+                    <div class="field" style="margin:0">
                         <label for="guru-recap-class">Kelas</label>
                         <select id="guru-recap-class" class="input"><option value="">— Pilih Kelas —</option></select>
                     </div>
-                    <div class="field" style="margin:0">
-                        <label for="guru-recap-start">Dari</label>
-                        <input type="date" id="guru-recap-start" class="input" style="width:auto">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                        <div class="field" style="margin:0">
+                            <label for="guru-recap-start">Dari</label>
+                            <input type="date" id="guru-recap-start" class="input">
+                        </div>
+                        <div class="field" style="margin:0">
+                            <label for="guru-recap-end">Sampai</label>
+                            <input type="date" id="guru-recap-end" class="input">
+                        </div>
                     </div>
-                    <div class="field" style="margin:0">
-                        <label for="guru-recap-end">Sampai</label>
-                        <input type="date" id="guru-recap-end" class="input" style="width:auto">
-                    </div>
-                    <button class="btn btn-secondary btn-sm" id="guru-recap-btn">Tampilkan</button>
+                    <button class="btn btn-primary btn-sm" id="guru-recap-btn" style="width:100%">Tampilkan</button>
                 </div>
                 <div id="guru-recap-content"><p class="hint">Pilih kelas dan rentang tanggal lalu klik Tampilkan.</p></div>
             </div>
@@ -97,7 +94,7 @@
     <div class="tab-panel" id="tab-observasi">
         <div class="page-body">
             <div class="section-card">
-                <h3>Tulis Observasi Siswa</h3>
+                <h3>Tulis Catatan Siswa</h3>
                 <form id="obs-form">
                     <div class="field" style="position:relative">
                         <label for="obs-student-search">Siswa</label>
@@ -128,36 +125,27 @@
                             </select>
                         </div>
                         <div class="field" style="flex:1; min-width:140px">
-                            <label for="obs-visibility">Siapa yang boleh melihat?</label>
+                            <label for="obs-visibility">Ditujukan untuk</label>
                             <select id="obs-visibility" class="input">
-                                <option value="PRIVATE">🔒 Privat — hanya pihak terlibat</option>
-                                <option value="RESTRICTED">👥 Orang Tertentu</option>
-                                <option value="PUBLIC">🌐 Semua Internal — seluruh staf sekolah</option>
+                                <option value="SISWA_DAN_ORTU">👨‍👩‍👦 Siswa & Orang Tua</option>
+                                <option value="SISWA_SAJA">🎓 Siswa saja</option>
+                                <option value="ORTU_SAJA">👨‍👩‍👧 Orang Tua saja</option>
                             </select>
                         </div>
-                    </div>
-                    <div id="obs-restricted-form" class="field" style="display:none">
-                        <label>Pilih orang yang boleh melihat</label>
-                        <div id="obs-form-members" style="margin-bottom:6px;min-height:24px;font-size:13px"></div>
-                        <div style="position:relative">
-                            <input type="text" id="obs-form-member-search" class="input" placeholder="Ketik min. 2 huruf nama staf…" autocomplete="off" style="font-size:13px">
-                            <div id="obs-form-member-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--color-surface,#1e2330);border:1px solid var(--color-border);border-radius:6px;z-index:50;max-height:160px;overflow-y:auto"></div>
-                        </div>
-                        <p id="obs-form-member-msg" class="hint" style="color:var(--color-danger);margin:4px 0 0"></p>
                     </div>
                     <div class="field">
                         <label for="obs-content">Catatan</label>
                         <textarea id="obs-content" class="input" rows="3" placeholder="Tuliskan observasi…" maxlength="1000" required></textarea>
                         <p class="hint" style="text-align:right; margin:2px 0 0"><span id="obs-char-count">0</span>/1000 karakter</p>
                     </div>
-                    <button type="submit" class="btn btn-primary" id="obs-submit">Simpan Observasi</button>
+                    <button type="submit" class="btn btn-primary" id="obs-submit">Simpan Catatan</button>
                     <div id="obs-status" class="status-msg" style="display:none; margin-top:8px"></div>
                 </form>
             </div>
 
             <!-- Riwayat observasi yang pernah ditulis guru ini -->
             <div class="section-card">
-                <h3>Riwayat Observasi Saya</h3>
+                <h3>Riwayat Catatan Saya</h3>
                 <div id="obs-history-list"><p class="hint">Memuat…</p></div>
             </div>
         </div>
