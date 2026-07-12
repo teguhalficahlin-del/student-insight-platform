@@ -1622,8 +1622,8 @@ async function loadKpClsRecap() {
         const classIds = new Set(classes.map(c => c.class_id));
         const rows = allRows.filter(r => classIds.has(r.class_id));
 
-        if (!rows.length || rows.every(r => r.total === 0)) {
-            container.innerHTML = '<p class="hint">Belum ada data absensi kelas pada rentang ini.</p>';
+        if (!rows.length) {
+            container.innerHTML = '<p class="hint">Belum ada kelas di program ini untuk rentang tanggal tersebut.</p>';
             return;
         }
 
