@@ -567,7 +567,7 @@ export async function getAbsentTeachersToday() {
         .from('teaching_schedules')
         .select('schedule_id, session_start, session_end, scheduled_teacher_id, class:classes(name), teacher:users(full_name)')
         .eq('session_date', today)
-        .eq('meeting_status', 'GURU_TIDAK_HADIR');
+        .eq('teacher_indicator', 'PENDING_EVALUATION');
     if (error) throw error;
     return data ?? [];
 }
