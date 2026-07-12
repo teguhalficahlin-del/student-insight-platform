@@ -1531,44 +1531,35 @@ async function initKpPlacementForm(programId) {
 let _wkKurTableVisible = false;
 
 async function initWakaKurTab() {
-    const monday = localDateStr((() => {
-        const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d;
-    })());
-    const friday = localDateStr((() => {
-        const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 4); return d;
-    })());
-
-    document.getElementById('wk-kur-start').value = monday;
-    document.getElementById('wk-kur-end').value   = friday;
-
-    document.getElementById('wk-kur-load-btn').onclick   = loadWkKurTable;
-    document.getElementById('wk-kur-toggle-btn').onclick = toggleWkKurTable;
+    const today = localDateStr();
+    document.getElementById('wk-kur-start').value = today;
+    document.getElementById('wk-kur-end').value   = today;
+    document.getElementById('wk-kur-btn').onclick = handleWkKurBtn;
+    await loadWkKurTable();
 }
 
 async function loadWkKurTable() {
-    const hintEl     = document.getElementById('waka-kur-hint');
-    const wrapEl     = document.getElementById('wk-kur-table-wrap');
-    const tbody      = document.getElementById('waka-kur-body');
-    const toggleBtn  = document.getElementById('wk-kur-toggle-btn');
-    const loadBtn    = document.getElementById('wk-kur-load-btn');
-    const dateStart  = document.getElementById('wk-kur-start').value;
-    const dateEnd    = document.getElementById('wk-kur-end').value;
+    const hintEl    = document.getElementById('waka-kur-hint');
+    const wrapEl    = document.getElementById('wk-kur-table-wrap');
+    const tbody     = document.getElementById('waka-kur-body');
+    const btn       = document.getElementById('wk-kur-btn');
+    const dateStart = document.getElementById('wk-kur-start').value;
+    const dateEnd   = document.getElementById('wk-kur-end').value;
 
     hintEl.style.display = 'none';
     wrapEl.style.display = 'none';
-    toggleBtn.style.display = 'none';
-    loadBtn.disabled = true;
-    loadBtn.textContent = 'Memuat…';
+    btn.disabled = true;
+    btn.textContent = 'Memuat…';
 
     try {
         const rows = await getPendingAttendanceSessions(dateStart || null, dateEnd || null);
-        loadBtn.disabled = false;
-        loadBtn.textContent = 'Tampilkan';
 
         if (rows.length === 0) {
             hintEl.textContent = '✓ Tidak ada sesi yang menunggu pengisian absensi pada rentang ini.';
             hintEl.style.display = 'block';
             _wkKurTableVisible = false;
+            btn.disabled = false;
+            btn.textContent = 'Tampilkan';
             return;
         }
 
@@ -1582,23 +1573,27 @@ async function loadWkKurTable() {
         </tr>`).join('');
 
         wrapEl.style.display = '';
-        toggleBtn.style.display = '';
-        toggleBtn.textContent = 'Sembunyikan';
         _wkKurTableVisible = true;
+        btn.disabled = false;
+        btn.textContent = 'Sembunyikan';
     } catch (err) {
-        loadBtn.disabled = false;
-        loadBtn.textContent = 'Tampilkan';
         hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
         hintEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Tampilkan';
     }
 }
 
-function toggleWkKurTable() {
-    const wrapEl    = document.getElementById('wk-kur-table-wrap');
-    const toggleBtn = document.getElementById('wk-kur-toggle-btn');
-    _wkKurTableVisible = !_wkKurTableVisible;
-    wrapEl.style.display    = _wkKurTableVisible ? '' : 'none';
-    toggleBtn.textContent   = _wkKurTableVisible ? 'Sembunyikan' : 'Tampilkan';
+function handleWkKurBtn() {
+    if (_wkKurTableVisible) {
+        // Sembunyikan
+        document.getElementById('wk-kur-table-wrap').style.display = 'none';
+        _wkKurTableVisible = false;
+        document.getElementById('wk-kur-btn').textContent = 'Tampilkan';
+    } else {
+        // Tampilkan ulang atau load baru
+        loadWkKurTable();
+    }
 }
 
 // ─── TAB WAKA HUMAS ──────────────────────────────────────────
