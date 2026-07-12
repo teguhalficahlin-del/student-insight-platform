@@ -372,6 +372,39 @@ export async function getProgram(programId) {
     return data;
 }
 
+export async function getPrograms() {
+    const { data, error } = await supabase
+        .from('programs')
+        .select('program_id, name')
+        .eq('is_active', true)
+        .order('name');
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function getStudentAttendanceSessions(studentId, dateStart, dateEnd) {
+    let q = supabase
+        .from('attendance')
+        .select(`
+            attendance_id, status, is_void,
+            schedule:teaching_schedules (
+                session_date, session_start, session_end,
+                subject:subjects ( name ),
+                teacher:users ( full_name )
+            )
+        `)
+        .eq('student_id', studentId)
+        .eq('is_void', false)
+        .order('created_at', { ascending: false });
+    if (dateStart) q = q.gte('schedule.session_date', dateStart);
+    if (dateEnd)   q = q.lte('schedule.session_date', dateEnd);
+    const { data, error } = await q;
+    if (error) throw error;
+    return (data ?? [])
+        .filter(r => r.schedule)
+        .sort((a, b) => (b.schedule.session_date ?? '').localeCompare(a.schedule.session_date ?? ''));
+}
+
 export async function fetchPklStudents(programId) {
     const { data, error } = await supabase
         .from('students')

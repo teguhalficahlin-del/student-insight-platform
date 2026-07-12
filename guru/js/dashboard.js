@@ -21,6 +21,7 @@ import {
     createPlacement, finishPlacement, bulkImportPkl,
     getSchoolStats, getKepsekMonitoring, getPendingAttendanceSessions,
     getAttendanceRecapPerClass, getOpenCases,
+    getPrograms, getStudentAttendanceSessions,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
     getMyObservations, updateObsVisibility, getStudentUserId, getStudentParents,
     getObsAudienceMembers, removeObsAudienceMember,
@@ -1108,109 +1109,179 @@ async function initWakaKesiswaanTab() {
 }
 
 async function loadWkAttendanceRecap() {
-    const dateStart = document.getElementById('wk-att-start').value;
-    const dateEnd   = document.getElementById('wk-att-end').value;
-    const tbody     = document.getElementById('wk-att-body');
-    const emptyEl   = document.getElementById('wk-att-empty');
-    tbody.innerHTML = '<tr><td colspan="7" class="hint">Memuat…</td></tr>';
-    emptyEl.style.display = 'none';
-
+    const dateStart = document.getElementById('wk-att-start').value || null;
+    const dateEnd   = document.getElementById('wk-att-end').value   || null;
+    const container = document.getElementById('wk-att-recap');
+    container.innerHTML = '<p class="hint">Memuat…</p>';
     try {
-        const rows = await getAttendanceRecapPerClass(dateStart || null, dateEnd || null);
-        if (rows.length === 0) {
-            tbody.innerHTML = '';
-            emptyEl.style.display = 'block';
+        const [programs, rows] = await Promise.all([
+            getPrograms(),
+            getAttendanceRecapPerClass(dateStart, dateEnd),
+        ]);
+
+        if (!rows.length) {
+            container.innerHTML = '<p class="hint">Belum ada data kehadiran.</p>';
             return;
         }
-        tbody.innerHTML = rows.map(r => {
-            const pctDenom = r.HADIR + r.IZIN + r.TIDAK_HADIR;
-            const pct   = pctDenom > 0 ? Math.round(r.HADIR / pctDenom * 100) : 0;
-            const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
-            const safeId = r.class_id.replace(/[^a-z0-9]/gi, '_');
-            return `<tr class="wk-class-row" data-class-id="${esc(r.class_id)}" data-class-name="${esc(r.name)}" style="cursor:pointer">
-                <td style="color:var(--color-primary)">
-                    <span style="display:inline-flex;align-items:center;gap:6px">
-                        <span class="wk-chevron" id="wkchv-${safeId}" style="font-size:10px;color:var(--color-text-muted);transition:transform .2s">▶</span>
-                        ${esc(r.name)}
-                    </span>
-                </td>
-                <td style="text-align:center">${r.HADIR}</td>
-                <td style="text-align:center">${r.IZIN}</td>
-                <td style="text-align:center">${r.SAKIT}</td>
-                <td style="text-align:center">${r.TIDAK_HADIR}</td>
-                <td style="text-align:center">${r.total}</td>
-                <td style="text-align:center;font-weight:600;color:${color}">${r.total > 0 ? pct + '%' : '—'}</td>
-            </tr>
-            <tr class="wk-detail-row" id="wkdet-${safeId}" style="display:none">
-                <td colspan="7" style="padding:0 0 8px 24px;background:var(--color-bg)">
-                    <div id="wkdet-body-${safeId}"><p class="hint" style="padding:8px 0">Memuat detail…</p></div>
-                </td>
-            </tr>`;
+
+        // Kelompokkan kelas per program
+        const classMap = new Map(rows.map(r => [r.class_id, r]));
+        const progMap  = new Map();
+        for (const prog of programs) {
+            progMap.set(prog.program_id, { ...prog, classes: [] });
+        }
+
+        // Ambil class → program mapping
+        const { data: classProgData } = await supabase
+            .from('classes')
+            .select('class_id, program_id')
+            .in('class_id', rows.map(r => r.class_id));
+
+        for (const cp of classProgData ?? []) {
+            const prog = progMap.get(cp.program_id);
+            const cls  = classMap.get(cp.class_id);
+            if (prog && cls) prog.classes.push(cls);
+        }
+
+        // Filter program yang punya kelas
+        const activeProgs = [...progMap.values()].filter(p => p.classes.length > 0);
+
+        // Render accordion per program
+        const html = activeProgs.map(prog => {
+            const classAccordions = prog.classes
+                .sort((a, b) => a.name.localeCompare(b.name, 'id'))
+                .map(r => {
+                    const pctDenom = r.HADIR + r.IZIN + r.TIDAK_HADIR;
+                    const pct    = pctDenom > 0 ? Math.round(r.HADIR / pctDenom * 100) : 0;
+                    const color  = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+                    const safeId = r.class_id.replace(/[^a-z0-9]/gi, '_');
+                    return `
+                    <details class="att-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
+                        <summary class="att-accordion-summary">
+                            <span>${esc(r.name)}</span>
+                            <span class="att-acc-names" style="color:${color};font-weight:600">
+                                ${pctDenom > 0 ? pct + '%' : '—'} hadir
+                            </span>
+                        </summary>
+                        <div id="wkdet-body-${safeId}"
+                             data-class-id="${esc(r.class_id)}"
+                             data-date-start="${esc(dateStart ?? '')}"
+                             data-date-end="${esc(dateEnd ?? '')}"
+                             style="padding:4px 0">
+                            <p class="hint" style="padding:8px 16px">Memuat siswa…</p>
+                        </div>
+                    </details>`;
+                }).join('');
+
+            return `
+            <details class="att-accordion" style="margin-bottom:8px">
+                <summary class="att-accordion-summary">
+                    <span>${esc(prog.name)}</span>
+                    <span class="att-acc-names">${prog.classes.length} kelas</span>
+                </summary>
+                <div style="padding:4px 0">${classAccordions}</div>
+            </details>`;
         }).join('');
 
-        tbody.querySelectorAll('tr.wk-class-row').forEach(tr => {
-            tr.addEventListener('click', () => wkToggleClassDetail(tr, dateStart, dateEnd));
+        container.innerHTML = html;
+
+        // Lazy load siswa saat accordion kelas dibuka
+        container.querySelectorAll('details.wz-accordion-inner').forEach(det => {
+            det.addEventListener('toggle', async () => {
+                if (!det.open) return;
+                const body = det.querySelector('[data-class-id]');
+                if (!body || body.dataset.loaded) return;
+                body.dataset.loaded = '1';
+
+                const classId  = body.dataset.classId;
+                const dStart   = body.dataset.dateStart || null;
+                const dEnd     = body.dataset.dateEnd   || null;
+
+                try {
+                    const students = await getWaliAttendanceSummary(
+                        classId, config.current_academic_year, dStart, dEnd
+                    );
+                    if (!students.length) {
+                        body.innerHTML = '<p class="hint" style="padding:8px 16px">Belum ada data kehadiran siswa.</p>';
+                        return;
+                    }
+                    body.innerHTML = students
+                        .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'))
+                        .map(s => {
+                            const pct = s.total > 0 ? Math.round(s.HADIR / s.total * 100) : null;
+                            const color = pct === null ? 'var(--color-text-muted)' : pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+                            const safeId = s.student_id.replace(/[^a-z0-9]/gi, '_');
+                            return `
+                            <details class="att-accordion wz-accordion-inner"
+                                     style="margin:4px 8px 4px 24px"
+                                     data-student-id="${esc(s.student_id)}"
+                                     data-date-start="${esc(dStart ?? '')}"
+                                     data-date-end="${esc(dEnd ?? '')}">
+                                <summary class="att-accordion-summary">
+                                    <span>
+                                        ${esc(s.full_name)}
+                                        <span class="sub-label" style="margin-left:4px">${esc(s.nis)}</span>
+                                    </span>
+                                    <span style="color:${color};font-weight:600">
+                                        ${pct !== null ? pct + '%' : '—'}
+                                    </span>
+                                </summary>
+                                <div id="wkstu-body-${safeId}" style="padding:4px 0">
+                                    <p class="hint" style="padding:8px 24px">Memuat sesi…</p>
+                                </div>
+                            </details>`;
+                        }).join('');
+
+                    // Lazy load sesi per siswa
+                    body.querySelectorAll('details[data-student-id]').forEach(stuDet => {
+                        stuDet.addEventListener('toggle', async () => {
+                            if (!stuDet.open) return;
+                            const sBody = stuDet.querySelector('[id^="wkstu-body-"]');
+                            if (!sBody || sBody.dataset.loaded) return;
+                            sBody.dataset.loaded = '1';
+                            const sid    = stuDet.dataset.studentId;
+                            const ds     = stuDet.dataset.dateStart || null;
+                            const de     = stuDet.dataset.dateEnd   || null;
+                            try {
+                                const sessions = await getStudentAttendanceSessions(sid, ds, de);
+                                if (!sessions.length) {
+                                    sBody.innerHTML = '<p class="hint" style="padding:8px 24px">Belum ada sesi tercatat.</p>';
+                                    return;
+                                }
+                                const STATUS_COLOR = {
+                                    HADIR: 'var(--color-success)',
+                                    IZIN:  'var(--color-warning,#f59e0b)',
+                                    SAKIT: 'var(--color-primary)',
+                                    TIDAK_HADIR: 'var(--color-danger)',
+                                };
+                                sBody.innerHTML = sessions.map(s => `
+                                    <div style="display:flex;align-items:center;gap:8px;
+                                        padding:7px 24px;border-top:0.5px solid var(--color-border)">
+                                        <span style="font-size:12px;color:var(--color-text-muted);min-width:90px">
+                                            ${esc(s.schedule.session_date)} ${fmtTime(s.schedule.session_start)}
+                                        </span>
+                                        <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
+                                            ${esc(s.schedule.subject?.name ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
+                                        </span>
+                                        <span style="font-size:11px;font-weight:600;
+                                            color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
+                                            ${esc(s.status)}
+                                        </span>
+                                    </div>`).join('');
+                            } catch(err) {
+                                sBody.innerHTML = `<div class="alert alert-danger" style="margin:8px 24px">${esc(fe(err))}</div>`;
+                            }
+                        });
+                    });
+
+                } catch (err) {
+                    body.innerHTML = `<div class="alert alert-danger" style="margin:8px 16px">${esc(fe(err))}</div>`;
+                }
+            });
         });
+
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
-    }
-}
-
-async function wkToggleClassDetail(tr, dateStart, dateEnd) {
-    const classId = tr.dataset.classId;
-    const safeId  = classId.replace(/[^a-z0-9]/gi, '_');
-    const detRow  = document.getElementById(`wkdet-${safeId}`);
-    const detBody = document.getElementById(`wkdet-body-${safeId}`);
-    const chevron = document.getElementById(`wkchv-${safeId}`);
-
-    const isOpen = detRow.style.display !== 'none';
-    detRow.style.display = isOpen ? 'none' : 'table-row';
-    chevron.style.transform = isOpen ? '' : 'rotate(90deg)';
-
-    // Sudah pernah dimuat — tidak perlu fetch ulang
-    if (isOpen || detBody.dataset.loaded) return;
-    detBody.dataset.loaded = '1';
-
-    try {
-        const students = await getWaliAttendanceSummary(
-            classId, config.current_academic_year,
-            dateStart || null, dateEnd || null
-        );
-        if (students.length === 0) {
-            detBody.innerHTML = '<p class="hint" style="padding:8px 0">Belum ada data kehadiran siswa pada rentang ini.</p>';
-            return;
-        }
-        const tableRows = students.map(s => {
-            const pctDenom = s.HADIR + s.IZIN + s.TIDAK_HADIR;
-            const pct   = pctDenom > 0 ? Math.round(s.HADIR / pctDenom * 100) : 0;
-            const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
-            return `<tr>
-                <td><span style="font-weight:500">${esc(s.full_name)}</span><br><span class="sub-label">${esc(s.nis)}</span></td>
-                <td style="text-align:center">${s.HADIR}</td>
-                <td style="text-align:center">${s.IZIN}</td>
-                <td style="text-align:center">${s.SAKIT}</td>
-                <td style="text-align:center">${s.TIDAK_HADIR}</td>
-                <td style="text-align:center">${s.total}</td>
-                <td style="text-align:center;font-weight:600;color:${color}">${pctDenom > 0 ? pct + '%' : '—'}</td>
-            </tr>`;
-        }).join('');
-        detBody.innerHTML = `
-            <div class="table-wrapper" style="margin-top:8px">
-            <table class="table" style="margin:0">
-                <thead><tr>
-                    <th>Nama / NIS</th>
-                    <th style="text-align:center">Hadir</th>
-                    <th style="text-align:center">Izin</th>
-                    <th style="text-align:center">Sakit</th>
-                    <th style="text-align:center">Alpa</th>
-                    <th style="text-align:center">Total Sesi</th>
-                    <th style="text-align:center">% Hadir</th>
-                </tr></thead>
-                <tbody>${tableRows}</tbody>
-            </table>
-            </div>`;
-    } catch (err) {
-        detBody.innerHTML = `<div class="alert alert-danger">${esc(fe(err))}</div>`;
+        container.innerHTML = `<div class="alert alert-danger">${esc(fe(err))}</div>`;
     }
 }
 
