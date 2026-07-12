@@ -1175,7 +1175,7 @@ async function runProvisionStudents() {
 async function renderParentsPanel() {
     const [parents, links, config] = await Promise.all([
         fetchAllRows('users', q => q.select('user_id, full_name, login_identifier, must_change_password').eq('role_type', 'ORTU').order('full_name')),
-        fetchAllRows('student_parents', q => q.select('parent_user_id, students ( student_id, student_status )')),
+        fetchAllRows('student_parents', q => q.select('parent_user_id, students ( student_id, student_status, full_name )')),
         getSchoolConfig(),
     ]);
 
@@ -1202,6 +1202,14 @@ async function renderParentsPanel() {
         if (!childMap.has(l.parent_user_id)) childMap.set(l.parent_user_id, []);
         if (l.students) childMap.get(l.parent_user_id).push(l.students);
     }
+    // Map parent_user_id → nama anak aktif (bisa lebih dari satu)
+    const childNamesMap = new Map();
+    for (const [parentId, children] of childMap) {
+        const aktifNames = children
+            .filter(c => c.student_status === 'AKTIF')
+            .map(c => c.full_name ?? '—');
+        childNamesMap.set(parentId, aktifNames);
+    }
 
     // classId → [orang tua]
     const classMap = new Map((allClasses ?? []).map(c => [c.class_id, []]));
@@ -1223,15 +1231,22 @@ async function renderParentsPanel() {
 
     const totalAktif = [...classMap.values()].reduce((s, l) => s + l.length, 0) + tanpaKelas.length;
 
-    const rowOf = u => `<tr>
-        <td>${esc(u.full_name)}</td>
-        <td>${esc(u.login_identifier)}</td>
-        <td>${u.must_change_password
-            ? `<span class="badge badge-muted"
-                title="Menunggu pengguna ganti password">Menunggu ganti PW</span>`
-            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn"
-                data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}">Reset PW</button>`}
-        </td></tr>`;
+    const rowOf = u => {
+        const childNames = childNamesMap.get(u.user_id) ?? [];
+        const childCell  = childNames.length
+            ? childNames.map(n => esc(n)).join(', ')
+            : '<span style="color:var(--color-text-muted)">—</span>';
+        return `<tr>
+            <td>${esc(u.full_name)}</td>
+            <td style="color:var(--color-text-muted);font-size:13px">${childCell}</td>
+            <td>${esc(u.login_identifier)}</td>
+            <td>${u.must_change_password
+                ? `<span class="badge badge-muted"
+                    title="Menunggu pengguna ganti password">Menunggu ganti PW</span>`
+                : `<button class="btn btn-sm btn-secondary user-reset-pw-btn"
+                    data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}">Reset PW</button>`}
+            </td></tr>`;
+    };
 
     // Kelompokkan kelas per program
     const byProgram = new Map();
@@ -1255,7 +1270,7 @@ async function renderParentsPanel() {
         const classHtml = renderClassAccordion(
             progClasses,
             classMap,
-            ['Nama', 'NIK', 'Aksi'],
+            ['Nama', 'Nama Anak', 'NIK', 'Aksi'],
             rowOf,
         );
         return `<details style="margin-bottom:8px">

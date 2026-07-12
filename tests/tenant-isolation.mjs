@@ -1504,6 +1504,185 @@ async function main() {
     else
         log.fail(`F3: anon bisa baca forum_posts — EXPOSURE${c15f3err ? ': ' + c15f3err.slice(0, 120) : ''}`);
 
+    // ══════════════════════════════════════════════════════
+    // CHECK 16 — Catatan Siswa: isolasi visibilitas & RLS insert
+    // ══════════════════════════════════════════════════════
+    console.log('\n── CHECK 16 — Catatan Siswa: isolasi visibilitas & RLS insert');
+    {
+        // ── Setup: cari catatan terbaru + aktor terkait ──
+        const d16 = await mgmtQuery(`
+            SELECT
+                o.observation_id,
+                o.visibility,
+                o.student_id,
+                o.school_id,
+                s.user_id        AS siswa_user_id,
+                u_s.auth_user_id AS siswa_auth,
+                s.full_name      AS nama_siswa,
+                u_a.auth_user_id AS guru_auth,
+                u_a.user_id      AS guru_user_id,
+                (SELECT sp.parent_user_id
+                 FROM student_parents sp
+                 JOIN users u ON u.user_id = sp.parent_user_id
+                 WHERE sp.student_id = o.student_id
+                   AND u.auth_user_id IS NOT NULL
+                 LIMIT 1) AS ortu_user_id,
+                (SELECT u.auth_user_id
+                 FROM student_parents sp
+                 JOIN users u ON u.user_id = sp.parent_user_id
+                 WHERE sp.student_id = o.student_id
+                   AND u.auth_user_id IS NOT NULL
+                 LIMIT 1) AS ortu_auth,
+                (SELECT u2.user_id
+                 FROM users u2
+                 WHERE u2.school_id = o.school_id
+                   AND u2.role_type = 'SISWA'
+                   AND u2.user_id   != s.user_id
+                   AND u2.auth_user_id IS NOT NULL
+                 LIMIT 1) AS siswa_lain_user_id,
+                (SELECT u2.auth_user_id
+                 FROM users u2
+                 WHERE u2.school_id = o.school_id
+                   AND u2.role_type = 'SISWA'
+                   AND u2.user_id   != s.user_id
+                   AND u2.auth_user_id IS NOT NULL
+                 LIMIT 1) AS siswa_lain_auth,
+                (SELECT u2.user_id
+                 FROM users u2
+                 WHERE u2.school_id = o.school_id
+                   AND u2.role_type = 'GURU'
+                   AND u2.user_id   != o.author_user_id
+                   AND u2.auth_user_id IS NOT NULL
+                 LIMIT 1) AS guru_lain_user_id,
+                (SELECT u2.auth_user_id
+                 FROM users u2
+                 WHERE u2.school_id = o.school_id
+                   AND u2.role_type = 'GURU'
+                   AND u2.user_id   != o.author_user_id
+                   AND u2.auth_user_id IS NOT NULL
+                 LIMIT 1) AS guru_lain_auth
+            FROM observations o
+            JOIN students s ON s.student_id = o.student_id
+            JOIN users u_s  ON u_s.user_id  = s.user_id
+            JOIN users u_a  ON u_a.user_id  = o.author_user_id
+            WHERE u_s.auth_user_id IS NOT NULL
+            ORDER BY o.created_at DESC
+            LIMIT 1;
+        `);
+
+        const d = d16[0];
+        if (!d?.observation_id) {
+            console.log('  ⚠ SKIP — tidak ada catatan siswa di database, buat dulu via portal guru');
+        } else {
+            const obsId     = d.observation_id;
+            const vis       = d.visibility;
+            const schoolId  = d.school_id;
+
+            // Helper simulasi RLS
+            const asUser = async (authUid, sql) => {
+                const claims = `{"sub":"${authUid}","role":"authenticated"}`;
+                const r = await mgmtQuery(
+                    `BEGIN; SET LOCAL ROLE authenticated;` +
+                    ` SELECT set_config('request.jwt.claims', $c$${claims}$c$, true);` +
+                    ` ${sql}` +
+                    ` ROLLBACK;`
+                );
+                return r;
+            };
+
+            // C16-1: Siswa PEMILIK bisa baca catatan untuk dirinya
+            // (jika visibility SISWA_SAJA atau SISWA_DAN_ORTU)
+            if (d.siswa_auth && (vis === 'SISWA_SAJA' || vis === 'SISWA_DAN_ORTU')) {
+                let ok = false, err = '';
+                try {
+                    const r = await asUser(d.siswa_auth,
+                        `SELECT COUNT(*)::int AS cnt FROM observations WHERE observation_id = '${obsId}';`);
+                    ok = r[0]?.cnt === 1;
+                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'}`;
+                } catch(e) { err = e.message.slice(0,120); }
+                if (ok) log.pass(`C16-1: siswa ${d.nama_siswa} bisa baca catatannya sendiri (visibility=${vis})`);
+                else    log.fail(`C16-1: siswa tidak bisa baca catatannya — ${err}`);
+            }
+
+            // C16-2: Ortu bisa baca catatan anaknya
+            // (jika visibility ORTU_SAJA atau SISWA_DAN_ORTU)
+            if (d.ortu_auth && (vis === 'ORTU_SAJA' || vis === 'SISWA_DAN_ORTU')) {
+                let ok = false, err = '';
+                try {
+                    const r = await asUser(d.ortu_auth,
+                        `SELECT COUNT(*)::int AS cnt FROM observations WHERE observation_id = '${obsId}';`);
+                    ok = r[0]?.cnt === 1;
+                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'}`;
+                } catch(e) { err = e.message.slice(0,120); }
+                if (ok) log.pass(`C16-2: ortu bisa baca catatan anaknya (visibility=${vis})`);
+                else    log.fail(`C16-2: ortu tidak bisa baca catatan anak — ${err}`);
+            }
+
+            // C16-3: Siswa LAIN tidak bisa baca catatan ini
+            if (d.siswa_lain_auth) {
+                let ok = false, err = '';
+                try {
+                    const r = await asUser(d.siswa_lain_auth,
+                        `SELECT COUNT(*)::int AS cnt FROM observations WHERE observation_id = '${obsId}';`);
+                    ok = r[0]?.cnt === 0;
+                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'}`;
+                } catch(e) { err = e.message.slice(0,120); }
+                if (ok) log.pass(`C16-3: siswa lain tidak bisa baca catatan siswa lain (isolasi per-siswa)`);
+                else    log.fail(`C16-3: siswa lain bisa baca catatan — ISOLATION BREACH: ${err}`);
+            }
+
+            // C16-4: Guru LAIN (bukan penulis) tidak bisa baca catatan ini
+            if (d.guru_lain_auth) {
+                let ok = false, err = '';
+                try {
+                    const r = await asUser(d.guru_lain_auth,
+                        `SELECT COUNT(*)::int AS cnt FROM observations WHERE observation_id = '${obsId}';`);
+                    ok = r[0]?.cnt === 0;
+                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'}`;
+                } catch(e) { err = e.message.slice(0,120); }
+                if (ok) log.pass(`C16-4: guru lain tidak bisa baca catatan guru lain (isolasi per-penulis)`);
+                else    log.fail(`C16-4: guru lain bisa baca catatan — ISOLATION BREACH: ${err}`);
+            }
+
+            // C16-5: Guru PENULIS bisa baca catatannya sendiri
+            if (d.guru_auth) {
+                let ok = false, err = '';
+                try {
+                    const r = await asUser(d.guru_auth,
+                        `SELECT COUNT(*)::int AS cnt FROM observations WHERE observation_id = '${obsId}';`);
+                    ok = r[0]?.cnt === 1;
+                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'}`;
+                } catch(e) { err = e.message.slice(0,120); }
+                if (ok) log.pass(`C16-5: guru penulis bisa baca catatannya sendiri`);
+                else    log.fail(`C16-5: guru penulis tidak bisa baca catatan sendiri — ${err}`);
+            }
+
+            // C16-6: Guru LAIN tidak bisa INSERT catatan untuk siswa yang tidak diajarnya
+            // Uji fn_guru_teaches_student — guru lain coba insert ke student_id yang sama
+            if (d.guru_lain_auth) {
+                let ok = false, err = '';
+                const fakeId = '00000000-0000-0000-0000-000000000099';
+                try {
+                    await asUser(d.guru_lain_auth,
+                        `INSERT INTO observations (observation_id, school_id, author_user_id, student_id, dimension, sentiment, visibility, content, observed_at)
+                         VALUES ('${fakeId}','${schoolId}','${d.guru_lain_user_id}','${d.student_id}',
+                                 'AKADEMIK','POSITIF','SISWA_DAN_ORTU','test isolasi guru',NOW()::date);`);
+                    // Jika tidak throw, insert berhasil = BREACH
+                    err = 'INSERT tidak ditolak';
+                } catch(e) {
+                    // Ditolak RLS = benar
+                    if (e.message.includes('42501') || e.message.includes('permission') || e.message.includes('violates')) {
+                        ok = true;
+                    } else {
+                        err = e.message.slice(0,120);
+                    }
+                }
+                if (ok) log.pass(`C16-6: guru lain ditolak INSERT catatan untuk siswa yang tidak diajarnya (fn_guru_teaches_student aktif)`);
+                else    log.fail(`C16-6: guru lain bisa INSERT catatan — RLS BYPASS: ${err}`);
+            }
+        }
+    }
+
     // ── Ringkasan ────────────────────────────────────────────────
     console.log(`\n${'='.repeat(52)}`);
     if (failures === 0) {
