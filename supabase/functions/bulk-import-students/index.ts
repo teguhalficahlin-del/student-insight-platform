@@ -224,20 +224,25 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }
 
         // ── 10. Batch existing-NIS check against DB ─────────────
-        let existingNisSet = new Set<string>();
+        // Chunked to avoid PostgREST 1000-row default limit and long URL.
+        const existingNisSet = new Set<string>();
         if (validRows.length > 0) {
-            const { data: existing, error: dupErr } = await admin
-                .from('students')
-                .select('nis')
-                .eq('school_id', user.school_id)
-                .in('nis', validRows.map(r => r.nis));
+            const CHUNK = 500;
+            for (let i = 0; i < validRows.length; i += CHUNK) {
+                const chunk = validRows.slice(i, i + CHUNK).map(r => r.nis);
+                const { data: existing, error: dupErr } = await admin
+                    .from('students')
+                    .select('nis')
+                    .eq('school_id', user.school_id)
+                    .in('nis', chunk)
+                    .limit(chunk.length);
 
-            if (dupErr) {
-                console.error('[bulk-import-students] existing-NIS check failed:', dupErr);
-                return internalError(dupErr);
+                if (dupErr) {
+                    console.error('[bulk-import-students] existing-NIS check failed:', dupErr);
+                    return internalError(dupErr);
+                }
+                (existing ?? []).forEach((s: { nis: string }) => existingNisSet.add(s.nis));
             }
-
-            existingNisSet = new Set((existing ?? []).map((s: { nis: string }) => s.nis));
         }
 
         const existingRows = validRows.filter(r => existingNisSet.has(r.nis));
