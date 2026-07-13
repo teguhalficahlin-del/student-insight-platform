@@ -735,6 +735,35 @@ export async function deleteUserWithAuth(user_id) {
     return callEdge('DELETE', 'delete-user', { user_id });
 }
 
+/**
+ * Reset semua data siswa sekolah via SECURITY DEFINER server-side.
+ * Menghapus attendance, observasi, kasus, guru_wali, dll. sebelum
+ * menghapus siswa — melewati batasan RLS client-side.
+ * Kembalikan { deleted_students, auth_user_ids } — pemanggil wajib
+ * memanggil deleteUserWithAuth untuk tiap auth_user_id.
+ */
+export async function wizardResetStudents(schoolId, studentIds = null) {
+    const { data, error } = await supabase.rpc('fn_wizard_reset_students', {
+        p_school_id:   schoolId,
+        p_student_ids: studentIds,
+    });
+    if (error) throw error;
+    return data;
+}
+
+/**
+ * Reset semua data jadwal sekolah via SECURITY DEFINER server-side.
+ * Menghapus attendance/substitute terkait sesi, lalu teaching_schedules,
+ * schedule_templates, dan teaching_assignments.
+ */
+export async function wizardResetSchedules(schoolId) {
+    const { data, error } = await supabase.rpc('fn_wizard_reset_schedules', {
+        p_school_id: schoolId,
+    });
+    if (error) throw error;
+    return data;
+}
+
 /** Pulihkan user yang di-soft-delete (dalam 30 hari). */
 export async function restoreUser(user_id) {
     return callEdge('POST', 'restore-user', { user_id });

@@ -29,6 +29,8 @@ import {
     getBkAssignments, getGuruWaliAssignments,
     assignBkToClass, revokeBkFromClass,
     assignGuruWaliToStudent, revokeGuruWaliFromStudent,
+    wizardResetStudents, wizardResetSchedules,
+    deleteUserWithAuth,
     logout,
 } from './api.js';
 
@@ -2703,6 +2705,11 @@ function wireDataTable(step, cfg) {
     selBtn.addEventListener('click', async () => {
         const ids = selectedIds();
         if (!ids.length) return;
+        if (SERVER_RESET_STEPS.has(step)) {
+            if (!confirm(`Hapus ${ids.length} data terpilih? Tindakan ini tidak dapat dibatalkan.`)) return;
+            runServerReset(step, ids, selBtn);
+            return;
+        }
         const blockMsg = await checkDeleteOrder(step, ids);
         if (blockMsg) { showError(blockMsg); return; }
         if (!confirm(`Hapus ${ids.length} data terpilih? Tindakan ini tidak dapat dibatalkan.`)) return;
@@ -2713,6 +2720,11 @@ function wireDataTable(step, cfg) {
         const allIdsEl = contentEl.querySelector('.wz-all-ids');
         const ids = allIdsEl ? JSON.parse(allIdsEl.textContent) : checks.map(c => c.value);
         if (!ids.length) return;
+        if (SERVER_RESET_STEPS.has(step)) {
+            if (!confirm(`Hapus SEMUA ${ids.length} data pada langkah ini? Tindakan ini tidak dapat dibatalkan.`)) return;
+            runServerReset(step, ids, allBtn);
+            return;
+        }
         const blockMsg = await checkDeleteOrder(step, ids);
         if (blockMsg) { showError(blockMsg); return; }
         if (!confirm(`Hapus SEMUA ${ids.length} data pada langkah ini? Tindakan ini tidak dapat dibatalkan.`)) return;
@@ -2870,6 +2882,44 @@ async function runBulkDelete(step, cfg, ids, btn) {
         showError(err.message ?? 'Gagal menghapus data.');
     } finally {
         btn.textContent = label;
+        await refreshDataList(step);
+    }
+}
+
+// Step 6 (siswa) dan step 10 (jadwal) tidak bisa dihapus via RLS client-side
+// karena attendance tidak punya policy DELETE untuk ADMINISTRATIVE (ABS-3) dan
+// guru_wali_assignments hanya bisa dihapus oleh KEPSEK/WAKA.
+// Keduanya diarahkan ke SECURITY DEFINER function di server.
+const SERVER_RESET_STEPS = new Set([6, 10]);
+
+async function runServerReset(step, ids, btn) {
+    clearError();
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Menghapus…';
+    try {
+        const config = await getSchoolConfig();
+        const schoolId = config?.school_id;
+        if (!schoolId) throw new Error('school_id tidak ditemukan.');
+
+        if (step === 6) {
+            btn.textContent = 'Menghapus siswa & data terkait…';
+            const result = await wizardResetStudents(schoolId, ids);
+            // Hapus akun auth siswa via edge function (satu per satu, tidak blocking UI)
+            const authIds = result?.auth_user_ids ?? [];
+            if (authIds.length > 0) {
+                btn.textContent = `Menghapus ${authIds.length} akun…`;
+                await Promise.allSettled(authIds.map(aid => deleteUserWithAuth(aid)));
+            }
+        } else if (step === 10) {
+            btn.textContent = 'Menghapus jadwal & data terkait…';
+            await wizardResetSchedules(schoolId);
+        }
+    } catch (err) {
+        showError(err.message ?? 'Gagal menghapus data.');
+    } finally {
+        btn.textContent = label;
+        btn.disabled = false;
         await refreshDataList(step);
     }
 }
