@@ -1,0 +1,2 @@
+[functions.delete-school]
+verify_jwt = false

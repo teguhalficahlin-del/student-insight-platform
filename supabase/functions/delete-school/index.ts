@@ -5,10 +5,13 @@
  * Hapus sekolah beserta semua datanya secara permanen.
  * Hanya bisa dipanggil oleh superadmin (X-Superadmin-Key).
  *
- * Urutan hapus:
- *   1. Ambil semua auth_user_id dari users sekolah ini
- *   2. Hapus semua Auth account satu per satu
- *   3. Hapus baris di schools (FK CASCADE hapus users + data lain)
+ * Urutan hapus (semua FK ke schools adalah NO ACTION/RESTRICT):
+ *   1. Hapus auth accounts semua user sekolah (batched parallel)
+ *   2. Hapus data forum (child → parent)
+ *   3. Hapus data transaksional
+ *   4. Hapus data jadwal
+ *   5. Hapus entitas utama
+ *   6. Hapus schools (terakhir)
  */
 
 import { handleCors, corsHeaders } from '../_shared/cors.ts';
@@ -43,7 +46,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const admin = getAdminClient();
 
-    // 0. Pastikan sekolah sudah nonaktif sebelum dihapus
+    // 0. Pastikan sekolah ada dan sudah nonaktif
     const { data: school, error: schoolErr } = await admin
         .from('schools')
         .select('is_active, name')
@@ -66,18 +69,104 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return json({ error: usersErr.message }, 500);
     }
 
-    // 2. Hapus semua Auth account
-    for (const u of users ?? []) {
-        if (!u.auth_user_id) continue;
-        const { error: authErr } = await admin.auth.admin.deleteUser(u.auth_user_id);
-        if (authErr && !authErr.message?.includes('not found')) {
-            console.warn('[delete-school] deleteUser partial fail:', authErr.message);
+    // 2. Hapus semua Auth account — batched parallel (50 per batch)
+    const authIds = (users ?? [])
+        .map(u => u.auth_user_id)
+        .filter(Boolean) as string[];
+
+    const BATCH_SIZE = 50;
+    const failedAuthIds: string[] = [];
+
+    for (let i = 0; i < authIds.length; i += BATCH_SIZE) {
+        const batch = authIds.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(
+            batch.map(id => admin.auth.admin.deleteUser(id))
+        );
+        results.forEach((result, idx) => {
+            if (result.status === 'rejected') {
+                failedAuthIds.push(batch[idx]);
+                console.warn('[delete-school] deleteUser fail:', batch[idx], result.reason);
+            } else if (result.value.error) {
+                const msg = result.value.error.message ?? '';
+                if (!msg.includes('not found')) {
+                    failedAuthIds.push(batch[idx]);
+                    console.warn('[delete-school] deleteUser error:', batch[idx], msg);
+                }
+            }
+        });
+    }
+
+    // 3. Hapus semua data sekolah secara eksplisit — urut FK
+    //    Semua FK ke schools adalah NO ACTION/RESTRICT, tidak ada CASCADE.
+    //    Urutan wajib: child tables dulu, schools terakhir.
+
+    // case_events: append-only (trg_case_events_immutable memblokir DELETE).
+    // Harus dihapus via SECURITY DEFINER function yang disable trigger sementara.
+    const { error: ceErr } = await admin.rpc('fn_delete_school_case_events', { p_school_id: school_id });
+    if (ceErr) {
+        console.error('[delete-school] delete case_events:', ceErr);
+        return json({ error: `Gagal menghapus case_events: ${ceErr.message}` }, 500);
+    }
+
+    const tables: string[] = [
+        // ── Forum kelas (RESTRICT ke schools) ──────────────────
+        'forum_post_comments',
+        'forum_post_subjects',
+        'forum_post_audience',
+        'forum_post_acknowledgements',
+        'forum_posts',
+        // ── Penugasan (RESTRICT ke schools) ────────────────────
+        'bk_class_assignments',
+        'guru_wali_assignments',
+        // ── Data transaksional ──────────────────────────────────
+        // case_events sudah dihapus via rpc di atas
+        'cases',
+        'pkl_attendance',
+        'pkl_placements',
+        'observations',
+        'attendance',
+        'teacher_journals',
+        'teacher_attendance_log',
+        'substitute_schedules',
+        'sync_idempotency',
+        'achievements',
+        'student_updates',
+        // ── Relasi siswa ────────────────────────────────────────
+        'class_enrollments',
+        'student_parents',
+        // ── Jadwal ──────────────────────────────────────────────
+        'teaching_schedules',
+        'schedule_templates',
+        'schedule_time_slots',
+        'teaching_assignments',
+        // ── Notifikasi & log ────────────────────────────────────
+        'login_devices',
+        'notifications',
+        // ── Entitas utama ───────────────────────────────────────
+        'students',
+        'academic_periods', // closed_by_user_id → users (RESTRICT), harus sebelum users
+        'users',
+        'subjects',
+        'classes',
+        'programs',
+        // ── Config ──────────────────────────────────────────────
+        'school_config',
+        // ── Audit log (school_id TEXT, bukan FK — data orphan jika tidak dihapus) ─
+        'audit_log',
+    ];
+
+    for (const table of tables) {
+        const { error } = await admin
+            .from(table)
+            .delete()
+            .eq('school_id', school_id);
+        if (error) {
+            console.error(`[delete-school] delete ${table}:`, error);
+            return json({ error: `Gagal menghapus ${table}: ${error.message}` }, 500);
         }
     }
 
-    // 3. Hapus baris schools — FK CASCADE di DB akan hapus:
-    //    school_config, users, classes, programs, subjects, schedules,
-    //    attendance, observations, cases, pkl_placements, dst.
+    // 4. Hapus baris schools — semua child sudah bersih
     const { error: delErr } = await admin
         .from('schools')
         .delete()
@@ -88,5 +177,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return json({ error: delErr.message }, 500);
     }
 
-    return json({ success: true, school_id });
+    return json({
+        success: true,
+        school_id,
+        ...(failedAuthIds.length > 0 && {
+            warning: `${failedAuthIds.length} akun auth gagal dihapus`,
+            failed_auth_ids: failedAuthIds,
+        }),
+    });
 });
