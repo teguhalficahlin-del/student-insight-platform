@@ -1280,57 +1280,63 @@ async function renderScheduleStep() {
             const teachersWithCode = teachers.filter(t => t.teacher_code);
             const kelasNames = classes.map(c => c.name);
 
-            // ── Slot waktu default (8 sesi + 2 istirahat per hari) ──────
-            // Format: [start, end] atau null = baris istirahat
+            // ── Slot waktu (format HH.MM - HH.MM sesuai format sekolah) ──
+            // null = baris istirahat
             const SLOTS = [
-                ['07:00','07:40'], ['07:40','08:20'], ['08:20','09:00'],
-                null, // istirahat 09:00-09:15
-                ['09:15','09:55'], ['09:55','10:35'], ['10:35','11:15'],
-                null, // istirahat 11:15-11:30
-                ['11:30','12:10'], ['12:10','12:50'],
+                { no: 1,  w: '07.15 - 07.55' },
+                { no: 2,  w: '07.55 - 08.35' },
+                { no: 3,  w: '08.35 - 09.15' },
+                { no: 4,  w: '09.15 - 09.55' },
+                null, // ISTRAHAT 09.55 - 10.25
+                { no: 5,  w: '10.25 - 11.05' },
+                { no: 6,  w: '11.05 - 11.45' },
+                { no: 7,  w: '11.45 - 12.25' },
+                null, // ISTRAHAT 12.25 - 13.00
+                { no: 8,  w: '13.00 - 13.40' },
+                { no: 9,  w: '13.40 - 14.20' },
+                { no: 10, w: '14.20 - 15.00' },
+                { no: 11, w: '15.00 - 15.40' },
             ];
-            const DAYS = ['SENIN','SELASA','RABU','KAMIS','JUMAT'];
+            const DAYS = ['SENIN','SELASA','RABU','KAMIS',"JUM'AT"];
 
-            // ── Row 0: nama kelas (2 kolom per kelas, visual merge) ─────
-            const headerKelas = ['', '', '', ...kelasNames.flatMap(k => [k, ''])];
-            // ── Row 1: kolom tetap + KG/Mapel per kelas ─────────────────
-            const headerKol   = ['HARI', 'MULAI', 'SELESAI', ...kelasNames.flatMap(() => ['KG', 'Mapel'])];
+            // ── Format identik dengan jadwal sekolah ─────────────────────
+            // Row 0: '', HARI, NO, WAKTU, Kelas1, '', Kelas2, '', ...
+            // Row 1: '', '', '', '', MAPEL, KG, MAPEL, KG, ...
+            // Data: '', HARI(atau ''), no, 'HH.MM - HH.MM', mapel, kg, ...
+            const row0 = ['', 'HARI', 'NO', 'WAKTU', ...kelasNames.flatMap(k => [k, ''])];
+            const row1 = ['', '', '', '', ...kelasNames.flatMap(() => ['MAPEL', 'KG'])];
+            const aoa  = [row0, row1];
 
-            const aoa = [headerKelas, headerKol];
-
-            // ── Baris data per hari & slot ───────────────────────────────
-            // Aturan ANTI BENTROK ditegakkan oleh struktur grid:
-            // satu baris = satu slot waktu. Guru yang sama di baris yang sama
-            // berarti bentrok — TU akan melihatnya langsung di spreadsheet.
             for (const hari of DAYS) {
-                // Pemisah antar hari
-                aoa.push([`=== ${hari} ===`, '', '', ...kelasNames.flatMap(() => ['', ''])]);
-                let breakIdx = 1;
+                let firstSlot = true;
+                let breakCount = 0;
                 for (const slot of SLOTS) {
                     if (slot === null) {
-                        const labels = ['09:00-09:15', '11:15-11:30'];
-                        aoa.push([`ISTIRAHAT ${labels[breakIdx++ - 1] ?? ''}`, '', '', ...kelasNames.flatMap(() => ['', ''])]);
+                        const labels = ['09.55 - 10.25', '12.25 - 13.00'];
+                        aoa.push(['', '', '', `ISTRAHAT ${labels[breakCount++] ?? ''}`, ...kelasNames.flatMap(() => ['', ''])]);
                         continue;
                     }
-                    aoa.push([hari, slot[0], slot[1], ...kelasNames.flatMap(() => ['', ''])]);
+                    aoa.push(['', firstSlot ? hari : '', slot.no, slot.w, ...kelasNames.flatMap(() => ['', ''])]);
+                    firstSlot = false;
                 }
             }
 
-            // ── Sheet 1: Template Jadwal (grid anti-bentrok) ─────────────
+            // ── Sheet 1: Template Jadwal ──────────────────────────────────
             const ws1 = XLSX.utils.aoa_to_sheet(aoa);
 
-            // Merge sel nama kelas di header (2 kolom per kelas)
+            // Merge sel nama kelas di row 0 (2 kolom per kelas)
             ws1['!merges'] = kelasNames.map((_, i) => ({
-                s: { r: 0, c: 3 + i * 2 },
-                e: { r: 0, c: 4 + i * 2 },
+                s: { r: 0, c: 4 + i * 2 },
+                e: { r: 0, c: 5 + i * 2 },
             }));
 
-            // Lebar kolom
+            // Lebar kolom: blank | HARI | NO | WAKTU | (MAPEL | KG) × n
             ws1['!cols'] = [
-                { wch: 12 }, // HARI / pemisah
-                { wch: 7  }, // MULAI
-                { wch: 8  }, // SELESAI
-                ...kelasNames.flatMap(() => [{ wch: 7 }, { wch: 18 }]),
+                { wch: 2  }, // kolom A kosong
+                { wch: 10 }, // HARI
+                { wch: 4  }, // NO
+                { wch: 16 }, // WAKTU
+                ...kelasNames.flatMap(() => [{ wch: 12 }, { wch: 8 }]),
             ];
 
             // ── Sheet 2: Daftar Guru (referensi KG) ─────────────────────
@@ -1344,22 +1350,20 @@ async function renderScheduleStep() {
                 [''],
                 ['CARA ISI:'],
                 ['  1. Buka sheet "Template Jadwal".'],
-                ['  2. Setiap baris = satu slot waktu (hari + jam mulai-selesai).'],
-                ['  3. Setiap pasang kolom [KG | Mapel] = satu kelas.'],
-                ['  4. Isi KG dengan kode guru (lihat sheet Daftar Guru).'],
-                ['  5. Isi Mapel dengan nama mata pelajaran (bebas diketik).'],
-                ['  6. Biarkan kosong jika tidak ada pelajaran di slot/kelas itu.'],
+                ['  2. Setiap baris = satu slot waktu.'],
+                ['  3. Kolom MAPEL = nama mata pelajaran. Kolom KG = kode singkat guru.'],
+                ['  4. Lihat sheet "Daftar Guru" untuk kode guru yang tersedia.'],
+                ['  5. Biarkan MAPEL dan KG kosong jika tidak ada pelajaran di slot/kelas itu.'],
+                ['  6. Baris ISTRAHAT diabaikan saat impor.'],
+                [''],
+                ['FORMAT WAKTU:'],
+                ['  Gunakan format HH.MM - HH.MM (titik, bukan titik dua).'],
+                ['  Contoh: 07.15 - 07.55'],
+                ['  Sesuaikan baris waktu jika jadwal sekolah Anda berbeda.'],
                 [''],
                 ['ATURAN ANTI BENTROK:'],
-                ['  ⚠ Satu guru TIDAK BOLEH muncul 2× atau lebih pada baris yang sama.'],
-                ['    Satu baris = satu jam. Guru yang sama di dua kolom berbeda'],
-                ['    pada baris yang sama = mengajar dua kelas sekaligus = DITOLAK.'],
-                ['  ✓ Periksa setiap baris: pastikan tidak ada KG yang sama muncul dua kali.'],
-                [''],
-                ['BARIS YANG DIABAIKAN SAAT IMPOR:'],
-                ['  - Baris "=== SENIN ===" dsb (pemisah hari)'],
-                ['  - Baris "ISTIRAHAT ..."'],
-                ['  - Sel yang kosong (tidak dikirim)'],
+                ['  ⚠ Satu kode guru TIDAK BOLEH muncul lebih dari satu kali pada baris yang sama.'],
+                ['    Satu baris = satu jam pelajaran. Guru bentrok = impor ditolak sistem.'],
             ];
 
             const wb = XLSX.utils.book_new();
@@ -1395,34 +1399,79 @@ async function renderScheduleStep() {
                 const ws  = wb.Sheets[wb.SheetNames[0]];
                 const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-                // Deteksi format grid: row[1][0] === 'HARI'
-                const isGrid = aoa.length >= 2 && String(aoa[1]?.[0] ?? '').toUpperCase() === 'HARI';
-                if (isGrid) {
-                    // Ambil nama kelas dari row[0] kolom 3,5,7,...
+                // Deteksi format lama (sistem): row[1][0] === 'HARI'
+                const isOldGrid    = aoa.length >= 2 && String(aoa[1]?.[0] ?? '').toUpperCase() === 'HARI';
+                // Deteksi format sekolah: row[0][1] === 'HARI' (blank | HARI | NO | WAKTU | MAPEL | KG …)
+                const isSchoolGrid = !isOldGrid && aoa.length >= 3 && String(aoa[0]?.[1] ?? '').toUpperCase() === 'HARI';
+
+                const VALID_DAYS = ['SENIN','SELASA','RABU','KAMIS','JUMAT',"JUM'AT",'SABTU'];
+                const csvEsc = v => (String(v).includes(',') || String(v).includes('"'))
+                    ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+
+                if (isOldGrid) {
+                    // Format lama: HARI col 0, MULAI col 1, SELESAI col 2, (KG|Mapel)× dari col 3
                     const kelasNames = [];
                     for (let c = 3; c < (aoa[0]?.length ?? 0); c += 2) {
                         const k = String(aoa[0][c] ?? '').trim();
                         if (k) kelasNames.push(k);
                     }
-                    const VALID_DAYS = ['SENIN','SELASA','RABU','KAMIS','JUMAT','SABTU'];
-                    const esc = v => (String(v).includes(',') || String(v).includes('"'))
-                        ? `"${String(v).replace(/"/g, '""')}"` : String(v);
                     const flatRows = ['kode_guru,nama_mapel,nama_kelas,hari,start_time,end_time'];
                     for (let r = 2; r < aoa.length; r++) {
                         const row  = aoa[r];
                         const hari = String(row[0] ?? '').trim().toUpperCase();
-                        if (!VALID_DAYS.includes(hari)) continue; // pemisah/istirahat
+                        if (!VALID_DAYS.includes(hari)) continue;
                         const start = String(row[1] ?? '').trim();
                         const end   = String(row[2] ?? '').trim();
                         for (let ki = 0; ki < kelasNames.length; ki++) {
                             const kg    = String(row[3 + ki * 2] ?? '').trim();
                             const mapel = String(row[4 + ki * 2] ?? '').trim();
                             if (!kg || !mapel) continue;
-                            flatRows.push(`${esc(kg)},${esc(mapel)},${esc(kelasNames[ki])},${hari},${start},${end}`);
+                            flatRows.push(`${csvEsc(kg)},${csvEsc(mapel)},${csvEsc(kelasNames[ki])},${hari},${start},${end}`);
                         }
                     }
                     if (flatRows.length <= 1) {
                         statusEl.innerHTML = '<div class="alert alert-danger">File Excel belum berisi data jadwal. Isi kolom KG (kode guru) dan Mapel di sheet "Template Jadwal" terlebih dahulu, lalu impor kembali.</div>';
+                        return;
+                    }
+                    csvText = flatRows.join('\n');
+                } else if (isSchoolGrid) {
+                    // Format sekolah: blank col 0, HARI col 1, NO col 2, WAKTU col 3, (MAPEL|KG)× dari col 4
+                    // Nama kelas ada di row 0 pada kolom 4, 6, 8, ...
+                    const kelasNames = [];
+                    for (let c = 4; c < (aoa[0]?.length ?? 0); c += 2) {
+                        const k = String(aoa[0][c] ?? '').trim();
+                        if (k) kelasNames.push({ name: k, col: c });
+                    }
+                    const flatRows = ['kode_guru,nama_mapel,nama_kelas,hari,start_time,end_time'];
+                    let currentHari = '';
+                    // Data mulai baris 2 (baris 0=header, baris 1=MAPEL/KG sub-header)
+                    for (let r = 2; r < aoa.length; r++) {
+                        const row  = aoa[r];
+                        const hariCell = String(row[1] ?? '').trim().toUpperCase();
+                        if (VALID_DAYS.includes(hariCell)) currentHari = hariCell === "JUM'AT" ? 'JUMAT' : hariCell;
+                        if (!currentHari) continue;
+
+                        const waktu = String(row[3] ?? '').trim();
+                        if (!waktu || /istr[ae]hat/i.test(waktu)) continue;
+
+                        // Waktu format "07.15 - 07.55" → start="07:15", end="07:55"
+                        const timeParts = waktu.split(/\s*[-–]\s*/);
+                        if (timeParts.length < 2) continue;
+                        const start = timeParts[0].trim().replace('.', ':');
+                        const end   = timeParts[1].trim().replace('.', ':');
+                        if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) continue;
+
+                        for (const { name, col } of kelasNames) {
+                            const mapel = String(row[col]     ?? '').trim();
+                            const kg    = String(row[col + 1] ?? '').trim();
+                            if (!kg || !mapel) continue;
+                            // Abaikan event sekolah penuh (UPACARA, SENAM, dll)
+                            if (/upacara|senam|kultum|english day/i.test(mapel)) continue;
+                            flatRows.push(`${csvEsc(kg)},${csvEsc(mapel)},${csvEsc(name)},${currentHari},${start},${end}`);
+                        }
+                    }
+                    if (flatRows.length <= 1) {
+                        statusEl.innerHTML = '<div class="alert alert-danger">File Excel belum berisi data jadwal. Isi kolom MAPEL dan KG di sheet pertama terlebih dahulu, lalu impor kembali.</div>';
                         return;
                     }
                     csvText = flatRows.join('\n');
