@@ -1421,6 +1421,10 @@ async function renderScheduleStep() {
                             flatRows.push(`${esc(kg)},${esc(mapel)},${esc(kelasNames[ki])},${hari},${start},${end}`);
                         }
                     }
+                    if (flatRows.length <= 1) {
+                        statusEl.innerHTML = '<div class="alert alert-danger">File Excel belum berisi data jadwal. Isi kolom KG (kode guru) dan Mapel di sheet "Template Jadwal" terlebih dahulu, lalu impor kembali.</div>';
+                        return;
+                    }
                     csvText = flatRows.join('\n');
                 } else {
                     // Format flat (CSV biasa dalam Excel)
