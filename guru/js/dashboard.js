@@ -20,7 +20,9 @@ import {
     fetchAllPklStudents, fetchAllDudiPartners,
     createPlacement, finishPlacement, bulkImportPkl,
     createAchievement, getStudentAchievements,
-    getSchoolStats, getKepsekMonitoring, getPendingAttendanceSessions, getAttendanceFillRate,
+    getSchoolStats, getKepsekMonitoring,
+    getPendingAttendanceSessions, getPendingSessionsByTeacher, getPendingSessionsDetail,
+    getAttendanceFillRate,
     getAttendanceRecapPerClass, getOpenCases,
     getPrograms, getStudentAttendanceSessions,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
@@ -2153,7 +2155,7 @@ async function loadWkKur1(date) {
     btn.style.display    = 'none';
 
     try {
-        const rows = await getPendingAttendanceSessions(date, date);
+        const rows = await getPendingAttendanceSessions(date);
         tbody.innerHTML = rows.length === 0
             ? `<tr><td colspan="5" class="hint" style="text-align:center;padding:12px">✓ Tidak ada sesi yang menunggu pengisian absensi hari ini.</td></tr>`
             : rows.map((r, i) => `<tr>
@@ -2197,13 +2199,13 @@ async function loadWkKur2() {
     btn.textContent         = 'Memuat…';
 
     try {
-        const [rows] = await Promise.all([
-            getPendingAttendanceSessions(dateStart || null, dateEnd || null),
+        const [groups] = await Promise.all([
+            getPendingSessionsByTeacher(dateStart || null, dateEnd || null),
             loadWkKurStats(dateStart || null, dateEnd || null, 'wk-kur2', 'Tidak ada sesi pada rentang ini'),
         ]);
         statsRow.style.display = '';
         btn.disabled = false;
-        if (rows.length === 0) {
+        if (groups.length === 0) {
             hintEl.textContent   = '✓ Tidak ada sesi yang menunggu pengisian absensi pada rentang ini.';
             hintEl.style.display = 'block';
             btn.textContent      = 'Sembunyikan';
@@ -2211,47 +2213,32 @@ async function loadWkKur2() {
             return;
         }
 
-        // Kelompokkan per guru, urutkan terbanyak di atas
-        const byTeacher = new Map();
-        for (const r of rows) {
-            const name = r.teacher?.full_name ?? '—';
-            if (!byTeacher.has(name)) byTeacher.set(name, []);
-            byTeacher.get(name).push(r);
-        }
-        const groups = [...byTeacher.entries()]
-            .sort((a, b) => b[1].length - a[1].length);
-
         const THRESHOLD = 10;
         let html = '';
-        groups.forEach(([name, sesi], idx) => {
-            const count    = sesi.length;
+        groups.forEach((row, idx) => {
+            const count    = Number(row.jumlah);
             const alert    = count >= THRESHOLD;
             const detailId = `wk-kur2-detail-${idx}`;
             const color    = alert ? 'var(--color-danger,#ef4444)' : '';
             const badge    = alert
                 ? `<span style="font-size:11px;background:var(--color-danger,#ef4444);color:#fff;border-radius:4px;padding:1px 6px;margin-left:6px">≥${THRESHOLD}×</span>`
                 : '';
-            html += `<tr style="cursor:pointer" onclick="document.getElementById('${detailId}').style.display=document.getElementById('${detailId}').style.display==='none'?'':'none'">
+            html += `<tr style="cursor:pointer" onclick="_wkKur2ToggleDetail('${detailId}','${row.teacher_id}','${esc(dateStart||'')}','${esc(dateEnd||'')}')">
                 <td style="text-align:center">${idx + 1}</td>
-                <td style="color:${color};font-weight:${alert?'600':'400'}">${esc(name)}${badge}</td>
+                <td style="color:${color};font-weight:${alert?'600':'400'}">${esc(row.teacher_name)}${badge}</td>
                 <td style="text-align:center;color:${color};font-weight:${alert?'600':'400'}">${count} sesi</td>
                 <td style="text-align:center;font-size:18px;color:var(--color-text-muted)">&#8250;</td>
             </tr>
-            <tr id="${detailId}" style="display:none">
+            <tr id="${detailId}" style="display:none" data-loaded="0">
                 <td colspan="4" style="padding:0">
                     <table style="width:100%;border-collapse:collapse;background:var(--color-surface-raised,rgba(0,0,0,.15))">
                         <thead><tr style="font-size:11px;color:var(--color-text-muted)">
-                            <th style="padding:6px 12px;text-align:left">Mata Pelajaran</th>
-                            <th style="padding:6px 12px;text-align:left">Kelas</th>
                             <th style="padding:6px 12px;text-align:left">Tanggal</th>
                             <th style="padding:6px 12px;text-align:left">Sesi</th>
+                            <th style="padding:6px 12px;text-align:left">Mata Pelajaran</th>
+                            <th style="padding:6px 12px;text-align:left">Kelas</th>
                         </tr></thead>
-                        <tbody>${sesi.map(r => `<tr style="font-size:13px">
-                            <td style="padding:5px 12px">${esc(r.subject?.name ?? '—')}</td>
-                            <td style="padding:5px 12px">${esc(r.class?.name ?? '—')}</td>
-                            <td style="padding:5px 12px">${esc(r.session_date ?? '—')}</td>
-                            <td style="padding:5px 12px">${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
-                        </tr>`).join('')}</tbody>
+                        <tbody id="${detailId}-body"><tr><td colspan="4" style="padding:8px 12px;color:var(--color-text-muted)">Memuat…</td></tr></tbody>
                     </table>
                 </td>
             </tr>`;
@@ -2265,6 +2252,30 @@ async function loadWkKur2() {
         btn.textContent      = 'Tampilkan';
         hintEl.textContent   = `Gagal memuat data. ${fe(err)}`;
         hintEl.style.display = 'block';
+    }
+}
+
+async function _wkKur2ToggleDetail(detailId, teacherId, dateStart, dateEnd) {
+    const row = document.getElementById(detailId);
+    if (!row) return;
+    const visible = row.style.display !== 'none';
+    row.style.display = visible ? 'none' : '';
+    if (!visible && row.dataset.loaded === '0') {
+        row.dataset.loaded = '1';
+        const bodyEl = document.getElementById(detailId + '-body');
+        try {
+            const sesi = await getPendingSessionsDetail(teacherId, dateStart || null, dateEnd || null);
+            bodyEl.innerHTML = sesi.length === 0
+                ? `<tr><td colspan="4" style="padding:8px 12px;color:var(--color-text-muted)">Tidak ada data.</td></tr>`
+                : sesi.map(s => `<tr style="font-size:13px">
+                    <td style="padding:5px 12px">${esc(s.session_date ?? '—')}</td>
+                    <td style="padding:5px 12px">${fmtTime(s.session_start)} – ${fmtTime(s.session_end)}</td>
+                    <td style="padding:5px 12px">${esc(s.subject_name ?? '—')}</td>
+                    <td style="padding:5px 12px">${esc(s.class_name ?? '—')}</td>
+                </tr>`).join('');
+        } catch (err) {
+            bodyEl.innerHTML = `<tr><td colspan="4" style="padding:8px 12px;color:var(--color-danger,#ef4444)">Gagal memuat. ${fe(err)}</td></tr>`;
+        }
     }
 }
 

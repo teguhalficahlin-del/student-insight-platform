@@ -641,17 +641,34 @@ export async function getAttendanceFillRate(dateStart, dateEnd) {
     return { total: hadir + pending + tidak, hadir, pending, tidak };
 }
 
-export async function getPendingAttendanceSessions(dateStart, dateEnd) {
-    let q = supabase
+// Hanya untuk Panel 1 (hari ini) — satu hari, baris sedikit, aman tanpa RPC.
+export async function getPendingAttendanceSessions(date) {
+    const { data, error } = await supabase
         .from('teaching_schedules')
-        .select('schedule_id, session_date, session_start, session_end, scheduled_teacher_id, class:classes(name), teacher:users(full_name), subject:subjects(name)')
+        .select('session_start, session_end, class:classes(name), teacher:users(full_name), subject:subjects(name)')
         .eq('teacher_indicator', 'PENDING_EVALUATION')
-        .order('session_date', { ascending: true })
-        .order('session_start', { ascending: true })
-        .limit(200);
-    if (dateStart) q = q.gte('session_date', dateStart);
-    if (dateEnd)   q = q.lte('session_date', dateEnd);
-    const { data, error } = await q;
+        .eq('meeting_status', 'NORMAL')
+        .eq('session_date', date)
+        .order('session_start', { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function getPendingSessionsByTeacher(dateStart, dateEnd) {
+    const { data, error } = await supabase.rpc('fn_pending_sessions_by_teacher', {
+        p_date_start: dateStart ?? null,
+        p_date_end:   dateEnd   ?? null,
+    });
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function getPendingSessionsDetail(teacherId, dateStart, dateEnd) {
+    const { data, error } = await supabase.rpc('fn_pending_sessions_detail', {
+        p_teacher_id: teacherId,
+        p_date_start: dateStart ?? null,
+        p_date_end:   dateEnd   ?? null,
+    });
     if (error) throw error;
     return data ?? [];
 }
