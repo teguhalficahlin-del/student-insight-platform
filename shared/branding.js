@@ -64,8 +64,8 @@ function _injectDynamicManifest(slug, branding = null) {
                     manifest.background_color = branding.primary_color;
                 }
             }
-            // Selalu generate ikon SVG dinamis dari slug (override ikon generik "SMK HR")
-            const abbr     = _slugToAbbr(slug);
+            // Selalu generate ikon SVG dinamis dengan identitas platform "SMK SIP"
+            const abbr     = 'SIP';
             const color    = branding?.primary_color || '#1a56db';
             const iconURI  = _makeIconDataURI(abbr, color);
             const dynIcon  = { src: iconURI, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' };
