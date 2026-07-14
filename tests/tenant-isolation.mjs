@@ -1418,81 +1418,132 @@ async function main() {
     }
 
     // ── CHECK 15: Forum Kelas RLS isolation ──────────────────────
-    // Verifikasi: siswa hanya bisa baca posting forum kelasnya sendiri.
-    // - F1: siswa X AKL (Andi Kurniawan) bisa baca posting X AKL → COUNT = 1
-    // - F2: siswa kelas lain (Nanda Fauzan / XI TKRO) tidak bisa baca → COUNT = 0
-    // - F3: anon tidak bisa baca forum_posts → COUNT = 0
+    // Verifikasi isolasi forum_posts via data sintetis BEGIN...ROLLBACK:
+    //   F1: GURU_A (penulis posting) bisa baca posting miliknya → cnt=1
+    //   F2: GURU_B (sekolah berbeda) TIDAK bisa baca posting GURU_A → cnt=0 (cross-tenant)
+    //   F3: anon TIDAK bisa baca forum_posts sama sekali → 42501
     //
-    // Semua cek via BEGIN...ROLLBACK (DB tidak berubah).
-    log.head('CHECK 15 — Forum Kelas RLS isolation: siswa hanya bisa baca posting forum kelasnya sendiri, anon selalu 0');
+    // Catatan: siswa belum punya auth_user_id di DB saat ini (belum provisi akun login).
+    // Ketika akun siswa sudah aktif, F1 diperluas dengan uji audience siswa.
+    log.head('CHECK 15 — Forum Kelas RLS isolation: penulis bisa baca, cross-tenant ditolak, anon 0');
 
-    // auth_user_id Andi Kurniawan (siswa X AKL, smkhr)
-    const ANDI_AUTH   = '85addd98-9ef9-4740-8ac9-170e984ace27';
-    // auth_user_id Nanda Fauzan (siswa XI TKRO, smkhr — kelas lain)
-    const NANDA_AUTH  = 'f99ef21a-abff-4afa-814a-2861181f1100';
-    // post_id posting X AKL
-    const FORUM_POST  = 'a47dcc34-8ba4-4e67-87b0-5cc76062d4b7';
-    const SMKHR       = 'cc1e152e-5425-4128-9ea5-d0f5c1d55df9';
+    const C15_POST = 'ffffffff-ffff-ffff-ffff-000000000015'; // sentinel post_id
 
-    // F1: Andi (siswa X AKL) bisa baca posting X AKL
-    let c15f1 = false, c15f1err = '';
-    try {
-        const r = await mgmtQuery(`
-            BEGIN;
-            SET LOCAL ROLE authenticated;
-            SELECT set_config('request.jwt.claims',
-                '{"sub":"${ANDI_AUTH}","role":"authenticated"}', true);
-            SELECT set_config('request.jwt.claim.sub', '${ANDI_AUTH}', true);
-            SELECT COUNT(*)::int AS cnt
-            FROM forum_posts
-            WHERE post_id = '${FORUM_POST}'
-              AND school_id = '${SMKHR}';
-            ROLLBACK;`);
-        c15f1 = Array.isArray(r) && r.length > 0 && r[0]?.cnt === 1;
-        if (!c15f1) c15f1err = `cnt=${r[0]?.cnt ?? 'null'}`;
-    } catch (e) { c15f1err = e.message; }
-    if (c15f1)
-        log.pass('F1: Andi Kurniawan (X AKL) bisa baca posting forum X AKL (cnt=1)');
-    else
-        log.fail(`F1: Andi Kurniawan (X AKL) gagal baca posting forum X AKL${c15f1err ? ': ' + c15f1err.slice(0, 120) : ''}`);
+    // Pre-query: GURU_A (sekolah A) + class milik sekolah A + GURU_B (sekolah B)
+    const c15pre = await mgmtQuery(`
+        with
+        ga as (
+            select u.user_id, u.auth_user_id, u.school_id
+            from users u
+            where u.role_type = 'GURU' and u.is_active = true and u.auth_user_id is not null
+            order by u.full_name limit 1
+        ),
+        cls as (
+            select c.class_id, c.academic_year
+            from classes c
+            where c.school_id = (select school_id from ga)
+            limit 1
+        ),
+        gb as (
+            select u.user_id, u.auth_user_id, u.school_id
+            from users u
+            where u.role_type = 'GURU' and u.is_active = true and u.auth_user_id is not null
+              and u.school_id <> (select school_id from ga)
+            order by u.full_name limit 1
+        )
+        select
+            (select user_id::text      from ga)  as ga_uid,
+            (select auth_user_id::text from ga)  as ga_auth,
+            (select school_id::text    from ga)  as ga_school,
+            (select class_id::text     from cls) as class_id,
+            (select academic_year      from cls) as academic_year,
+            (select user_id::text      from gb)  as gb_uid,
+            (select auth_user_id::text from gb)  as gb_auth,
+            (select school_id::text    from gb)  as gb_school`);
 
-    // F2: Nanda (siswa XI TKRO) tidak bisa baca posting X AKL
-    let c15f2 = false, c15f2err = '';
-    try {
-        const r = await mgmtQuery(`
-            BEGIN;
-            SET LOCAL ROLE authenticated;
-            SELECT set_config('request.jwt.claims',
-                '{"sub":"${NANDA_AUTH}","role":"authenticated"}', true);
-            SELECT set_config('request.jwt.claim.sub', '${NANDA_AUTH}', true);
-            SELECT COUNT(*)::int AS cnt
-            FROM forum_posts
-            WHERE post_id = '${FORUM_POST}'
-              AND school_id = '${SMKHR}';
-            ROLLBACK;`);
-        c15f2 = Array.isArray(r) && r.length > 0 && r[0]?.cnt === 0;
-        if (!c15f2) c15f2err = `cnt=${r[0]?.cnt ?? 'null'}`;
-    } catch (e) { c15f2err = e.message; }
-    if (c15f2)
-        log.pass('F2: Nanda Fauzan (XI TKRO) tidak bisa baca posting forum X AKL (cnt=0)');
-    else
-        log.fail(`F2: Nanda Fauzan (XI TKRO) bisa baca posting forum kelas lain — ISOLATION BREACH${c15f2err ? ': ' + c15f2err.slice(0, 120) : ''}`);
+    const d15 = c15pre[0] || {};
+    const c15skip =
+        !d15.ga_uid      ? 'tidak ada GURU aktif dengan auth_user_id' :
+        !d15.class_id    ? 'tidak ada kelas di sekolah GURU_A' :
+        !d15.gb_uid      ? 'tidak ada GURU aktif di sekolah kedua (butuh ≥2 sekolah berisi GURU)' : null;
 
-    // F3: anon tidak bisa baca forum_posts
+    if (c15skip) {
+        log.pass(`CHECK 15 SKIP — ${c15skip} (tidak menggagalkan)`);
+    } else {
+        const c15ins =
+            ` insert into forum_posts` +
+            `   (post_id, school_id, class_id, author_user_id, academic_year,` +
+            `    title, body, visibility, is_pinned, is_withdrawn)` +
+            ` values ('${C15_POST}', '${d15.ga_school}', '${d15.class_id}', '${d15.ga_uid}',` +
+            `   '${d15.academic_year}', 'Test RLS CHECK 15', 'Body uji isolasi forum.',` +
+            `   'INTERNAL', false, false);`;
+
+        // Sanity: post tersimpan (tanpa RLS)
+        let c15setupOk = false;
+        try {
+            const sanity = await mgmtQuery(
+                `begin; ${c15ins}` +
+                ` select count(*)::int as cnt from forum_posts where post_id = '${C15_POST}';` +
+                ` rollback;`);
+            if (sanity[0]?.cnt === 1) {
+                log.pass('CHECK 15 setup: 1 forum_post sentinel tersimpan — data valid');
+                c15setupOk = true;
+            } else {
+                log.fail(`CHECK 15 setup gagal: cnt=${sanity[0]?.cnt}`);
+            }
+        } catch (e) { log.fail(`CHECK 15 setup error: ${e.message.slice(0, 120)}`); }
+
+        if (c15setupOk) {
+            // F1: GURU_A (penulis) bisa baca posting sendiri
+            let c15f1 = false, c15f1err = '';
+            try {
+                const r = await mgmtQuery(
+                    `begin; ${c15ins}` +
+                    ` set local role authenticated;` +
+                    ` select set_config('request.jwt.claims','{"sub":"${d15.ga_auth}","role":"authenticated"}',true);` +
+                    ` select set_config('request.jwt.claim.sub','${d15.ga_auth}',true);` +
+                    ` select count(*)::int as cnt from forum_posts where post_id = '${C15_POST}';` +
+                    ` rollback;`);
+                c15f1 = Array.isArray(r) && r.length > 0 && r[0]?.cnt === 1;
+                if (!c15f1) c15f1err = `cnt=${r[0]?.cnt ?? 'null'}`;
+            } catch (e) { c15f1err = e.message; }
+            if (c15f1)
+                log.pass('F1: GURU_A (penulis) bisa baca posting forum sendiri (cnt=1)');
+            else
+                log.fail(`F1: GURU_A gagal baca posting miliknya sendiri${c15f1err ? ': ' + c15f1err.slice(0, 120) : ''}`);
+
+            // F2: GURU_B (sekolah lain) TIDAK bisa baca posting GURU_A → cross-tenant isolation
+            let c15f2 = false, c15f2err = '';
+            try {
+                const r = await mgmtQuery(
+                    `begin; ${c15ins}` +
+                    ` set local role authenticated;` +
+                    ` select set_config('request.jwt.claims','{"sub":"${d15.gb_auth}","role":"authenticated"}',true);` +
+                    ` select set_config('request.jwt.claim.sub','${d15.gb_auth}',true);` +
+                    ` select count(*)::int as cnt from forum_posts where post_id = '${C15_POST}';` +
+                    ` rollback;`);
+                c15f2 = Array.isArray(r) && r.length > 0 && r[0]?.cnt === 0;
+                if (!c15f2) c15f2err = `cnt=${r[0]?.cnt ?? 'null'}`;
+            } catch (e) { c15f2err = e.message; }
+            if (c15f2)
+                log.pass('F2: GURU_B (sekolah lain) tidak bisa baca posting GURU_A — cross-tenant OK (cnt=0)');
+            else
+                log.fail(`F2: GURU_B (sekolah lain) bisa baca posting sekolah lain — ISOLATION BREACH${c15f2err ? ': ' + c15f2err.slice(0, 120) : ''}`);
+        }
+    }
+
+    // F3: anon tidak bisa baca forum_posts (uji independen, tidak butuh data sintetis)
     // mgmtQuery melempar exception 42501 ketika anon ditolak — itu perilaku BENAR.
     let c15f3 = false, c15f3err = '';
     try {
         const r = await mgmtQuery(`
             BEGIN;
             SET LOCAL ROLE anon;
-            SELECT COUNT(*)::int AS cnt
-            FROM forum_posts
-            WHERE school_id = '${SMKHR}';
+            SELECT COUNT(*)::int AS cnt FROM forum_posts;
             ROLLBACK;`);
         c15f3 = Array.isArray(r) && r.length > 0 && r[0]?.cnt === 0;
         if (!c15f3) c15f3err = `cnt=${r[0]?.cnt ?? 'null'}`;
     } catch (e) {
-        // 42501 = permission denied → anon ditolak = BENAR
         if (e.message.includes('42501') || e.message.includes('permission denied')) {
             c15f3 = true;
         } else {
