@@ -24,6 +24,26 @@ function getSlugFromURL() {
     return null;
 }
 
+// Buat singkatan dari slug: "smkn1ub" → "N1UB", "smkhr" → "HR", "smkcontoh" → "CONT"
+function _slugToAbbr(slug) {
+    var s = (slug || '').toLowerCase().replace(/^smk/, '').replace(/[^a-z0-9]/g, '');
+    return (s.slice(0, 4) || slug.slice(0, 4)).toUpperCase();
+}
+
+// Buat data-URI SVG ikon dengan singkatan sekolah + warna branding
+function _makeIconDataURI(abbr, color) {
+    var bg  = color || '#1a56db';
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">' +
+        '<rect width="512" height="512" rx="96" fill="' + bg + '"/>' +
+        '<text x="256" y="210" font-family="Arial,sans-serif" font-weight="700" font-size="130" ' +
+            'fill="#ffffff" text-anchor="middle" dominant-baseline="middle">SMK</text>' +
+        '<text x="256" y="355" font-family="Arial,sans-serif" font-weight="700" font-size="' +
+            (abbr.length <= 3 ? '130' : abbr.length <= 4 ? '110' : '88') + '" ' +
+            'fill="#bfdbfe" text-anchor="middle" dominant-baseline="middle">' + abbr + '</text>' +
+        '</svg>';
+    return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
+
 function _injectDynamicManifest(slug, branding = null) {
     const el = document.querySelector('link[rel="manifest"]');
     if (!el || !slug) return;
@@ -43,11 +63,18 @@ function _injectDynamicManifest(slug, branding = null) {
                     manifest.theme_color      = branding.primary_color;
                     manifest.background_color = branding.primary_color;
                 }
-                if (branding.logo_url) {
-                    // Tambahkan logo sekolah sebagai icon utama, pertahankan fallback generik
-                    const schoolIcon = { src: branding.logo_url, sizes: '512x512', type: 'image/png', purpose: 'any maskable' };
-                    manifest.icons = [schoolIcon, ...(manifest.icons ?? [])];
-                }
+            }
+            // Selalu generate ikon SVG dinamis dari slug (override ikon generik "SMK HR")
+            const abbr     = _slugToAbbr(slug);
+            const color    = branding?.primary_color || '#1a56db';
+            const iconURI  = _makeIconDataURI(abbr, color);
+            const dynIcon  = { src: iconURI, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' };
+            // Jika ada logo_url sekolah, pakai itu sebagai prioritas pertama
+            if (branding?.logo_url) {
+                const logoIcon = { src: branding.logo_url, sizes: '512x512', type: 'image/png', purpose: 'any maskable' };
+                manifest.icons = [logoIcon, dynIcon, ...(manifest.icons ?? [])];
+            } else {
+                manifest.icons = [dynIcon, ...(manifest.icons ?? [])];
             }
             const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
             el.href = URL.createObjectURL(blob);
@@ -130,6 +157,7 @@ export async function applyBrandingById(schoolId, supabaseClient) {
             .single();
         if (!data) return null;
         if (data.slug) try { localStorage.setItem('school_slug', data.slug); } catch { /* private mode */ }
+        _injectDynamicManifest(data.slug, data);
         return _applyToDom(data);
     } catch {
         return null;
