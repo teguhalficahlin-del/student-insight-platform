@@ -193,7 +193,7 @@
                         <label for="ach-desc">Keterangan <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></label>
                         <textarea id="ach-desc" class="input" rows="2" placeholder="Detail tambahan…" maxlength="500"></textarea>
                     </div>
-                    <button type="submit" class="btn btn-primary" id="ach-submit">Simpan Prestasi</button>
+                    <button type="submit" class="btn btn-primary" id="ach-submit" style="width:100%">Simpan Prestasi</button>
                     <div id="ach-status" class="status-msg" style="display:none;margin-top:8px"></div>
                 </form>
                 <div id="ach-student-achievements" style="margin-top:16px;display:none">
@@ -805,8 +805,8 @@
                             style="resize:vertical; width:100%"></textarea>
                     </div>
                     <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px">
-                        <button type="submit" class="btn btn-primary" id="journal-submit-btn">Simpan</button>
-                        <span id="journal-date-toggle" style="font-size:0.85em; color:var(--color-text-muted); cursor:pointer; text-decoration:underline">Ubah tanggal</span>
+                        <button type="submit" class="btn btn-primary" id="journal-submit-btn" style="flex:1">Simpan</button>
+                        <button type="button" id="journal-date-toggle" style="font-size:0.85em; color:var(--color-text-muted); cursor:pointer; text-decoration:underline; background:none; border:none; padding:4px 0; min-height:44px">Ubah tanggal</button>
                     </div>
                     <div id="journal-date-row" style="display:none; margin-top:8px">
                         <input type="date" id="journal-date" class="input" style="width:auto">
@@ -932,7 +932,7 @@
 
             <!-- Create modal -->
             <div id="kasus-create-modal" class="modal-overlay">
-                <div style="background:var(--color-surface); border-radius:var(--radius-lg); padding:24px; width:100%; max-width:520px; max-height:90vh; overflow-y:auto">
+                <div style="background:var(--color-surface); border-radius:var(--radius-lg); padding:24px; width:100%; max-width:520px; max-height:90vh; overflow-y:auto; margin:0 16px">
                     <h3 style="margin-bottom:16px">Buat Kasus Baru</h3>
                     <form id="kasus-create-form">
                         <div class="field">

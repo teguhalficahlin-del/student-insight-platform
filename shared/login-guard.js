@@ -36,11 +36,11 @@ function showConcurrentBanner(onSignOutOthers) {
     banner.style.cssText = [
         'position:fixed;top:0;left:0;right:0;z-index:10000',
         'background:#b45309;color:#fff;padding:10px 16px',
-        'display:flex;align-items:center;gap:12px;font-size:14px',
+        'display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:14px',
         'box-shadow:0 2px 8px rgba(0,0,0,.3)',
     ].join(';');
     banner.innerHTML = `
-        <span style="flex:1">⚠️ Akun Anda sedang aktif di perangkat lain. Jika bukan Anda, segera keluar semua perangkat.</span>
+        <span style="flex:1;min-width:200px">⚠️ Akun Anda sedang aktif di perangkat lain. Jika bukan Anda, segera keluar semua perangkat.</span>
         <button id="lgb-signout-all" style="background:#fff;color:#b45309;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:600">Keluar Semua Perangkat</button>
         <button id="lgb-dismiss" style="background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px">Abaikan</button>`;
     document.body.prepend(banner);

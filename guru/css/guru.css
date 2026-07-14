@@ -40,7 +40,7 @@ p { margin: 0 0 8px; color: var(--color-text-muted); }
 .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     padding: 10px 18px; border-radius: var(--radius); border: 1px solid transparent;
-    font-size: 14px; font-weight: 600; cursor: pointer;
+    font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px;
     transition: background-color .15s, border-color .15s;
 }
 .btn-primary  { background: var(--color-primary); color: #fff; }
@@ -66,7 +66,7 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
     width: 100%; padding: 10px 12px; border: 1px solid var(--color-border);
     border-radius: var(--radius); font-size: 16px; font-family: inherit;
     background: var(--color-surface); color: var(--color-text); outline: none;
-    transition: border-color .15s;
+    transition: border-color .15s; min-height: 44px;
 }
 .input:focus { border-color: var(--color-primary); }
 .hint { font-size: 13px; color: var(--color-text-muted); margin: 4px 0 0; }
@@ -249,11 +249,13 @@ details[open] .att-accordion-summary::before { transform: rotate(90deg); }
 
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 200; align-items: center; justify-content: center; }
 .modal-overlay.is-open { display: flex; }
-.modal-box { background: var(--color-surface); border-radius: var(--radius-lg); padding: 24px; width: min(560px,96vw); max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-md); }
+.modal-box { background: var(--color-surface); border-radius: var(--radius-lg); padding: 24px; width: min(560px,calc(100vw - 32px)); max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-md); }
 
 /* ── Notif badge ─────────────────────────────────────────── */
 .notif-badge-count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; line-height: 18px; border-radius: 9px; background: var(--color-danger); color: #fff; font-size: 11px; font-weight: 700; text-align: center; padding: 0 3px; pointer-events: none; }
 .kasus-notif-badge { display: inline-block; min-width: 18px; height: 18px; line-height: 18px; border-radius: 9px; background: var(--color-danger); color: #fff; font-size: 11px; font-weight: 700; text-align: center; padding: 0 4px; margin-left: 5px; vertical-align: middle; }
+.bottom-nav .tab-btn { position: relative; }
+.bottom-nav .tab-btn .kasus-notif-badge { position: absolute; top: 4px; right: 4px; margin-left: 0; }
 
 /* ── Sync banner ─────────────────────────────────────────── */
 .sync-banner { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2000; padding: 8px 14px; font-size: 13px; text-align: center; display: none; background: var(--color-warning-bg); color: var(--color-warning); border-top: 1px solid var(--color-warning); }
@@ -322,6 +324,7 @@ details[open] .att-accordion-summary::before { transform: rotate(90deg); }
     /* Kontainer pill */
     .bottom-nav-inner {
         display: flex;
+        justify-content: space-around;
         background: rgba(11, 17, 32, 0.96);
         border: 1px solid rgba(245, 158, 11, 0.40);
         border-radius: 32px;
