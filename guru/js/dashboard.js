@@ -32,6 +32,7 @@ import {
     registerLoginDevice,
     getForumPosts, getForumCategories, getForumStudents, createForumPost,
     addForumAcknowledgement, addForumComment, getForumPostComments, getForumClasses,
+    withdrawForumPost, updateForumPost,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 
@@ -3455,10 +3456,17 @@ async function loadForumPosts(append = false) {
 
     const LIMIT = 20;
     try {
+        // Waka/Kepsek/Kaprodi: tampilkan semua posting kelas (tidak filter by audience table).
+        // RLS fn_can_read_forum_post tetap menjadi penjaga akses di sisi database.
+        const isOversight = ['WAKA_KESISWAAN', 'KEPSEK', 'ADMINISTRATIVE'].includes(currentUser.role_type)
+            || currentUser.is_waka_kesiswaan === true
+            || currentUser.is_kepsek === true;
+        const isKaprodi = currentUser.role_type === 'KAPRODI' || !!currentUser.kaprodi_program_id;
+        const skipAudienceFilter = isOversight || isKaprodi;
         const posts = await getForumPosts(
             _forumClassId, _forumAcademicYear,
             currentUser.user_id, currentUser.school_id,
-            LIMIT, _forumOffset
+            LIMIT, _forumOffset, skipAudienceFilter
         );
         loadingEl.style.display = 'none';
 
@@ -3500,6 +3508,8 @@ function renderForumPostCard(post) {
     const cmtCount = (post.comments ?? []).length;
     const hasAcked = (post.acknowledgements ?? []).some(a => a.user_id === currentUser.user_id);
 
+    const canEdit = isAuthor && !isWithdrawn && cmtCount === 0;
+
     const bodyHtml = isWithdrawn
         ? `<p style="color:var(--color-text-muted);font-style:italic;margin:8px 0">[Posting ini telah ditarik]</p>`
         : `<p style="margin:8px 0;white-space:pre-wrap;color:var(--color-text)">${esc(post.body ?? '')}</p>`;
@@ -3508,6 +3518,7 @@ function renderForumPostCard(post) {
     <div class="forum-post-card" data-post-id="${esc(post.post_id)}"
          data-author-id="${esc(post.author_user_id ?? '')}"
          data-withdrawn="${isWithdrawn ? '1' : '0'}"
+         data-comment-count="${cmtCount}"
          style="border-bottom:0.5px solid var(--color-border);padding:14px 0${isWithdrawn ? ';opacity:.6' : ''}">
 
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:4px">
@@ -3518,7 +3529,7 @@ function renderForumPostCard(post) {
         ${subjects.length ? `<p style="font-size:12px;color:var(--color-text-muted);margin:0 0 4px">Siswa: ${esc(subjects.join(', '))}</p>` : ''}
         ${catLabel ? `<span style="font-size:11px;padding:2px 8px;border-radius:20px;color:${catColor};background:var(--color-bg-alt);margin-bottom:6px;display:inline-block">${esc(catLabel)}</span>` : ''}
 
-        ${bodyHtml}
+        <div class="forum-post-body">${bodyHtml}</div>
 
         ${!isWithdrawn ? `
         <div class="forum-post-actions" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
@@ -3529,6 +3540,7 @@ function renderForumPostCard(post) {
             <button class="btn btn-sm btn-secondary btn-comments" style="font-size:12px">
                 💬 Komentar${cmtCount > 0 ? ` (${cmtCount})` : ''}
             </button>
+            ${canEdit ? `<button class="btn btn-sm btn-secondary btn-edit-post" style="font-size:12px">Edit</button>` : ''}
             ${isAuthor ? `<button class="btn btn-sm btn-secondary btn-withdraw" style="font-size:12px;color:var(--color-danger)">Tarik posting</button>` : ''}
         </div>
         <div class="forum-comments-panel" style="display:none;margin-top:12px;padding:10px;background:var(--color-bg-alt);border-radius:var(--radius)">
@@ -3601,16 +3613,18 @@ function wireForumCards(containerEl, posts) {
             });
         }
 
+        const editBtn = card.querySelector('.btn-edit-post');
+        if (editBtn) {
+            editBtn.addEventListener('click', () => handleEditForumPost(card, postId));
+        }
+
         const wdBtn = card.querySelector('.btn-withdraw');
         if (wdBtn) {
             wdBtn.addEventListener('click', async () => {
                 if (!confirm('Tarik posting ini? Konten akan disembunyikan dari pembaca.')) return;
                 wdBtn.disabled = true;
                 try {
-                    await supabase.from('forum_posts')
-                        .update({ is_withdrawn: true })
-                        .eq('post_id', postId)
-                        .eq('author_user_id', currentUser.user_id);
+                    await withdrawForumPost(postId);
                     _forumOffset = 0;
                     await loadForumPosts();
                 } catch (err) {
@@ -3618,6 +3632,74 @@ function wireForumCards(containerEl, posts) {
                     wdBtn.disabled = false;
                 }
             });
+        }
+    });
+}
+
+function handleEditForumPost(card, postId) {
+    const bodyEl   = card.querySelector('.forum-post-body');
+    const actionsEl = card.querySelector('.forum-post-actions');
+    if (!bodyEl) return;
+
+    // Ambil teks asli dari elemen <p> di dalam body
+    const currentText = bodyEl.querySelector('p')?.innerText ?? '';
+
+    const textarea = document.createElement('textarea');
+    textarea.className  = 'input';
+    textarea.value      = currentText;
+    textarea.rows       = 4;
+    textarea.maxLength  = 2000;
+    textarea.style.cssText = 'width:100%;font-size:14px;margin:4px 0 6px;box-sizing:border-box';
+
+    const saveBtn   = document.createElement('button');
+    saveBtn.className   = 'btn btn-primary btn-sm';
+    saveBtn.textContent = 'Simpan';
+    saveBtn.style.marginRight = '6px';
+    saveBtn.style.fontSize = '12px';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className   = 'btn btn-secondary btn-sm';
+    cancelBtn.textContent = 'Batal';
+    cancelBtn.style.fontSize = '12px';
+
+    const errEl = document.createElement('p');
+    errEl.style.cssText = 'color:var(--color-danger);font-size:12px;margin:4px 0 0;display:none';
+
+    bodyEl.innerHTML = '';
+    bodyEl.appendChild(textarea);
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:4px';
+    btnRow.appendChild(saveBtn);
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(errEl);
+    bodyEl.appendChild(btnRow);
+    if (actionsEl) actionsEl.style.display = 'none';
+    textarea.focus();
+
+    cancelBtn.addEventListener('click', () => {
+        _forumOffset = 0;
+        loadForumPosts();
+    });
+
+    saveBtn.addEventListener('click', async () => {
+        const newBody = textarea.value.trim();
+        if (newBody.length < 3) {
+            errEl.textContent = 'Isi posting minimal 3 karakter.';
+            errEl.style.display = 'block';
+            return;
+        }
+        errEl.style.display = 'none';
+        saveBtn.disabled    = true;
+        saveBtn.textContent = 'Menyimpan…';
+        try {
+            await updateForumPost(postId, newBody);
+            _forumOffset = 0;
+            await loadForumPosts();
+        } catch (err) {
+            errEl.textContent  = fe(err, 's');
+            errEl.style.display = 'block';
+            saveBtn.disabled    = false;
+            saveBtn.textContent = 'Simpan';
         }
     });
 }
@@ -3851,14 +3933,22 @@ function renderForumCategoryGrid() {
 function updateAudienceWarning() {
     const val    = document.getElementById('forum-audience-select').value;
     const warnEl = document.getElementById('forum-audience-warning');
+    const specificSection = document.getElementById('forum-specific-section');
     if (val === 'ORTU_SISWA_KELAS') {
         warnEl.textContent = 'Posting ini akan terlihat oleh semua siswa dan orang tua di kelas ini.';
         warnEl.style.display = 'block';
+        if (specificSection) specificSection.style.display = 'none';
     } else if (val === 'PUBLIK') {
         warnEl.textContent = 'Posting ini terlihat oleh seluruh anggota forum, termasuk siswa dan semua orang tua.';
         warnEl.style.display = 'block';
+        if (specificSection) specificSection.style.display = 'none';
+    } else if (val === 'ORANG_TERTENTU') {
+        warnEl.textContent = 'Posting hanya terlihat oleh orang yang Anda pilih di bawah ini.';
+        warnEl.style.display = 'block';
+        if (specificSection) specificSection.style.display = 'block';
     } else {
         warnEl.style.display = 'none';
+        if (specificSection) specificSection.style.display = 'block';
     }
 }
 
@@ -3875,8 +3965,18 @@ async function submitCreatePost() {
         errEl.style.display = 'block';
         return;
     }
+    if (!content) {
+        errEl.textContent = 'Isi catatan tidak boleh kosong.';
+        errEl.style.display = 'block';
+        return;
+    }
     if (audience === 'ORTU_SISWA_SUBJEK' && !_forumSelectedStudents.length) {
         errEl.textContent = 'Audiens "Orang tua & siswa yang dibahas" memerlukan minimal satu siswa dipilih.';
+        errEl.style.display = 'block';
+        return;
+    }
+    if (audience === 'ORANG_TERTENTU' && !_forumSpecificUsers.length) {
+        errEl.textContent = 'Pilih setidaknya satu orang sebagai penerima.';
         errEl.style.display = 'block';
         return;
     }

@@ -1057,11 +1057,13 @@ export async function removeSchoolAdmin(user_id) {
 export async function getForumClasses(userId, academicYear) {
     const classMap = new Map();
 
-    // 1. Wali kelas
+    // Ambil profil user sekali (termasuk role dan jabatan tambahan)
     const { data: u } = await supabase.from('users')
-        .select('wali_kelas_class_id')
+        .select('wali_kelas_class_id, role_type, program_id, kaprodi_program_id, is_waka_kesiswaan, is_kepsek')
         .eq('user_id', userId)
         .maybeSingle();
+
+    // 1. Wali kelas
     if (u?.wali_kelas_class_id) {
         const { data: cls } = await supabase.from('classes')
             .select('class_id, name')
@@ -1101,16 +1103,42 @@ export async function getForumClasses(userId, academicYear) {
         (enr ?? []).forEach(r => r.class && classMap.set(r.class.class_id, r.class.name));
     }
 
+    // 5. Waka Kesiswaan / Kepsek / Administrative → semua kelas tahun ini
+    const isOversight = ['WAKA_KESISWAAN', 'KEPSEK', 'ADMINISTRATIVE'].includes(u?.role_type)
+        || u?.is_waka_kesiswaan === true
+        || u?.is_kepsek === true;
+    if (isOversight) {
+        const { data: allCls } = await supabase.from('classes')
+            .select('class_id, name')
+            .eq('academic_year', academicYear);
+        (allCls ?? []).forEach(c => classMap.set(c.class_id, c.name));
+    }
+
+    // 6. Kaprodi → kelas di program yang dikelola
+    const programId = u?.kaprodi_program_id ?? (u?.role_type === 'KAPRODI' ? u?.program_id : null);
+    if (programId) {
+        const { data: kpCls } = await supabase.from('classes')
+            .select('class_id, name')
+            .eq('program_id', programId)
+            .eq('academic_year', academicYear);
+        (kpCls ?? []).forEach(c => classMap.set(c.class_id, c.name));
+    }
+
     return Array.from(classMap, ([class_id, name]) => ({ class_id, name }))
         .sort((a, b) => a.name.localeCompare(b.name, 'id'));
 }
 
-export async function getForumPosts(classId, academicYear, callerId, schoolId, limit = 20, offset = 0) {
-    const { data, error } = await supabase
+export async function getForumPosts(classId, academicYear, callerId, schoolId, limit = 20, offset = 0, skipAudienceFilter = false) {
+    // Waka/Kepsek/Kaprodi tidak perlu filter audience — RLS sudah guard akses.
+    // User biasa hanya melihat posting yang ada di audience-nya.
+    const audienceSel = skipAudienceFilter
+        ? 'forum_post_audience(user_id)'
+        : 'forum_post_audience!inner(user_id)';
+    let q = supabase
         .from('forum_posts')
         .select(`
-            post_id, title, body, visibility, is_pinned, created_at, updated_at,
-            author_user_id,
+            post_id, title, body, visibility, is_pinned, is_withdrawn,
+            created_at, updated_at, author_user_id,
             category:communication_categories(category_code, label_sekolah, polarity),
             author:users!forum_posts_author_user_id_fkey(user_id, full_name),
             subjects:forum_post_subjects(
@@ -1118,17 +1146,19 @@ export async function getForumPosts(classId, academicYear, callerId, schoolId, l
             ),
             acknowledgements:forum_post_acknowledgements(user_id),
             comments:forum_post_comments(comment_id),
-            forum_post_audience!inner(user_id)
+            ${audienceSel}
         `)
-        .eq('class_id',                    classId)
-        .eq('academic_year',               academicYear)
-        .eq('school_id',                   schoolId)
-        .eq('forum_post_audience.user_id', callerId)
+        .eq('class_id',    classId)
+        .eq('academic_year', academicYear)
+        .eq('school_id',   schoolId)
         .order('is_pinned',  { ascending: false })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
+    if (!skipAudienceFilter) {
+        q = q.eq('forum_post_audience.user_id', callerId);
+    }
+    const { data, error } = await q;
     if (error) throw error;
-    // Buang field forum_post_audience dari response (dipakai hanya untuk filter)
     return (data ?? []).map(({ forum_post_audience: _aud, ...rest }) => rest);
 }
 
@@ -1222,6 +1252,13 @@ export async function addForumComment(postId, body, authorUserId, schoolId) {
 export async function withdrawForumPost(postId) {
     const { error } = await supabase.from('forum_posts')
         .update({ is_withdrawn: true })
+        .eq('post_id', postId);
+    if (error) throw error;
+}
+
+export async function updateForumPost(postId, newBody) {
+    const { error } = await supabase.from('forum_posts')
+        .update({ body: newBody, updated_at: new Date().toISOString() })
         .eq('post_id', postId);
     if (error) throw error;
 }
