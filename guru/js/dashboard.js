@@ -1996,18 +1996,21 @@ async function initKpPlacementForm(programId) {
 
 let _wkKur1Visible = false;
 let _wkKur2Visible = false;
+let _wkKurTabInit  = false;
 
 async function initWakaKurTab() {
-    const today  = localDateStr();
-    const monday = localDateStr((() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; })());
-    const sunday = localDateStr((() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 6); return d; })());
-
-    document.getElementById('wk-kur-start').value = monday;
-    document.getElementById('wk-kur-end').value   = sunday;
-    document.getElementById('wk-kur1-btn').onclick = handleWkKur1Btn;
-    document.getElementById('wk-kur2-btn').onclick = handleWkKur2Btn;
-
-    await loadWkKur1(today);
+    if (!_wkKurTabInit) {
+        _wkKurTabInit = true;
+        // Default Panel 2: 7 hari terakhir — selaras dengan scope Panel 1 (hari ini)
+        const weekAgo = localDateStr(new Date(Date.now() - 6 * 86400000));
+        document.getElementById('wk-kur-start').value = weekAgo;
+        document.getElementById('wk-kur-end').value   = localDateStr();
+        document.getElementById('wk-kur1-refresh').onclick = () => loadWkKur1(localDateStr());
+        document.getElementById('wk-kur1-btn').onclick = handleWkKur1Btn;
+        document.getElementById('wk-kur2-btn').onclick = handleWkKur2Btn;
+    }
+    // Selalu reload Panel 1 saat tab dibuka agar data terbaru tampil
+    await loadWkKur1(localDateStr());
 }
 
 async function loadWkKur1(date) {

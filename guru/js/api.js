@@ -603,7 +603,8 @@ export async function getPendingAttendanceSessions(dateStart, dateEnd) {
         .select('schedule_id, session_date, session_start, session_end, scheduled_teacher_id, class:classes(name), teacher:users(full_name), subject:subjects(name)')
         .eq('teacher_indicator', 'PENDING_EVALUATION')
         .order('session_date', { ascending: true })
-        .order('session_start', { ascending: true });
+        .order('session_start', { ascending: true })
+        .limit(200);
     if (dateStart) q = q.gte('session_date', dateStart);
     if (dateEnd)   q = q.lte('session_date', dateEnd);
     const { data, error } = await q;
