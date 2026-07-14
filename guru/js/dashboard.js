@@ -696,16 +696,21 @@ async function loadAttModalContent(scheduleId, classId, className) {
                 </div>`;
         }
 
-        // Carousel satu-siswa-per-slide
-        const slidesHtml = students.map(s => `
-            <div class="att-carousel-slide">${renderStudentRow(s)}</div>`).join('');
+        // Carousel per-5-siswa
+        const CHUNK = 5;
+        const chunks = [];
+        for (let i = 0; i < students.length; i += CHUNK)
+            chunks.push(students.slice(i, i + CHUNK));
 
+        const slidesHtml = chunks.map(group => `
+            <div class="att-carousel-slide">${group.map(renderStudentRow).join('')}</div>`).join('');
+
+        const lastChunkEnd = students.length;
         panel.innerHTML = `
             <div class="att-carousel-nav">
                 <button class="att-prev" aria-label="Sebelumnya">&#8592;</button>
                 <div class="att-carousel-counter">
-                    <span class="att-cur-num">1</span> / ${students.length}
-                    <span class="att-carousel-sub">${esc(students[0].full_name)}</span>
+                    Siswa <span class="att-cur-range">1–${Math.min(CHUNK, students.length)}</span> / ${students.length}
                 </div>
                 <button class="att-next" aria-label="Berikutnya">&#8594;</button>
             </div>
@@ -721,19 +726,19 @@ async function loadAttModalContent(scheduleId, classId, className) {
 
         // Carousel logic
         let cur = 0;
-        const track   = panel.querySelector('.att-carousel-track');
-        const curNum  = panel.querySelector('.att-cur-num');
-        const subLbl  = panel.querySelector('.att-carousel-sub');
-        const prevBtn = panel.querySelector('.att-prev');
-        const nextBtn = panel.querySelector('.att-next');
+        const track    = panel.querySelector('.att-carousel-track');
+        const curRange = panel.querySelector('.att-cur-range');
+        const prevBtn  = panel.querySelector('.att-prev');
+        const nextBtn  = panel.querySelector('.att-next');
 
         function goTo(idx) {
-            cur = Math.max(0, Math.min(students.length - 1, idx));
+            cur = Math.max(0, Math.min(chunks.length - 1, idx));
             track.style.transform = `translateX(-${cur * 100}%)`;
-            curNum.textContent  = cur + 1;
-            subLbl.textContent  = students[cur].full_name;
-            prevBtn.disabled    = cur === 0;
-            nextBtn.disabled    = cur === students.length - 1;
+            const start = cur * CHUNK + 1;
+            const end   = Math.min(start + CHUNK - 1, students.length);
+            curRange.textContent = `${start}–${end}`;
+            prevBtn.disabled = cur === 0;
+            nextBtn.disabled = cur === chunks.length - 1;
         }
         goTo(0);
         prevBtn.addEventListener('click', () => goTo(cur - 1));
