@@ -3342,23 +3342,10 @@ async function initForumTab() {
             document.getElementById('forum-loading').textContent = 'Anda tidak memiliki kelas yang bisa diakses.';
             return;
         }
-        const progGroupRe = /^(?:XI{1,2}|X{1,3}I{0,3})\s+(\S+)/;
-        const groupMap = new Map();
-        classes.forEach(c => {
-            const m = progGroupRe.exec(c.name);
-            const group = m ? m[1] : 'Lainnya';
-            if (!groupMap.has(group)) groupMap.set(group, []);
-            groupMap.get(group).push(c);
-        });
-        sel.innerHTML = [...groupMap.entries()]
-            .sort(([a], [b]) => a.localeCompare(b, 'id'))
-            .map(([group, cls]) => {
-                const opts = cls
-                    .sort((a, b) => a.name.localeCompare(b.name, 'id'))
-                    .map(c => `<option value="${esc(c.class_id)}">${esc(c.name)}</option>`)
-                    .join('');
-                return `<optgroup label="${esc(group)}">${opts}</optgroup>`;
-            }).join('');
+        sel.innerHTML = [...classes]
+            .sort((a, b) => a.name.localeCompare(b.name, 'id'))
+            .map(c => `<option value="${esc(c.class_id)}">${esc(c.name)}</option>`)
+            .join('');
         const first = classes[0];
         _forumClassId      = first.class_id;
         _forumAcademicYear = config.current_academic_year;
