@@ -30,16 +30,17 @@ function _slugToAbbr(slug) {
     return (s.slice(0, 4) || slug.slice(0, 4)).toUpperCase();
 }
 
-// Buat data-URI SVG ikon dengan singkatan sekolah + warna branding
+// Buat data-URI SVG ikon style K: mortarboard + SMK + SIP serif
 function _makeIconDataURI(abbr, color) {
-    var bg  = color || '#1a56db';
+    var bg  = color || '#1d4ed8';
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">' +
         '<rect width="512" height="512" rx="96" fill="' + bg + '"/>' +
-        '<text x="256" y="210" font-family="Arial,sans-serif" font-weight="700" font-size="130" ' +
-            'fill="#ffffff" text-anchor="middle" dominant-baseline="middle">SMK</text>' +
-        '<text x="256" y="355" font-family="Arial,sans-serif" font-weight="700" font-size="' +
-            (abbr.length <= 3 ? '130' : abbr.length <= 4 ? '110' : '88') + '" ' +
-            'fill="#bfdbfe" text-anchor="middle" dominant-baseline="middle">' + abbr + '</text>' +
+        '<polygon points="256,112 340,152 256,192 172,152" fill="rgba(255,255,255,0.85)"/>' +
+        '<line x1="340" y1="152" x2="340" y2="210" stroke="rgba(255,255,255,0.85)" stroke-width="18" stroke-linecap="round"/>' +
+        '<text x="256" y="298" font-family="Arial,sans-serif" font-weight="700" font-size="88" ' +
+            'fill="rgba(255,255,255,0.65)" text-anchor="middle" dominant-baseline="middle" letter-spacing="4">SMK</text>' +
+        '<text x="256" y="408" font-family="Georgia,serif" font-weight="700" font-size="128" ' +
+            'fill="#ffffff" text-anchor="middle" dominant-baseline="middle">SIP</text>' +
         '</svg>';
     return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
 }
