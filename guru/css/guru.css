@@ -57,7 +57,8 @@ p { margin: 0 0 8px; color: var(--color-text-muted); }
 .btn-warning { background: var(--color-warning-bg); color: var(--color-warning); border-color: var(--color-warning); }
 .btn-warning:hover { background: var(--color-warning); color: #fff; }
 .hint-success { font-size: 13px; color: var(--color-success); font-weight: 600; margin-top: 4px; }
-.sub-label { font-size: 11px; color: var(--color-text-muted); }
+.sub-label { font-size: 11px; color: rgba(255,255,255,0.65); }
+.acc-empty { padding: 8px 16px; color: var(--color-text-muted); font-size: 13px; }
 
 /* ── Form ────────────────────────────────────────────────── */
 label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
@@ -220,11 +221,14 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 }
 .att-accordion-summary {
     display: flex; align-items: center; gap: 10px;
+    justify-content: space-between;
     padding: 8px 12px; cursor: pointer;
     font-size: 13px; font-weight: 600;
     background: var(--color-surface-alt);
     user-select: none; list-style: none;
 }
+.att-acc-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att-acc-status { flex-shrink: 0; }
 .att-accordion-summary::-webkit-details-marker { display: none; }
 .att-accordion-summary::before {
     content: '▶'; font-size: 10px; transition: transform .2s;
@@ -275,7 +279,12 @@ details[open] .att-accordion-summary::before { transform: rotate(90deg); }
 #loading { padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 14px; }
 
 /* ── Date row ────────────────────────────────────────────── */
-.date-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.date-row { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.date-range { display: flex; gap: 6px; flex: 1; min-width: 0; }
+.date-range input[type="date"] { flex: 1; min-width: 0; }
+
+/* ── Banner offset ────────────────────────────────────────── */
+body.has-login-banner .app-header { margin-top: 94px; }
 .date-row label { margin: 0; }
 
 /* ── Obs card ────────────────────────────────────────────── */
@@ -372,9 +381,8 @@ details[open] .att-accordion-summary::before { transform: rotate(90deg); }
     /* Tab — tap target lebih besar */
     .tab-btn { padding: 12px 14px; font-size: 13px; }
 
-    /* Date row — date input mengisi ruang tersisa */
+    /* Date row — date input mengisi ruang tersisa (via .date-range wrapper) */
     .date-row { flex-wrap: nowrap; }
-    .date-row input[type="date"] { flex: 1; min-width: 0; }
 
     /* Tabel jadwal — jam + kelas lebih rapat */
     .table th, .table td { padding: 8px 8px; font-size: 13px; }

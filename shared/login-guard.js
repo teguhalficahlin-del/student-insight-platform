@@ -44,13 +44,15 @@ function showConcurrentBanner(onSignOutOthers) {
         <button id="lgb-signout-all" style="background:#fff;color:#b45309;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:600">Keluar Semua Perangkat</button>
         <button id="lgb-dismiss" style="background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px">Abaikan</button>`;
     document.body.prepend(banner);
+    document.body.classList.add('has-login-banner');
 
-    document.getElementById('lgb-dismiss').onclick = () => banner.remove();
+    const removeBanner = () => { banner.remove(); document.body.classList.remove('has-login-banner'); };
+    document.getElementById('lgb-dismiss').onclick = removeBanner;
     document.getElementById('lgb-signout-all').onclick = async () => {
         document.getElementById('lgb-signout-all').disabled = true;
         document.getElementById('lgb-signout-all').textContent = 'Memproses…';
         await onSignOutOthers();
-        banner.remove();
+        removeBanner();
     };
 }
 

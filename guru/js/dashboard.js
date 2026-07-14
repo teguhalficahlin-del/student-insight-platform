@@ -1107,16 +1107,16 @@ async function loadWaliSummary() {
                          data-date-start="${esc(dateStart ?? '')}"
                          data-date-end="${esc(dateEnd ?? '')}">
                     <summary class="att-accordion-summary">
-                        <span>
+                        <span class="att-acc-name">
                             ${esc(s.full_name)}
                             <span class="sub-label" style="margin-left:4px">${esc(s.nis)}</span>
                         </span>
-                        <span style="color:${color};font-weight:600">
+                        <span class="att-acc-status" style="color:${color};font-weight:600">
                             ${pct !== null ? pct + '%' : '—'}
                         </span>
                     </summary>
                     <div style="padding:4px 0">
-                        <p class="hint" style="padding:8px 16px">Memuat sesi…</p>
+                        <p class="acc-empty">Memuat sesi…</p>
                     </div>
                 </details>`;
             }).join('');
@@ -1134,7 +1134,7 @@ async function loadWaliSummary() {
                 try {
                     const sessions = await getStudentAttendanceSessions(sid, ds, de);
                     if (!sessions.length) {
-                        body.innerHTML = '<p class="hint" style="padding:8px 16px">Belum ada sesi tercatat.</p>';
+                        body.innerHTML = '<p class="acc-empty">Belum ada sesi tercatat.</p>';
                         return;
                     }
                     const STATUS_COLOR = {
@@ -1371,24 +1371,29 @@ function buildAttStatCards(rows) {
     const pctI = tot > 0 ? Math.round(i  / tot * 100) : 0;
     const pctS = tot > 0 ? Math.round(sk / tot * 100) : 0;
     const pctA = tot > 0 ? Math.round(a  / tot * 100) : 0;
-    const colH = pctH >= 80 ? 'var(--color-success)' : pctH >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+    const muted = 'var(--color-text-muted)';
+    const colH = tot === 0 ? muted : pctH >= 80 ? 'var(--color-success)' : pctH >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
+    const colI = tot === 0 ? muted : 'var(--color-warning,#f59e0b)';
+    const colS = tot === 0 ? muted : 'var(--color-primary)';
+    const colA = tot === 0 ? muted : 'var(--color-danger)';
+    const lbl  = 'font-size:11px;color:rgba(255,255,255,0.65);margin-top:2px';
     return `
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
         <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
             <div style="font-size:20px;font-weight:500;color:${colH}">${pctH}%</div>
-            <div style="font-size:11px;color:var(--color-text-muted);margin-top:2px">Hadir</div>
+            <div style="${lbl}">Hadir</div>
         </div>
         <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
-            <div style="font-size:20px;font-weight:500;color:var(--color-warning,#f59e0b)">${pctI}%</div>
-            <div style="font-size:11px;color:var(--color-text-muted);margin-top:2px">Izin</div>
+            <div style="font-size:20px;font-weight:500;color:${colI}">${pctI}%</div>
+            <div style="${lbl}">Izin</div>
         </div>
         <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
-            <div style="font-size:20px;font-weight:500;color:var(--color-primary)">${pctS}%</div>
-            <div style="font-size:11px;color:var(--color-text-muted);margin-top:2px">Sakit</div>
+            <div style="font-size:20px;font-weight:500;color:${colS}">${pctS}%</div>
+            <div style="${lbl}">Sakit</div>
         </div>
         <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
-            <div style="font-size:20px;font-weight:500;color:var(--color-danger)">${pctA}%</div>
-            <div style="font-size:11px;color:var(--color-text-muted);margin-top:2px">Alpa</div>
+            <div style="font-size:20px;font-weight:500;color:${colA}">${pctA}%</div>
+            <div style="${lbl}">Alpa</div>
         </div>
     </div>`;
 }
