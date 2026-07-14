@@ -115,10 +115,7 @@ const STAFF_ROLES = ROLE_TYPE.filter(
 );
 
 function generateTempPassword(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    const arr = new Uint8Array(12);
-    crypto.getRandomValues(arr);
-    return Array.from(arr, b => chars[b % chars.length]).join('');
+    return '12345678';
 }
 
 // ─────────────────────────────────────────────────────────────

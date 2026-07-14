@@ -139,10 +139,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                         continue;
                     }
 
-                    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-                    const arr = new Uint8Array(12);
-                    crypto.getRandomValues(arr);
-                    const tempPassword = Array.from(arr, b => chars[b % chars.length]).join('');
+                    const tempPassword = '12345678';
 
                     const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                         email:         internalEmail,
