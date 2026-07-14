@@ -334,36 +334,24 @@ export async function getWaliKelasInfo(classId) {
  * Catatan: EKSKUL dihapus dari absensi → data lama berstatus EKSKUL dihitung HADIR.
  */
 export async function getWaliAttendanceSummary(classId, academicYear, dateStart, dateEnd) {
-    // 1. Ambil daftar siswa
-    const students = await getEnrolledStudents(classId, academicYear);
-    if (students.length === 0) return [];
-    const ids = students.map(s => s.student_id);
-
-    // 2. Ambil kehadiran dalam rentang berdasarkan TANGGAL SESI (session_date),
-    //    bukan created_at (waktu input). Mulai dari teaching_schedules lalu
-    //    !inner ke attendance (PostgREST tak bisa filter kolom embedded non-inner).
-    let q = supabase
-        .from('teaching_schedules')
-        .select('session_date, attendance!inner ( student_id, status, is_void )')
-        .in('attendance.student_id', ids)
-        .eq('attendance.is_void', false);
-    if (dateStart) q = q.gte('session_date', dateStart);
-    if (dateEnd)   q = q.lte('session_date', dateEnd);
-    const { data, error } = await q;
+    const { data, error } = await supabase.rpc('fn_class_attendance_summary', {
+        p_class_id:      classId,
+        p_academic_year: academicYear,
+        p_date_start:    dateStart ?? null,
+        p_date_end:      dateEnd   ?? null,
+        p_teacher_id:    null,
+    });
     if (error) throw error;
-
-    const map = new Map(students.map(s => [s.student_id, { ...s, HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0, total: 0 }]));
-    for (const sched of data ?? []) {
-        for (const r of sched.attendance ?? []) {
-            const agg = map.get(r.student_id);
-            if (!agg) continue;
-            // EKSKUL dihapus dari absensi → dihitung sebagai HADIR (kompat data lama)
-            const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
-            if (agg[st] !== undefined) agg[st]++;
-            agg.total++;
-        }
-    }
-    return [...map.values()];
+    return (data ?? []).map(r => ({
+        student_id:  r.student_id,
+        full_name:   r.full_name,
+        nis:         r.nis,
+        HADIR:       Number(r.hadir),
+        TIDAK_HADIR: Number(r.tidak_hadir),
+        IZIN:        Number(r.izin),
+        SAKIT:       Number(r.sakit),
+        total:       Number(r.total),
+    }));
 }
 
 // ─── KAPRODI (pindahan dari /kaprodi/) ───────────────────────
@@ -458,12 +446,20 @@ export async function fetchDudiPartners(programId) {
 
 export async function fetchPklAttendance(studentIds, dateStart, dateEnd) {
     if (!studentIds?.length) return [];
-    let q = supabase.from('pkl_attendance').select('student_id, attendance_date, status').in('student_id', studentIds).order('attendance_date', { ascending: false });
-    if (dateStart) q = q.gte('attendance_date', dateStart);
-    if (dateEnd)   q = q.lte('attendance_date', dateEnd);
-    const { data, error } = await q;
+    const { data, error } = await supabase.rpc('fn_pkl_attendance_recap', {
+        p_student_ids: studentIds,
+        p_date_start:  dateStart ?? null,
+        p_date_end:    dateEnd   ?? null,
+    });
     if (error) throw error;
-    return data ?? [];
+    return (data ?? []).map(r => ({
+        student_id:  r.student_id,
+        HADIR:       Number(r.hadir),
+        TIDAK_HADIR: Number(r.tidak_hadir),
+        IZIN:        Number(r.izin),
+        SAKIT:       Number(r.sakit),
+        total:       Number(r.total),
+    }));
 }
 
 export async function fetchDudiObservations(studentIds) {
@@ -676,39 +672,20 @@ export async function getPendingSessionsDetail(teacherId, dateStart, dateEnd) {
 // ─── WAKA KESISWAAN ─────────────────────────────────────────
 
 export async function getAttendanceRecapPerClass(dateStart, dateEnd) {
-    // 1. Ambil semua kelas aktif — tampil meski belum ada attendance
-    const { data: classData, error: classErr } = await supabase
-        .from('classes')
-        .select('class_id, name')
-        .eq('is_active', true)
-        .order('name');
-    if (classErr) throw classErr;
-
-    const map = new Map((classData ?? []).map(c => [
-        c.class_id,
-        { class_id: c.class_id, name: c.name, HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0, total: 0 }
-    ]));
-
-    // 2. Ambil attendance dari teaching_schedules dalam rentang tanggal
-    let q = supabase
-        .from('teaching_schedules')
-        .select('class_id, attendance!inner(status, is_void)')
-        .eq('attendance.is_void', false);
-    if (dateStart) q = q.gte('session_date', dateStart);
-    if (dateEnd)   q = q.lte('session_date', dateEnd);
-    const { data, error } = await q;
+    const { data, error } = await supabase.rpc('fn_attendance_recap_per_class', {
+        p_date_start: dateStart ?? null,
+        p_date_end:   dateEnd   ?? null,
+    });
     if (error) throw error;
-
-    for (const sched of data ?? []) {
-        const agg = map.get(sched.class_id);
-        if (!agg) continue;
-        for (const r of sched.attendance ?? []) {
-            const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
-            if (agg[st] !== undefined) agg[st]++;
-            agg.total++;
-        }
-    }
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'id'));
+    return (data ?? []).map(r => ({
+        class_id:    r.class_id,
+        name:        r.name,
+        HADIR:       Number(r.hadir),
+        TIDAK_HADIR: Number(r.tidak_hadir),
+        IZIN:        Number(r.izin),
+        SAKIT:       Number(r.sakit),
+        total:       Number(r.total),
+    }));
 }
 
 /**
@@ -726,31 +703,25 @@ export async function getClassStudents(classId) {
     return data ?? [];
 }
 
-export async function getAttendanceSummaryByStudents(students, dateStart, dateEnd, teacherId = null) {
-    if (!students?.length) return [];
-    const ids = students.map(s => s.student_id);
-    let q = supabase
-        .from('teaching_schedules')
-        .select('session_date, attendance!inner ( student_id, status, is_void )')
-        .in('attendance.student_id', ids)
-        .eq('attendance.is_void', false);
-    if (teacherId) q = q.eq('scheduled_teacher_id', teacherId);
-    if (dateStart) q = q.gte('session_date', dateStart);
-    if (dateEnd)   q = q.lte('session_date', dateEnd);
-    const { data, error } = await q;
+export async function getAttendanceSummaryByStudents(classId, academicYear, dateStart, dateEnd, teacherId = null) {
+    const { data, error } = await supabase.rpc('fn_class_attendance_summary', {
+        p_class_id:      classId,
+        p_academic_year: academicYear,
+        p_date_start:    dateStart ?? null,
+        p_date_end:      dateEnd   ?? null,
+        p_teacher_id:    teacherId ?? null,
+    });
     if (error) throw error;
-
-    const map = new Map(students.map(s => [s.student_id, { ...s, HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0, total: 0 }]));
-    for (const sched of data ?? []) {
-        for (const r of sched.attendance ?? []) {
-            const agg = map.get(r.student_id);
-            if (!agg) continue;
-            const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
-            if (agg[st] !== undefined) agg[st]++;
-            agg.total++;
-        }
-    }
-    return [...map.values()];
+    return (data ?? []).map(r => ({
+        student_id:  r.student_id,
+        full_name:   r.full_name,
+        nis:         r.nis,
+        HADIR:       Number(r.hadir),
+        TIDAK_HADIR: Number(r.tidak_hadir),
+        IZIN:        Number(r.izin),
+        SAKIT:       Number(r.sakit),
+        total:       Number(r.total),
+    }));
 }
 
 export async function getOpenCases(schoolId) {

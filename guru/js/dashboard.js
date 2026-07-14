@@ -423,12 +423,12 @@ async function loadGuruRecap() {
 
     content.innerHTML = '<p class="hint">Memuat rekap…</p>';
     try {
-        const students = await getEnrolledStudents(classId, config.current_academic_year);
-        if (students.length === 0) {
+        const enrolled = await getEnrolledStudents(classId, config.current_academic_year);
+        if (enrolled.length === 0) {
             content.innerHTML = '<p class="hint">Belum ada siswa aktif di kelas ini untuk tahun ajaran ini.</p>';
             return;
         }
-        const rows = await getAttendanceSummaryByStudents(students, dateStart || null, dateEnd || null, currentUser.user_id);
+        const rows = await getAttendanceSummaryByStudents(classId, config.current_academic_year, dateStart || null, dateEnd || null, currentUser.user_id);
 
         _guruRekapRows = rows;
         _guruRekapPage = 0;
@@ -1714,14 +1714,8 @@ async function loadKpRecap() {
     if (ids.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
     try {
         const rows = await fetchPklAttendance(ids, start, end);
-        const byStudent = new Map(kpStudents.map(s => [s.student_id, { name: s.full_name, nis: s.nis, HADIR:0, TIDAK_HADIR:0, IZIN:0, SAKIT:0, total:0 }]));
-        for (const r of rows) {
-            const a = byStudent.get(r.student_id);
-            if (!a) continue;
-            if (a[r.status] !== undefined) a[r.status]++;
-            a.total++;
-        }
-        const recap = [...byStudent.values()];
+        const nameById = new Map(kpStudents.map(s => [s.student_id, { name: s.full_name, nis: s.nis }]));
+        const recap = rows.map(r => ({ ...nameById.get(r.student_id), ...r }));
         if (recap.every(a => a.total === 0)) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
         tbody.innerHTML = recap.map(a => {
             const pct   = a.total > 0 ? Math.round(a.HADIR / a.total * 100) : 0;
