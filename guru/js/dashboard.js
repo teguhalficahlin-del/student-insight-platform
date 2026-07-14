@@ -2112,26 +2112,25 @@ async function initWakaKurTab() {
         document.getElementById('wk-kur2-btn').onclick = handleWkKur2Btn;
     }
     // Selalu reload Panel 1 + stats saat tab dibuka agar data terbaru tampil
-    await Promise.all([loadWkKurStats(localDateStr()), loadWkKur1(localDateStr())]);
+    await Promise.all([loadWkKurStats(localDateStr(), localDateStr()), loadWkKur1(localDateStr())]);
 }
 
-async function loadWkKurStats(date) {
-    const elSudah       = document.getElementById('wk-kur-pct-sudah');
-    const elBelum       = document.getElementById('wk-kur-pct-belum');
-    const elDetailSudah = document.getElementById('wk-kur-detail-sudah');
-    const elDetailBelum = document.getElementById('wk-kur-detail-belum');
+async function loadWkKurStats(dateStart, dateEnd, prefix = 'wk-kur', emptyMsg = 'Tidak ada sesi hari ini') {
+    const elSudah       = document.getElementById(`${prefix}-pct-sudah`);
+    const elBelum       = document.getElementById(`${prefix}-pct-belum`);
+    const elDetailSudah = document.getElementById(`${prefix}-detail-sudah`);
+    const elDetailBelum = document.getElementById(`${prefix}-detail-belum`);
     elSudah.textContent = '…'; elBelum.textContent = '…';
     elDetailSudah.textContent = ''; elDetailBelum.textContent = '';
     try {
-        const { total, hadir, pending, tidak } = await getAttendanceFillRate(date);
+        const { total, hadir, pending, tidak } = await getAttendanceFillRate(dateStart, dateEnd);
         if (total === 0) {
             elSudah.textContent = '—'; elBelum.textContent = '—';
-            elDetailSudah.textContent = 'Tidak ada sesi hari ini';
-            elDetailBelum.textContent = '';
+            elDetailSudah.textContent = emptyMsg;
             return;
         }
-        const pctHadir  = Math.round(hadir  / total * 100);
-        const pctBelum  = Math.round((pending + tidak) / total * 100);
+        const pctHadir = Math.round(hadir / total * 100);
+        const pctBelum = Math.round((pending + tidak) / total * 100);
         elSudah.textContent = pctHadir + '%';
         elBelum.textContent = pctBelum + '%';
         elDetailSudah.textContent = `${hadir} dari ${total} sesi`;
@@ -2190,19 +2189,25 @@ async function loadWkKur2() {
     const dateStart = document.getElementById('wk-kur-start').value;
     const dateEnd   = document.getElementById('wk-kur-end').value;
 
-    hintEl.style.display = 'none';
-    wrapEl.style.display = 'none';
-    btn.disabled         = true;
-    btn.textContent      = 'Memuat…';
+    const statsRow = document.getElementById('wk-kur2-stats-row');
+    hintEl.style.display    = 'none';
+    wrapEl.style.display    = 'none';
+    statsRow.style.display  = 'none';
+    btn.disabled            = true;
+    btn.textContent         = 'Memuat…';
 
     try {
-        const rows = await getPendingAttendanceSessions(dateStart || null, dateEnd || null);
+        const [rows] = await Promise.all([
+            getPendingAttendanceSessions(dateStart || null, dateEnd || null),
+            loadWkKurStats(dateStart || null, dateEnd || null, 'wk-kur2', 'Tidak ada sesi pada rentang ini'),
+        ]);
+        statsRow.style.display = '';
         btn.disabled = false;
         if (rows.length === 0) {
             hintEl.textContent   = '✓ Tidak ada sesi yang menunggu pengisian absensi pada rentang ini.';
             hintEl.style.display = 'block';
-            btn.textContent      = 'Tampilkan';
-            _wkKur2Visible = false;
+            btn.textContent      = 'Sembunyikan';
+            _wkKur2Visible = true;
             return;
         }
         tbody.innerHTML = rows.map((r, i) => `<tr>
@@ -2227,6 +2232,8 @@ async function loadWkKur2() {
 function handleWkKur2Btn() {
     if (_wkKur2Visible) {
         document.getElementById('wk-kur2-wrap').style.display = 'none';
+        document.getElementById('wk-kur2-stats-row').style.display = 'none';
+        document.getElementById('wk-kur2-hint').style.display = 'none';
         _wkKur2Visible = false;
         document.getElementById('wk-kur2-btn').textContent = 'Tampilkan';
     } else {

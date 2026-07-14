@@ -627,12 +627,14 @@ export async function getKepsekMonitoring(period = 'hari_ini', academicYear = nu
     return data;
 }
 
-export async function getAttendanceFillRate(date) {
-    const { data, error } = await supabase
+export async function getAttendanceFillRate(dateStart, dateEnd) {
+    let q = supabase
         .from('teaching_schedules')
         .select('teacher_indicator')
-        .eq('session_date', date)
         .eq('meeting_status', 'NORMAL');
+    if (dateStart) q = q.gte('session_date', dateStart);
+    if (dateEnd)   q = q.lte('session_date', dateEnd);
+    const { data, error } = await q;
     if (error) throw error;
     const rows = data ?? [];
     const total   = rows.length;
