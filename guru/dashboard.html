@@ -673,39 +673,73 @@
     ════════════════════════════════════════════════════════ -->
     <div class="tab-panel" id="tab-kepsek">
         <div class="page-body">
+
+            <!-- Kartu Ringkasan Hari Ini -->
+            <div class="stats-row" id="ks-stats-row">
+                <div class="stat-card">
+                    <span class="stat-value" id="ks-pct-siswa">—</span>
+                    <div class="stat-label">Kehadiran Siswa</div>
+                    <div id="ks-detail-siswa" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="ks-pct-guru">—</span>
+                    <div class="stat-label">Kehadiran Guru di Kelas</div>
+                    <div id="ks-detail-guru" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
+                </div>
+            </div>
+
+            <!-- Panel 1: Per Kelas Hari Ini (auto-load) -->
             <div class="section-card">
-                <!-- Header + toggle periode -->
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-                    <h3 style="margin:0">Kehadiran Sekolah</h3>
-                    <div id="ks-period-toggle" role="group" aria-label="Pilih periode" style="display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px">
-                        <button class="btn btn-sm ks-period-btn active" data-period="hari_ini" style="white-space:nowrap;flex-shrink:0">Hari Ini</button>
-                        <button class="btn btn-sm ks-period-btn" data-period="7_hari" style="white-space:nowrap;flex-shrink:0">7 Hari Terakhir</button>
-                        <button class="btn btn-sm ks-period-btn" data-period="minggu_lalu" style="white-space:nowrap;flex-shrink:0">Minggu Lalu</button>
-                        <button class="btn btn-sm ks-period-btn" data-period="bulan_lalu" style="white-space:nowrap;flex-shrink:0">Bulan Lalu</button>
-                        <button class="btn btn-sm ks-period-btn" data-period="tahun_ajaran_lalu" style="white-space:nowrap;flex-shrink:0">Tahun Ajaran Lalu</button>
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+                    <h3 style="margin:0">Kehadiran Per Kelas — Hari Ini</h3>
+                    <div style="display:flex;gap:6px">
+                        <button class="btn btn-secondary btn-sm" id="ks1-refresh">Muat Ulang</button>
+                        <button class="btn" id="ks1-btn" style="display:none">Sembunyikan</button>
                     </div>
                 </div>
-
-                <!-- Error -->
-                <div id="ks-monitoring-error" style="display:none;color:var(--color-danger);font-size:13px;margin-bottom:8px"></div>
-
-                <!-- Kartu ringkasan -->
-                <div class="stats-row" style="margin-bottom:16px">
-                    <div class="stat-card">
-                        <span class="stat-value" id="ks-pct-siswa">—</span>
-                        <div class="stat-label">Kehadiran Siswa</div>
-                        <div id="ks-detail-siswa" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-value" id="ks-pct-guru">—</span>
-                        <div class="stat-label">Kehadiran Guru di Kelas</div>
-                        <div id="ks-detail-guru" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
-                    </div>
+                <p class="hint" id="ks1-hint" style="display:none"></p>
+                <div class="table-wrapper" id="ks1-wrap" style="display:none">
+                    <table class="table">
+                        <thead><tr>
+                            <th style="text-align:center;width:40px">No</th>
+                            <th>Kelas</th>
+                            <th style="text-align:center">Hadir</th>
+                            <th style="text-align:center">Alpha</th>
+                            <th style="text-align:center">Izin</th>
+                            <th style="text-align:center">Sakit</th>
+                            <th style="text-align:center">% Hadir</th>
+                        </tr></thead>
+                        <tbody id="ks1-body"></tbody>
+                    </table>
                 </div>
+            </div>
 
-                <!-- Grafik -->
-                <div id="ks-chart-wrap" style="position:relative;height:220px;margin-top:4px">
-                    <canvas id="ks-chart" aria-label="Grafik kehadiran siswa dan guru"></canvas>
+            <!-- Panel 2: Rentang Waktu (lazy-load) -->
+            <div class="section-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+                    <h3 style="margin:0">Kehadiran Per Kelas — Rentang Waktu</h3>
+                    <button class="btn" id="ks2-btn">Tampilkan</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+                    <label style="font-size:13px;color:var(--color-text-muted)">Dari</label>
+                    <input type="date" id="ks-start" class="input" style="width:auto">
+                    <label style="font-size:13px;color:var(--color-text-muted)">s/d</label>
+                    <input type="date" id="ks-end" class="input" style="width:auto">
+                </div>
+                <p class="hint" id="ks2-hint" style="display:none"></p>
+                <div class="table-wrapper" id="ks2-wrap" style="display:none">
+                    <table class="table">
+                        <thead><tr>
+                            <th style="text-align:center;width:40px">No</th>
+                            <th>Kelas</th>
+                            <th style="text-align:center">Hadir</th>
+                            <th style="text-align:center">Alpha</th>
+                            <th style="text-align:center">Izin</th>
+                            <th style="text-align:center">Sakit</th>
+                            <th style="text-align:center">% Hadir</th>
+                        </tr></thead>
+                        <tbody id="ks2-body"></tbody>
+                    </table>
                 </div>
             </div>
 

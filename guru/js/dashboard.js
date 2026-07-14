@@ -2421,35 +2421,24 @@ async function loadWhCases() {
 
 // ─── TAB KEPSEK (Monitoring) ─────────────────────────────────
 
-const BULAN_ID = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-
-function fmtChartLabel(dateStr, byMonth) {
-    const d = new Date(dateStr + 'T00:00:00');
-    if (byMonth) return BULAN_ID[d.getMonth()] + ' ' + d.getFullYear();
-    return d.getDate() + ' ' + BULAN_ID[d.getMonth()];
-}
-
-function prevAcademicYear(current) {
-    // '2025/2026' → '2024/2025'
-    const y = parseInt(current?.split('/')[0] ?? new Date().getFullYear());
-    return `${y - 1}/${y}`;
-}
-
-let _kepsekTabInit = false;
-let _ksChart       = null;
+let _ksTabInit  = false;
+let _ks1Visible = false;
+let _ks2Visible = false;
 
 async function initKepsekTab() {
-    if (!_kepsekTabInit) {
-        _kepsekTabInit = true;
-        document.getElementById('ks-period-toggle').addEventListener('click', async (e) => {
-            const btn = e.target.closest('.ks-period-btn');
-            if (!btn) return;
-            document.querySelectorAll('.ks-period-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            await loadKepsekMonitoring(btn.dataset.period);
-        });
+    if (!_ksTabInit) {
+        _ksTabInit = true;
+        const weekAgo = localDateStr(new Date(Date.now() - 6 * 86400000));
+        document.getElementById('ks-start').value = weekAgo;
+        document.getElementById('ks-end').value   = localDateStr();
+        document.getElementById('ks1-refresh').onclick = () => {
+            loadKsStats();
+            loadKs1();
+        };
+        document.getElementById('ks1-btn').onclick = handleKs1Btn;
+        document.getElementById('ks2-btn').onclick = handleKs2Btn;
     }
-    await loadKepsekMonitoring('hari_ini');
+    await Promise.all([loadKsStats(), loadKs1()]);
 }
 
 let _ksAdminTabInit = false;
@@ -2462,103 +2451,134 @@ async function initKsAdminTab() {
     await loadAdminList();
 }
 
-async function loadKepsekMonitoring(period = 'hari_ini') {
-    const errEl     = document.getElementById('ks-monitoring-error');
-    const pctSiswa  = document.getElementById('ks-pct-siswa');
-    const pctGuru   = document.getElementById('ks-pct-guru');
-    const detSiswa  = document.getElementById('ks-detail-siswa');
-    const detGuru   = document.getElementById('ks-detail-guru');
+async function loadKsStats() {
+    const pctSiswa = document.getElementById('ks-pct-siswa');
+    const pctGuru  = document.getElementById('ks-pct-guru');
+    const detSiswa = document.getElementById('ks-detail-siswa');
+    const detGuru  = document.getElementById('ks-detail-guru');
     pctSiswa.textContent = '…';
     pctGuru.textContent  = '…';
     detSiswa.textContent = '';
     detGuru.textContent  = '';
-    errEl.style.display  = 'none';
-
     try {
-        const ayLalu = prevAcademicYear(config?.current_academic_year);
-        const d = await getKepsekMonitoring(period, period === 'tahun_ajaran_lalu' ? ayLalu : null);
+        const d = await getKepsekMonitoring('hari_ini');
         const s = d.summary ?? {};
-
         pctSiswa.textContent = s.pct_siswa != null ? s.pct_siswa + '%' : '—';
         pctGuru.textContent  = s.pct_guru  != null ? s.pct_guru  + '%' : '—';
-
         detSiswa.textContent = (s.siswa_total > 0)
             ? `${s.siswa_hadir} dari ${s.siswa_total} sesi tercatat`
             : 'Belum ada data';
-        detGuru.textContent  = (s.guru_total > 0)
+        detGuru.textContent = (s.guru_total > 0)
             ? `${s.guru_hadir} dari ${s.guru_total} sesi terjadwal`
             : 'Belum ada data';
-
-        renderKepsekChart(d.chart ?? [], d.by_month);
-
-    } catch (err) {
-        errEl.textContent   = `Gagal memuat data: ${fe(err)}`;
-        errEl.style.display = 'block';
-        pctSiswa.textContent = '—';
-        pctGuru.textContent  = '—';
-        console.error('[kepsek monitoring]', err);
+    } catch {
+        pctSiswa.textContent = '!';
+        pctGuru.textContent  = '!';
     }
 }
 
-function renderKepsekChart(chartData, byMonth) {
-    const canvas = document.getElementById('ks-chart');
-    const labels = chartData.map(p => fmtChartLabel(p.date, byMonth));
-    const dataSiswa = chartData.map(p => p.pct_siswa);
-    const dataGuru  = chartData.map(p => p.pct_guru);
+async function loadKs1() {
+    const hintEl = document.getElementById('ks1-hint');
+    const wrapEl = document.getElementById('ks1-wrap');
+    const tbody  = document.getElementById('ks1-body');
+    const btn    = document.getElementById('ks1-btn');
 
-    const primary = getComputedStyle(document.documentElement)
-        .getPropertyValue('--color-primary').trim() || '#4361ee';
+    hintEl.style.display = 'none';
+    wrapEl.style.display = 'none';
+    btn.style.display    = 'none';
 
-    if (_ksChart) { _ksChart.destroy(); _ksChart = null; }
+    try {
+        const today = localDateStr();
+        const rows  = await getAttendanceRecapPerClass(today, today);
+        tbody.innerHTML = rows.length === 0
+            ? `<tr><td colspan="7" class="hint" style="text-align:center;padding:12px">Belum ada data kehadiran hari ini.</td></tr>`
+            : rows.map((r, i) => {
+                const pct = r.total > 0 ? Math.round(r.HADIR / r.total * 100) : null;
+                const low = pct != null && pct < 75;
+                return `<tr>
+                    <td style="text-align:center">${i + 1}</td>
+                    <td>${esc(r.name)}</td>
+                    <td style="text-align:center">${r.HADIR}</td>
+                    <td style="text-align:center">${r.TIDAK_HADIR}</td>
+                    <td style="text-align:center">${r.IZIN}</td>
+                    <td style="text-align:center">${r.SAKIT}</td>
+                    <td style="text-align:center;font-weight:600;color:${low ? 'var(--color-danger,#ef4444)' : ''}">${pct != null ? pct + '%' : '—'}</td>
+                </tr>`;
+            }).join('');
+        wrapEl.style.display = '';
+        btn.style.display    = '';
+        btn.textContent      = 'Sembunyikan';
+        _ks1Visible = true;
+    } catch (err) {
+        hintEl.textContent   = `Gagal memuat data. ${fe(err)}`;
+        hintEl.style.display = 'block';
+    }
+}
 
-    _ksChart = new Chart(canvas, {
-        type: 'line',
-        data: {
-            labels,
-            datasets: [
-                {
-                    label: 'Kehadiran Siswa (%)',
-                    data: dataSiswa,
-                    borderColor: primary,
-                    backgroundColor: primary + '22',
-                    tension: 0.3,
-                    fill: true,
-                    pointRadius: chartData.length <= 14 ? 4 : 2,
-                    spanGaps: true,
-                },
-                {
-                    label: 'Kehadiran Guru (%)',
-                    data: dataGuru,
-                    borderColor: '#e67e22',
-                    backgroundColor: '#e67e2222',
-                    tension: 0.3,
-                    fill: true,
-                    pointRadius: chartData.length <= 14 ? 4 : 2,
-                    spanGaps: true,
-                },
-            ],
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } },
-                tooltip: {
-                    callbacks: {
-                        label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y != null ? ctx.parsed.y + '%' : '—'}`,
-                    },
-                },
-            },
-            scales: {
-                y: {
-                    min: 0, max: 100,
-                    ticks: { callback: v => v + '%', font: { size: 11 } },
-                    grid: { color: '#0001' },
-                },
-                x: { ticks: { font: { size: 11 }, maxRotation: 45 } },
-            },
-        },
-    });
+function handleKs1Btn() {
+    const wrapEl = document.getElementById('ks1-wrap');
+    const btn    = document.getElementById('ks1-btn');
+    _ks1Visible = !_ks1Visible;
+    wrapEl.style.display = _ks1Visible ? '' : 'none';
+    btn.textContent      = _ks1Visible ? 'Sembunyikan' : 'Tampilkan';
+}
+
+async function loadKs2() {
+    const hintEl    = document.getElementById('ks2-hint');
+    const wrapEl    = document.getElementById('ks2-wrap');
+    const tbody     = document.getElementById('ks2-body');
+    const btn       = document.getElementById('ks2-btn');
+    const dateStart = document.getElementById('ks-start').value;
+    const dateEnd   = document.getElementById('ks-end').value;
+
+    hintEl.style.display = 'none';
+    wrapEl.style.display = 'none';
+    btn.disabled         = true;
+    btn.textContent      = 'Memuat…';
+
+    try {
+        const rows = await getAttendanceRecapPerClass(dateStart || null, dateEnd || null);
+        btn.disabled = false;
+        if (rows.length === 0) {
+            hintEl.textContent   = 'Belum ada data kehadiran pada rentang ini.';
+            hintEl.style.display = 'block';
+            btn.textContent      = 'Sembunyikan';
+            _ks2Visible = true;
+            return;
+        }
+        tbody.innerHTML = rows.map((r, i) => {
+            const pct = r.total > 0 ? Math.round(r.HADIR / r.total * 100) : null;
+            const low = pct != null && pct < 75;
+            return `<tr>
+                <td style="text-align:center">${i + 1}</td>
+                <td>${esc(r.name)}</td>
+                <td style="text-align:center">${r.HADIR}</td>
+                <td style="text-align:center">${r.TIDAK_HADIR}</td>
+                <td style="text-align:center">${r.IZIN}</td>
+                <td style="text-align:center">${r.SAKIT}</td>
+                <td style="text-align:center;font-weight:600;color:${low ? 'var(--color-danger,#ef4444)' : ''}">${pct != null ? pct + '%' : '—'}</td>
+            </tr>`;
+        }).join('');
+        wrapEl.style.display = '';
+        btn.textContent      = 'Sembunyikan';
+        _ks2Visible = true;
+    } catch (err) {
+        btn.disabled         = false;
+        btn.textContent      = 'Tampilkan';
+        hintEl.textContent   = `Gagal memuat data. ${fe(err)}`;
+        hintEl.style.display = 'block';
+    }
+}
+
+function handleKs2Btn() {
+    if (_ks2Visible) {
+        document.getElementById('ks2-wrap').style.display = 'none';
+        document.getElementById('ks2-hint').style.display = 'none';
+        _ks2Visible = false;
+        document.getElementById('ks2-btn').textContent = 'Tampilkan';
+    } else {
+        loadKs2();
+    }
 }
 
 async function loadAdminList() {
