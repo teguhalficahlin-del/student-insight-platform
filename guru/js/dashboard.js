@@ -1018,8 +1018,7 @@ function renderObsHistory(rows, listEl) {
         const sentColor = SENTIMENT_COLOR[r.sentiment] ?? 'inherit';
         const vis      = r.visibility ?? 'SISWA_DAN_ORTU';
         const visLabel = OBS_VIS_LABEL[vis] ?? vis;
-        const visColor = 'var(--color-primary)';
-        return `
+        const visColor  = 'var(--color-primary)';
         const isVoid    = !!r.is_void;
         const voidStyle = isVoid ? 'opacity:0.55;' : '';
         return `
