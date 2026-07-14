@@ -35,7 +35,7 @@ import {
     registerLoginDevice,
     getForumPosts, getForumCategories, getForumStudents, createForumPost,
     addForumAcknowledgement, addForumComment, getForumPostComments, getForumClasses,
-    withdrawForumPost, updateForumPost,
+    withdrawForumPost, updateForumPost, withdrawForumComment,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 
@@ -3643,7 +3643,11 @@ async function initForumTab() {
     });
 
     document.getElementById('btn-create-post').addEventListener('click', openCreatePostModal);
-    document.getElementById('btn-load-more-posts').addEventListener('click', () => loadForumPosts(true));
+    document.getElementById('btn-load-more-posts').addEventListener('click', async (e) => {
+        e.currentTarget.disabled = true;
+        await loadForumPosts(true);
+        e.currentTarget.disabled = false;
+    });
     document.getElementById('btn-cancel-post').addEventListener('click', closeCreatePostModal);
     document.getElementById('modal-create-post').addEventListener('click', e => {
         if (e.target === e.currentTarget) closeCreatePostModal();
@@ -3767,7 +3771,7 @@ function renderForumPostCard(post) {
         <div class="forum-comments-panel" style="display:none;margin-top:12px;padding:10px;background:var(--color-bg-alt);border-radius:var(--radius)">
             <div class="forum-comments-list" style="margin-bottom:8px;font-size:13px"></div>
             <div style="display:flex;gap:6px">
-                <input type="text" class="input forum-comment-input" placeholder="Tulis komentar…" style="flex:1;font-size:13px">
+                <input type="text" class="input forum-comment-input" placeholder="Tulis komentar…" maxlength="1000" style="flex:1;font-size:13px">
                 <button class="btn btn-primary btn-sm btn-send-comment">Kirim</button>
             </div>
             <p class="forum-comment-err" style="font-size:12px;color:var(--color-danger);margin:4px 0 0;display:none"></p>
@@ -3842,7 +3846,11 @@ function wireForumCards(containerEl, posts) {
         const wdBtn = card.querySelector('.btn-withdraw');
         if (wdBtn) {
             wdBtn.addEventListener('click', async () => {
-                if (!confirm('Tarik posting ini? Konten akan disembunyikan dari pembaca.')) return;
+                const cmtCount = parseInt(card.dataset.commentCount ?? '0', 10);
+                const msg = cmtCount > 0
+                    ? `Tarik posting ini? Konten akan disembunyikan, tapi ${cmtCount} komentar yang sudah ada tetap terlihat.`
+                    : 'Tarik posting ini? Konten akan disembunyikan dari pembaca.';
+                if (!confirm(msg)) return;
                 wdBtn.disabled = true;
                 try {
                     await withdrawForumPost(postId);
@@ -3936,12 +3944,31 @@ async function loadForumComments(postId, panel) {
         }
         listEl.innerHTML = comments.map(c => {
             const ts = new Date(c.created_at).toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
-            return `<div style="margin-bottom:8px;border-bottom:0.5px solid var(--color-border);padding-bottom:8px">
-                <span style="font-weight:600;font-size:12px">${esc(c.author?.full_name ?? '—')}</span>
-                <span style="font-size:11px;color:var(--color-text-muted);margin-left:6px">${ts}</span>
+            const isOwn = c.author_user_id === currentUser.user_id;
+            return `<div style="margin-bottom:8px;border-bottom:0.5px solid var(--color-border);padding-bottom:8px" data-comment-id="${esc(c.comment_id)}">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+                    <span>
+                        <span style="font-weight:600;font-size:12px">${esc(c.author?.full_name ?? '—')}</span>
+                        <span style="font-size:11px;color:var(--color-text-muted);margin-left:6px">${ts}</span>
+                    </span>
+                    ${isOwn ? `<button class="btn-del-comment" data-cid="${esc(c.comment_id)}" style="background:none;border:none;cursor:pointer;color:var(--color-danger);font-size:12px;padding:0 2px" title="Hapus komentar">Hapus</button>` : ''}
+                </div>
                 <p style="margin:4px 0 0;font-size:13px;white-space:pre-wrap">${esc(c.body)}</p>
             </div>`;
         }).join('');
+        listEl.querySelectorAll('.btn-del-comment').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!confirm('Hapus komentar ini?')) return;
+                btn.disabled = true;
+                try {
+                    await withdrawForumComment(btn.dataset.cid);
+                    btn.closest('[data-comment-id]').remove();
+                } catch (err) {
+                    alert(fe(err));
+                    btn.disabled = false;
+                }
+            });
+        });
     } catch (err) {
         listEl.innerHTML = `<span style="color:var(--color-danger)">${fe(err)}</span>`;
     }
@@ -3986,7 +4013,11 @@ async function openCreatePostModal() {
         _forumAllMembers = await getForumMemberDetails(
             _forumClassId, _forumAcademicYear
         );
-    } catch { /* non-fatal: picker tetap muncul, hasil kosong */ }
+    } catch (err) {
+        // non-fatal: picker tetap muncul tapi beri tahu user
+        const searchEl = document.getElementById('forum-specific-search');
+        if (searchEl) searchEl.placeholder = 'Gagal memuat daftar anggota — coba tutup dan buka modal lagi';
+    }
 }
 
 // ─── Forum: picker orang tertentu ────────────────────────
@@ -4181,11 +4212,6 @@ async function submitCreatePost() {
 
     errEl.style.display = 'none';
 
-    if (!content && !_forumSelectedStudents.length) {
-        errEl.textContent = 'Isi catatan atau pilih setidaknya satu siswa.';
-        errEl.style.display = 'block';
-        return;
-    }
     if (!content) {
         errEl.textContent = 'Isi catatan tidak boleh kosong.';
         errEl.style.display = 'block';

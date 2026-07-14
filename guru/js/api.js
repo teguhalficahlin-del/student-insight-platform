@@ -1105,43 +1105,49 @@ export async function removeSchoolAdmin(user_id) {
 export async function getForumClasses(userId, academicYear) {
     const classMap = new Map();
 
-    // Ambil profil user sekali (termasuk role dan jabatan tambahan)
+    // Ambil profil user dulu — dibutuhkan untuk menentukan query selanjutnya
     const { data: u } = await supabase.from('users')
         .select('wali_kelas_class_id, role_type, program_id, kaprodi_program_id, is_waka_kesiswaan, is_kepsek')
         .eq('user_id', userId)
         .maybeSingle();
 
-    // 1. Wali kelas
-    if (u?.wali_kelas_class_id) {
-        const { data: cls } = await supabase.from('classes')
-            .select('class_id, name')
-            .eq('class_id', u.wali_kelas_class_id)
-            .maybeSingle();
-        if (cls) classMap.set(cls.class_id, cls.name);
-    }
+    const isOversight = ['WAKA_KESISWAAN', 'KEPSEK', 'ADMINISTRATIVE'].includes(u?.role_type)
+        || u?.is_waka_kesiswaan === true
+        || u?.is_kepsek === true;
+    const programId = u?.kaprodi_program_id ?? (u?.role_type === 'KAPRODI' ? u?.program_id : null);
 
-    // 2. Guru mapel (teaching_assignments)
-    const { data: ta } = await supabase.from('teaching_assignments')
-        .select('class:classes(class_id, name)')
-        .eq('user_id', userId)
-        .eq('academic_year', academicYear)
-        .eq('is_active', true);
-    (ta ?? []).forEach(r => r.class && classMap.set(r.class.class_id, r.class.name));
+    // Jalankan semua query independen secara paralel
+    const [cls, ta, bk, gwa, allCls, kpCls] = await Promise.all([
+        // 1. Wali kelas
+        u?.wali_kelas_class_id
+            ? supabase.from('classes').select('class_id, name').eq('class_id', u.wali_kelas_class_id).maybeSingle().then(r => r.data)
+            : Promise.resolve(null),
+        // 2. Guru mapel
+        supabase.from('teaching_assignments').select('class:classes(class_id, name)')
+            .eq('user_id', userId).eq('academic_year', academicYear).eq('is_active', true).then(r => r.data),
+        // 3. BK
+        supabase.from('bk_class_assignments').select('class:classes(class_id, name)')
+            .eq('bk_user_id', userId).eq('academic_year', academicYear).eq('is_active', true).then(r => r.data),
+        // 4a. Guru wali (hasil dipakai untuk query enrollments berikutnya)
+        supabase.from('guru_wali_assignments').select('student_id')
+            .eq('guru_user_id', userId).eq('academic_year', academicYear).eq('is_active', true).then(r => r.data),
+        // 5. Oversight → semua kelas
+        isOversight
+            ? supabase.from('classes').select('class_id, name').eq('academic_year', academicYear).then(r => r.data)
+            : Promise.resolve(null),
+        // 6. Kaprodi → kelas program
+        programId
+            ? supabase.from('classes').select('class_id, name').eq('program_id', programId).eq('academic_year', academicYear).then(r => r.data)
+            : Promise.resolve(null),
+    ]);
 
-    // 3. BK
-    const { data: bk } = await supabase.from('bk_class_assignments')
-        .select('class:classes(class_id, name)')
-        .eq('bk_user_id', userId)
-        .eq('academic_year', academicYear)
-        .eq('is_active', true);
-    (bk ?? []).forEach(r => r.class && classMap.set(r.class.class_id, r.class.name));
+    if (cls) classMap.set(cls.class_id, cls.name);
+    (ta  ?? []).forEach(r => r.class && classMap.set(r.class.class_id, r.class.name));
+    (bk  ?? []).forEach(r => r.class && classMap.set(r.class.class_id, r.class.name));
+    (allCls ?? []).forEach(c => classMap.set(c.class_id, c.name));
+    (kpCls  ?? []).forEach(c => classMap.set(c.class_id, c.name));
 
-    // 4. Guru wali → siswa → kelas aktif
-    const { data: gwa } = await supabase.from('guru_wali_assignments')
-        .select('student_id')
-        .eq('guru_user_id', userId)
-        .eq('academic_year', academicYear)
-        .eq('is_active', true);
+    // 4b. Enrollments — dependen pada hasil gwa, dijalankan setelah batch pertama
     if (gwa?.length) {
         const { data: enr } = await supabase.from('class_enrollments')
             .select('class:classes(class_id, name)')
@@ -1149,27 +1155,6 @@ export async function getForumClasses(userId, academicYear) {
             .eq('academic_year', academicYear)
             .is('withdrawn_at', null);
         (enr ?? []).forEach(r => r.class && classMap.set(r.class.class_id, r.class.name));
-    }
-
-    // 5. Waka Kesiswaan / Kepsek / Administrative → semua kelas tahun ini
-    const isOversight = ['WAKA_KESISWAAN', 'KEPSEK', 'ADMINISTRATIVE'].includes(u?.role_type)
-        || u?.is_waka_kesiswaan === true
-        || u?.is_kepsek === true;
-    if (isOversight) {
-        const { data: allCls } = await supabase.from('classes')
-            .select('class_id, name')
-            .eq('academic_year', academicYear);
-        (allCls ?? []).forEach(c => classMap.set(c.class_id, c.name));
-    }
-
-    // 6. Kaprodi → kelas di program yang dikelola
-    const programId = u?.kaprodi_program_id ?? (u?.role_type === 'KAPRODI' ? u?.program_id : null);
-    if (programId) {
-        const { data: kpCls } = await supabase.from('classes')
-            .select('class_id, name')
-            .eq('program_id', programId)
-            .eq('academic_year', academicYear);
-        (kpCls ?? []).forEach(c => classMap.set(c.class_id, c.name));
     }
 
     return Array.from(classMap, ([class_id, name]) => ({ class_id, name }))
