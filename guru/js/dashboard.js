@@ -2493,8 +2493,11 @@ const EVENT_TYPE_LABEL = {
     CASE_UNLOCKED:          'Kasus Dibuka Kunci',
 };
 
+const KASUS_PAGE    = 50;
 let _kasusTabInit   = false;
 let _kasusAllCases  = [];
+let _kasusOffset    = 0;
+let _kasusHasMore   = false;
 let _kasusCurrentId = null;
 
 async function initKasusTab() {
@@ -2505,8 +2508,8 @@ async function initKasusTab() {
     await ensureStudentPool();
 
     // Filters
-    document.getElementById('kasus-filter-status').addEventListener('change', renderKasusList);
-    document.getElementById('kasus-filter-track').addEventListener('change',  renderKasusList);
+    document.getElementById('kasus-filter-status').addEventListener('change', () => loadKasusList());
+    document.getElementById('kasus-filter-track').addEventListener('change',  () => loadKasusList());
 
     // Offline guard — disable tombol + banner saat tidak ada koneksi
     function syncKasusOnlineState() {
@@ -2619,9 +2622,7 @@ async function initKasusTab() {
             if (r._queued) {
                 showCreateMsg('Kasus disimpan lokal. Akan dikirim saat koneksi kembali.', false);
             }
-            _kasusAllCases = [];
-            _kasusTabInit = false;
-            await initKasusTab();
+            await loadKasusList();
         } catch (err) {
             showCreateMsg(fe(err, 's'), true);
         } finally {
@@ -2652,32 +2653,36 @@ function closeKasusModal() {
     document.getElementById('kasus-create-modal').style.display = 'none';
 }
 
-async function loadKasusList() {
+async function loadKasusList(append = false) {
     const contentEl = document.getElementById('kasus-list-content');
-    contentEl.innerHTML = '<p class="hint">Memuat kasus…</p>';
+    if (!append) {
+        _kasusAllCases = [];
+        _kasusOffset   = 0;
+        contentEl.innerHTML = '<p class="hint">Memuat kasus…</p>';
+    }
+    const status = document.getElementById('kasus-filter-status').value;
+    const track  = document.getElementById('kasus-filter-track').value;
     try {
-        _kasusAllCases = await getCases();
+        const rows = await getCases({ status, track, offset: _kasusOffset, limit: KASUS_PAGE + 1 });
+        _kasusHasMore  = rows.length > KASUS_PAGE;
+        const page     = _kasusHasMore ? rows.slice(0, KASUS_PAGE) : rows;
+        _kasusAllCases = append ? [..._kasusAllCases, ...page] : page;
+        _kasusOffset   = _kasusAllCases.length;
         renderKasusList();
     } catch (err) {
-        contentEl.innerHTML = `<div class="status-err">${esc(fe(err))}</div>`;
+        if (!append) contentEl.innerHTML = `<div class="status-err">${esc(fe(err))}</div>`;
     }
 }
 
 function renderKasusList() {
-    const contentEl   = document.getElementById('kasus-list-content');
-    const statusFilter = document.getElementById('kasus-filter-status').value;
-    const trackFilter  = document.getElementById('kasus-filter-track').value;
+    const contentEl = document.getElementById('kasus-list-content');
 
-    let rows = _kasusAllCases;
-    if (statusFilter) rows = rows.filter(r => r.status === statusFilter);
-    if (trackFilter)  rows = rows.filter(r => r.track  === trackFilter);
-
-    if (!rows.length) {
+    if (!_kasusAllCases.length) {
         contentEl.innerHTML = '<p class="hint">Tidak ada kasus yang sesuai filter.</p>';
         return;
     }
 
-    contentEl.innerHTML = rows.map(r => `
+    contentEl.innerHTML = _kasusAllCases.map(r => `
         <div class="kasus-row" data-id="${r.case_id}">
             <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px; flex-wrap:wrap">
                 <strong style="font-size:14px; flex:1">${esc(r.title)}</strong>
@@ -2690,10 +2695,20 @@ function renderKasusList() {
                 &middot; ${fmt(r.created_at)}
             </div>
         </div>
-    `).join('');
+    `).join('') + (_kasusHasMore
+        ? `<div style="text-align:center;padding:12px">
+               <button class="btn btn-secondary btn-sm" id="kasus-load-more-btn">Muat lebih…</button>
+           </div>`
+        : '');
 
     contentEl.querySelectorAll('.kasus-row').forEach(el => {
         el.addEventListener('click', () => openKasusDetail(el.dataset.id));
+    });
+    const moreBtn = document.getElementById('kasus-load-more-btn');
+    if (moreBtn) moreBtn.addEventListener('click', async () => {
+        moreBtn.disabled = true;
+        moreBtn.textContent = 'Memuat…';
+        await loadKasusList(true);
     });
 }
 
@@ -3134,8 +3149,14 @@ async function refreshKasusDetail() {
         renderKasusDetail(kasus);
         renderKasusEvents(events);
         renderKasusActions(kasus);
-        // Update list cache
-        _kasusAllCases = await getCases();
+        // Update entri di list cache tanpa re-fetch seluruh halaman
+        const idx = _kasusAllCases.findIndex(c => c.case_id === _kasusCurrentId);
+        if (idx >= 0) _kasusAllCases[idx] = {
+            ..._kasusAllCases[idx],
+            status:               kasus.status,
+            current_handler_role: kasus.current_handler_role,
+            is_locked:            kasus.is_locked,
+        };
     } catch (err) {
         console.error('[kasus] refresh error', err);
     }

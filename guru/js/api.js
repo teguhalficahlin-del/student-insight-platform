@@ -858,17 +858,19 @@ export async function markNotificationsRead(ids) {
     if (error) throw error;
 }
 
-export async function getCases() {
-    const { data, error } = await supabase
+export async function getCases({ status = '', track = '', offset = 0, limit = 51 } = {}) {
+    let req = supabase
         .from('cases')
         .select(`
             case_id, title, status, track, current_handler_role, is_locked,
             created_at, created_by_user_id,
-            student:students(student_id, full_name, nis),
-            created_by:users!cases_created_by_user_id_fkey(full_name)
+            student:students(student_id, full_name, nis)
         `)
         .order('created_at', { ascending: false })
-        .limit(200);
+        .range(offset, offset + limit - 1);
+    if (status) req = req.eq('status', status);
+    if (track)  req = req.eq('track', track);
+    const { data, error } = await req;
     if (error) throw error;
     return data ?? [];
 }
