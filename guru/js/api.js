@@ -758,7 +758,7 @@ export async function getMyObservations(userId) {
         .from('observations')
         .select(`
             observation_id, dimension, sentiment, visibility, content, observed_at, created_at,
-            student_id, author_user_id,
+            student_id, author_user_id, is_void, void_reason,
             student:students!observations_student_id_fkey ( full_name, nis )
         `)
         .eq('author_user_id', userId)
@@ -786,38 +786,6 @@ export async function getStudentParents(studentId) {
     return data ?? [];
 }
 
-export async function updateObsVisibility({ obsId, visibility }) {
-    const { error } = await supabase
-        .from('observations')
-        .update({ visibility })
-        .eq('observation_id', obsId);
-    if (error) throw error;
-}
-
-export async function getObsAudienceMembers(obsId) {
-    const { data, error } = await supabase
-        .from('observation_audience_members')
-        .select('user_id, users:user_id(full_name, role_type)')
-        .eq('observation_id', obsId);
-    if (error) throw error;
-    return data ?? [];
-}
-
-export async function addObsAudienceMember({ obsId, userId, schoolId, addedByUserId }) {
-    const { error } = await supabase
-        .from('observation_audience_members')
-        .insert({ observation_id: obsId, user_id: userId, school_id: schoolId, added_by_user_id: addedByUserId });
-    if (error) throw error;
-}
-
-export async function removeObsAudienceMember({ obsId, userId }) {
-    const { error } = await supabase
-        .from('observation_audience_members')
-        .delete()
-        .eq('observation_id', obsId)
-        .eq('user_id', userId);
-    if (error) throw error;
-}
 
 // ─── KASUS ───────────────────────────────────────────────────
 

@@ -23,8 +23,7 @@ import {
     getAttendanceRecapPerClass, getOpenCases,
     getPrograms, getStudentAttendanceSessions,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
-    getMyObservations, updateObsVisibility, getStudentUserId, getStudentParents,
-    getObsAudienceMembers, removeObsAudienceMember,
+    getMyObservations, getStudentUserId, getStudentParents,
     getCases, getCase, getCaseEvents, createCase,
     addCaseComment, escalateCase, changeCaseStatus, closeCase,
     updateCaseAudience, getCaseAudienceMembers,
@@ -1020,15 +1019,22 @@ function renderObsHistory(rows, listEl) {
         const visLabel = OBS_VIS_LABEL[vis] ?? vis;
         const visColor = 'var(--color-primary)';
         return `
+        const isVoid    = !!r.is_void;
+        const voidStyle = isVoid ? 'opacity:0.55;' : '';
+        return `
         <div data-obs-id="${esc(r.observation_id)}" data-obs-vis="${esc(vis)}"
              data-student-id="${esc(r.student_id ?? '')}"
              data-author-id="${esc(r.author_user_id ?? '')}"
              data-student-name="${esc(r.student?.full_name ?? '')}"
-             style="border-bottom:0.5px solid var(--color-border);padding:10px 0;font-size:13px">
+             style="border-bottom:0.5px solid var(--color-border);padding:10px 0;font-size:13px;${voidStyle}">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px">
                 <strong>${esc(nama)}<span style="font-weight:400;color:var(--color-text-muted)">${esc(nis)}</span></strong>
                 <span style="font-size:11px;color:var(--color-text-muted)">${fmt(r.observed_at)}</span>
             </div>
+            ${isVoid ? `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11px;color:var(--color-danger)">
+                <span>⊘ Disembunyikan oleh admin</span>
+                ${r.void_reason ? `<span style="color:var(--color-text-muted)">— ${esc(r.void_reason)}</span>` : ''}
+            </div>` : ''}
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center">
                 <span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--color-bg-alt)">${esc(dim)}</span>
                 <span style="font-size:11px;padding:2px 8px;border-radius:20px;color:${sentColor};background:var(--color-bg-alt)">${esc(sent)}</span>
