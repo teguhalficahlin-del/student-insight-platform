@@ -641,7 +641,7 @@ async function loadWeekSchedule() {
                    </div>`;
 
             return `
-                <details class="att-accordion" ${isToday || sesiCount > 0 ? 'open' : ''}>
+                <details class="att-accordion">
                     <summary class="att-accordion-summary">
                         <span>${esc(dayLabel)}</span>
                         <span class="att-acc-names">${sesiCount > 0 ? `${sesiCount} sesi` : 'tidak ada jadwal'}</span>
@@ -649,6 +649,17 @@ async function loadWeekSchedule() {
                     <div style="padding:0 12px 8px">${tableHtml}</div>
                 </details>`;
         }).join('');
+
+        // Single-expand: tutup semua accordion lain saat satu dibuka
+        contentEl.querySelectorAll('details.att-accordion').forEach(det => {
+            det.addEventListener('toggle', () => {
+                if (det.open) {
+                    contentEl.querySelectorAll('details.att-accordion').forEach(other => {
+                        if (other !== det) other.removeAttribute('open');
+                    });
+                }
+            });
+        });
 
         contentEl.querySelectorAll('.att-open-btn').forEach(btn => {
             btn.addEventListener('click', () => openAttModal(btn));
