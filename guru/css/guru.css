@@ -381,8 +381,8 @@ body.has-login-banner .app-header { margin-top: 94px; }
     /* Tab — tap target lebih besar */
     .tab-btn { padding: 12px 14px; font-size: 13px; }
 
-    /* Date row — date input mengisi ruang tersisa (via .date-range wrapper) */
-    .date-row { flex-wrap: nowrap; }
+    /* Date row — biarkan wrap agar tidak overflow di layar sempit */
+    .date-row { flex-wrap: wrap; }
 
     /* Tabel jadwal — jam + kelas lebih rapat */
     .table th, .table td { padding: 8px 8px; font-size: 13px; }
@@ -415,9 +415,15 @@ body.has-login-banner .app-header { margin-top: 94px; }
 }
 
 @media (max-width: 480px) {
-    /* Stats card kaprodi 2-per-row */
-    .stat-card { min-width: calc(50% - 6px); padding: 12px; }
+    /* Stats card — 3 card rata (1/3 lebar) agar tidak ada orphan */
+    .stat-card { min-width: calc(33.333% - 8px); padding: 12px; }
     .stat-value { font-size: 22px; }
+
+    /* Form PKL — stack 1 kolom di layar kecil */
+    #kp-placement-form { grid-template-columns: 1fr !important; }
+
+    /* Tombol submit kaprodi full-width di mobile */
+    #kp-pl-submit, #kp-ach-submit { width: 100%; }
 
     /* Table font lebih kecil */
     .table { font-size: 12px; }
@@ -431,6 +437,9 @@ body.has-login-banner .app-header { margin-top: 94px; }
     .att-radio-group { width: 100%; }
     .att-notes-input { width: 100%; max-width: 100%; }
 }
+
+/* Subheading muted — pengganti inline style h4 */
+.subheading-muted { font-size: 13px; margin-bottom: 8px; color: var(--color-text-muted); font-weight: 600; }
 
 /* Dropdown pencarian siswa */
 #obs-student-list { left: 0; right: 0; top: 100%; }
