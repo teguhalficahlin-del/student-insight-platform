@@ -29,7 +29,7 @@ import {
     getMyObservations, getStudentUserId, getStudentParents,
     getCases, getCase, getCaseEvents, createCase,
     addCaseComment, escalateCase, changeCaseStatus, closeCase,
-    updateCaseAudience, getCaseAudienceMembers,
+    updateCaseAudience, logCaseAudienceChange, getCaseAudienceMembers,
     addCaseAudienceMember, removeCaseAudienceMember, searchInternalUsers,
     getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
     registerLoginDevice,
@@ -2615,13 +2615,20 @@ async function handleAddAdmin(e) {
     const resultEl = document.getElementById('ks-new-admin-result');
     const name    = document.getElementById('ks-admin-name').value.trim();
     const loginId = document.getElementById('ks-admin-loginid').value.trim();
+    const idType  = document.getElementById('ks-admin-idtype').value;
+
+    if (loginId.length < 9) {
+        msgEl.textContent   = 'NIP/NIK minimal 9 karakter.';
+        msgEl.style.display = 'block';
+        return;
+    }
 
     btn.disabled = true;
     msgEl.style.display = 'none';
     resultEl.style.display = 'none';
 
     try {
-        const result = await addSchoolAdmin({ full_name: name, login_identifier: loginId });
+        const result = await addSchoolAdmin({ full_name: name, login_identifier: loginId, identifier_type: idType });
 
         document.getElementById('ks-result-loginid').textContent   = result.login_identifier;
         document.getElementById('ks-result-password').textContent  = result.temp_password;
@@ -2701,6 +2708,7 @@ const EVENT_TYPE_LABEL = {
     PARENT_REPLY_SENT:      'Balasan Terkirim',
     CASE_LOCKED:            'Kasus Dikunci',
     CASE_UNLOCKED:          'Kasus Dibuka Kunci',
+    AUDIENCE_CHANGED:       'Visibilitas Diubah',
 };
 
 const KASUS_PAGE    = 50;
@@ -2721,12 +2729,17 @@ async function initKasusTab() {
     document.getElementById('kasus-filter-status').addEventListener('change', () => loadKasusList());
     document.getElementById('kasus-filter-track').addEventListener('change',  () => loadKasusList());
 
+    // Sembunyikan tombol buat kasus untuk role ADMINISTRATIVE (bukan penanganan siswa)
+    if (currentUser.role_type === 'ADMINISTRATIVE') {
+        document.getElementById('kasus-new-btn').style.display = 'none';
+    }
+
     // Offline guard — disable tombol + banner saat tidak ada koneksi
     function syncKasusOnlineState() {
         const online = navigator.onLine;
         const btn    = document.getElementById('kasus-new-btn');
         const banner = document.getElementById('kasus-offline-banner');
-        btn.disabled          = !online;
+        if (btn) btn.disabled         = !online;
         banner.style.display  = online ? 'none' : 'block';
     }
     syncKasusOnlineState();
@@ -2979,6 +2992,8 @@ function renderKasusEvents(events) {
             detail = `→ ${esc(ROLE_LABEL[ev.new_handler_role] ?? ev.new_handler_role)}`;
         if (ev.event_type === 'STATUS_CHANGED' || ev.event_type === 'DECISION_CLOSE' || ev.event_type === 'FINAL_DECISION_MADE')
             detail = `${esc(CASE_STATUS_LABEL[ev.previous_status] ?? ev.previous_status ?? '?')} → ${esc(CASE_STATUS_LABEL[ev.new_status] ?? ev.new_status ?? '?')}`;
+        if (ev.event_type === 'AUDIENCE_CHANGED')
+            detail = `${esc(AUDIENCE_LABEL[ev.payload?.previous] ?? ev.payload?.previous ?? '?')} → ${esc(AUDIENCE_LABEL[ev.payload?.next] ?? ev.payload?.next ?? '?')}`;
         return `
             <div class="case-event-item">
                 <div style="font-size:12px; color:var(--color-text-muted); margin-bottom:4px">
@@ -3155,7 +3170,7 @@ function renderKasusActions(kasus) {
         newCloseBtn.dataset.confirming = '';
         newCloseBtn.disabled = true; newCloseBtn.textContent = 'Menutup…';
         try {
-            await closeCase({ caseId: kasus.case_id, note, authorUserId: currentUser.user_id, authorRole: currentUser.role_type });
+            await closeCase({ caseId: kasus.case_id, note, authorUserId: currentUser.user_id, authorRole: currentUser.role_type, previousStatus: kasus.status });
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Kasus berhasil ditutup.';
             await refreshKasusDetail();
         } catch (err) {
@@ -3187,6 +3202,13 @@ function renderAudiencePanel(kasus, currentAudience) {
             msgEl.style.color = ''; msgEl.textContent = 'Menyimpan…';
             try {
                 await updateCaseAudience({ caseId: kasus.case_id, audience: a });
+                await logCaseAudienceChange({
+                    caseId: kasus.case_id,
+                    previousAudience: currentAudience,
+                    newAudience: a,
+                    authorUserId: currentUser.user_id,
+                    authorRole: currentUser.role_type,
+                });
                 msgEl.style.color = 'var(--color-success)';
                 msgEl.textContent = `Audiens diubah ke: ${AUDIENCE_LABEL[a]}.`;
                 await refreshKasusDetail();
@@ -3350,6 +3372,7 @@ async function loadAudienceMembers(kasus) {
 
 function replaceEl(id) {
     const old = document.getElementById(id);
+    if (!old) return { addEventListener: () => {}, style: {}, dataset: {}, disabled: false };
     const neu = old.cloneNode(true);
     old.parentNode.replaceChild(neu, old);
     return neu;

@@ -26,6 +26,14 @@ function generatePassword(len = 12): string {
     return Array.from(arr, b => chars[b % chars.length]).join('');
 }
 
+/** Ubah login_identifier jadi slug aman untuk dipakai di email internal */
+function toEmailSlug(s: string): string {
+    return s.trim().toLowerCase()
+        .replace(/[^a-z0-9_]/g, '_')   // ganti karakter non-alfanumerik
+        .replace(/_+/g, '_')            // collapse underscore berulang
+        .replace(/^_|_$/g, '');         // trim underscore di awal/akhir
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
 
     if (req.method === 'OPTIONS') return handleCors();
@@ -48,13 +56,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // ── POST: tambah admin baru ──────────────────────────────
     if (req.method === 'POST') {
-        let body: { full_name?: string; login_identifier?: string };
+        let body: { full_name?: string; login_identifier?: string; identifier_type?: string };
         try { body = await req.json(); }
-        catch { return badRequest('Body harus JSON: { full_name, login_identifier }'); }
+        catch { return badRequest('Body harus JSON: { full_name, login_identifier, identifier_type }'); }
 
         const { full_name, login_identifier } = body;
+        const identifier_type = body.identifier_type === 'NIP' ? 'NIP' : 'NIK';
         if (!full_name?.trim())        return badRequest('full_name wajib diisi');
         if (!login_identifier?.trim()) return badRequest('login_identifier wajib diisi');
+        if (login_identifier.trim().length < 9) return badRequest('login_identifier minimal 9 karakter');
 
         // Cek duplikat login_identifier dalam sekolah yang sama
         const { data: existing } = await admin
@@ -69,7 +79,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }
 
         const tempPassword = generatePassword();
-        const email = `admin_${login_identifier.trim().toLowerCase().replace(/\s+/g, '_')}@staff.internal`;
+        const email = `admin_${toEmailSlug(login_identifier)}@${user.school_id}.internal`;
 
         // Buat Auth user
         const { data: created, error: createErr } = await admin.auth.admin.createUser({
@@ -92,7 +102,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             .insert({
                 auth_user_id:     authUserId,
                 login_identifier: login_identifier.trim(),
-                identifier_type:  'NIK',
+                identifier_type,
                 role_type:        'ADMINISTRATIVE',
                 full_name:        full_name.trim(),
                 email,
@@ -138,32 +148,34 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return forbidden('Hanya akun ADMINISTRATIVE yang dapat dihapus dari sini');
         }
 
-        // Pastikan masih ada minimal 1 admin tersisa setelah dihapus
+        // Pastikan masih ada minimal 1 admin aktif tersisa setelah dihapus
         const { count, error: countErr } = await admin
             .from('users')
             .select('user_id', { count: 'exact', head: true })
             .eq('school_id', user.school_id)
-            .eq('role_type', 'ADMINISTRATIVE');
+            .eq('role_type', 'ADMINISTRATIVE')
+            .eq('is_active', true)
+            .is('deleted_at', null);
 
         if (countErr) return internalError(countErr);
         if ((count ?? 0) <= 1) {
             return forbidden('Tidak dapat menghapus admin terakhir sekolah ini');
         }
 
-        // Hapus Auth account
-        if (target.auth_user_id) {
-            const { error: authDelErr } = await admin.auth.admin.deleteUser(target.auth_user_id);
-            if (authDelErr && !authDelErr.message?.includes('not found')) {
-                return internalError(authDelErr);
-            }
-        }
-
-        const { error: delErr } = await admin
+        // Soft-delete: set deleted_at + is_active=false di DB dulu
+        const { error: softDelErr } = await admin
             .from('users')
-            .delete()
+            .update({ deleted_at: new Date().toISOString(), is_active: false })
             .eq('user_id', user_id);
 
-        if (delErr) return internalError(delErr);
+        if (softDelErr) return internalError(softDelErr);
+
+        // Ban Auth account (bukan hard-delete agar bisa restore dalam 30 hari)
+        if (target.auth_user_id) {
+            await admin.auth.admin.updateUserById(target.auth_user_id, {
+                ban_duration: '87600h', // ~10 tahun = effectively permanent
+            }).catch(e => console.warn('[manage-admin-account] ban auth user gagal:', e));
+        }
 
         return ok({ deleted: true, user_id, full_name: target.full_name });
     }

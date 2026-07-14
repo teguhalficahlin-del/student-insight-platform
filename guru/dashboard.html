@@ -760,7 +760,13 @@
                         </div>
                         <div class="field">
                             <label class="label" for="ks-admin-loginid">NIP / NIK</label>
-                            <input id="ks-admin-loginid" class="input" type="text" inputmode="numeric" placeholder="Masukkan NIP atau NIK admin baru" required>
+                            <div style="display:flex;gap:8px;align-items:center">
+                                <select id="ks-admin-idtype" class="input" style="width:auto;flex-shrink:0">
+                                    <option value="NIK">NIK</option>
+                                    <option value="NIP">NIP</option>
+                                </select>
+                                <input id="ks-admin-loginid" class="input" type="text" inputmode="numeric" placeholder="Nomor identitas (min. 9 digit)" required minlength="9">
+                            </div>
                         </div>
                         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
                             <button type="submit" class="btn btn-primary" id="ks-add-admin-btn">Buat Akun Admin</button>
@@ -872,7 +878,7 @@
                     <!-- Comment form -->
                     <div id="kasus-comment-block" style="margin-bottom:16px">
                         <label for="kasus-comment-text">Tambah Komentar</label>
-                        <textarea id="kasus-comment-text" class="input" rows="3" placeholder="Tulis komentar…" style="margin-bottom:8px"></textarea>
+                        <textarea id="kasus-comment-text" class="input" rows="3" placeholder="Tulis komentar…" maxlength="2000" style="margin-bottom:8px"></textarea>
                         <button class="btn btn-secondary btn-sm" id="kasus-comment-submit-btn">Kirim Komentar</button>
                         <span id="kasus-comment-msg" style="font-size:13px; margin-left:8px"></span>
                     </div>
@@ -899,9 +905,9 @@
                         <!-- Restricted: member list + add -->
                         <div id="kasus-aud-restricted-panel" style="display:none">
                             <div id="kasus-aud-members-list" style="font-size:13px; margin-bottom:8px"></div>
-                            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
+                            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; position:relative">
                                 <input type="text" id="kasus-aud-member-search" class="input" placeholder="Ketik min. 2 huruf nama staf…" style="flex:1; min-width:160px" autocomplete="off">
-                                <div id="kasus-aud-member-list" style="display:none; border:1px solid var(--color-border); border-radius:var(--radius); background:var(--color-surface); max-height:120px; overflow-y:auto; position:absolute; z-index:100; min-width:200px"></div>
+                                <div id="kasus-aud-member-list" style="display:none; border:1px solid var(--color-border); border-radius:var(--radius); background:var(--color-surface); max-height:120px; overflow-y:auto; position:absolute; z-index:100; min-width:200px; top:100%; left:0"></div>
                             </div>
                         </div>
                         <span id="kasus-audience-msg" style="font-size:12px; display:block; margin-top:6px"></span>

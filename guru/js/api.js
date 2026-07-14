@@ -989,8 +989,8 @@ export async function addCaseComment({ caseId, text, authorUserId, authorRole, p
     if (error) throw error;
 }
 
-export async function escalateCase({ caseId, previousHandlerRole, newHandlerRole, note, authorUserId, authorRole, previousStatus, newStatus = 'UNDER_REVIEW' }) {
-    // Bila pemanggil tidak kirim previousStatus, baca dari server agar tidak hardcode
+export async function escalateCase({ caseId, previousHandlerRole, newHandlerRole, note, authorUserId, authorRole, previousStatus }) {
+    // previousStatus wajib diisi oleh pemanggil; fetch dari server sebagai fallback
     let prevSt = previousStatus;
     if (!prevSt) {
         const { data, error: fetchErr } = await supabase
@@ -1005,15 +1005,15 @@ export async function escalateCase({ caseId, previousHandlerRole, newHandlerRole
     const { error } = await supabase
         .from('case_events')
         .insert({
-            case_id:              caseId,
-            event_type:           'DECISION_ESCALATE',
-            author_user_id:       authorUserId,
-            author_role_at_time:  authorRole,
+            case_id:               caseId,
+            event_type:            'DECISION_ESCALATE',
+            author_user_id:        authorUserId,
+            author_role_at_time:   authorRole,
             previous_handler_role: previousHandlerRole,
-            new_handler_role:     newHandlerRole,
-            previous_status:      prevSt,
-            new_status:           newStatus,
-            payload:              note ? { text: note } : {},
+            new_handler_role:      newHandlerRole,
+            previous_status:       prevSt,
+            new_status:            prevSt,   // eskalasi tidak mengubah status kasus
+            payload:               note ? { text: note } : {},
         });
     if (error) throw error;
 }
@@ -1033,7 +1033,7 @@ export async function changeCaseStatus({ caseId, previousStatus, newStatus, note
     if (error) throw error;
 }
 
-export async function closeCase({ caseId, note, authorUserId, authorRole }) {
+export async function closeCase({ caseId, note, authorUserId, authorRole, previousStatus }) {
     const { error } = await supabase
         .from('case_events')
         .insert({
@@ -1041,11 +1041,24 @@ export async function closeCase({ caseId, note, authorUserId, authorRole }) {
             event_type:          'DECISION_CLOSE',
             author_user_id:      authorUserId,
             author_role_at_time: authorRole,
-            previous_status:     null,
+            previous_status:     previousStatus ?? null,
             new_status:          'CLOSED',
             payload:             note ? { text: note } : {},
         });
     if (error) throw error;
+}
+
+export async function logCaseAudienceChange({ caseId, previousAudience, newAudience, authorUserId, authorRole }) {
+    const { error } = await supabase
+        .from('case_events')
+        .insert({
+            case_id:             caseId,
+            event_type:          'AUDIENCE_CHANGED',
+            author_user_id:      authorUserId,
+            author_role_at_time: authorRole,
+            payload:             { previous: previousAudience, next: newAudience },
+        });
+    if (error) console.warn('[kasus] audit audience change gagal:', error);
 }
 
 // ─── KELOLA ADMIN (kepsek only) ───────────────────────────────
@@ -1055,6 +1068,7 @@ export async function listSchoolAdmins() {
         .from('v_users_staff_directory')
         .select('user_id, full_name')
         .eq('role_type', 'ADMINISTRATIVE')
+        .eq('is_active', true)
         .order('full_name');
     if (error) throw error;
     return data ?? [];
@@ -1078,8 +1092,8 @@ async function _callManageAdmin(method, body) {
     return json.data;
 }
 
-export async function addSchoolAdmin({ full_name, login_identifier }) {
-    return _callManageAdmin('POST', { full_name, login_identifier });
+export async function addSchoolAdmin({ full_name, login_identifier, identifier_type }) {
+    return _callManageAdmin('POST', { full_name, login_identifier, identifier_type });
 }
 
 export async function removeSchoolAdmin(user_id) {
