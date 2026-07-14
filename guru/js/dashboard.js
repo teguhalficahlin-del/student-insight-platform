@@ -696,34 +696,58 @@ async function loadAttModalContent(scheduleId, classId, className) {
                 </div>`;
         }
 
-        // Kelompokkan per 5 siswa dalam accordion
-        const CHUNK = 5;
-        const chunks = [];
-        for (let i = 0; i < students.length; i += CHUNK)
-            chunks.push(students.slice(i, i + CHUNK));
-
-        const accordionHtml = chunks.map((group, idx) => {
-            const first = group[0].full_name;
-            const last  = group[group.length - 1].full_name;
-            const label = group.length === 1 ? first : `${first} … ${last}`;
-            return `
-                <details ${idx === 0 ? 'open' : ''} class="att-accordion">
-                    <summary class="att-accordion-summary">
-                        Siswa ${idx * CHUNK + 1}–${idx * CHUNK + group.length}
-                        <span class="att-acc-names">${esc(label)}</span>
-                    </summary>
-                    ${group.map(renderStudentRow).join('')}
-                </details>`;
-        }).join('');
+        // Carousel satu-siswa-per-slide
+        const slidesHtml = students.map(s => `
+            <div class="att-carousel-slide">${renderStudentRow(s)}</div>`).join('');
 
         panel.innerHTML = `
-            ${accordionHtml}
+            <div class="att-carousel-nav">
+                <button class="att-prev" aria-label="Sebelumnya">&#8592;</button>
+                <div class="att-carousel-counter">
+                    <span class="att-cur-num">1</span> / ${students.length}
+                    <span class="att-carousel-sub">${esc(students[0].full_name)}</span>
+                </div>
+                <button class="att-next" aria-label="Berikutnya">&#8594;</button>
+            </div>
+            <div class="att-carousel-track-wrap">
+                <div class="att-carousel-track">${slidesHtml}</div>
+            </div>
             <div class="att-save-btn">
                 <button class="btn btn-success btn-sm att-save" data-schedule="${scheduleId}" data-count="${students.length}">
                     Simpan Kehadiran (${students.length} siswa)
                 </button>
                 <span class="status-msg" id="att-status-${scheduleId}" style="display:none; margin-left:8px"></span>
             </div>`;
+
+        // Carousel logic
+        let cur = 0;
+        const track   = panel.querySelector('.att-carousel-track');
+        const curNum  = panel.querySelector('.att-cur-num');
+        const subLbl  = panel.querySelector('.att-carousel-sub');
+        const prevBtn = panel.querySelector('.att-prev');
+        const nextBtn = panel.querySelector('.att-next');
+
+        function goTo(idx) {
+            cur = Math.max(0, Math.min(students.length - 1, idx));
+            track.style.transform = `translateX(-${cur * 100}%)`;
+            curNum.textContent  = cur + 1;
+            subLbl.textContent  = students[cur].full_name;
+            prevBtn.disabled    = cur === 0;
+            nextBtn.disabled    = cur === students.length - 1;
+        }
+        goTo(0);
+        prevBtn.addEventListener('click', () => goTo(cur - 1));
+        nextBtn.addEventListener('click', () => goTo(cur + 1));
+
+        // Touch swipe
+        let tx0 = null;
+        track.parentElement.addEventListener('touchstart', e => { tx0 = e.touches[0].clientX; }, { passive: true });
+        track.parentElement.addEventListener('touchend', e => {
+            if (tx0 === null) return;
+            const dx = e.changedTouches[0].clientX - tx0;
+            if (Math.abs(dx) > 40) goTo(dx < 0 ? cur + 1 : cur - 1);
+            tx0 = null;
+        }, { passive: true });
 
         panel.querySelector('.att-save').addEventListener('click', () => saveAttendance(scheduleId, students));
     } catch (err) {
