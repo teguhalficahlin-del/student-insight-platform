@@ -65,12 +65,12 @@ function fmtTime(t) { return t ? t.slice(0, 5) : '—'; }
 // ─── Boot ────────────────────────────────────────────────────
 async function init() {
     const { data: auth } = await supabase.auth.getUser();
-    if (!auth?.user) { window.location.href = getLoginUrl(); return; }
+    if (!auth?.user) { window.location.replace(getLoginUrl()); return; }
 
     currentUser = await getCurrentUserRow();
     if (!currentUser || !STUDENT_ROLES.includes(currentUser.role_type)) {
         await supabase.auth.signOut();
-        window.location.href = getLoginUrl();
+        window.location.replace(getLoginUrl());
         return;
     }
 
@@ -91,7 +91,7 @@ async function init() {
     // Alumni (LULUS) / mutasi (KELUAR) tidak boleh lagi mengakses portal
     if (!ACTIVE_STUDENT_STATUSES.includes(student.student_status)) {
         await logout();
-        window.location.href = getLoginUrl();
+        window.location.replace(getLoginUrl());
         return;
     }
 
@@ -679,7 +679,7 @@ function initNotifBell() {
 document.getElementById('logout-btn')?.addEventListener('click', async () => {
     LC.clear();
     await logout();
-    window.location.href = getLoginUrl();
+    window.location.replace(getLoginUrl());
 });
 
 // ─── Start ───────────────────────────────────────────────────

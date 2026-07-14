@@ -187,7 +187,7 @@ nextBtn.addEventListener('click', async () => {
         if (state.currentStep === TOTAL_STEPS) {
             await markSetupCompleted();
             localStorage.removeItem(STATE_KEY);
-            window.location.href = 'dashboard.html';
+            window.location.replace('dashboard.html');
             return;
         }
 
@@ -212,7 +212,7 @@ dashboardBtn.addEventListener('click', async () => {
         // Simpan state wizard — TIDAK dihapus,
         // agar TU bisa kembali melanjutkan setup
         saveState(state);
-        window.location.href = 'dashboard.html';
+        window.location.replace('dashboard.html');
     } catch (err) {
         showError(err.message ?? 'Gagal membuka dashboard. Coba lagi.');
         dashboardBtn.disabled = false;
@@ -546,7 +546,7 @@ async function renderStep() {
         const savedState = raw ? JSON.parse(raw) : null;
         const isIncomplete = savedState && savedState.maxReachedStep < 11;
         if (!isIncomplete) {
-            window.location.href = 'dashboard.html';
+            window.location.replace('dashboard.html');
             return;
         }
     }

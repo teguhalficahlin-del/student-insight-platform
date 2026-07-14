@@ -261,7 +261,7 @@ export async function voidObservation(observationId, reason) {
 
 export function requireAdministrativeOrRedirect(userRow) {
     if (!userRow || userRow.role_type !== 'ADMINISTRATIVE') {
-        window.location.href = 'index.html';
+        window.location.replace('index.html');
         return false;
     }
     return true;

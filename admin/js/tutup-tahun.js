@@ -79,7 +79,7 @@ function renderStepVisibility() {
 nextBtn.addEventListener('click', async () => {
     clearError();
     if (state.currentStep === TOTAL_STEPS) {
-        window.location.href = 'dashboard.html';
+        window.location.replace('dashboard.html');
         return;
     }
     state.currentStep += 1;

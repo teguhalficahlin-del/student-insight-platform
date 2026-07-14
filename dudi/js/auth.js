@@ -55,7 +55,7 @@ form.addEventListener('submit', async (e) => {
             return;
         }
         await checkMustChangePassword(supabase, userRow);
-        window.location.href = 'dashboard.html';
+        window.location.replace('dashboard.html');
     } catch (err) {
         showError(err.message ?? 'Login gagal. Periksa ID login dan password Anda.');
     }

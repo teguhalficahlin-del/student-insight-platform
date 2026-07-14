@@ -56,7 +56,7 @@ form.addEventListener('submit', async (e) => {
             return;
         }
         await checkMustChangePassword(supabase, userRow);
-        window.location.href = 'portal.html';
+        window.location.replace('portal.html');
 
     } catch (err) {
         errorEl.textContent   = err.message ?? 'Login gagal. Periksa NIK dan password Anda.';

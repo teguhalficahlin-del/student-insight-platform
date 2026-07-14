@@ -121,13 +121,13 @@ const DIMENSION_LABELS = {
 async function init() {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData?.user) {
-        window.location.href = getLoginUrl();
+        window.location.replace(getLoginUrl());
         return;
     }
 
     currentUser = await getCurrentUserRow();
     if (!currentUser || currentUser.role_type !== 'ORTU') {
-        window.location.href = getLoginUrl();
+        window.location.replace(getLoginUrl());
         return;
     }
 
@@ -610,7 +610,7 @@ btnSchedule.addEventListener('click', async () => {
 logoutBtn.addEventListener('click', async () => {
     LC.clear();
     await logout();
-    window.location.href = getLoginUrl();
+    window.location.replace(getLoginUrl());
 });
 
 // ─── Forum Kelas ──────────────────────────────────────────────

@@ -1621,7 +1621,7 @@ async function saveStep3() {
 
 async function finishSetup() {
     await markSetupCompleted(); // upsert school_config setup_completed = true
-    window.location.href = 'dashboard.html';
+    window.location.replace('dashboard.html');
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -3052,7 +3052,7 @@ window.addEventListener('beforeunload', (e) => {
 
 (async function init() {
     const { data: authData } = await supabase.auth.getUser();
-    if (!authData?.user) { window.location.href = 'index.html'; return; }
+    if (!authData?.user) { window.location.replace('index.html'); return; }
 
     const userRow = await getCurrentUserRow();
     if (!requireAdministrativeOrRedirect(userRow)) return;

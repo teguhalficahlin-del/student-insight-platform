@@ -2,7 +2,7 @@ const SUPABASE_URL  = 'https://xovvuuwexoweoqyltepq.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvdnZ1dXdleG93ZW9xeWx0ZXBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDk0NzUsImV4cCI6MjA5Nzc4NTQ3NX0.mFwmVfSqYM7ITURtLC143BsurK6Yr31WFViJe5PFGN8';
 
 const saKey = sessionStorage.getItem('sa_key');
-if (!saKey) window.location.href = 'index.html';
+if (!saKey) window.location.replace('index.html');
 
 // ── Tab navigation ────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -53,7 +53,7 @@ function fmt(d) {
 // ── Logout ────────────────────────────────────────────────────
 document.getElementById('logout-btn').addEventListener('click', () => {
     sessionStorage.removeItem('sa_key');
-    window.location.href = 'index.html';
+    window.location.replace('index.html');
 });
 
 // ── Health badges per sekolah ─────────────────────────────────

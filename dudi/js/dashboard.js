@@ -209,10 +209,10 @@ document.addEventListener('click', e => {
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
     const { data: authData } = await supabase.auth.getUser();
-    if (!authData?.user) { window.location.href = getLoginUrl(); return; }
+    if (!authData?.user) { window.location.replace(getLoginUrl()); return; }
 
     const userRow = await getCurrentUserRow();
-    if (!isDudi(userRow)) { window.location.href = getLoginUrl(); return; }
+    if (!isDudi(userRow)) { window.location.replace(getLoginUrl()); return; }
 
     currentUser = userRow;
     applyBrandingById(userRow.school_id, supabase);
@@ -538,7 +538,7 @@ logoutBtn.addEventListener('click', async () => {
     LC.clear();
     await clearOfflineQueue();
     await logout();
-    window.location.href = getLoginUrl();
+    window.location.replace(getLoginUrl());
 });
 
 // ── Helpers ───────────────────────────────────────────────────

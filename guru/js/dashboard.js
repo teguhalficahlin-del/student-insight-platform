@@ -193,12 +193,12 @@ function fmtTime(t) { return t ? t.slice(0, 5) : '—'; }
 // ─── Boot ────────────────────────────────────────────────────
 async function init() {
     const { data: auth } = await supabase.auth.getUser();
-    if (!auth?.user) { window.location.href = getLoginUrl(); return; }
+    if (!auth?.user) { window.location.replace(getLoginUrl()); return; }
 
     currentUser = await getCurrentUserRow();
     if (!currentUser || !GURU_ROLES.includes(currentUser.role_type) || currentUser.is_active === false) {
         await supabase.auth.signOut();
-        window.location.href = getLoginUrl();
+        window.location.replace(getLoginUrl());
         return;
     }
 
@@ -4034,7 +4034,7 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
     await clearOfflineQueue();
     LC.clear('');   // hapus semua cache smkhr:* dari localStorage
     await logout();
-    window.location.href = getLoginUrl();
+    window.location.replace(getLoginUrl());
 });
 
 // ─── Start ───────────────────────────────────────────────────

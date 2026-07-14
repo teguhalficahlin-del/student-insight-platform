@@ -30,7 +30,7 @@ supabase.auth.getUser().then(async ({ data }) => {
     if (row && STUDENT_ROLES.includes(row.role_type) && row.is_active !== false) {
         const s = await getMyStudent(row.user_id).catch(() => null);
         if (s && !ACTIVE_STUDENT_STATUSES.includes(s.student_status)) return; // alumni/keluar: jangan auto-masuk
-        window.location.href = 'dashboard.html';
+        window.location.replace('dashboard.html');
     }
 });
 
@@ -59,7 +59,7 @@ form.addEventListener('submit', async (e) => {
                 : 'Akun siswa ini sudah tidak aktif. Hubungi admin sekolah.');
         }
         await checkMustChangePassword(supabase, row);
-        window.location.href = 'dashboard.html';
+        window.location.replace('dashboard.html');
     } catch (err) {
         errEl.textContent    = err.message ?? 'Login gagal. Periksa NIS dan password Anda.';
         errEl.style.display  = 'block';

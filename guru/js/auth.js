@@ -28,7 +28,7 @@ supabase.auth.getUser().then(async ({ data }) => {
     if (!data?.user) return;
     const row = await getCurrentUserRow();
     if (row && GURU_ROLES.includes(row.role_type) && row.is_active !== false) {
-        window.location.href = 'dashboard.html';
+        window.location.replace('dashboard.html');
     }
 });
 
@@ -50,7 +50,7 @@ form.addEventListener('submit', async (e) => {
             throw new Error('Akun Anda telah dinonaktifkan. Hubungi admin sekolah.');
         }
         await checkMustChangePassword(supabase, row);
-        window.location.href = 'dashboard.html';
+        window.location.replace('dashboard.html');
     } catch (err) {
         errEl.textContent    = err.message ?? 'Login gagal. Periksa NIP/NIK dan password Anda.';
         errEl.style.display  = 'block';

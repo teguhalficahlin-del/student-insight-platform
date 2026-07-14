@@ -20,12 +20,12 @@ function fmtTime(d) {
 
 async function init() {
     const { data: auth } = await supabase.auth.getUser();
-    if (!auth?.user) { window.location.href = getLoginUrl(); return; }
+    if (!auth?.user) { window.location.replace(getLoginUrl()); return; }
 
     const user = await getCurrentUserRow();
     if (!user || !STAKEHOLDER_ROLES.includes(user.role_type)) {
         await supabase.auth.signOut();
-        window.location.href = getLoginUrl();
+        window.location.replace(getLoginUrl());
         return;
     }
 
@@ -69,7 +69,7 @@ async function loadSummary() {
 
 document.getElementById('logout-btn')?.addEventListener('click', async () => {
     await logout();
-    window.location.href = getLoginUrl();
+    window.location.replace(getLoginUrl());
 });
 
 init();

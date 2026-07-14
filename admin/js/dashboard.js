@@ -90,7 +90,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
 
 document.getElementById('logout-btn').addEventListener('click', async () => {
     await logout();
-    window.location.href = getLoginUrl();
+    window.location.replace(getLoginUrl());
 });
 
 // Hamburger menu toggle (mobile)
@@ -2176,7 +2176,7 @@ async function renderExportPanel() {
 
 (async () => {
     const { data: authData } = await supabase.auth.getUser();
-    if (!authData?.user) { window.location.href = getLoginUrl(); return; }
+    if (!authData?.user) { window.location.replace(getLoginUrl()); return; }
 
     const userRow = await getCurrentUserRow();
     if (!requireAdministrativeOrRedirect(userRow)) return;

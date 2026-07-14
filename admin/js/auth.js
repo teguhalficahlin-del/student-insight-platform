@@ -53,7 +53,7 @@ form.addEventListener('submit', async (e) => {
         }
 
         if (userRow.role_type === 'ORTU') {
-            window.location.href = '../parent/portal.html';
+            window.location.replace('../parent/portal.html');
             return;
         }
 
@@ -79,7 +79,7 @@ form.addEventListener('submit', async (e) => {
             return;
         }
         const setupDone = config?.setup_completed === true;
-        window.location.href = setupDone ? 'dashboard.html' : 'wizard.html';
+        window.location.replace(setupDone ? 'dashboard.html' : 'wizard.html');
 
     } catch (err) {
         errorEl.textContent = err.message ?? 'Login gagal. Periksa identifier dan password Anda.';

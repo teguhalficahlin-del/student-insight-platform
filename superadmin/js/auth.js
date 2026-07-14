@@ -18,7 +18,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
         if (!res.ok) throw new Error('Gagal menghubungi server. Coba lagi.');
 
         sessionStorage.setItem('sa_key', key);
-        window.location.href = 'dashboard.html';
+        window.location.replace('dashboard.html');
     } catch (err) {
         errEl.textContent    = err.message ?? 'Gagal menghubungi server.';
         errEl.style.display  = 'block';
