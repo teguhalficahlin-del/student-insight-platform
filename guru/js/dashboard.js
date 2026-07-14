@@ -137,9 +137,10 @@ const _studentSubjectCache = new Map(); // studentId → { userId, parents }
 let config       = null;   // { current_academic_year, current_semester }
 let jabatan      = [];
 let isTeacher    = false;  // hanya GURU & WALI_KELAS yang mengajar
-let myStudents       = [];     // for observation selector
+let myStudents         = [];     // for observation selector
 let isBroadObserver    = false;  // BK/Waka/Kepsek — bisa cari siswa seluruh sekolah
 let kaprodiAllStudents = [];     // PKL + aktif di prodi Kaprodi, untuk batas pencarian
+let _studentPoolInit   = false;  // guard: ensureStudentPool hanya load sekali
 let kpStudents      = [];  // kaprodi PKL students
 let kpAktifStudents = [];  // kaprodi siswa AKTIF (kelas)
 let kpProgramId     = null;
@@ -857,13 +858,12 @@ async function runFlush() {
     } catch (e) { console.warn('[offline] flush gagal:', e); }
 }
 
-// ── Observasi ─────────────────────────────────────────────────
+// ── Student pool (dipakai Observasi & Kasus) ─────────────────
 
-let _obsFormInit = false;
-async function initObsForm() {
-    if (_obsFormInit) return;
-    _obsFormInit = true;
-    // Load students dari cache dulu agar dropdown siap pakai walau offline
+async function ensureStudentPool() {
+    if (_studentPoolInit) return;
+    _studentPoolInit = true;
+    isBroadObserver = jabatan.some(j => ['bk', 'waka_kesiswaan', 'kepsek'].includes(j));
     const stuCacheKey = `mystudents-${currentUser.user_id}`;
     myStudents = LC.get(stuCacheKey) ?? [];
     try {
@@ -875,6 +875,15 @@ async function initObsForm() {
         myStudents = fresh;
         LC.set(stuCacheKey, fresh);
     } catch (_) { /* pakai cache yang sudah di-load di atas */ }
+}
+
+// ── Observasi ─────────────────────────────────────────────────
+
+let _obsFormInit = false;
+async function initObsForm() {
+    if (_obsFormInit) return;
+    _obsFormInit = true;
+    await ensureStudentPool();
 
     const searchEl      = document.getElementById('obs-student-search');
     const hiddenEl      = document.getElementById('obs-student-id');
@@ -890,12 +899,6 @@ async function initObsForm() {
     });
 
     // Audience ditentukan oleh select obs-visibility — tidak ada picker.
-
-    // Observer berjangkauan luas (BK/Kaprodi/Waka Kesiswaan/Kepsek) bisa
-    // mengamati siswa di luar kelas yang ia ajar — bahkan saat tak mengajar
-    // sama sekali (myStudents kosong). Untuk mereka, lengkapi daftar dengan
-    // pencarian sisi-server (cakupan dibatasi RLS).
-    isBroadObserver = jabatan.some(j => ['bk', 'waka_kesiswaan', 'kepsek'].includes(j));
 
     function renderHits(hits) {
         if (hits.length === 0) { listEl.style.display = 'none'; return; }
@@ -2498,6 +2501,8 @@ async function initKasusTab() {
     markKasusAsSeen();
     if (_kasusTabInit) { renderKasusList(); return; }
     _kasusTabInit = true;
+
+    await ensureStudentPool();
 
     // Filters
     document.getElementById('kasus-filter-status').addEventListener('change', renderKasusList);
