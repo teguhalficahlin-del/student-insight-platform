@@ -19,6 +19,7 @@ import {
     getAttendanceSummaryByStudents,
     fetchAllPklStudents, fetchAllDudiPartners,
     createPlacement, finishPlacement, bulkImportPkl,
+    createAchievement, getStudentAchievements,
     getSchoolStats, getKepsekMonitoring, getPendingAttendanceSessions,
     getAttendanceRecapPerClass, getOpenCases,
     getPrograms, getStudentAttendanceSessions,
@@ -976,6 +977,7 @@ async function initObsTab() {
     await initObsForm();
     if (!_obsTabInit) {
         _obsTabInit = true;
+        initAchievementForm('ach', myStudents);
     }
     await loadObsHistory();
 }
@@ -1618,7 +1620,7 @@ async function initKaprodiTab() {
             if (btn) handleFinishPkl(btn);
         });
 
-        await Promise.all([loadKpRecap(), loadKpClsRecap(), loadKpObs(), initKpPlacementForm(programId)]);
+        await Promise.all([loadKpRecap(), loadKpClsRecap(), loadKpObs(), initKpPlacementForm(programId), initAchievementForm('kp-ach', kaprodiAllStudents)]);
     } catch (err) {
         console.error('[kaprodi]', err);
     }
@@ -1990,6 +1992,106 @@ async function initKpPlacementForm(programId) {
             fileInput.value = '';
         }
     });
+}
+
+// ─── PRESTASI ────────────────────────────────────────────────
+
+const ACH_CATEGORY_LABEL = { AKADEMIK: 'Akademik', NON_AKADEMIK: 'Non-Akademik', SERTIFIKASI: 'Sertifikasi', PENGHARGAAN: 'Penghargaan' };
+const ACH_SCOPE_LABEL    = { SEKOLAH: 'Sekolah', KABUPATEN: 'Kab/Kota', PROVINSI: 'Provinsi', NASIONAL: 'Nasional', INTERNASIONAL: 'Internasional' };
+
+function initAchievementForm(prefix, studentPool) {
+    const searchEl   = document.getElementById(`${prefix}-student-search`);
+    const hiddenEl   = document.getElementById(`${prefix}-student-id`);
+    const dropEl     = document.getElementById(`${prefix}-student-list`);
+    const form       = document.getElementById(`${prefix}-form`);
+    const submitBtn  = document.getElementById(`${prefix}-submit`);
+    const statusEl   = document.getElementById(`${prefix}-status`);
+    const achWrap    = document.getElementById(`${prefix}-student-achievements`);
+    const achListEl  = document.getElementById(`${prefix}-student-list-result`);
+    if (!searchEl || !form) return;
+
+    // Student search (debounce)
+    let _t;
+    searchEl.addEventListener('input', () => {
+        clearTimeout(_t);
+        hiddenEl.value = '';
+        _t = setTimeout(() => {
+            const q = searchEl.value.trim().toLowerCase();
+            if (!q) { dropEl.style.display = 'none'; return; }
+            const hits = studentPool.filter(s =>
+                s.full_name.toLowerCase().includes(q) || (s.nis ?? '').includes(q)
+            ).slice(0, 8);
+            if (!hits.length) { dropEl.style.display = 'none'; return; }
+            dropEl.innerHTML = hits.map(s =>
+                `<div class="obs-list-item" data-id="${s.student_id}" data-name="${esc(s.full_name)}"
+                      style="padding:8px 12px;cursor:pointer">${esc(s.full_name)} <span style="color:var(--color-text-muted);font-size:12px">${esc(s.nis ?? '')}</span></div>`
+            ).join('');
+            dropEl.style.display = 'block';
+        }, 180);
+    });
+
+    dropEl.addEventListener('click', async e => {
+        const item = e.target.closest('.obs-list-item');
+        if (!item) return;
+        hiddenEl.value    = item.dataset.id;
+        searchEl.value    = item.dataset.name;
+        dropEl.style.display = 'none';
+        // Tampilkan prestasi siswa terpilih
+        achWrap.style.display = 'block';
+        achListEl.innerHTML = '<p class="hint">Memuat…</p>';
+        try {
+            const rows = await getStudentAchievements(item.dataset.id);
+            achListEl.innerHTML = rows.length ? renderAchievementList(rows) : '<p class="hint">Belum ada prestasi tercatat.</p>';
+        } catch { achListEl.innerHTML = '<p class="hint">Gagal memuat.</p>'; }
+    });
+
+    document.addEventListener('click', e => {
+        if (!searchEl.contains(e.target) && !dropEl.contains(e.target)) dropEl.style.display = 'none';
+    });
+
+    // Set default date ke hari ini
+    const dateEl = document.getElementById(`${prefix}-date`);
+    if (dateEl && !dateEl.value) dateEl.value = localDateStr();
+
+    form.addEventListener('submit', async e => {
+        e.preventDefault();
+        const studentId = hiddenEl.value;
+        if (!studentId) { alert('Pilih siswa terlebih dahulu.'); return; }
+        const title     = document.getElementById(`${prefix}-title`).value.trim();
+        const category  = document.getElementById(`${prefix}-category`).value;
+        const scope     = document.getElementById(`${prefix}-scope`).value;
+        const achievedAt = document.getElementById(`${prefix}-date`).value;
+        const desc      = document.getElementById(`${prefix}-desc`).value.trim();
+        submitBtn.disabled = true; submitBtn.textContent = 'Menyimpan…';
+        statusEl.style.display = 'none';
+        try {
+            await createAchievement({ studentId, title, description: desc || null, category, scope, achievedAt });
+            statusEl.innerHTML = '<span style="color:var(--color-success)">✓ Prestasi berhasil disimpan.</span>';
+            statusEl.style.display = 'block';
+            form.reset();
+            dateEl.value = localDateStr();
+            achWrap.style.display = 'none';
+        } catch (err) {
+            statusEl.innerHTML = `<span style="color:var(--color-danger)">✗ ${esc(fe(err))}</span>`;
+            statusEl.style.display = 'block';
+        } finally {
+            submitBtn.disabled = false; submitBtn.textContent = 'Simpan Prestasi';
+        }
+    });
+}
+
+function renderAchievementList(rows) {
+    return rows.map(r => `
+        <div class="obs-card" style="border-left:3px solid var(--color-primary)">
+            <div class="obs-meta">
+                <strong>${esc(r.title)}</strong>
+                &middot; <span class="badge badge-neutral">${ACH_CATEGORY_LABEL[r.category] ?? r.category}</span>
+                &middot; <span class="badge badge-neutral">${ACH_SCOPE_LABEL[r.scope] ?? r.scope}</span>
+                &middot; ${fmt(r.achieved_at)}
+                &middot; oleh ${esc(r.recorded_by_name ?? '—')}
+            </div>
+            ${r.description ? `<p class="obs-content" style="margin-top:4px">${esc(r.description)}</p>` : ''}
+        </div>`).join('');
 }
 
 // ─── TAB WAKA KURIKULUM ───────────────────────────────────────

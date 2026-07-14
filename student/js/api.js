@@ -342,6 +342,17 @@ export async function getForumPosts(classId, academicYear, userId, schoolId, lim
  * Siswa menandai posting sudah dibaca (acknowledgement).
  * Idempoten — duplikat diabaikan via onConflict ignore.
  */
+export async function getMyAchievements(studentId) {
+    const { data, error } = await supabase
+        .from('v_student_portal_achievements')
+        .select('achievement_id, title, description, category, scope, achieved_at, recorded_by_name')
+        .eq('student_id', studentId)
+        .order('achieved_at', { ascending: false })
+        .limit(50);
+    if (error) throw error;
+    return data ?? [];
+}
+
 export async function addForumAck(postId, userId, schoolId) {
     const { error } = await supabase
         .from('forum_post_acknowledgements')

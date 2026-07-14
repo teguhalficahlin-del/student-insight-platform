@@ -14,6 +14,7 @@ import {
     getMyCases,
     getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
     getMyForumClass, getForumPosts, addForumAck,
+    getMyAchievements,
 } from './api.js';
 
 // ─── State ───────────────────────────────────────────────────
@@ -468,9 +469,10 @@ async function loadObservations() {
     casesHintEl.style.display = 'block';
     document.getElementById('cases-list').innerHTML = '';
 
-    const [obsResult, casesResult] = await Promise.allSettled([
+    const [obsResult, casesResult, achResult] = await Promise.allSettled([
         getMyObservations(student.student_id, dateStart, dateEnd),
         getMyCases(student.student_id),
+        getMyAchievements(student.student_id),
     ]);
 
     if (obsResult.status === 'fulfilled') {
@@ -486,6 +488,35 @@ async function loadObservations() {
     } else {
         casesHintEl.textContent = `Gagal memuat data kasus. ${fe(casesResult.reason)}`;
     }
+
+    renderAchievements(achResult.status === 'fulfilled' ? achResult.value : []);
+}
+
+const ACH_CATEGORY_LABEL = { AKADEMIK: 'Akademik', NON_AKADEMIK: 'Non-Akademik', SERTIFIKASI: 'Sertifikasi', PENGHARGAAN: 'Penghargaan' };
+const ACH_SCOPE_LABEL    = { SEKOLAH: 'Sekolah', KABUPATEN: 'Kab/Kota', PROVINSI: 'Provinsi', NASIONAL: 'Nasional', INTERNASIONAL: 'Internasional' };
+
+function renderAchievements(rows) {
+    const hintEl = document.getElementById('ach-hint');
+    const listEl = document.getElementById('ach-list');
+    if (!hintEl || !listEl) return;
+    if (!rows.length) {
+        hintEl.textContent   = 'Belum ada prestasi yang tercatat.';
+        hintEl.style.display = 'block';
+        listEl.innerHTML     = '';
+        return;
+    }
+    hintEl.style.display = 'none';
+    listEl.innerHTML = rows.map(r => `
+        <div class="obs-card" style="border-left:3px solid var(--color-primary)">
+            <div class="obs-meta">
+                <strong>${esc(r.title)}</strong>
+                &middot; <span class="badge badge-neutral">${ACH_CATEGORY_LABEL[r.category] ?? r.category}</span>
+                &middot; <span class="badge badge-neutral">${ACH_SCOPE_LABEL[r.scope] ?? r.scope}</span>
+                &middot; ${fmt(r.achieved_at)}
+                &middot; dicatat oleh ${esc(r.recorded_by_name ?? '—')}
+            </div>
+            ${r.description ? `<p class="obs-content" style="margin-top:4px">${esc(r.description)}</p>` : ''}
+        </div>`).join('');
 }
 
 async function loadObsOnly() {

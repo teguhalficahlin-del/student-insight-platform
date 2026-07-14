@@ -542,6 +542,36 @@ export async function fetchAllDudiPartners() {
     }));
 }
 
+// ─── PRESTASI ────────────────────────────────────────────────
+
+export async function createAchievement({ studentId, title, description, category, scope, achievedAt }) {
+    const { error } = await supabase.from('achievements').insert({
+        student_id: studentId,
+        recorded_by_user_id: (await supabase.auth.getUser()).data.user?.id,
+        title, description: description || null, category, scope, achieved_at: achievedAt,
+    });
+    if (error) throw error;
+}
+
+export async function getStudentAchievements(studentId) {
+    const { data, error } = await supabase
+        .from('achievements')
+        .select('achievement_id, title, description, category, scope, achieved_at, is_voided, recorded_by_user_id, users!achievements_recorded_by_user_id_fkey(full_name)')
+        .eq('student_id', studentId)
+        .eq('is_voided', false)
+        .order('achieved_at', { ascending: false })
+        .limit(50);
+    if (error) throw error;
+    return (data ?? []).map(r => ({ ...r, recorded_by_name: r.users?.full_name ?? '—' }));
+}
+
+export async function voidAchievement(achievementId, voidReason) {
+    const { error } = await supabase.from('achievements').update({
+        is_voided: true, voided_at: new Date().toISOString(), void_reason: voidReason,
+    }).eq('achievement_id', achievementId);
+    if (error) throw error;
+}
+
 export async function createPlacement({ studentId, dudiUserId, startDate, endDate }) {
     const { error } = await supabase.from('pkl_placements').insert({ student_id: studentId, dudi_user_id: dudiUserId, start_date: startDate, end_date: endDate, is_active: true });
     if (error) throw error;

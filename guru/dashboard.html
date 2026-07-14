@@ -145,6 +145,58 @@
                 <h3>Riwayat Catatan Saya</h3>
                 <div id="obs-history-list"><p class="hint">Memuat…</p></div>
             </div>
+
+            <!-- Catat Prestasi Siswa -->
+            <div class="section-card" id="ach-form-card">
+                <h3>Catat Prestasi Siswa</h3>
+                <form id="ach-form">
+                    <div class="field" style="position:relative">
+                        <label for="ach-student-search">Siswa</label>
+                        <input type="text" id="ach-student-search" class="input" placeholder="Cari nama siswa…" autocomplete="off">
+                        <input type="hidden" id="ach-student-id">
+                        <div id="ach-student-list" style="display:none;border:1px solid var(--color-border);border-radius:var(--radius);background:var(--color-surface);max-height:180px;overflow-y:auto;position:absolute;z-index:100;left:0;right:0;top:100%"></div>
+                    </div>
+                    <div class="field">
+                        <label for="ach-title">Judul Prestasi</label>
+                        <input type="text" id="ach-title" class="input" placeholder="Contoh: Juara 1 Olimpiade Matematika" maxlength="200" required>
+                    </div>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap">
+                        <div class="field" style="flex:1;min-width:140px">
+                            <label for="ach-category">Kategori</label>
+                            <select id="ach-category" class="input">
+                                <option value="AKADEMIK">Akademik</option>
+                                <option value="NON_AKADEMIK">Non-Akademik</option>
+                                <option value="SERTIFIKASI">Sertifikasi</option>
+                                <option value="PENGHARGAAN">Penghargaan</option>
+                            </select>
+                        </div>
+                        <div class="field" style="flex:1;min-width:140px">
+                            <label for="ach-scope">Tingkat</label>
+                            <select id="ach-scope" class="input">
+                                <option value="SEKOLAH">Sekolah</option>
+                                <option value="KABUPATEN">Kabupaten/Kota</option>
+                                <option value="PROVINSI">Provinsi</option>
+                                <option value="NASIONAL">Nasional</option>
+                                <option value="INTERNASIONAL">Internasional</option>
+                            </select>
+                        </div>
+                        <div class="field" style="flex:1;min-width:140px">
+                            <label for="ach-date">Tanggal Prestasi</label>
+                            <input type="date" id="ach-date" class="input" required>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="ach-desc">Keterangan <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></label>
+                        <textarea id="ach-desc" class="input" rows="2" placeholder="Detail tambahan…" maxlength="500"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="ach-submit">Simpan Prestasi</button>
+                    <div id="ach-status" class="status-msg" style="display:none;margin-top:8px"></div>
+                </form>
+                <div id="ach-student-achievements" style="margin-top:16px;display:none">
+                    <h4 style="font-size:13px;margin-bottom:8px;color:var(--color-text-muted)">Prestasi Siswa Terpilih</h4>
+                    <div id="ach-student-list-result"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -374,6 +426,58 @@
                 <h3>Observasi dari DUDI</h3>
                 <p class="hint" id="kp-obs-hint" style="display:none">Belum ada observasi dari DUDI.</p>
                 <div id="kp-obs-list"></div>
+            </div>
+
+            <!-- Catat Prestasi Siswa (Kaprodi) -->
+            <div class="section-card">
+                <h3>Catat Prestasi Siswa</h3>
+                <form id="kp-ach-form">
+                    <div class="field" style="position:relative">
+                        <label for="kp-ach-student-search">Siswa</label>
+                        <input type="text" id="kp-ach-student-search" class="input" placeholder="Cari nama siswa di program ini…" autocomplete="off">
+                        <input type="hidden" id="kp-ach-student-id">
+                        <div id="kp-ach-student-list" style="display:none;border:1px solid var(--color-border);border-radius:var(--radius);background:var(--color-surface);max-height:180px;overflow-y:auto;position:absolute;z-index:100;left:0;right:0;top:100%"></div>
+                    </div>
+                    <div class="field">
+                        <label for="kp-ach-title">Judul Prestasi</label>
+                        <input type="text" id="kp-ach-title" class="input" placeholder="Contoh: Juara 1 LKS Tingkat Provinsi" maxlength="200" required>
+                    </div>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap">
+                        <div class="field" style="flex:1;min-width:140px">
+                            <label for="kp-ach-category">Kategori</label>
+                            <select id="kp-ach-category" class="input">
+                                <option value="AKADEMIK">Akademik</option>
+                                <option value="NON_AKADEMIK">Non-Akademik</option>
+                                <option value="SERTIFIKASI">Sertifikasi</option>
+                                <option value="PENGHARGAAN">Penghargaan</option>
+                            </select>
+                        </div>
+                        <div class="field" style="flex:1;min-width:140px">
+                            <label for="kp-ach-scope">Tingkat</label>
+                            <select id="kp-ach-scope" class="input">
+                                <option value="SEKOLAH">Sekolah</option>
+                                <option value="KABUPATEN">Kabupaten/Kota</option>
+                                <option value="PROVINSI">Provinsi</option>
+                                <option value="NASIONAL">Nasional</option>
+                                <option value="INTERNASIONAL">Internasional</option>
+                            </select>
+                        </div>
+                        <div class="field" style="flex:1;min-width:140px">
+                            <label for="kp-ach-date">Tanggal Prestasi</label>
+                            <input type="date" id="kp-ach-date" class="input" required>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="kp-ach-desc">Keterangan <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></label>
+                        <textarea id="kp-ach-desc" class="input" rows="2" placeholder="Detail tambahan…" maxlength="500"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm" id="kp-ach-submit">Simpan Prestasi</button>
+                    <div id="kp-ach-status" class="status-msg" style="display:none;margin-top:8px"></div>
+                </form>
+                <div id="kp-ach-student-achievements" style="margin-top:16px;display:none">
+                    <h4 style="font-size:13px;margin-bottom:8px;color:var(--color-text-muted)">Prestasi Siswa Terpilih</h4>
+                    <div id="kp-ach-student-list-result"></div>
+                </div>
             </div>
 
         </div>
