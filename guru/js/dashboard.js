@@ -20,7 +20,7 @@ import {
     fetchAllPklStudents, fetchAllDudiPartners,
     createPlacement, finishPlacement, bulkImportPkl,
     createAchievement, getStudentAchievements,
-    getSchoolStats, getKepsekMonitoring, getPendingAttendanceSessions,
+    getSchoolStats, getKepsekMonitoring, getPendingAttendanceSessions, getAttendanceFillRate,
     getAttendanceRecapPerClass, getOpenCases,
     getPrograms, getStudentAttendanceSessions,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
@@ -2107,12 +2107,40 @@ async function initWakaKurTab() {
         const weekAgo = localDateStr(new Date(Date.now() - 6 * 86400000));
         document.getElementById('wk-kur-start').value = weekAgo;
         document.getElementById('wk-kur-end').value   = localDateStr();
-        document.getElementById('wk-kur1-refresh').onclick = () => loadWkKur1(localDateStr());
+        document.getElementById('wk-kur1-refresh').onclick = () => { loadWkKurStats(localDateStr()); loadWkKur1(localDateStr()); };
         document.getElementById('wk-kur1-btn').onclick = handleWkKur1Btn;
         document.getElementById('wk-kur2-btn').onclick = handleWkKur2Btn;
     }
-    // Selalu reload Panel 1 saat tab dibuka agar data terbaru tampil
-    await loadWkKur1(localDateStr());
+    // Selalu reload Panel 1 + stats saat tab dibuka agar data terbaru tampil
+    await Promise.all([loadWkKurStats(localDateStr()), loadWkKur1(localDateStr())]);
+}
+
+async function loadWkKurStats(date) {
+    const elSudah       = document.getElementById('wk-kur-pct-sudah');
+    const elBelum       = document.getElementById('wk-kur-pct-belum');
+    const elDetailSudah = document.getElementById('wk-kur-detail-sudah');
+    const elDetailBelum = document.getElementById('wk-kur-detail-belum');
+    elSudah.textContent = '…'; elBelum.textContent = '…';
+    elDetailSudah.textContent = ''; elDetailBelum.textContent = '';
+    try {
+        const { total, hadir, pending, tidak } = await getAttendanceFillRate(date);
+        if (total === 0) {
+            elSudah.textContent = '—'; elBelum.textContent = '—';
+            elDetailSudah.textContent = 'Tidak ada sesi hari ini';
+            elDetailBelum.textContent = '';
+            return;
+        }
+        const pctHadir  = Math.round(hadir  / total * 100);
+        const pctBelum  = Math.round((pending + tidak) / total * 100);
+        elSudah.textContent = pctHadir + '%';
+        elBelum.textContent = pctBelum + '%';
+        elDetailSudah.textContent = `${hadir} dari ${total} sesi`;
+        elDetailBelum.textContent = `${pending} belum diisi, ${tidak} guru tidak hadir`;
+        elSudah.style.color = hadir === total ? 'var(--color-success, #22c55e)' : '';
+        elBelum.style.color = (pending + tidak) > 0 ? 'var(--color-danger, #ef4444)' : '';
+    } catch {
+        elSudah.textContent = '!'; elBelum.textContent = '!';
+    }
 }
 
 async function loadWkKur1(date) {

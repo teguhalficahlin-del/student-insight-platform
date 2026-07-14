@@ -627,6 +627,21 @@ export async function getKepsekMonitoring(period = 'hari_ini', academicYear = nu
     return data;
 }
 
+export async function getAttendanceFillRate(date) {
+    const { data, error } = await supabase
+        .from('teaching_schedules')
+        .select('teacher_indicator')
+        .eq('session_date', date)
+        .eq('meeting_status', 'NORMAL');
+    if (error) throw error;
+    const rows = data ?? [];
+    const total   = rows.length;
+    const hadir   = rows.filter(r => r.teacher_indicator === 'HADIR').length;
+    const pending = rows.filter(r => r.teacher_indicator === 'PENDING_EVALUATION').length;
+    const tidak   = rows.filter(r => r.teacher_indicator === 'TIDAK_HADIR').length;
+    return { total, hadir, pending, tidak };
+}
+
 export async function getPendingAttendanceSessions(dateStart, dateEnd) {
     let q = supabase
         .from('teaching_schedules')

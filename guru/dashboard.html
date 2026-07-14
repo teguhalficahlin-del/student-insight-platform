@@ -589,6 +589,20 @@
     <div class="tab-panel" id="tab-waka_kurikulum">
         <div class="page-body">
 
+            <!-- Kartu Ringkasan Hari Ini -->
+            <div class="stats-row" id="wk-kur-stats-row">
+                <div class="stat-card">
+                    <span class="stat-value" id="wk-kur-pct-sudah">—</span>
+                    <div class="stat-label">Sudah Isi Absensi</div>
+                    <div id="wk-kur-detail-sudah" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="wk-kur-pct-belum">—</span>
+                    <div class="stat-label">Belum / Tidak Hadir</div>
+                    <div id="wk-kur-detail-belum" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
+                </div>
+            </div>
+
             <!-- Tabel 1: Hari Ini (auto-load) -->
             <div class="section-card">
                 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
