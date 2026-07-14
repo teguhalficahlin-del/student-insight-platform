@@ -1143,6 +1143,7 @@ async function loadWaliSummary() {
                         SAKIT: 'var(--color-primary)',
                         TIDAK_HADIR: 'var(--color-danger)',
                     };
+                    const STATUS_LABEL = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Alpa' };
                     body.innerHTML = sessions.map(s => `
                         <div style="display:flex;align-items:center;gap:8px;
                             padding:7px 16px;border-top:0.5px solid var(--color-border)">
@@ -1154,7 +1155,7 @@ async function loadWaliSummary() {
                             </span>
                             <span style="font-size:11px;font-weight:600;
                                 color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
-                                ${esc(s.status)}
+                                ${STATUS_LABEL[s.status] ?? esc(s.status)}
                             </span>
                         </div>`).join('');
                 } catch(err) {
@@ -1330,7 +1331,7 @@ async function loadBkAttendanceRecap() {
                                         </span>
                                         <span style="font-size:11px;font-weight:600;
                                             color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
-                                            ${esc(s.status)}
+                                            ${STATUS_LABEL[s.status] ?? esc(s.status)}
                                         </span>
                                     </div>`).join('');
                             } catch(err) {
@@ -1376,7 +1377,7 @@ function buildAttStatCards(rows) {
     const colI = tot === 0 ? muted : 'var(--color-warning,#f59e0b)';
     const colS = tot === 0 ? muted : 'var(--color-primary)';
     const colA = tot === 0 ? muted : 'var(--color-danger)';
-    const lbl  = 'font-size:11px;color:rgba(255,255,255,0.65);margin-top:2px';
+    const lbl  = 'font-size:11px;color:var(--color-text-muted);margin-top:2px';
     return `
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
         <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
@@ -1458,7 +1459,6 @@ async function loadWkAttendanceRecap() {
                                 <span style="color:var(--color-warning,#f59e0b)">${pctI}%I</span>
                                 <span style="color:var(--color-primary)">${pctS}%S</span>
                                 <span style="color:var(--color-danger)">${pctA}%A</span>
-                            </span>
                             </span>
                         </summary>
                         <div id="wkdet-body-${safeId}"
@@ -1563,7 +1563,7 @@ async function loadWkAttendanceRecap() {
                                         </span>
                                         <span style="font-size:11px;font-weight:600;
                                             color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
-                                            ${esc(s.status)}
+                                            ${STATUS_LABEL[s.status] ?? esc(s.status)}
                                         </span>
                                     </div>`).join('');
                             } catch(err) {
@@ -1887,7 +1887,7 @@ async function loadKpClsRecap() {
                                         </span>
                                         <span style="font-size:11px;font-weight:600;
                                             color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
-                                            ${esc(s.status)}
+                                            ${STATUS_LABEL[s.status] ?? esc(s.status)}
                                         </span>
                                     </div>`).join('');
                             } catch(err) {
