@@ -2594,8 +2594,8 @@ async function initKasusTab() {
         const track  = document.getElementById('kasus-c-track').value;
 
         msgEl.style.display = 'none';
-        if (!sId)          { showCreateMsg('Pilih siswa dari daftar.', true); return; }
-        if (!title)        { showCreateMsg('Judul tidak boleh kosong.', true); return; }
+        if (!sId)             { showCreateMsg('Pilih siswa dari daftar.', true); return; }
+        if (title.length < 5) { showCreateMsg('Judul minimal 5 karakter.', true); return; }
         if (desc.length < 20) { showCreateMsg('Deskripsi minimal 20 karakter.', true); return; }
 
         btnEl.disabled = true; btnEl.textContent = 'Menyimpan…';

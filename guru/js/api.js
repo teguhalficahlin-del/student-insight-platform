@@ -281,7 +281,7 @@ export async function searchStudents(query, schoolId) {
     const term = `%${q}%`;
     let req = supabase
         .from('students')
-        .select('student_id, nis, full_name, student_status')
+        .select('student_id, nis, full_name, student_status, class_enrollments(classes(name))')
         .or(`full_name.ilike.${term},nis.ilike.${term}`)
         .in('student_status', ['AKTIF', 'PKL'])
         .order('full_name')
@@ -289,7 +289,10 @@ export async function searchStudents(query, schoolId) {
     if (schoolId) req = req.eq('school_id', schoolId);
     const { data, error } = await req;
     if (error) throw error;
-    return (data ?? []).map(s => ({ ...s, class_name: '' }));
+    return (data ?? []).map(s => ({
+        ...s,
+        class_name: s.class_enrollments?.[0]?.classes?.name ?? '',
+    }));
 }
 
 /**

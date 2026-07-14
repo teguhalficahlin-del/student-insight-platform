@@ -159,15 +159,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const rows: ImportRow[] = rawRows.map((r, i) => {
             const jabatan = (r.jabatan ?? '').toUpperCase().split(',').map((s: string) => s.trim()).filter(Boolean);
             const mengajar = (r.mengajar ?? '').toUpperCase().trim() === 'YA';
-            // role_type: dari kolom eksplisit, atau dari mengajar flag, atau dari jabatan utama
+            // role_type: jabatan spesifik menang atas mengajar (BK yang mengajar tetap BK)
             let roleType = (r.role_type ?? '').toUpperCase();
             if (!roleType) {
-                if (mengajar) roleType = 'GURU';
-                else if (jabatan.includes('KEPSEK')) roleType = 'KEPSEK';
+                if (jabatan.includes('KEPSEK')) roleType = 'KEPSEK';
                 else if (jabatan.includes('WAKA_KURIKULUM')) roleType = 'WAKA_KURIKULUM';
                 else if (jabatan.includes('WAKA_KESISWAAN')) roleType = 'WAKA_KESISWAAN';
                 else if (jabatan.includes('WAKA_HUMAS')) roleType = 'WAKA_HUMAS';
                 else if (jabatan.includes('BK')) roleType = 'BK';
+                else if (mengajar) roleType = 'GURU';
                 else roleType = 'GURU';
             }
             return {
