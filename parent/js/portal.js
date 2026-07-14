@@ -614,11 +614,12 @@ logoutBtn.addEventListener('click', async () => {
 });
 
 // ─── Forum Kelas ──────────────────────────────────────────────
-let forumChildren      = [];
-let forumSelectedChild = null;
-let forumOffset        = 0;
-let forumHasMore       = false;
-let forumInitDone      = false;
+let forumChildren        = [];
+let forumSelectedChild   = null;
+let forumOffset          = 0;
+let forumHasMore         = false;
+let forumInitDone        = false;
+let forumListenerSetup   = false; // tidak di-reset saat ganti anak
 
 const FORUM_LIMIT = 20;
 
@@ -656,14 +657,16 @@ async function initForumSection() {
 
     forumSelectedChild = forumChildren[0];
 
-    selectEl.addEventListener('change', async () => {
-        const idx = Number(selectEl.value);
-        forumSelectedChild = forumChildren[idx] ?? null;
-        forumOffset = 0;
-        await loadForumPosts();
-    });
-
-    document.getElementById('btn-load-more-forum')?.addEventListener('click', () => loadForumPosts(true));
+    if (!forumListenerSetup) {
+        forumListenerSetup = true;
+        selectEl.addEventListener('change', async () => {
+            const idx = Number(selectEl.value);
+            forumSelectedChild = forumChildren[idx] ?? null;
+            forumOffset = 0;
+            await loadForumPosts();
+        });
+        document.getElementById('btn-load-more-forum')?.addEventListener('click', () => loadForumPosts(true));
+    }
 
     await loadForumPosts();
 }

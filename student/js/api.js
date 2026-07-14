@@ -318,7 +318,10 @@ export async function getForumPosts(classId, academicYear, userId, schoolId, lim
                 student:students ( student_id, full_name, nis )
             ),
             acknowledgements:forum_post_acknowledgements ( user_id ),
-            comments:forum_post_comments ( comment_id ),
+            comments:forum_post_comments (
+                comment_id, body, created_at,
+                author:users!forum_post_comments_author_user_id_fkey ( user_id, full_name )
+            ),
             forum_post_audience!inner ( user_id )
         `)
         .eq('class_id', classId)

@@ -797,10 +797,15 @@ function renderForumCard(p) {
         ? `<button class="btn btn-secondary" disabled style="font-size:0.8rem;padding:4px 12px">✓ Sudah dibaca</button>`
         : `<button id="${ackBtnId}" class="btn btn-primary" style="font-size:0.8rem;padding:4px 12px">Tandai sudah baca</button>`;
 
-    // Jumlah komentar
-    const commentCount = p.comments?.length ?? 0;
-    const commentHtml  = commentCount > 0
-        ? `<span style="font-size:0.8rem;color:var(--color-text-muted,#6b7280)">${commentCount} komentar</span>`
+    // Komentar
+    const comments     = p.comments ?? [];
+    const commentsHtml = comments.length
+        ? comments.map(c => `
+            <div style="padding:6px 0;border-top:1px solid var(--color-border,#e5e7eb);font-size:0.85rem">
+                <span style="font-weight:600">${esc(c.author?.full_name ?? '—')}</span>
+                <span style="color:var(--color-text-muted,#6b7280)"> · ${fmtRelative(c.created_at)}</span>
+                <p style="margin:3px 0 0">${esc(c.body)}</p>
+            </div>`).join('')
         : '';
 
     // Waktu relatif
@@ -823,10 +828,10 @@ function renderForumCard(p) {
         ${subjectsHtml}
         ${p.title && p.title !== p.body ? `<div style="font-weight:600;margin-bottom:4px">${esc(p.title)}</div>` : ''}
         <div style="white-space:pre-wrap;font-size:0.9rem">${esc(p.body ?? '')}</div>
-        <div style="margin-top:10px;display:flex;align-items:center;gap:12px">
+        <div style="margin-top:10px">
             ${ackHtml}
-            ${commentHtml}
         </div>
+        ${commentsHtml}
     `;
 
     if (!alreadyAck) {
