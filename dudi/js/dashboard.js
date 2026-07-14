@@ -412,7 +412,7 @@ function renderHistoryRows(rows, nameById) {
         <tr>
             <td>${formatDate(r.attendance_date)}</td>
             <td>${esc(nameById.get(r.student_id) ?? '—')}</td>
-            <td><span class="badge badge-${r.status.toLowerCase().replace('_', '_')}">${STATUS_LABELS[r.status] ?? r.status}</span></td>
+            <td><span class="badge badge-${r.status.toLowerCase().replace(/_/g, '-')}">${STATUS_LABELS[r.status] ?? r.status}</span></td>
             <td>${esc(r.notes ?? '—')}</td>
         </tr>
     `).join('');
@@ -428,7 +428,7 @@ async function loadHistory() {
     if (cached) renderHistoryRows(cached, nameById);
 
     try {
-        const rows = await fetchRecentAttendance(ids, 14);
+        const rows = await fetchRecentAttendance(ids, 90);
         LC.set(ckey, rows);
         renderHistoryRows(rows, nameById);
     } catch (err) {
