@@ -959,7 +959,7 @@ export async function removeCaseAudienceMember({ caseId, userId }) {
 }
 
 export async function searchInternalUsers(query) {
-    const INTERNAL_ROLES = ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK'];
+    const INTERNAL_ROLES = ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','WAKA_HUMAS','KEPSEK'];
     const { data, error } = await supabase
         .from('v_users_staff_directory')
         .select('user_id, full_name, role_type')

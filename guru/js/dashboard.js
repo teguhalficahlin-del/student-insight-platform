@@ -3023,6 +3023,7 @@ async function loadAudienceMembers(kasus) {
             studentId ? fetchStudentSubject(studentId, knownUserId) : Promise.resolve(null),
         ]);
         const memberSet = new Set(members.map(m => m.user_id));
+        const subjectUidSet = new Set();
 
         // ── Toggle siswa & ortu ──
         if (subject) {
@@ -3033,6 +3034,7 @@ async function loadAudienceMembers(kasus) {
             subject.parents.forEach(p => {
                 rows.push({ uid: p.parent_user_id, label: esc(p.users?.full_name ?? p.parent_user_id), role: 'Ortu' });
             });
+            rows.forEach(r => subjectUidSet.add(r.uid));
             if (rows.length) {
                 subjectPanel.innerHTML = `
                     <div style="font-size:12px;font-weight:600;color:var(--color-text-muted);margin-bottom:6px">Siswa &amp; Orang Tua Terkait</div>
@@ -3075,11 +3077,12 @@ async function loadAudienceMembers(kasus) {
             subjectPanel.innerHTML = '';
         }
 
-        // ── Chip staf (unchanged) ──
-        if (!members.length) {
+        // ── Chip staf (kecualikan siswa/ortu yang sudah tampil di subjectPanel) ──
+        const staffMembers = members.filter(m => !subjectUidSet.has(m.user_id));
+        if (!staffMembers.length) {
             listEl.innerHTML = '<em style="color:var(--color-text-muted)">Belum ada staf yang ditambahkan.</em>';
         } else {
-            listEl.innerHTML = members.map(m => {
+            listEl.innerHTML = staffMembers.map(m => {
                 const name = m.users?.full_name ?? m.user_id;
                 const role = ROLE_LABEL[m.users?.role_type] ?? m.users?.role_type ?? '';
                 return `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;padding:2px 8px;border:1px solid var(--color-border);border-radius:20px;font-size:12px">
