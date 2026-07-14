@@ -2423,6 +2423,11 @@ async function loadWhCases() {
 
 const BULAN_ID = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 
+function _prevAcademicYear() {
+    const y = parseInt(config?.current_academic_year?.split('/')[0] ?? new Date().getFullYear());
+    return `${y - 1}/${y}`;
+}
+
 function fmtChartLabel(dateStr, byMonth) {
     const d = new Date(dateStr + 'T00:00:00');
     return byMonth
@@ -2443,7 +2448,9 @@ async function initKepsekTab() {
             if (!btn) return;
             document.querySelectorAll('.ks-period-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            loadKepsekMonitoring(btn.dataset.period);
+            const period = btn.dataset.period;
+            const ayLalu = period === 'tahun_ajaran_lalu' ? _prevAcademicYear() : null;
+            loadKepsekMonitoring(period, ayLalu);
         });
 
         // Wire date range button
