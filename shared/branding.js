@@ -24,7 +24,7 @@ function getSlugFromURL() {
     return null;
 }
 
-function _injectDynamicManifest(slug) {
+function _injectDynamicManifest(slug, branding = null) {
     const el = document.querySelector('link[rel="manifest"]');
     if (!el || !slug) return;
     fetch(el.href)
@@ -32,6 +32,23 @@ function _injectDynamicManifest(slug) {
         .then(manifest => {
             // start_url ke login page dengan slug agar reinstall PWA tetap bawa slug
             manifest.start_url = `./index.html?school=${encodeURIComponent(slug)}`;
+            if (branding) {
+                if (branding.name) {
+                    manifest.name       = branding.name;
+                    manifest.short_name = branding.name.length > 15
+                        ? branding.name.replace(/[aeiouAEIOU\s]/g, '').slice(0, 10) || branding.name.slice(0, 15)
+                        : branding.name;
+                }
+                if (branding.primary_color) {
+                    manifest.theme_color      = branding.primary_color;
+                    manifest.background_color = branding.primary_color;
+                }
+                if (branding.logo_url) {
+                    // Tambahkan logo sekolah sebagai icon utama, pertahankan fallback generik
+                    const schoolIcon = { src: branding.logo_url, sizes: '512x512', type: 'image/png', purpose: 'any maskable' };
+                    manifest.icons = [schoolIcon, ...(manifest.icons ?? [])];
+                }
+            }
             const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
             el.href = URL.createObjectURL(blob);
         })
@@ -66,7 +83,6 @@ export async function applyBranding(slug = null) {
     const resolvedSlug = slug ?? getSlugFromURL();
     if (!resolvedSlug) return null;
     try { localStorage.setItem('school_slug', resolvedSlug); } catch { /* private mode */ }
-    _injectDynamicManifest(resolvedSlug);
 
     let branding = null;
     try {
@@ -86,6 +102,7 @@ export async function applyBranding(slug = null) {
         return null;
     }
 
+    _injectDynamicManifest(resolvedSlug, branding);
     return _applyToDom(branding);
 }
 
