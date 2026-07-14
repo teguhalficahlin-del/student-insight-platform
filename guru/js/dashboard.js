@@ -2210,14 +2210,53 @@ async function loadWkKur2() {
             _wkKur2Visible = true;
             return;
         }
-        tbody.innerHTML = rows.map((r, i) => `<tr>
-            <td style="text-align:center">${i + 1}</td>
-            <td>${esc(r.teacher?.full_name ?? '—')}</td>
-            <td>${esc(r.subject?.name ?? '—')}</td>
-            <td>${esc(r.class?.name ?? '—')}</td>
-            <td>${esc(r.session_date ?? '—')}</td>
-            <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
-        </tr>`).join('');
+
+        // Kelompokkan per guru, urutkan terbanyak di atas
+        const byTeacher = new Map();
+        for (const r of rows) {
+            const name = r.teacher?.full_name ?? '—';
+            if (!byTeacher.has(name)) byTeacher.set(name, []);
+            byTeacher.get(name).push(r);
+        }
+        const groups = [...byTeacher.entries()]
+            .sort((a, b) => b[1].length - a[1].length);
+
+        const THRESHOLD = 10;
+        let html = '';
+        groups.forEach(([name, sesi], idx) => {
+            const count    = sesi.length;
+            const alert    = count >= THRESHOLD;
+            const detailId = `wk-kur2-detail-${idx}`;
+            const color    = alert ? 'var(--color-danger,#ef4444)' : '';
+            const badge    = alert
+                ? `<span style="font-size:11px;background:var(--color-danger,#ef4444);color:#fff;border-radius:4px;padding:1px 6px;margin-left:6px">≥${THRESHOLD}×</span>`
+                : '';
+            html += `<tr style="cursor:pointer" onclick="document.getElementById('${detailId}').style.display=document.getElementById('${detailId}').style.display==='none'?'':'none'">
+                <td style="text-align:center">${idx + 1}</td>
+                <td style="color:${color};font-weight:${alert?'600':'400'}">${esc(name)}${badge}</td>
+                <td style="text-align:center;color:${color};font-weight:${alert?'600':'400'}">${count} sesi</td>
+                <td style="text-align:center;font-size:18px;color:var(--color-text-muted)">&#8250;</td>
+            </tr>
+            <tr id="${detailId}" style="display:none">
+                <td colspan="4" style="padding:0">
+                    <table style="width:100%;border-collapse:collapse;background:var(--color-surface-raised,rgba(0,0,0,.15))">
+                        <thead><tr style="font-size:11px;color:var(--color-text-muted)">
+                            <th style="padding:6px 12px;text-align:left">Mata Pelajaran</th>
+                            <th style="padding:6px 12px;text-align:left">Kelas</th>
+                            <th style="padding:6px 12px;text-align:left">Tanggal</th>
+                            <th style="padding:6px 12px;text-align:left">Sesi</th>
+                        </tr></thead>
+                        <tbody>${sesi.map(r => `<tr style="font-size:13px">
+                            <td style="padding:5px 12px">${esc(r.subject?.name ?? '—')}</td>
+                            <td style="padding:5px 12px">${esc(r.class?.name ?? '—')}</td>
+                            <td style="padding:5px 12px">${esc(r.session_date ?? '—')}</td>
+                            <td style="padding:5px 12px">${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
+                        </tr>`).join('')}</tbody>
+                    </table>
+                </td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
         wrapEl.style.display = '';
         btn.textContent      = 'Sembunyikan';
         _wkKur2Visible = true;
