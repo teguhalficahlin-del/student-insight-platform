@@ -19,7 +19,23 @@ function getSlugFromURL() {
     const host  = window.location.hostname;
     const parts = host.split('.');
     if (parts.length >= 3 && !host.endsWith('.github.io')) return parts[0].toLowerCase();
+    // Fallback: slug dari sesi sebelumnya (untuk PWA yang dibuka tanpa ?school=)
+    try { const s = localStorage.getItem('school_slug'); if (s) return s; } catch { /* private mode */ }
     return null;
+}
+
+function _injectDynamicManifest(slug) {
+    const el = document.querySelector('link[rel="manifest"]');
+    if (!el || !slug) return;
+    fetch(el.href)
+        .then(r => r.json())
+        .then(manifest => {
+            // start_url ke login page dengan slug agar reinstall PWA tetap bawa slug
+            manifest.start_url = `./index.html?school=${encodeURIComponent(slug)}`;
+            const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+            el.href = URL.createObjectURL(blob);
+        })
+        .catch(() => { /* abaikan jika manifest tidak bisa di-fetch */ });
 }
 
 function adjustColor(hex, amount) {
@@ -50,6 +66,7 @@ export async function applyBranding(slug = null) {
     const resolvedSlug = slug ?? getSlugFromURL();
     if (!resolvedSlug) return null;
     try { localStorage.setItem('school_slug', resolvedSlug); } catch { /* private mode */ }
+    _injectDynamicManifest(resolvedSlug);
 
     let branding = null;
     try {
