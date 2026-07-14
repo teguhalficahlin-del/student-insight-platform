@@ -628,20 +628,17 @@ export async function getKepsekMonitoring(period = 'hari_ini', academicYear = nu
 }
 
 export async function getAttendanceFillRate(dateStart, dateEnd) {
-    let q = supabase
-        .from('teaching_schedules')
-        .select('teacher_indicator')
-        .eq('meeting_status', 'NORMAL');
-    if (dateStart) q = q.gte('session_date', dateStart);
-    if (dateEnd)   q = q.lte('session_date', dateEnd);
-    const { data, error } = await q;
+    const { data, error } = await supabase.rpc('fn_attendance_fill_rate', {
+        p_date_start: dateStart ?? null,
+        p_date_end:   dateEnd   ?? null,
+    });
     if (error) throw error;
-    const rows = data ?? [];
-    const total   = rows.length;
-    const hadir   = rows.filter(r => r.teacher_indicator === 'HADIR').length;
-    const pending = rows.filter(r => r.teacher_indicator === 'PENDING_EVALUATION').length;
-    const tidak   = rows.filter(r => r.teacher_indicator === 'TIDAK_HADIR').length;
-    return { total, hadir, pending, tidak };
+    const rows   = data ?? [];
+    const get    = key => Number(rows.find(r => r.teacher_indicator === key)?.jumlah ?? 0);
+    const hadir  = get('HADIR');
+    const pending = get('PENDING_EVALUATION');
+    const tidak  = get('TIDAK_HADIR');
+    return { total: hadir + pending + tidak, hadir, pending, tidak };
 }
 
 export async function getPendingAttendanceSessions(dateStart, dateEnd) {
