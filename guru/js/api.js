@@ -387,7 +387,7 @@ export async function getStudentAttendanceSessions(studentId, dateStart, dateEnd
         .from('attendance')
         .select(`
             attendance_id, status, is_void,
-            schedule:teaching_schedules (
+            schedule:teaching_schedules!inner (
                 session_date, session_start, session_end,
                 subject:subjects ( name ),
                 teacher:users ( full_name )
