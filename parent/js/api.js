@@ -234,7 +234,7 @@ export async function fetchPklPlacement(studentId) {
         .from('pkl_placements')
         .select(`
             placement_id, start_date, end_date,
-            dudi:users!pkl_placements_dudi_user_id_fkey ( full_name )
+            dudi:users!pkl_placements_dudi_user_id_fkey ( full_name, dudi_org_name )
         `)
         .eq('student_id', studentId)
         .eq('is_active', true)
@@ -245,19 +245,15 @@ export async function fetchPklPlacement(studentId) {
         placement_id: data.placement_id,
         start_date:   data.start_date,
         end_date:     data.end_date,
-        dudi_name:    data.dudi?.full_name ?? '-',
+        dudi_name:    data.dudi?.dudi_org_name ?? data.dudi?.full_name ?? '-',
     };
 }
 
 export async function fetchPklAttendanceSummary(studentId) {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    const since = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const { data, error } = await supabase
         .from('pkl_attendance')
         .select('pkl_attendance_id, attendance_date, status, notes')
         .eq('student_id', studentId)
-        .gte('attendance_date', since)
         .order('attendance_date', { ascending: false });
     if (error) throw error;
     return data ?? [];
