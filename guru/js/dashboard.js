@@ -3213,6 +3213,13 @@ async function initJurnalTab() {
                 ? '⏳ Catatan disimpan lokal — akan dikirim saat online.'
                 : 'Catatan berhasil disimpan.';
             msgEl.style.display = 'block';
+            if (r.status === 'queued') {
+                const cacheKey = `jurnal-${currentUser.user_id}`;
+                const cached   = LC.get(cacheKey) ?? [];
+                const newEntry = { journal_id: r.journal_id, entry_date: date, content, created_at: new Date().toISOString() };
+                LC.set(cacheKey, [newEntry, ...cached]);
+                renderJurnalEntries([newEntry, ...cached], document.getElementById('journal-list'));
+            }
             if (r.status === 'synced') await loadJurnalList();
         } catch (err) {
             msgEl.textContent = fe(err, 's');
@@ -3281,6 +3288,13 @@ function renderJurnalEntries(entries, listEl) {
                 askBtn.style.display    = 'inline-flex';
             });
             yesBtn.addEventListener('click', async () => {
+                if (!navigator.onLine) {
+                    errEl.textContent = 'Hapus tidak tersedia saat offline.';
+                    errEl.style.display = 'block';
+                    confirmEl.style.display = 'none';
+                    askBtn.style.display = 'inline-flex';
+                    return;
+                }
                 yesBtn.disabled = true; yesBtn.textContent = 'Menghapus…';
                 try {
                     await deleteJournalEntry(askBtn.dataset.delete);

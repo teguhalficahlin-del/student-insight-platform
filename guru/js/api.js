@@ -712,7 +712,8 @@ export async function getJournalEntries(userId) {
         .select('journal_id, entry_date, content, created_at')
         .eq('owner_user_id', userId)
         .order('entry_date', { ascending: false })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(200);
     if (error) throw error;
     return data ?? [];
 }
@@ -729,7 +730,8 @@ export async function insertJournalEntry(userId, entryDate, content) {
         entry_date:      entryDate,
         content,
     };
-    return saveJournalEntry(payload);
+    const r = await saveJournalEntry(payload);
+    return { ...r, journal_id: payload.journal_id };
 }
 
 export async function deleteJournalEntry(journalId) {
