@@ -388,7 +388,7 @@ function renderGuruRekapPage() {
     if (!tbody) return;
 
     tbody.innerHTML = slice.map(s => {
-        const pctDenom = s.HADIR + s.IZIN + s.TIDAK_HADIR;
+        const pctDenom = s.HADIR + s.IZIN + s.SAKIT + s.TIDAK_HADIR;
         const pct = pctDenom > 0 ? Math.round((s.HADIR / pctDenom) * 100) : 0;
         const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning)' : 'var(--color-danger)';
         return `<tr>
@@ -462,7 +462,7 @@ async function loadGuruRecap() {
         document.getElementById('guru-recap-export').addEventListener('click', () => {
             const header = 'Nama,NIS,Hadir,Izin,Sakit,Alpa,Total Sesi,% Hadir';
             const csvRows = rows.map(s => {
-                const pctDenom = s.HADIR + s.IZIN + s.TIDAK_HADIR;
+                const pctDenom = s.HADIR + s.IZIN + s.SAKIT + s.TIDAK_HADIR;
                 const pct = pctDenom > 0 ? Math.round((s.HADIR / pctDenom) * 100) : 0;
                 return [s.full_name, s.nis, s.HADIR, s.IZIN, s.SAKIT, s.TIDAK_HADIR, s.total, s.total > 0 ? pct + '%' : '—']
                     .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',');
@@ -1184,10 +1184,11 @@ async function loadBkAttendanceRecap() {
         const progMap  = new Map();
         for (const prog of programs) progMap.set(prog.program_id, { ...prog, classes: [] });
 
-        const { data: classProgData } = await supabase
+        const { data: classProgData, error: cpErr } = await supabase
             .from('classes')
             .select('class_id, program_id')
             .in('class_id', rows.map(r => r.class_id));
+        if (cpErr) throw cpErr;
 
         for (const cp of classProgData ?? []) {
             const prog = progMap.get(cp.program_id);
@@ -1401,10 +1402,11 @@ async function loadWkAttendanceRecap() {
         }
 
         // Ambil class → program mapping
-        const { data: classProgData } = await supabase
+        const { data: classProgData, error: cpErr } = await supabase
             .from('classes')
             .select('class_id, program_id')
             .in('class_id', rows.map(r => r.class_id));
+        if (cpErr) throw cpErr;
 
         for (const cp of classProgData ?? []) {
             const prog = progMap.get(cp.program_id);
