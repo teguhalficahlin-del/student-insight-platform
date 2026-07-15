@@ -656,9 +656,8 @@ async function loadWeekSchedule() {
         contentEl.innerHTML = results.map((r, idx) => {
             const dayLabel  = `${DAY_NAMES[idx]}, ${fmtDayLabel(r.date).split(',')[1]?.trim() ?? r.date}`;
             const isToday   = r.date === todayStr;
-            const sesiCount = r.rows.length;
-
             const mergedSessions = mergeConsecutiveSessions(r.rows);
+            const sesiCount = mergedSessions.length;
             const tableHtml = sesiCount === 0
                 ? '<p class="hint" style="margin:8px 0 4px">Tidak ada jadwal</p>'
                 : `<div class="table-wrapper">
