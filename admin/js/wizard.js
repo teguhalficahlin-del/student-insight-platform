@@ -1456,9 +1456,12 @@ async function renderScheduleStep() {
                         const row  = aoa[r];
                         const hariCell = String(row[schoolGridOffset] ?? '').trim().toUpperCase();
                         if (VALID_DAYS.includes(hariCell)) {
-                            currentHari = hariCell === "JUM'AT" ? 'JUMAT' : hariCell;
-                            // Reset carry saat ganti hari
-                            kelasNames.forEach(({ col }) => { lastKg[col] = ''; lastMapel[col] = ''; });
+                            const newHari = hariCell === "JUM'AT" ? 'JUMAT' : hariCell;
+                            if (newHari !== currentHari) {
+                                // Reset carry HANYA saat hari benar-benar berganti
+                                currentHari = newHari;
+                                kelasNames.forEach(({ col }) => { lastKg[col] = ''; lastMapel[col] = ''; });
+                            }
                         }
                         if (!currentHari) continue;
 
