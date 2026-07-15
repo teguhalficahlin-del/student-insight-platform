@@ -13,7 +13,7 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
 3. **Missing RLS policy bukan otomatis celah.** RLS default-deny: tidak ada policy = akses ditolak. Verifikasi live dulu (simulasi cross-tenant nyata) SEBELUM fix, jangan asumsi dari pola kode saja.
 4. Lihat `docs/audit-handoff.md §3a` untuk daftar lengkap standing rules.
 
-## Status Singkat (terakhir diperbarui: 12 Juli 2026)
+## Status Singkat (terakhir diperbarui: 15 Juli 2026)
 
 - **Fase 1**: ✅ Selesai
 - **Fase 2**: ✅ **SELESAI (9 Juli 2026).** Kelompok A-E selesai 100%,
@@ -76,9 +76,18 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
   + **commit TBD (§9.1 + CHECK 14): mig 20260709020000 live, CHECK 14 (13
     assertion write-path), docs §9.1 SELESAI, CLAUDE.md update.**
   Lihat docs/audit-handoff.md §8, §10, §11, §12, §13, §14.
-- **Test suite**: 90/90 ✓ lulus (terakhir dijalankan 9 Juli 2026, pasca
-  CHECK 14 ditambahkan). 14 CHECK top-level. Catatan historis: "42/42"
-  yang sempat tercatat adalah angka pre-CHECK-10/11 (sebelum commit c19b164
-  8 Juli 2026) — sudah stale, 90 adalah angka valid saat ini.
+- **Test suite**: 93/93 ✓ (terakhir dijalankan 12 Juli 2026, pasca Forum Kelas CHECK 15).
+  15 CHECK top-level.
+
+**Sesi 15 Juli 2026 — Fix non-keamanan:**
+- PWA manifest: `start_url`/`scope`/`id` di 6 portal diubah ke absolute path
+  (commit `f942004`). Warning Chrome console hilang.
+- Aksesibilitas: 7 `<label>` tanpa `for` di `guru/dashboard.html` diperbaiki
+  (commit `d6bec39`). DevTools Issues = 0.
+- Tab Dashboard Guru: `isTeacher` kini cek `teacher_code` ATAU `teaching_assignments.count > 0`
+  — menangkap guru dengan jabatan (WAKA_KESISWAAN dll) yang mengajar tapi tidak punya
+  `teacher_code` (commit `9174d0d`). Lihat docs/audit-handoff.md §17.
+- Investigasi tenant isolation tab WAKA_KESISWAAN: AMAN — RLS sudah filter `school_id`
+  via migration `20260701130000`. Lihat docs/audit-handoff.md §17.4.
 
 Detail lengkap dan checklist prioritas ada di `docs/audit-handoff.md §6`.

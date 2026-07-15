@@ -1273,3 +1273,73 @@ Semua konsisten dengan desain di `project_actor_roles.md`.
 Tidak ada anomali.
 
 **Status:** CLOSED — tidak ada tindakan lanjut.
+
+---
+
+## 17. Sesi 15 Juli 2026 — PWA Manifest, Aksesibilitas, Tab Dashboard Guru
+
+### 17.1 Fix PWA Manifest — Absolute Path (commit `f942004`)
+
+**Masalah:** Semua 6 portal (`guru`, `student`, `parent`, `admin`, `dudi`, `stakeholder`) memiliki `start_url`, `scope`, dan `id` di `manifest.json` dengan relative URL (`"./dashboard.html"`, `"./"`, `"./guru/"`). Chrome membuang warning `Manifest: property 'start_url' ignored, URL is invalid` di console karena relative URL tidak bisa di-resolve dengan benar ketika field `id` juga relatif.
+
+**Fix:** Ubah semua ke absolute path berbasis `/student-insight-platform/<portal>/`.
+
+| Field | Sebelum | Sesudah (contoh portal guru) |
+|-------|---------|------------------------------|
+| `start_url` | `"./dashboard.html"` | `"/student-insight-platform/guru/dashboard.html"` |
+| `scope` | `"./"` | `"/student-insight-platform/guru/"` |
+| `id` | `"./guru/"` | `"/student-insight-platform/guru/"` |
+
+**File yang diubah:** `guru/manifest.json`, `student/manifest.json`, `parent/manifest.json`, `admin/manifest.json`, `dudi/manifest.json`, `stakeholder/manifest.json`.
+
+---
+
+### 17.2 Fix Aksesibilitas — Label Tidak Terhubung ke Form Field (commit `d6bec39`)
+
+**Masalah:** DevTools Issues melaporkan 7 `<label>` di `guru/dashboard.html` tidak terhubung ke form field (tidak ada atribut `for` yang matching `id` input).
+
+**Fix:**
+
+| Baris | Masalah | Solusi |
+|-------|---------|--------|
+| 239 | `<label>` menarget `#forum-student-list` (div, bukan input) | Ubah ke `<p class="field-label">` |
+| 247 | `<label>` menarget `#forum-category-grid` (div) | Ubah ke `<p class="field-label">` |
+| 266 | `<label>` tanpa `for`, input `#forum-specific-search` ada | Tambah `for="forum-specific-search"` |
+| 641, 643 | `<label>` tanggal inline tanpa `for` | Tambah `for="wk-kur-start"` / `for="wk-kur-end"` |
+| 717, 719 | `<label>` tanggal inline tanpa `for` | Tambah `for="ks-range-start"` / `for="ks-range-end"` |
+
+---
+
+### 17.3 Fix Tab Dashboard Guru — Deteksi `isTeacher` (commit `9174d0d`)
+
+**Masalah:** Tab "Dashboard Guru", "Catatan Siswa", dan "Jurnal Mengajar" hanya muncul jika `isTeacher = true`. Sebelumnya: `isTeacher = !!currentUser.teacher_code`. `teacher_code` adalah kode pendek untuk import jadwal CSV — kolom ini sering NULL untuk user dengan role jabatan (WAKA_KESISWAAN, BK, KAPRODI, dll.) yang juga mengajar, karena saat import data kolom ini tidak diisi untuk role non-GURU.
+
+**Dampak nyata:** WAKA_KESISWAAN SMK N 1 Ujungbatu yang mengajar tidak mendapat tab Dashboard Guru meski punya `teaching_assignments`.
+
+**Fix:** `guru/js/api.js` — tambah `teaching_assignments(count)` ke select `getCurrentUserRow()`. `guru/js/dashboard.js` — ubah:
+
+```js
+isTeacher = !!currentUser.teacher_code
+    || (currentUser.teaching_assignments?.[0]?.count ?? 0) > 0;
+```
+
+**Aturan tab yang berlaku setelah fix:**
+- Tab "Dashboard Guru", "Catatan Siswa", "Jurnal Mengajar" → muncul jika `isTeacher` (punya `teacher_code` ATAU `teaching_assignments > 0`)
+- Tab jabatan (Wali Kelas, BK, Kaprodi, Waka Kesiswaan, dll.) → muncul via `getJabatan()` berdasarkan `role_type` atau flag (`is_bk`, `is_waka_kesiswaan`, `wali_kelas_class_id`, dll.)
+- Tab "Pembinaan Siswa" dan "Forum Kelas" → selalu ada untuk semua role
+- Tab "Kelola Admin" → hanya jika `jabatan.includes('kepsek')`
+
+Semua `switch case` di `loadTabContent()` sudah punya handler untuk setiap tab. Tidak ada tab tanpa handler.
+
+---
+
+### 17.4 Investigasi Tenant Isolation Tab WAKA_KESISWAAN
+
+**Konteks:** Investigasi apakah tab Kesiswaan bisa menampilkan data lintas sekolah.
+
+**Hasil: AMAN.** Migration `20260701130000_rls_add_school_filter.sql` sudah mengganti policy lama:
+- `rls_classes_read_all`: `school_id = fn_current_school_id() AND auth.uid() IS NOT NULL` ✅
+- `rls_programs_read_all`: `school_id = fn_current_school_id() AND auth.uid() IS NOT NULL` ✅
+- `fn_attendance_recap_per_class` (SECURITY DEFINER): filter `c.school_id = fn_current_school_id()` di WHERE + `ts.school_id = fn_current_school_id()` di JOIN + REVOKE anon/public ✅
+
+**Catatan:** File `contracts/06_rls_policies.sql` menampilkan policy lama (stale — tanpa filter `school_id`). Yang berlaku di database live adalah migration `20260701130000_*` yang sudah lebih baru. File contracts perlu disinkronkan sebagai technical debt.
