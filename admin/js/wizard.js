@@ -1484,12 +1484,7 @@ async function renderScheduleStep() {
                             const rawKg    = String(row[col + 1] ?? '').trim();
                             const kg    = rawKg    || lastKg[col]    || '';
                             const mapel = rawMapel || lastMapel[col] || '';
-                            if (name === 'X BP' && currentHari === 'KAMIS') {
-                                console.log('[CF] X BP KAMIS', waktu,
-                                    'rawKg=', rawKg, 'rawMapel=', rawMapel,
-                                    'lastKg=', lastKg[col], 'lastMapel=', lastMapel[col],
-                                    'kg=', kg, 'mapel=', mapel);
-                            }
+
                             if (rawKg)    lastKg[col]    = rawKg;
                             if (rawMapel) lastMapel[col] = rawMapel;
                             if (!kg) continue;
@@ -1510,8 +1505,6 @@ async function renderScheduleStep() {
             } else {
                 csvText = await file.text();
             }
-            const xbpKamis = csvText.split('\n').filter(r => r.includes('X BP') && r.includes('KAMIS'));
-            console.log('[DEBUG] X BP KAMIS rows:', xbpKamis);
             const result  = await importSchedules(csvText);
             const { total_templates = 0, schedules_generated = 0, failed = 0, errors = [] } = result ?? {};
             if (failed > 0) {
