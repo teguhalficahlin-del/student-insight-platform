@@ -123,6 +123,7 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
     background: var(--color-surface); border-radius: var(--radius-lg);
     border: 1px solid var(--color-border); padding: 20px; margin-bottom: 20px;
 }
+.section-card h2 { font-size: 15px; margin-bottom: 16px; color: var(--color-primary); }
 .section-card h3 { font-size: 15px; margin-bottom: 16px; color: var(--color-primary); }
 
 /* ── Table ───────────────────────────────────────────────── */
@@ -309,6 +310,7 @@ body.has-login-banner .app-header { margin-top: 94px; }
     .login-card  { padding: 24px 16px; }
     .page-body   { padding: 12px 10px; }
     .section-card { padding: 14px 12px; margin-bottom: 12px; }
+    #wk-kur1-wrap { max-height: 320px; overflow-y: auto; }
 
     /* Header — nama lebih kecil agar tidak tumpang tindih */
     .app-header  { padding: 10px 14px; gap: 8px; }
