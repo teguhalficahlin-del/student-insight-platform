@@ -789,25 +789,25 @@ async function renderWzFkBkTab() {
             }).filter(Boolean).join(', ');
 
             const aidList = assigned.map(a => a.assignment_id);
-            const checkCell = `<td style="width:36px"><input type="checkbox"
+            const checkCell = `<td><input type="checkbox"
                 class="wzfk-bk-check" ${aidList.length ? '' : 'disabled'}
                 data-aids='${JSON.stringify(aidList)}'></td>`;
 
             return `<tr>
                 ${checkCell}
-                <td style="font-weight:500">${esc(cls.name)}</td>
-                <td>${chips}</td>
+                <td style="font-weight:500;word-break:break-word">${esc(cls.name)}</td>
+                <td style="word-break:break-word">${chips}</td>
             </tr>`;
         }).join('');
 
         return `
             <details class="wz-accordion">
                 <summary class="wz-accordion-header">${esc(progName)} (${classes.length} kelas)</summary>
-                <table class="table" style="width:100%;margin-top:4px">
+                <table class="table" style="width:100%;margin-top:4px;table-layout:fixed">
                     <thead><tr>
                         <th style="width:36px"></th>
-                        <th style="width:200px">Kelas</th>
-                        <th>BK yang Ditugaskan</th>
+                        <th style="width:35%">Kelas</th>
+                        <th style="width:auto">BK yang Ditugaskan</th>
                     </tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
