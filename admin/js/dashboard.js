@@ -1745,15 +1745,14 @@ function buildJadwalGrid(slots, templates, classes, teacherIdMap) {
 async function renderJadwalPanel() {
     panelContent.innerHTML = '<p class="hint">Memuat…</p>';
 
-    const [config, allClasses, teachers, substitutes] = await Promise.all([
-        getSchoolConfig(),
-        getClasses(),
+    const config = await getSchoolConfig();
+    const ay  = config?.current_academic_year ?? '';
+    const sem = config?.current_semester ?? 1;
+    const [allClasses, teachers, substitutes] = await Promise.all([
+        getClasses(ay),
         getTeacherList().catch(() => []),
         getActiveSubstitutes().catch(() => []),
     ]);
-
-    const ay  = config?.current_academic_year ?? '';
-    const sem = config?.current_semester ?? 1;
     const teacherIdMap = new Map(teachers.filter(t => t.teacher_code).map(t => [t.user_id, t.teacher_code]));
 
     const wizardUrl = schoolSlug ? `wizard.html?school=${encodeURIComponent(schoolSlug)}` : 'wizard.html';
