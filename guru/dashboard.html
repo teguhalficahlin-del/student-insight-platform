@@ -598,12 +598,12 @@
                 <div class="stat-card">
                     <span class="stat-value" id="wk-kur-pct-sudah">—</span>
                     <div class="stat-label">Sudah Isi Absensi</div>
-                    <div id="wk-kur-detail-sudah" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
+                    <div id="wk-kur-detail-sudah" style="font-size:12px;color:var(--color-text-muted);margin-top:2px"></div>
                 </div>
                 <div class="stat-card">
                     <span class="stat-value" id="wk-kur-pct-belum">—</span>
                     <div class="stat-label">Belum / Tidak Hadir</div>
-                    <div id="wk-kur-detail-belum" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
+                    <div id="wk-kur-detail-belum" style="font-size:12px;color:var(--color-text-muted);margin-top:2px"></div>
                 </div>
             </div>
 
@@ -647,12 +647,12 @@
                     <div class="stat-card">
                         <span class="stat-value" id="wk-kur2-pct-sudah">—</span>
                         <div class="stat-label">Sudah Isi Absensi</div>
-                        <div id="wk-kur2-detail-sudah" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
+                        <div id="wk-kur2-detail-sudah" style="font-size:12px;color:var(--color-text-muted);margin-top:2px"></div>
                     </div>
                     <div class="stat-card">
                         <span class="stat-value" id="wk-kur2-pct-belum">—</span>
                         <div class="stat-label">Belum / Tidak Hadir</div>
-                        <div id="wk-kur2-detail-belum" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
+                        <div id="wk-kur2-detail-belum" style="font-size:12px;color:var(--color-text-muted);margin-top:2px"></div>
                     </div>
                 </div>
                 <p class="hint" id="wk-kur2-hint" style="display:none"></p>
@@ -683,12 +683,12 @@
                 <div class="stat-card">
                     <span class="stat-value" id="ks-pct-siswa">—</span>
                     <div class="stat-label">Kehadiran Siswa</div>
-                    <div id="ks-detail-siswa" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
+                    <div id="ks-detail-siswa" style="font-size:12px;color:var(--color-text-muted);margin-top:2px"></div>
                 </div>
                 <div class="stat-card">
                     <span class="stat-value" id="ks-pct-guru">—</span>
                     <div class="stat-label">Kehadiran Guru di Kelas</div>
-                    <div id="ks-detail-guru" style="font-size:11px;color:var(--color-text-muted);margin-top:2px"></div>
+                    <div id="ks-detail-guru" style="font-size:12px;color:var(--color-text-muted);margin-top:2px"></div>
                 </div>
             </div>
 
@@ -713,12 +713,16 @@
                 </div>
 
                 <!-- Date range bebas -->
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-                    <label for="ks-range-start" style="font-size:13px;color:var(--color-text-muted)">Dari</label>
-                    <input type="date" id="ks-range-start" class="input" style="width:auto">
-                    <label for="ks-range-end" style="font-size:13px;color:var(--color-text-muted)">s/d</label>
-                    <input type="date" id="ks-range-end" class="input" style="width:auto">
-                    <button class="btn btn-sm" id="ks-range-btn">Tampilkan</button>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="ks-range-start" style="font-size:13px;color:var(--color-text-muted);white-space:nowrap;min-width:28px">Dari</label>
+                        <input type="date" id="ks-range-start" class="input" style="flex:1;min-width:0">
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="ks-range-end" style="font-size:13px;color:var(--color-text-muted);white-space:nowrap;min-width:28px">s/d</label>
+                        <input type="date" id="ks-range-end" class="input" style="flex:1;min-width:0">
+                        <button class="btn btn-sm" id="ks-range-btn">Tampilkan</button>
+                    </div>
                 </div>
 
                 <!-- Error -->

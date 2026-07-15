@@ -299,8 +299,8 @@ body.has-login-banner .app-header { margin-top: 94px; }
 /* ── Stats row ───────────────────────────────────────────── */
 .stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
 .stat-card { background: var(--color-surface); border-radius: var(--radius); border: 1px solid var(--color-border); padding: 16px 20px; flex: 1; min-width: 120px; text-align: center; }
-.stat-value { font-size: 28px; font-weight: 700; color: var(--color-primary); display: block; }
-.stat-label { font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
+.stat-value { font-size: 28px; font-weight: 700; color: var(--color-text); display: block; }
+.stat-label { font-size: 13px; color: var(--color-text-muted); margin-top: 2px; }
 
 /* ── Responsive ──────────────────────────────────────────── */
 /* ── Bottom nav (mobile only) ──────────────────────────────── */

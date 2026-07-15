@@ -60,7 +60,7 @@ function _setBellBadge(n) {
         // Badge kecil di tab Kasus juga (backward compat)
         document.querySelectorAll('[data-tab="kasus"]').forEach(t => {
             let b = t.querySelector('.kasus-notif-badge');
-            if (!b) { b = document.createElement('span'); b.className = 'kasus-notif-badge'; t.appendChild(b); }
+            if (!b) { b = document.createElement('span'); b.className = 'kasus-notif-badge'; b.setAttribute('aria-hidden', 'true'); t.appendChild(b); }
             b.textContent = n > 99 ? '99+' : String(n);
         });
     } else {
@@ -252,7 +252,7 @@ async function init() {
 const TAB_SHORT = {
     guru: 'Beranda', wali_kelas: 'Wali', bk: 'BK', kaprodi: 'Prodi',
     waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', waka_humas: 'Humas',
-    kepsek: 'Monitor', ks_admin: 'Admin',
+    kepsek: 'Kepsek', ks_admin: 'Admin',
     kasus: 'Pembinaan', jurnal: 'Jurnal', observasi: 'Catatan', forum: 'Forum',
 };
 const TAB_ICON = {
