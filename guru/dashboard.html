@@ -236,7 +236,7 @@
 
                 <!-- Subjek siswa -->
                 <div class="field">
-                    <label>Siswa yang dibahas <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></label>
+                    <p class="field-label">Siswa yang dibahas <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></p>
                     <div id="forum-student-list" style="max-height:160px;overflow-y:auto;border:1px solid var(--color-border);border-radius:var(--radius);padding:8px;display:flex;flex-direction:column;gap:4px">
                         <p class="hint" style="margin:0">Memuat daftar siswa…</p>
                     </div>
@@ -244,7 +244,7 @@
 
                 <!-- Kategori (muncul jika ada subjek) -->
                 <div id="forum-category-section" class="field" style="display:none">
-                    <label>Kategori kejadian <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></label>
+                    <p class="field-label">Kategori kejadian <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></p>
                     <div id="forum-category-grid" style="display:flex;flex-wrap:wrap;gap:6px"></div>
                 </div>
 
@@ -263,7 +263,7 @@
 
                 <!-- Tambah orang tertentu -->
                 <div class="field" id="forum-specific-section">
-                    <label>Tambah orang tertentu <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></label>
+                    <label for="forum-specific-search">Tambah orang tertentu <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></label>
                     <div style="position:relative">
                         <input
                             type="text"
@@ -638,9 +638,9 @@
                     <button class="btn" id="wk-kur2-btn">Tampilkan</button>
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-                    <label style="font-size:13px;color:var(--color-text-muted)">Dari</label>
+                    <label for="wk-kur-start" style="font-size:13px;color:var(--color-text-muted)">Dari</label>
                     <input type="date" id="wk-kur-start" class="input" style="width:auto">
-                    <label style="font-size:13px;color:var(--color-text-muted)">s/d</label>
+                    <label for="wk-kur-end" style="font-size:13px;color:var(--color-text-muted)">s/d</label>
                     <input type="date" id="wk-kur-end" class="input" style="width:auto">
                 </div>
                 <div class="stats-row" id="wk-kur2-stats-row" style="margin-bottom:12px;display:none">
@@ -714,9 +714,9 @@
 
                 <!-- Date range bebas -->
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-                    <label style="font-size:13px;color:var(--color-text-muted)">Dari</label>
+                    <label for="ks-range-start" style="font-size:13px;color:var(--color-text-muted)">Dari</label>
                     <input type="date" id="ks-range-start" class="input" style="width:auto">
-                    <label style="font-size:13px;color:var(--color-text-muted)">s/d</label>
+                    <label for="ks-range-end" style="font-size:13px;color:var(--color-text-muted)">s/d</label>
                     <input type="date" id="ks-range-end" class="input" style="width:auto">
                     <button class="btn btn-sm" id="ks-range-btn">Tampilkan</button>
                 </div>
