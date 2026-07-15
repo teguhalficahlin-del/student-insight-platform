@@ -1449,15 +1449,25 @@ async function renderScheduleStep() {
                     }
                     const flatRows = ['kode_guru,nama_mapel,nama_kelas,hari,start_time,end_time'];
                     let currentHari = '';
+                    const lastKg    = {};  // lastKg[col]    = kode guru terakhir per kolom kelas
+                    const lastMapel = {};  // lastMapel[col] = mapel terakhir per kolom kelas
                     // Data mulai baris 2 (baris 0=header, baris 1=MAPEL/KG sub-header)
                     for (let r = 2; r < aoa.length; r++) {
                         const row  = aoa[r];
                         const hariCell = String(row[schoolGridOffset] ?? '').trim().toUpperCase();
-                        if (VALID_DAYS.includes(hariCell)) currentHari = hariCell === "JUM'AT" ? 'JUMAT' : hariCell;
+                        if (VALID_DAYS.includes(hariCell)) {
+                            currentHari = hariCell === "JUM'AT" ? 'JUMAT' : hariCell;
+                            // Reset carry saat ganti hari
+                            kelasNames.forEach(({ col }) => { lastKg[col] = ''; lastMapel[col] = ''; });
+                        }
                         if (!currentHari) continue;
 
                         const waktu = String(row[2 + schoolGridOffset] ?? '').trim();
-                        if (!waktu || /istr[ae]hat/i.test(waktu)) continue;
+                        if (!waktu || /istr[ae]hat/i.test(waktu)) {
+                            // Reset carry saat istirahat agar slot setelah istirahat tidak carry dari sebelumnya
+                            if (/istr[ae]hat/i.test(waktu)) kelasNames.forEach(({ col }) => { lastKg[col] = ''; lastMapel[col] = ''; });
+                            continue;
+                        }
 
                         // Waktu format "07.15 - 07.55" → start="07:15", end="07:55"
                         const timeParts = waktu.split(/\s*[-–]\s*/);
@@ -1467,9 +1477,13 @@ async function renderScheduleStep() {
                         if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) continue;
 
                         for (const { name, col } of kelasNames) {
-                            const mapel = String(row[col]     ?? '').trim();
-                            const kg    = String(row[col + 1] ?? '').trim();
-                            if (!kg || !mapel) continue;
+                            const rawMapel = String(row[col]     ?? '').trim();
+                            const rawKg    = String(row[col + 1] ?? '').trim();
+                            const kg    = rawKg    || lastKg[col]    || '';
+                            const mapel = rawMapel || lastMapel[col] || '';
+                            if (rawKg)    lastKg[col]    = rawKg;
+                            if (rawMapel) lastMapel[col] = rawMapel;
+                            if (!kg) continue;
                             // Abaikan event sekolah penuh (UPACARA, SENAM, dll)
                             if (/upacara|senam|kultum|english day/i.test(mapel)) continue;
                             flatRows.push(`${csvEsc(kg)},${csvEsc(mapel)},${csvEsc(name)},${currentHari},${start},${end}`);
