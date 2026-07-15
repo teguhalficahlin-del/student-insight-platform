@@ -1297,6 +1297,8 @@ async function renderScheduleStep() {
                 { no: 10, w: '14.20 - 15.00' },
                 { no: 11, w: '15.00 - 15.40' },
             ];
+            // Waktu istirahat dari SLOTS (null entries): skip saat parse
+            const BREAK_SLOTS = new Set(['09:55-10:25', '12:25-13:00']);
             const DAYS = ['SENIN','SELASA','RABU','KAMIS',"JUM'AT"];
 
             // ── Format identik dengan jadwal sekolah ─────────────────────
@@ -1478,6 +1480,10 @@ async function renderScheduleStep() {
                         const start = timeParts[0].trim().replace('.', ':');
                         const end   = timeParts[1].trim().replace('.', ':');
                         if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) continue;
+                        if (BREAK_SLOTS.has(`${start}-${end}`)) {
+                            kelasNames.forEach(({ col }) => { lastKg[col] = ''; lastMapel[col] = ''; });
+                            continue;
+                        }
 
                         for (const { name, col } of kelasNames) {
                             const rawMapel = String(row[col]     ?? '').trim();
