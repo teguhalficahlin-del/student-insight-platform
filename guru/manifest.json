@@ -2,8 +2,8 @@
   "name": "Portal Guru",
   "short_name": "Portal Guru",
   "description": "Portal guru untuk absensi, jadwal mengajar, dan observasi siswa.",
-  "start_url": "./dashboard.html",
-  "scope": "./",
+  "start_url": "/student-insight-platform/guru/dashboard.html",
+  "scope": "/student-insight-platform/guru/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "theme_color": "#1a56db",
@@ -41,5 +41,5 @@
       "purpose": "maskable"
     }
   ],
-  "id": "./guru/"
+  "id": "/student-insight-platform/guru/"
 }

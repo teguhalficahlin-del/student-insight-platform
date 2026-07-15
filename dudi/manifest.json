@@ -2,8 +2,8 @@
   "name": "Portal DUDI",
   "short_name": "Portal DUDI",
   "description": "Portal mitra DUDI untuk memantau dan menilai siswa PKL.",
-  "start_url": "./dashboard.html",
-  "scope": "./",
+  "start_url": "/student-insight-platform/dudi/dashboard.html",
+  "scope": "/student-insight-platform/dudi/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "theme_color": "#1a56db",
@@ -41,5 +41,5 @@
       "purpose": "maskable"
     }
   ],
-  "id": "./dudi/"
+  "id": "/student-insight-platform/dudi/"
 }
