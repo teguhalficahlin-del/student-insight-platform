@@ -60,7 +60,8 @@ function _setBellBadge(n) {
         // Badge kecil di tab Kasus juga (backward compat)
         document.querySelectorAll('[data-tab="kasus"]').forEach(t => {
             let b = t.querySelector('.kasus-notif-badge');
-            if (!b) { b = document.createElement('span'); b.className = 'kasus-notif-badge'; b.setAttribute('aria-hidden', 'true'); t.appendChild(b); }
+            if (!b) { b = document.createElement('span'); b.className = 'kasus-notif-badge'; t.appendChild(b); }
+            b.setAttribute('aria-hidden', 'true');
             b.textContent = n > 99 ? '99+' : String(n);
         });
     } else {
