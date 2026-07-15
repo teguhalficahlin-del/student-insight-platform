@@ -509,7 +509,6 @@ function mergeConsecutiveSessions(sessions) {
         const last = merged[merged.length - 1];
         const sameBlock = last
             && last.class?.class_id === s.class?.class_id
-            && last._subjectKey    === (s.subject_label ?? '')
             && isConsecutive(last.merged_end, s.session_start);
         if (sameBlock) {
             last.merged_end = s.session_end;
@@ -520,7 +519,6 @@ function mergeConsecutiveSessions(sessions) {
                 merged_start: s.session_start,
                 merged_end:   s.session_end,
                 schedule_ids: [s.schedule_id],
-                _subjectKey:  s.subject_label ?? '',
             });
         }
     }
