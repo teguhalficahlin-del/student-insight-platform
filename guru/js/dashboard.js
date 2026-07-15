@@ -1726,7 +1726,7 @@ async function loadKpRecap() {
     const end   = document.getElementById('kp-date-end').value;
     const tbody = document.getElementById('kp-recap-body');
     const empty = document.getElementById('kp-recap-empty');
-    tbody.innerHTML = '<tr><td colspan="7" class="hint">Memuat…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="hint">Memuat…</td></tr>';
     empty.style.display = 'none';
 
     if (ids.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
@@ -1744,12 +1744,11 @@ async function loadKpRecap() {
                 <td style="text-align:center">${a.IZIN}</td>
                 <td style="text-align:center">${a.SAKIT}</td>
                 <td style="text-align:center">${a.TIDAK_HADIR}</td>
-                <td style="text-align:center">${a.total}</td>
                 <td style="text-align:center;font-weight:600;color:${color}">${a.total > 0 ? pct+'%' : '—'}</td>
             </tr>`;
         }).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
 

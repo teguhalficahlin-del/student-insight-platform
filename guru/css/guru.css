@@ -57,7 +57,7 @@ p { margin: 0 0 8px; color: var(--color-text-muted); }
 .btn-warning { background: var(--color-warning-bg); color: var(--color-warning); border-color: var(--color-warning); }
 .btn-warning:hover { background: var(--color-warning); color: #fff; }
 .hint-success { font-size: 13px; color: var(--color-success); font-weight: 600; margin-top: 4px; }
-.sub-label { font-size: 11px; color: rgba(255,255,255,0.65); }
+.sub-label { font-size: 11px; color: var(--color-text-muted); }
 .acc-empty { padding: 8px 16px; color: var(--color-text-muted); font-size: 13px; }
 
 /* ── Form ────────────────────────────────────────────────── */

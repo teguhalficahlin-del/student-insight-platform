@@ -415,7 +415,14 @@
                     <button class="btn btn-secondary btn-sm" id="kp-filter-btn">Filter</button>
                 </div>
                 <div class="table-wrapper">
-                    <table class="table"><thead><tr><th>Nama / NIS</th><th style="text-align:center">Hadir</th><th style="text-align:center">Izin</th><th style="text-align:center">Sakit</th><th style="text-align:center">Alpa</th><th style="text-align:center">Total</th><th style="text-align:center">% Hadir</th></tr></thead>
+                    <table class="table" style="table-layout:fixed;width:100%"><thead><tr>
+                        <th style="width:40%">Nama / NIS</th>
+                        <th style="width:12%;text-align:center">H</th>
+                        <th style="width:12%;text-align:center">I</th>
+                        <th style="width:12%;text-align:center">S</th>
+                        <th style="width:12%;text-align:center">A</th>
+                        <th style="width:12%;text-align:center">%</th>
+                    </tr></thead>
                     <tbody id="kp-recap-body"></tbody></table>
                 </div>
                 <p class="hint" id="kp-recap-empty" style="display:none">Belum ada data absensi pada rentang ini.</p>
