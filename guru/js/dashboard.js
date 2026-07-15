@@ -1322,6 +1322,7 @@ async function loadBkAttendanceRecap() {
                                     SAKIT: 'var(--color-primary)',
                                     TIDAK_HADIR: 'var(--color-danger)',
                                 };
+                                const STATUS_LABEL = { HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', TIDAK_HADIR: 'Alpa' };
                                 sBody.innerHTML = sessions.map(s => `
                                     <div style="display:flex;align-items:center;gap:8px;
                                         padding:7px 24px;border-top:0.5px solid var(--color-border)">
@@ -1554,6 +1555,7 @@ async function loadWkAttendanceRecap() {
                                     SAKIT: 'var(--color-primary)',
                                     TIDAK_HADIR: 'var(--color-danger)',
                                 };
+                                const STATUS_LABEL = { HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', TIDAK_HADIR: 'Alpa' };
                                 sBody.innerHTML = sessions.map(s => `
                                     <div style="display:flex;align-items:center;gap:8px;
                                         padding:7px 24px;border-top:0.5px solid var(--color-border)">
@@ -1877,6 +1879,7 @@ async function loadKpClsRecap() {
                                     SAKIT: 'var(--color-primary)',
                                     TIDAK_HADIR: 'var(--color-danger)',
                                 };
+                                const STATUS_LABEL = { HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', TIDAK_HADIR: 'Alpa' };
                                 sBody.innerHTML = sessions.map(s => `
                                     <div style="display:flex;align-items:center;gap:8px;
                                         padding:7px 24px;border-top:0.5px solid var(--color-border)">

@@ -388,8 +388,8 @@ export async function getStudentAttendanceSessions(studentId, dateStart, dateEnd
         .eq('student_id', studentId)
         .eq('is_void', false)
         .order('created_at', { ascending: false });
-    if (dateStart) q = q.gte('schedule.session_date', dateStart);
-    if (dateEnd)   q = q.lte('schedule.session_date', dateEnd);
+    if (dateStart) q = q.gte('teaching_schedules.session_date', dateStart);
+    if (dateEnd)   q = q.lte('teaching_schedules.session_date', dateEnd);
     const { data, error } = await q;
     if (error) throw error;
     return (data ?? [])
