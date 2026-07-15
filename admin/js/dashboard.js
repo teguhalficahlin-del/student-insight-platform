@@ -2177,18 +2177,18 @@ async function renderExportPanel() {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData?.user) { window.location.replace(getLoginUrl()); return; }
 
-    const userRow = await getCurrentUserRow();
+    const [userRow, branding] = await Promise.all([
+        getCurrentUserRow(authData.user),
+        getSchoolBranding().catch(() => null),
+    ]);
+
     if (!requireAdministrativeOrRedirect(userRow)) return;
 
     applyBrandingById(userRow.school_id, supabase);
-    // TEMUAN-1: nama sekolah = SATU sumber (schools.name), bukan salinan
-    // school_config.school_name yang tidak ikut ter-update saat rename via Branding.
-    let schoolName = 'Sekolah';
-    try {
-        const branding = await getSchoolBranding();
-        schoolName = branding?.name || schoolName;
-        schoolSlug = branding?.slug || null;
-    } catch { /* fallback */ }
+
+    const schoolName = branding?.name || 'Sekolah';
+    schoolSlug = branding?.slug || null;
+
     document.getElementById('dashboard-school-name').textContent = schoolName;
     document.getElementById('dashboard-user-name').textContent = `Masuk sebagai ${userRow.full_name}`;
     // Delegasi klik Reset PW untuk semua panel non-staf (siswa, ortu, dudi, stakeholder)
