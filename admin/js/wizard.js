@@ -1501,6 +1501,8 @@ async function renderScheduleStep() {
             } else {
                 csvText = await file.text();
             }
+            const xbpKamis = csvText.split('\n').filter(r => r.includes('X BP') && r.includes('KAMIS'));
+            console.log('[DEBUG] X BP KAMIS rows:', xbpKamis);
             const result  = await importSchedules(csvText);
             const { total_templates = 0, schedules_generated = 0, failed = 0, errors = [] } = result ?? {};
             if (failed > 0) {
