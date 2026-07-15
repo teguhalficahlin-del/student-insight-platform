@@ -4026,6 +4026,8 @@ async function openCreatePostModal() {
 
     const modal = document.getElementById('modal-create-post');
     modal.style.display = 'flex';
+    const searchEl = document.getElementById('forum-specific-search');
+    if (searchEl) { searchEl.placeholder = 'Ketik nama staf atau orang tua…'; searchEl.value = ''; }
     document.getElementById('forum-post-content').value = '';
     document.getElementById('forum-post-error').style.display = 'none';
     document.getElementById('forum-category-section').style.display = 'none';
