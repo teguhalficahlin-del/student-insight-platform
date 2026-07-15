@@ -51,7 +51,7 @@ p { margin: 0 0 8px; color: var(--color-text-muted); }
 .btn-success  { background: var(--color-success); color: #fff; }
 .btn-danger   { background: var(--color-danger); color: #fff; }
 .btn-sm { padding: 6px 12px; font-size: 13px; min-height: 44px; }
-.ks-period-btn { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
+.ks-period-btn { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); flex: 1; }
 .ks-period-btn.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
 .btn-xs { padding: 4px 8px; font-size: 12px; min-height: 44px; }
 .btn-warning { background: var(--color-warning-bg); color: var(--color-warning); border-color: var(--color-warning); }
