@@ -59,8 +59,12 @@
  *       PENDING_EVALUATION (attendance/journal recorded) — blindly
  *       resetting meeting_status/teacher_indicator on re-import would
  *       silently destroy that operational state.
+ *  11b. Upsert schedule_time_slots: extract unique (day_of_week, start_time,
+ *       end_time) dari validRows, sort by start_time per hari, assign
+ *       slot_number 1..N, upsert ON CONFLICT DO UPDATE start_time/end_time
+ *       (is_break dan break_label tidak disentuh — preserve slot manual).
  *  12.  Response: { total_templates, templates_updated,
- *       assignments_upserted, schedules_generated, failed, errors[] }
+ *       assignments_upserted, schedules_generated, time_slots_upserted, failed, errors[] }
  *
  * NOTE: date generation happens here in application code (a loop over
  * Date objects), not in the database — per design decision to keep
@@ -506,6 +510,52 @@ Deno.serve(async (req: Request): Promise<Response> => {
             }
         }
 
+        // ── 11b. Upsert schedule_time_slots dari validRows ──────
+        // Extract unique (start_time, end_time) per hari dari baris yang lolos
+        // validasi. Baris istirahat tidak ada di payload (sudah dibuang parser).
+        // slot_number di-assign berdasarkan urutan start_time per hari.
+        // DO UPDATE hanya start_time/end_time — is_break & break_label tidak
+        // disentuh agar slot istirahat yang diinput manual via schedule-builder
+        // tidak tertimpa.
+        let timeSlotsUpserted = 0;
+        if (validRows.length > 0) {
+            const slotsByDay = new Map<string, Set<string>>();
+            for (const row of validRows) {
+                if (!slotsByDay.has(row.hari)) slotsByDay.set(row.hari, new Set());
+                slotsByDay.get(row.hari)!.add(`${row.start_time}|${row.end_time}`);
+            }
+            const slotPayload: object[] = [];
+            for (const [hari, timeSet] of slotsByDay) {
+                const sorted = [...timeSet]
+                    .map(s => { const [st, et] = s.split('|'); return { st, et }; })
+                    .sort((a, b) => parseTimeMinutes(a.st) - parseTimeMinutes(b.st));
+                sorted.forEach(({ st, et }, idx) => {
+                    slotPayload.push({
+                        school_id:     user.school_id,
+                        academic_year: academicYear,
+                        semester:      semester,
+                        day_of_week:   hari,
+                        slot_number:   idx + 1,
+                        start_time:    st,
+                        end_time:      et,
+                        is_break:      false,
+                        break_label:   null,
+                    });
+                });
+            }
+            const { error: slotErr } = await admin
+                .from('schedule_time_slots')
+                .upsert(slotPayload, {
+                    onConflict:       'school_id,academic_year,semester,day_of_week,slot_number',
+                    ignoreDuplicates: false,
+                });
+            if (slotErr) {
+                console.error('[bulk-import-schedules] schedule_time_slots upsert failed:', slotErr);
+                return internalError(slotErr);
+            }
+            timeSlotsUpserted = slotPayload.length;
+        }
+
         // ── 12. Response ────────────────────────────────────────
         return ok({
             // Alias generik agar laporan hasil di wizard tampil seragam
@@ -516,6 +566,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             templates_updated:   templatesUpdated,
             assignments_upserted: assignmentsUpserted,
             schedules_generated: schedulesGenerated,
+            time_slots_upserted: timeSlotsUpserted,
             failed:              rows.length - totalTemplates,
             errors,
         });
