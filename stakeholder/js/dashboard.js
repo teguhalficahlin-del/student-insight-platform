@@ -22,7 +22,7 @@ async function init() {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) { window.location.replace(getLoginUrl()); return; }
 
-    const user = await getCurrentUserRow();
+    const user = await getCurrentUserRow(auth.user);
     if (!user || !STAKEHOLDER_ROLES.includes(user.role_type)) {
         await supabase.auth.signOut();
         window.location.replace(getLoginUrl());

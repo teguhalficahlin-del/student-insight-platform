@@ -199,7 +199,7 @@ async function init() {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) { window.location.replace(getLoginUrl()); return; }
 
-    currentUser = await getCurrentUserRow();
+    currentUser = await getCurrentUserRow(auth.user);
     if (!currentUser || !GURU_ROLES.includes(currentUser.role_type) || currentUser.is_active === false) {
         await supabase.auth.signOut();
         window.location.replace(getLoginUrl());

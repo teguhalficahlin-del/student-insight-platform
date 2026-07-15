@@ -68,7 +68,7 @@ async function init() {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) { window.location.replace(getLoginUrl()); return; }
 
-    currentUser = await getCurrentUserRow();
+    currentUser = await getCurrentUserRow(auth.user);
     if (!currentUser || !STUDENT_ROLES.includes(currentUser.role_type)) {
         await supabase.auth.signOut();
         window.location.replace(getLoginUrl());

@@ -47,13 +47,13 @@ export async function logout() {
     await supabase.auth.signOut();
 }
 
-export async function getCurrentUserRow() {
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth?.user) return null;
+export async function getCurrentUserRow(authUser = null) {
+    const user = authUser ?? (await supabase.auth.getUser()).data?.user;
+    if (!user) return null;
     const { data, error } = await supabase
         .from('users')
         .select('user_id, school_id, full_name, role_type, login_identifier, is_active, must_change_password, last_seen_at, last_seen_ua')
-        .eq('auth_user_id', auth.user.id)
+        .eq('auth_user_id', user.id)
         .maybeSingle();
     if (error) throw error;
     return data;

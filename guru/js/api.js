@@ -86,9 +86,9 @@ export async function registerLoginDevice() {
     }
 }
 
-export async function getCurrentUserRow() {
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth?.user) return null;
+export async function getCurrentUserRow(authUser = null) {
+    const user = authUser ?? (await supabase.auth.getUser()).data?.user;
+    if (!user) return null;
     const { data, error } = await supabase
         .from('users')
         .select(`
@@ -98,7 +98,7 @@ export async function getCurrentUserRow() {
             must_change_password, last_seen_at, last_seen_ua,
             teaching_assignments(count)
         `)
-        .eq('auth_user_id', auth.user.id)
+        .eq('auth_user_id', user.id)
         .maybeSingle();
     if (error) throw error;
     return data;

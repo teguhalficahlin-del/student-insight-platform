@@ -211,7 +211,7 @@ async function init() {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData?.user) { window.location.replace(getLoginUrl()); return; }
 
-    const userRow = await getCurrentUserRow();
+    const userRow = await getCurrentUserRow(authData.user);
     if (!isDudi(userRow)) { window.location.replace(getLoginUrl()); return; }
 
     currentUser = userRow;

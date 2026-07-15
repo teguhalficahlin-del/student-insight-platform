@@ -126,7 +126,7 @@ async function init() {
         return;
     }
 
-    currentUser = await getCurrentUserRow();
+    currentUser = await getCurrentUserRow(authData.user);
     if (!currentUser || currentUser.role_type !== 'ORTU') {
         window.location.replace(getLoginUrl());
         return;

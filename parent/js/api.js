@@ -40,14 +40,14 @@ export async function loginWithIdentifier(identifier, password, schoolId = null)
     return data.user;
 }
 
-export async function getCurrentUserRow() {
-    const { data: authData } = await supabase.auth.getUser();
-    if (!authData?.user) return null;
+export async function getCurrentUserRow(authUser = null) {
+    const user = authUser ?? (await supabase.auth.getUser()).data?.user;
+    if (!user) return null;
 
     const { data, error } = await supabase
         .from('users')
         .select('user_id, school_id, full_name, role_type, login_identifier, identifier_type, is_active, must_change_password, last_seen_at, last_seen_ua')
-        .eq('auth_user_id', authData.user.id)
+        .eq('auth_user_id', user.id)
         .maybeSingle();
 
     if (error) throw error;
