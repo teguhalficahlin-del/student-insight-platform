@@ -1401,8 +1401,13 @@ async function renderScheduleStep() {
 
                 // Deteksi format lama (sistem): row[1][0] === 'HARI'
                 const isOldGrid    = aoa.length >= 2 && String(aoa[1]?.[0] ?? '').toUpperCase() === 'HARI';
-                // Deteksi format sekolah: row[0][1] === 'HARI' (blank | HARI | NO | WAKTU | MAPEL | KG …)
-                const isSchoolGrid = !isOldGrid && aoa.length >= 3 && String(aoa[0]?.[1] ?? '').toUpperCase() === 'HARI';
+                // Deteksi format sekolah: HARI di index 1 (template resmi — col A blank ada)
+                // atau index 0 (file sekolah asli tanpa col A — sheet dimension mulai B1 bukan A1).
+                const schoolGridOffset =
+                    String(aoa[0]?.[1] ?? '').toUpperCase() === 'HARI' ? 1 :
+                    String(aoa[0]?.[0] ?? '').toUpperCase() === 'HARI' ? 0 :
+                    -1;
+                const isSchoolGrid = !isOldGrid && aoa.length >= 3 && schoolGridOffset >= 0;
 
                 const VALID_DAYS = ['SENIN','SELASA','RABU','KAMIS','JUMAT',"JUM'AT",'SABTU'];
                 const csvEsc = v => (String(v).includes(',') || String(v).includes('"'))
@@ -1435,10 +1440,10 @@ async function renderScheduleStep() {
                     }
                     csvText = flatRows.join('\n');
                 } else if (isSchoolGrid) {
-                    // Format sekolah: blank col 0, HARI col 1, NO col 2, WAKTU col 3, (MAPEL|KG)× dari col 4
-                    // Nama kelas ada di row 0 pada kolom 4, 6, 8, ...
+                    // Format sekolah: HARI di col (schoolGridOffset), WAKTU di col (3-schoolGridOffset),
+                    // kelas mulai dari col (4-schoolGridOffset). Semua akses kolom dikurangi offset.
                     const kelasNames = [];
-                    for (let c = 4; c < (aoa[0]?.length ?? 0); c += 2) {
+                    for (let c = 4 - schoolGridOffset; c < (aoa[0]?.length ?? 0); c += 2) {
                         const k = String(aoa[0][c] ?? '').trim();
                         if (k) kelasNames.push({ name: k, col: c });
                     }
@@ -1447,11 +1452,11 @@ async function renderScheduleStep() {
                     // Data mulai baris 2 (baris 0=header, baris 1=MAPEL/KG sub-header)
                     for (let r = 2; r < aoa.length; r++) {
                         const row  = aoa[r];
-                        const hariCell = String(row[1] ?? '').trim().toUpperCase();
+                        const hariCell = String(row[1 - schoolGridOffset] ?? '').trim().toUpperCase();
                         if (VALID_DAYS.includes(hariCell)) currentHari = hariCell === "JUM'AT" ? 'JUMAT' : hariCell;
                         if (!currentHari) continue;
 
-                        const waktu = String(row[3] ?? '').trim();
+                        const waktu = String(row[3 - schoolGridOffset] ?? '').trim();
                         if (!waktu || /istr[ae]hat/i.test(waktu)) continue;
 
                         // Waktu format "07.15 - 07.55" → start="07:15", end="07:55"
