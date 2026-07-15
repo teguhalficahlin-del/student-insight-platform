@@ -56,11 +56,9 @@ function _injectDynamicManifest(slug, branding = null) {
             if (branding) {
                 if (branding.name) {
                     manifest.name = branding.name;
-                    // Pakai slug sebagai short_name (maks 12 char) agar label terbaca
-                    // misal slug "smkn1ub" → "SMKN1UB", lebih baik daripada strip vokal
-                    manifest.short_name = slug
-                        ? slug.toUpperCase().slice(0, 12)
-                        : (branding.name.length > 12 ? branding.name.slice(0, 12) : branding.name);
+                    // short_name = nama sekolah dengan spasi antara kode+angka dihapus
+                    // "SMKN 1 Ujungbatu" → "SMKN1 Ujungbatu" → Android wrap jadi 2 baris
+                    manifest.short_name = branding.name.replace(/\b(SMK[A-Z]*)\s+(\d)/i, '$1$2');
                 }
                 if (branding.primary_color) {
                     manifest.theme_color      = branding.primary_color;
