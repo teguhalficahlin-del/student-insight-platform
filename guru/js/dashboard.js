@@ -658,14 +658,15 @@ async function loadWeekSchedule() {
             const isToday   = r.date === todayStr;
             const sesiCount = r.rows.length;
 
+            const mergedSessions = mergeConsecutiveSessions(r.rows);
             const tableHtml = sesiCount === 0
                 ? '<p class="hint" style="margin:8px 0 4px">Tidak ada jadwal</p>'
                 : `<div class="table-wrapper">
                    <table class="table">
                        <thead><tr><th>Jam</th><th>Kelas</th></tr></thead>
-                       <tbody>${r.rows.map(s => `
+                       <tbody>${mergedSessions.map(s => `
                            <tr>
-                               <td>${fmtTime(s.session_start)} – ${fmtTime(s.session_end)}</td>
+                               <td>${fmtTime(s.merged_start)} – ${fmtTime(s.merged_end)}</td>
                                <td>${esc(s.class?.name ?? '—')}</td>
                            </tr>`).join('')}
                        </tbody>
