@@ -497,6 +497,31 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 }
             }
 
+            // Assign block_group_id: slot berurutan (gap ≤ 40 menit) dengan
+            // guru+kelas+hari yang sama mendapat UUID yang sama.
+            const blockKeyMap = new Map<string, string>(); // "teacherId|classId|date|blockNum" → uuid
+            // Group per (teacher, class, date), urutkan start_time, lalu assign blok
+            const byTCD = new Map<string, typeof generatedRows>();
+            for (const r of generatedRows) {
+                const key = `${r.scheduled_teacher_id}|${r.class_id}|${r.session_date}`;
+                if (!byTCD.has(key)) byTCD.set(key, []);
+                byTCD.get(key)!.push(r);
+            }
+            for (const [key, slots] of byTCD) {
+                slots.sort((a, b) => parseTimeMinutes(a.session_start) - parseTimeMinutes(b.session_start));
+                let blockNum = 0;
+                let prevEndMin = -1;
+                for (const slot of slots) {
+                    const startMin = parseTimeMinutes(slot.session_start);
+                    const gap = prevEndMin >= 0 ? startMin - prevEndMin : -1;
+                    if (gap < 0 || gap > 40) blockNum++;
+                    prevEndMin = parseTimeMinutes(slot.session_end);
+                    const blockKey = `${key}|${blockNum}`;
+                    if (!blockKeyMap.has(blockKey)) blockKeyMap.set(blockKey, crypto.randomUUID());
+                    (slot as Record<string, unknown>).block_group_id = blockKeyMap.get(blockKey);
+                }
+            }
+
             // Pecah insert menjadi chunk agar tidak membebani worker: 600 template
             // × ~26 tanggal/semester bisa menghasilkan belasan ribu baris. Satu
             // statement raksasa (bangun array + serialize + terima balik semua id)
