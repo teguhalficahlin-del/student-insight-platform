@@ -48,39 +48,35 @@ function _makeIconDataURI(abbr, color) {
 function _injectDynamicManifest(slug, branding = null) {
     const el = document.querySelector('link[rel="manifest"]');
     if (!el || !slug) return;
-    fetch(el.href)
-        .then(r => r.json())
-        .then(manifest => {
-            // start_url ke login page dengan slug agar reinstall PWA tetap bawa slug
-            manifest.start_url = `./index.html?school=${encodeURIComponent(slug)}`;
-            if (branding) {
-                if (branding.name) {
-                    manifest.name = branding.name;
-                    // short_name = nama sekolah dengan spasi antara kode+angka dihapus
-                    // "SMKN 1 Ujungbatu" → "SMKN1 Ujungbatu" → Android wrap jadi 2 baris
-                    manifest.short_name = branding.name.replace(/\b(SMK[A-Z]*)\s+(\d)/i, '$1$2');
-                }
-                if (branding.primary_color) {
-                    manifest.theme_color      = branding.primary_color;
-                    manifest.background_color = branding.primary_color;
-                }
-            }
-            // Selalu generate ikon SVG dinamis dengan identitas platform "SMK SIP"
-            const abbr     = 'SIP';
-            const color    = branding?.primary_color || '#1a56db';
-            const iconURI  = _makeIconDataURI(abbr, color);
-            const dynIcon  = { src: iconURI, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' };
-            // Jika ada logo_url sekolah, pakai itu sebagai prioritas pertama
-            if (branding?.logo_url) {
-                const logoIcon = { src: branding.logo_url, sizes: '512x512', type: 'image/png', purpose: 'any maskable' };
-                manifest.icons = [logoIcon, dynIcon, ...(manifest.icons ?? [])];
-            } else {
-                manifest.icons = [dynIcon, ...(manifest.icons ?? [])];
-            }
-            const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
-            el.href = URL.createObjectURL(blob);
-        })
-        .catch(() => { /* abaikan jika manifest tidak bisa di-fetch */ });
+
+    const name      = branding?.name || slug.toUpperCase();
+    // "SMKN 1 Ujungbatu" → "SMKN1 Ujungbatu" sehingga Android wrap jadi 2 baris
+    const shortName = name.replace(/\b(SMK[A-Za-z]*)\s+(\d)/i, '$1$2');
+    const color     = branding?.primary_color || '#1a56db';
+    const iconURI   = _makeIconDataURI('SIP', color);
+    const dynIcon   = { src: iconURI, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' };
+    const icons     = branding?.logo_url
+        ? [{ src: branding.logo_url, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }, dynIcon]
+        : [dynIcon];
+
+    // Bangun manifest langsung tanpa fetch — blob URL ter-set synchronous
+    // sehingga sudah siap sebelum user sempat tap "Add to Home Screen"
+    const manifest = {
+        name,
+        short_name: shortName,
+        description: 'Portal ' + name,
+        start_url:  './index.html?school=' + encodeURIComponent(slug),
+        scope:      './',
+        display:    'standalone',
+        orientation:'any',
+        theme_color:      color,
+        background_color: color,
+        lang:  'id',
+        icons,
+    };
+
+    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+    el.href = URL.createObjectURL(blob);
 }
 
 function adjustColor(hex, amount) {

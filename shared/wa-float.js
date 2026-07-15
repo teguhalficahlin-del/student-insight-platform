@@ -101,24 +101,9 @@
     });
   }
 
-  function isLoggedIn() {
-    try {
-      var key = Object.keys(localStorage).find(function (k) {
-        return k.startsWith('sb-') && k.endsWith('-auth-token');
-      });
-      if (!key) return false;
-      var data = JSON.parse(localStorage.getItem(key));
-      return !!(data && data.access_token);
-    } catch (e) { return false; }
-  }
-
-  function maybeInject() {
-    if (isLoggedIn()) inject();
-  }
-
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', maybeInject);
+    document.addEventListener('DOMContentLoaded', inject);
   } else {
-    maybeInject();
+    inject();
   }
 })();
