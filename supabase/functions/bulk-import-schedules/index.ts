@@ -242,8 +242,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 errors.push({ row: row.rowNumber, message: `start_time (${row.start_time}) harus lebih kecil dari end_time (${row.end_time})` });
                 continue;
             }
-            if (!row.nama_kelas.trim() || !row.kode_guru || !row.nama_mapel) {
-                errors.push({ row: row.rowNumber, message: 'Kolom kode_guru, nama_mapel, dan nama_kelas wajib diisi' });
+            if (!row.nama_kelas.trim() || !row.kode_guru) {
+                errors.push({ row: row.rowNumber, message: 'Kolom kode_guru dan nama_kelas wajib diisi' });
                 continue;
             }
             validRows.push(row);
