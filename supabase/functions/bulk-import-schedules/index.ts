@@ -315,6 +315,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
         // ── 9b. Deteksi bentrok: 1 guru tidak boleh mengajar di kelas
         //        berbeda pada hari & waktu yang tumpang-tindih ────────
         if (validRows.length > 0) {
+            // Kumpulkan guru yang boleh mengajar paralel (moving class/team teaching)
+            const allTeacherIds = [...new Set(validRows.map(r => r.teacher_id).filter((id): id is string => !!id))];
+            const { data: parallelRows } = await admin
+                .from('users')
+                .select('user_id')
+                .in('user_id', allTeacherIds)
+                .eq('allow_parallel_teaching', true);
+            const parallelTeachers = new Set<string>((parallelRows ?? []).map((u: { user_id: string }) => u.user_id));
+
             // (i) Bentrok antar baris dalam file yang sama
             const byTeacherDay = new Map<string, ImportRow[]>();
             for (const row of validRows) {
@@ -331,6 +340,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                         const a = group[i], b = group[j];
                         if (conflicted.has(b)) continue;
                         if (a.class_id !== b.class_id &&
+                            !parallelTeachers.has(b.teacher_id!) &&
                             overlaps(parseTimeMinutes(a.start_time), parseTimeMinutes(a.end_time),
                                      parseTimeMinutes(b.start_time), parseTimeMinutes(b.end_time))) {
                             conflicted.add(b); // baris yang belakangan ditolak
@@ -367,7 +377,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     e.class_id !== row.class_id &&
                     overlaps(rS, rE, parseTimeMinutes(e.start_time.slice(0, 5)), parseTimeMinutes(e.end_time.slice(0, 5))),
                 );
-                if (clash) {
+                if (clash && !parallelTeachers.has(row.teacher_id!)) {
                     errors.push({ row: row.rowNumber, message: `Bentrok dengan jadwal tersimpan: ${row.kode_guru} sudah mengajar di kelas lain pada ${row.hari} ${clash.start_time.slice(0, 5)}-${clash.end_time.slice(0, 5)}`, code: 'SCHEDULE_CONFLICT' });
                     validRows.splice(validRows.indexOf(row), 1);
                 }

@@ -95,6 +95,7 @@ interface ImportRow {
     is_waka_kurikulum?: boolean;
     is_waka_kesiswaan?: boolean;
     is_waka_humas?:    boolean;
+    allow_parallel_teaching?: boolean;
 }
 
 interface ImportError {
@@ -184,6 +185,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 is_waka_kurikulum: jabatan.includes('WAKA_KURIKULUM'),
                 is_waka_kesiswaan: jabatan.includes('WAKA_KESISWAAN'),
                 is_waka_humas:     jabatan.includes('WAKA_HUMAS'),
+                allow_parallel_teaching: String(r.allow_parallel ?? '').toUpperCase() === 'YA',
             };
         });
 
@@ -526,6 +528,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 updatePatch.is_waka_kurikulum = row.is_waka_kurikulum ?? false;
                 updatePatch.is_waka_kesiswaan = row.is_waka_kesiswaan ?? false;
                 updatePatch.is_waka_humas = row.is_waka_humas ?? false;
+                updatePatch.allow_parallel_teaching = row.allow_parallel_teaching ?? false;
 
                 // Bangkitkan baris yang ada di Recycle Bin: undelete + reaktifkan.
                 // Tanpa ini, re-impor/tambah-ulang hanya meng-update baris terhapus
@@ -625,6 +628,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 is_waka_kurikulum:   row.is_waka_kurikulum ?? false,
                 is_waka_kesiswaan:   row.is_waka_kesiswaan ?? false,
                 is_waka_humas:       row.is_waka_humas ?? false,
+                allow_parallel_teaching: row.allow_parallel_teaching ?? false,
                 must_change_password: true,
             });
 
