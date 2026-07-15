@@ -29,15 +29,16 @@ async function init() {
         return;
     }
 
-    applyBrandingById(user.school_id, supabase);
-    await checkMustChangePassword(supabase, user);
-    await initLoginGuard(supabase, user);
     document.getElementById('hdr-name').textContent = user.full_name;
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display     = 'block';
-
+    await Promise.all([
+        applyBrandingById(user.school_id, supabase),
+        checkMustChangePassword(supabase, user),
+        initLoginGuard(supabase, user),
+        loadSummary(),
+    ]);
     document.getElementById('refresh-btn').onclick = loadSummary;
-    await loadSummary();
 }
 
 async function loadSummary() {

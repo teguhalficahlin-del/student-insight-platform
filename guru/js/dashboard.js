@@ -206,12 +206,12 @@ async function init() {
         return;
     }
 
-    applyBrandingById(currentUser.school_id, supabase);
-
-    await checkMustChangePassword(supabase, currentUser);
-    await initLoginGuard(supabase, currentUser);
-
-    config  = await getSchoolConfig();
+    await Promise.all([
+        applyBrandingById(currentUser.school_id, supabase),
+        checkMustChangePassword(supabase, currentUser),
+        initLoginGuard(supabase, currentUser),
+        getSchoolConfig().then(c => { config = c; }),
+    ]);
     jabatan   = getJabatan(currentUser);
     isTeacher = !!currentUser.teacher_code
         || (currentUser.teaching_assignments?.[0]?.count ?? 0) > 0;

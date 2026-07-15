@@ -75,12 +75,14 @@ async function init() {
         return;
     }
 
-    applyBrandingById(currentUser.school_id, supabase);
-    await checkMustChangePassword(supabase, currentUser);
-    await initLoginGuard(supabase, currentUser);
     registerLoginDevice(supabase); // fire-and-forget
-    config  = await getSchoolConfig();
-    student = await getMyStudent(currentUser.user_id);
+    await Promise.all([
+        applyBrandingById(currentUser.school_id, supabase),
+        checkMustChangePassword(supabase, currentUser),
+        initLoginGuard(supabase, currentUser),
+        getSchoolConfig().then(c => { config = c; }),
+        getMyStudent(currentUser.user_id).then(s => { student = s; }),
+    ]);
 
     if (!student) {
         // Akun SISWA belum tertaut ke data siswa

@@ -132,22 +132,21 @@ async function init() {
         return;
     }
 
-    applyBrandingById(currentUser.school_id, supabase);
-    await checkMustChangePassword(supabase, currentUser);
-    await initLoginGuard(supabase, currentUser);
+    registerLoginDevice(supabase); // fire-and-forget
+    portalUserName.textContent = currentUser.full_name;
+    await Promise.all([
+        applyBrandingById(currentUser.school_id, supabase),
+        checkMustChangePassword(supabase, currentUser),
+        initLoginGuard(supabase, currentUser),
+        fetchChildren(currentUser.user_id).then(c => { children = c; }).catch(err => {
+            loadingEl.textContent = 'Gagal memuat data anak.';
+            throw err;
+        }),
+    ]);
     // Tab click handler
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => showTab(btn.dataset.tab));
     });
-    registerLoginDevice(supabase); // fire-and-forget
-    portalUserName.textContent = currentUser.full_name;
-
-    try {
-        children = await fetchChildren(currentUser.user_id);
-    } catch (err) {
-        loadingEl.textContent = fe(err);
-        return;
-    }
 
     if (children.length === 0) {
         loadingEl.textContent = 'Belum ada data anak yang terhubung ke akun Anda. Hubungi admin sekolah.';
