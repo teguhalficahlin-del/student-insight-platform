@@ -55,10 +55,12 @@ function _injectDynamicManifest(slug, branding = null) {
             manifest.start_url = `./index.html?school=${encodeURIComponent(slug)}`;
             if (branding) {
                 if (branding.name) {
-                    manifest.name       = branding.name;
-                    manifest.short_name = branding.name.length > 15
-                        ? branding.name.replace(/[aeiouAEIOU\s]/g, '').slice(0, 10) || branding.name.slice(0, 15)
-                        : branding.name;
+                    manifest.name = branding.name;
+                    // Pakai slug sebagai short_name (maks 12 char) agar label terbaca
+                    // misal slug "smkn1ub" → "SMKN1UB", lebih baik daripada strip vokal
+                    manifest.short_name = slug
+                        ? slug.toUpperCase().slice(0, 12)
+                        : (branding.name.length > 12 ? branding.name.slice(0, 12) : branding.name);
                 }
                 if (branding.primary_color) {
                     manifest.theme_color      = branding.primary_color;
