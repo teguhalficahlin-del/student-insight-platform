@@ -1481,6 +1481,12 @@ async function renderScheduleStep() {
                             const rawKg    = String(row[col + 1] ?? '').trim();
                             const kg    = rawKg    || lastKg[col]    || '';
                             const mapel = rawMapel || lastMapel[col] || '';
+                            if (name === 'X BP' && currentHari === 'KAMIS') {
+                                console.log('[CF] X BP KAMIS', waktu,
+                                    'rawKg=', rawKg, 'rawMapel=', rawMapel,
+                                    'lastKg=', lastKg[col], 'lastMapel=', lastMapel[col],
+                                    'kg=', kg, 'mapel=', mapel);
+                            }
                             if (rawKg)    lastKg[col]    = rawKg;
                             if (rawMapel) lastMapel[col] = rawMapel;
                             if (!kg) continue;
