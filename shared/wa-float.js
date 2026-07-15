@@ -1,7 +1,7 @@
 (function () {
   var WA_NUMBER = '6281276979602';
   var WA_TEXT   = 'Halo, saya butuh bantuan terkait platform sekolah.';
-  var STORAGE_KEY = 'wa_float_top';
+  var STORAGE_KEY = 'wa_float_top_' + (location.pathname.split('/')[1] || 'root');
 
   function inject() {
     if (document.getElementById('wa-float-btn')) return;
@@ -40,10 +40,20 @@
     makeDraggable(btn);
   }
 
+  function getBottomSafeArea() {
+    var nav = document.querySelector('.bottom-nav, .admin-bottom-nav, [class*="bottom-nav"]');
+    if (nav) {
+      var rect = nav.getBoundingClientRect();
+      if (rect.height > 0) return rect.height + 12;
+    }
+    return 8;
+  }
+
   function clamp(top) {
-    var margin = 8;
-    var max    = window.innerHeight - 56 - margin;
-    return Math.min(Math.max(margin, top), max);
+    var marginTop = 8;
+    var marginBottom = getBottomSafeArea();
+    var max = window.innerHeight - 56 - marginBottom;
+    return Math.min(Math.max(marginTop, top), max);
   }
 
   function makeDraggable(el) {
