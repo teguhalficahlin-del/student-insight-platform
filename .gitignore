@@ -8,3 +8,7 @@ Thumbs.db
 docs/
 file uji/
 Ringkasan percakapan.md
+
+# SQL backups
+backup_*.sql
+*.sql.bak
