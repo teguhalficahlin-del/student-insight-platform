@@ -1,7 +1,7 @@
 {
-  "name": "Portal Stakeholder — Student Insight Platform",
-  "short_name": "Stakeholder SIP",
-  "description": "Portal stakeholder untuk melihat rekap dan statistik sekolah.",
+  "name": "SIP — Student Insight Platform",
+  "short_name": "SIP",
+  "description": "Platform monitoring siswa SMK",
   "start_url": "/student-insight-platform/stakeholder/dashboard.html",
   "scope": "/student-insight-platform/stakeholder/",
   "display": "standalone",

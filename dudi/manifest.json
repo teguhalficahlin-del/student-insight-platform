@@ -1,7 +1,7 @@
 {
-  "name": "Portal DUDI",
-  "short_name": "Portal DUDI",
-  "description": "Portal mitra DUDI untuk memantau dan menilai siswa PKL.",
+  "name": "SIP — Student Insight Platform",
+  "short_name": "SIP",
+  "description": "Platform monitoring siswa SMK",
   "start_url": "/student-insight-platform/dudi/dashboard.html",
   "scope": "/student-insight-platform/dudi/",
   "display": "standalone",

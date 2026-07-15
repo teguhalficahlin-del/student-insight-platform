@@ -1,7 +1,7 @@
 {
-  "name": "Portal Siswa",
-  "short_name": "Portal Siswa",
-  "description": "Portal siswa untuk melihat jadwal, kehadiran, dan informasi sekolah.",
+  "name": "SIP — Student Insight Platform",
+  "short_name": "SIP",
+  "description": "Platform monitoring siswa SMK",
   "start_url": "/student-insight-platform/student/dashboard.html",
   "scope": "/student-insight-platform/student/",
   "display": "standalone",

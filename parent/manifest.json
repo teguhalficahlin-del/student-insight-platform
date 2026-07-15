@@ -1,7 +1,7 @@
 {
-  "name": "Portal Orang Tua",
-  "short_name": "Portal Ortu",
-  "description": "Portal orang tua untuk memantau kehadiran dan perkembangan siswa.",
+  "name": "SIP — Student Insight Platform",
+  "short_name": "SIP",
+  "description": "Platform monitoring siswa SMK",
   "start_url": "/student-insight-platform/parent/portal.html",
   "scope": "/student-insight-platform/parent/",
   "display": "standalone",

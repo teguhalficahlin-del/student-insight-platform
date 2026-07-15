@@ -1,7 +1,7 @@
 {
-  "name": "Portal Guru",
-  "short_name": "Portal Guru",
-  "description": "Portal guru untuk absensi, jadwal mengajar, dan observasi siswa.",
+  "name": "SIP — Student Insight Platform",
+  "short_name": "SIP",
+  "description": "Platform monitoring siswa SMK",
   "start_url": "/student-insight-platform/guru/dashboard.html",
   "scope": "/student-insight-platform/guru/",
   "display": "standalone",

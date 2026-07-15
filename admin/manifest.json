@@ -1,7 +1,7 @@
 {
-  "name": "Admin Console — Student Insight Platform",
-  "short_name": "Admin SIP",
-  "description": "Konsol admin untuk mengelola data sekolah, jadwal, dan pengguna.",
+  "name": "SIP — Student Insight Platform",
+  "short_name": "SIP",
+  "description": "Platform monitoring siswa SMK",
   "start_url": "/student-insight-platform/admin/dashboard.html",
   "scope": "/student-insight-platform/admin/",
   "display": "standalone",
