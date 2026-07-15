@@ -497,6 +497,36 @@ function fmtDayLabel(dateStr) {
     return new Date(dateStr + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+function isConsecutive(endTime, startTime) {
+    const toMin = t => { const [h, m] = t.slice(0, 5).split(':').map(Number); return h * 60 + m; };
+    return toMin(startTime) - toMin(endTime) <= 40;
+}
+
+function mergeConsecutiveSessions(sessions) {
+    const sorted = [...sessions].sort((a, b) => a.session_start.localeCompare(b.session_start));
+    const merged = [];
+    for (const s of sorted) {
+        const last = merged[merged.length - 1];
+        const sameBlock = last
+            && last.class?.class_id === s.class?.class_id
+            && last._subjectKey    === (s.subject_label ?? '')
+            && isConsecutive(last.merged_end, s.session_start);
+        if (sameBlock) {
+            last.merged_end = s.session_end;
+            last.schedule_ids.push(s.schedule_id);
+        } else {
+            merged.push({
+                ...s,
+                merged_start: s.session_start,
+                merged_end:   s.session_end,
+                schedule_ids: [s.schedule_id],
+                _subjectKey:  s.subject_label ?? '',
+            });
+        }
+    }
+    return merged;
+}
+
 function renderScheduleRows(rows, contentEl, date) {
     const today     = localDateStr();
     const isPast    = date < today;
@@ -504,19 +534,21 @@ function renderScheduleRows(rows, contentEl, date) {
     const label     = fmtDayLabel(date);
     const sesiCount = rows.length;
 
+    const mergedRows = mergeConsecutiveSessions(rows);
     const tableHtml = sesiCount === 0
         ? '<p class="hint" style="margin:8px 0 4px">Tidak ada jadwal mengajar pada tanggal ini.</p>'
         : `<div class="table-wrapper">
            <table class="table">
                <thead><tr><th>Jam</th><th>Kelas</th><th>Kehadiran</th></tr></thead>
                <tbody>
-               ${rows.map(r => `
+               ${mergedRows.map(r => `
                    <tr>
-                       <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
+                       <td>${fmtTime(r.merged_start)} – ${fmtTime(r.merged_end)}</td>
                        <td>${esc(r.class?.name ?? '—')}</td>
                        <td>
                            <button class="btn ${isPast ? 'btn-secondary' : 'btn-primary'} btn-xs att-open-btn"
-                               data-schedule="${r.schedule_id}"
+                               data-schedule="${r.schedule_ids[0]}"
+                               data-schedule-ids='${JSON.stringify(r.schedule_ids)}'
                                data-class="${r.class?.class_id}"
                                data-classname="${esc(r.class?.name ?? '')}"
                                data-ispast="${isPast}">
@@ -771,13 +803,16 @@ async function loadAttModalContent(scheduleId, classId, className) {
             tx0 = null;
         }, { passive: true });
 
-        panel.querySelector('.att-save').addEventListener('click', () => saveAttendance(scheduleId, students));
+        const scheduleIds = (() => { try { return JSON.parse(document.querySelector(`.att-open-btn[data-schedule="${scheduleId}"]`)?.dataset?.scheduleIds ?? 'null'); } catch { return null; } })() ?? [scheduleId];
+        panel.querySelector('.att-save').addEventListener('click', () => saveAttendance(scheduleIds, students));
     } catch (err) {
         panel.innerHTML = `<div class="status-err">Gagal memuat data. ${esc(fe(err))}</div>`;
     }
 }
 
-async function saveAttendance(scheduleId, students) {
+async function saveAttendance(scheduleIds, students) {
+    const scheduleId = Array.isArray(scheduleIds) ? scheduleIds[0] : scheduleIds;
+    const allIds     = Array.isArray(scheduleIds) ? scheduleIds : [scheduleIds];
     const saveBtn  = document.querySelector(`.att-save[data-schedule="${scheduleId}"]`);
     const statusEl = document.getElementById(`att-status-${scheduleId}`);
     saveBtn.disabled = true;
@@ -793,34 +828,34 @@ async function saveAttendance(scheduleId, students) {
             return { student_id: s.student_id, status, source: 'TEACHER_DECLARED', notes };
         });
 
-        // Satu jalur idempoten (online + offline). session_date = tanggal
-        // yang sedang dilihat di tab Guru.
-        const batch = {
+        const sessionDate = document.getElementById('sched-date').value;
+        const results = await Promise.all(allIds.map(sid => saveAttendanceBatch({
             idempotency_key: crypto.randomUUID(),
-            schedule_id:     scheduleId,
+            schedule_id:     sid,
             submitted_by:    currentUser.user_id,
-            session_date:    document.getElementById('sched-date').value,
+            session_date:    sessionDate,
             records,
-        };
+        })));
 
-        const result = await saveAttendanceBatch(batch);
-        if (result.status === 'synced') {
-            statusEl.textContent = `✓ Tersimpan — ${records.length} siswa`;
-            statusEl.className   = 'status-msg status-ok';
+        const anyQueued = results.some(r => r.status === 'queued');
+        const anyFailed = results.find(r => r.status !== 'synced' && r.status !== 'queued');
+        if (anyFailed) {
+            statusEl.textContent = `✗ ${anyFailed.error}`;
+            statusEl.className   = 'status-msg status-err';
             statusEl.style.display = 'inline-block';
             await updateSyncBanner();
-            setTimeout(() => closeAttModal(), 1200);
-        } else if (result.status === 'queued') {
-            statusEl.textContent = `⏳ Tersimpan di perangkat — menunggu sinkron (${records.length} siswa)`;
+        } else if (anyQueued) {
+            statusEl.textContent = `⏳ Tersimpan di perangkat — menunggu sinkron (${records.length} siswa × ${allIds.length} sesi)`;
             statusEl.className   = 'status-msg status-warn';
             statusEl.style.display = 'inline-block';
             await updateSyncBanner();
             setTimeout(() => closeAttModal(), 1800);
         } else {
-            statusEl.textContent = `✗ ${result.error}`;
-            statusEl.className   = 'status-msg status-err';
+            statusEl.textContent = `✓ Tersimpan — ${records.length} siswa × ${allIds.length} sesi`;
+            statusEl.className   = 'status-msg status-ok';
             statusEl.style.display = 'inline-block';
             await updateSyncBanner();
+            setTimeout(() => closeAttModal(), 1200);
         }
     } catch (err) {
         statusEl.textContent = `✗ ${fe(err, 's')}`;
