@@ -1298,7 +1298,11 @@ async function renderScheduleStep() {
                 { no: 11, w: '15.00 - 15.40' },
             ];
             // Waktu istirahat dari SLOTS (null entries): skip saat parse
-            const BREAK_SLOTS = new Set(['09:55-10:25', '12:25-13:00']);
+            const BREAK_SLOTS = new Set([
+                '09:55-10:25',  // SENIN, RABU, KAMIS, JUMAT istirahat 1
+                '12:25-13:00',  // SENIN, SELASA, RABU, KAMIS istirahat 2
+                '09:35-10:05',  // SELASA istirahat 1
+            ]);
             const DAYS = ['SENIN','SELASA','RABU','KAMIS',"JUM'AT"];
 
             // ── Format identik dengan jadwal sekolah ─────────────────────
