@@ -96,6 +96,7 @@ interface ImportRow {
     is_waka_kesiswaan?: boolean;
     is_waka_humas?:    boolean;
     allow_parallel_teaching?: boolean;
+    mengajar?:         boolean;
 }
 
 interface ImportError {
@@ -186,6 +187,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 is_waka_kesiswaan: jabatan.includes('WAKA_KESISWAAN'),
                 is_waka_humas:     jabatan.includes('WAKA_HUMAS'),
                 allow_parallel_teaching: String(r.allow_parallel ?? '').toUpperCase() === 'YA',
+                mengajar,
             };
         });
 
@@ -475,7 +477,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }
 
         for (const row of validRows) {
-            if (row.role_type !== 'GURU') {
+            if (row.role_type !== 'GURU' && !row.mengajar) {
                 row.teacher_code = undefined;
                 continue;
             }
@@ -520,7 +522,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     role_type: row.role_type,
                 };
                 if (row.teacher_code) updatePatch.teacher_code = row.teacher_code;
-                if (!row.teacher_code && row.role_type !== 'GURU') updatePatch.teacher_code = null;
+                if (!row.teacher_code && row.role_type !== 'GURU' && !row.mengajar) updatePatch.teacher_code = null;
                 if (row.wali_kelas_class_id) updatePatch.wali_kelas_class_id = row.wali_kelas_class_id;
                 if (row.kaprodi_program_id) updatePatch.kaprodi_program_id = row.kaprodi_program_id;
                 updatePatch.is_bk = row.is_bk ?? false;
