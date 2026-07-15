@@ -212,7 +212,8 @@ async function init() {
 
     config  = await getSchoolConfig();
     jabatan   = getJabatan(currentUser);
-    isTeacher = !!currentUser.teacher_code;
+    isTeacher = !!currentUser.teacher_code
+        || (currentUser.teaching_assignments?.[0]?.count ?? 0) > 0;
 
     // Header
     document.getElementById('hdr-name').textContent = currentUser.full_name;

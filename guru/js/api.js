@@ -95,7 +95,8 @@ export async function getCurrentUserRow() {
             user_id, school_id, full_name, role_type, login_identifier, teacher_code,
             wali_kelas_class_id, kaprodi_program_id,
             is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, is_waka_humas, is_active,
-            must_change_password, last_seen_at, last_seen_ua
+            must_change_password, last_seen_at, last_seen_ua,
+            teaching_assignments(count)
         `)
         .eq('auth_user_id', auth.user.id)
         .maybeSingle();
