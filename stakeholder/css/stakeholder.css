@@ -104,8 +104,8 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .stat-card { background: var(--color-surface); border-radius: var(--radius); border: 1px solid var(--color-border); padding: 18px 20px; flex: 1; min-width: 130px; text-align: center; }
 .stat-card.stat-accent { background: var(--color-primary-bg); border-color: var(--color-primary); }
-.stat-value { font-size: 30px; font-weight: 700; color: var(--color-primary); display: block; }
-.stat-label { font-size: 12px; color: var(--color-text-muted); margin-top: 4px; }
+.stat-value { font-size: 30px; font-weight: 700; color: var(--color-text); display: block; }
+.stat-label { font-size: 13px; color: var(--color-text-muted); margin-top: 4px; }
 
 /* ── Loading ─────────────────────────────────────────────── */
 #loading { padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 14px; }
@@ -130,7 +130,7 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
     /* Stats row 1 (5 card) → 2-per-row */
     .stat-card { min-width: calc(50% - 6px); padding: 12px; }
     .stat-value { font-size: 22px; }
-    .stat-label { font-size: 10px; }
+    .stat-label { font-size: 12px; }
 
     /* Section head stack vertical */
     .section-head { flex-direction: column; align-items: flex-start; gap: 8px; }
