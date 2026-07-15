@@ -4062,14 +4062,18 @@ async function openCreatePostModal() {
     _forumAllMembers = [];
     renderSpecificChips();
     initForumSpecificPicker();
-    try {
-        _forumAllMembers = await getForumMemberDetails(
-            _forumClassId, _forumAcademicYear
-        );
-    } catch (err) {
-        // non-fatal: picker tetap muncul tapi beri tahu user
+    if (_forumClassId) {
+        try {
+            _forumAllMembers = await getForumMemberDetails(
+                _forumClassId, _forumAcademicYear
+            );
+        } catch (err) {
+            const searchEl = document.getElementById('forum-specific-search');
+            if (searchEl) searchEl.placeholder = 'Gagal memuat daftar anggota — coba tutup dan buka modal lagi';
+        }
+    } else {
         const searchEl = document.getElementById('forum-specific-search');
-        if (searchEl) searchEl.placeholder = 'Gagal memuat daftar anggota — coba tutup dan buka modal lagi';
+        if (searchEl) searchEl.placeholder = 'Pilih kelas terlebih dahulu';
     }
 }
 
