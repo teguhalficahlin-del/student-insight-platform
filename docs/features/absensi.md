@@ -99,6 +99,7 @@ Tidak bisa drill down ke level siswa individual.
 | fn_class_attendance_summary | Rekap per siswa dalam satu kelas |
 | fn_attendance_recap_per_class | Rekap per kelas (agregat) |
 | fn_attendance_fill_rate | Fill rate absensi guru (berapa sesi sudah diisi) |
+| evaluate-teacher-indicators | Edge function + cron job harian 00:00 WIB — membalik PENDING_EVALUATION → HADIR/TIDAK_HADIR |
 
 ## 6. Catatan Teknis
 
@@ -126,7 +127,8 @@ Tidak ada mekanisme terpisah untuk guru menandai diri sendiri hadir.
 
 ### Jika Guru Tidak Submit
 1. Guru tidak submit absensi sebelum sesi berakhir
-2. `fn_evaluate_teacher_indicators` (scheduled job server-side)
+2. `fn_evaluate_teacher_indicators` dipanggil oleh cron job harian
+   (evaluate-teacher-indicators, jadwal: 00:00 WIB via pg_cron + pg_net)
    membalik `PENDING_EVALUATION → TIDAK_HADIR`
 3. Tercatat sebagai tidak hadir di rekap Waka Kurikulum
 
