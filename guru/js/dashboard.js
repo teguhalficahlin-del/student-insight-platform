@@ -409,7 +409,6 @@ function renderGuruRekapPage() {
                 <summary class="att-accordion-summary">
                     <span class="att-acc-name">
                         ${esc(s.full_name)}
-                        <span class="sub-label" style="margin-left:4px">${esc(s.nis)}</span>
                     </span>
                     <span style="display:flex;gap:10px;align-items:center;font-size:11px;font-weight:500">
                         <span>${s.HADIR}H · ${s.IZIN}I · ${s.SAKIT}S · ${s.ALPA}A</span>
@@ -1172,7 +1171,6 @@ async function loadWaliSummary() {
                     <summary class="att-accordion-summary">
                         <span class="att-acc-name">
                             ${esc(s.full_name)}
-                            <span class="sub-label" style="margin-left:4px">${esc(s.nis)}</span>
                         </span>
                         <span class="att-acc-status" style="color:${color};font-weight:600">
                             ${pct !== null ? pct + '%' : '—'}

@@ -79,6 +79,9 @@ Rekap kelas yang diajar (per mapel)
   → klik satu kelas → accordion per siswa
     → klik accordion siswa → detail sesi mapel yang diajar guru itu saja
     (filter by teacher_id — sesi mapel lain tidak tampil)
+- Tersedia tombol **Unduh CSV** untuk export rekap kehadiran
+  semua siswa kelas yang dipilih dalam rentang tanggal yang ditentukan
+- CSV berisi: Nama, NIS, Hadir, Izin, Sakit, Alpa, Total Sesi, % Hadir
 
 ### Wali Kelas
 Rekap semua siswa di kelas yang diwalikan
