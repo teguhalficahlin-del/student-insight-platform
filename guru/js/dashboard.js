@@ -552,10 +552,11 @@ function mergeConsecutiveSessions(sessions) {
 
 function renderScheduleRows(rows, contentEl, date) {
     const today     = localDateStr();
-    const isPast    = date < today;
     const isToday   = date === today;
     const label     = fmtDayLabel(date);
     const sesiCount = rows.length;
+    const now       = new Date();
+    const nowTime   = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
 
     const mergedRows = mergeConsecutiveSessions(rows);
     const tableHtml = sesiCount === 0
@@ -564,22 +565,25 @@ function renderScheduleRows(rows, contentEl, date) {
            <table class="table">
                <thead><tr><th>Jam</th><th>Kelas</th><th>Kehadiran</th></tr></thead>
                <tbody>
-               ${mergedRows.map(r => `
+               ${mergedRows.map(r => {
+                   const ended = date < today || (isToday && nowTime > r.merged_end);
+                   return `
                    <tr>
                        <td>${fmtTime(r.merged_start)} – ${fmtTime(r.merged_end)}</td>
                        <td>${esc(r.class?.name ?? '—')}</td>
                        <td>
-                           <button class="btn ${isPast ? 'btn-secondary' : 'btn-primary'} btn-xs att-open-btn"
+                           <button class="btn btn-secondary btn-xs att-open-btn"
                                data-schedule="${r.schedule_ids[0]}"
                                data-schedule-ids='${JSON.stringify(r.schedule_ids)}'
                                data-class="${r.class?.class_id}"
                                data-classname="${esc(r.class?.name ?? '')}"
-                               data-ispast="${isPast}">
-                               ${isPast ? 'Koreksi Kehadiran' : 'Input Kehadiran'}
+                               data-ispast="${ended}"
+                               ${ended ? 'disabled title="Sesi sudah berakhir — tidak dapat diubah"' : 'style="background:var(--color-primary);color:#fff;border-color:var(--color-primary)"'}>
+                               ${ended ? 'Sesi Berakhir' : 'Input Kehadiran'}
                            </button>
                        </td>
-                   </tr>
-               `).join('')}
+                   </tr>`;
+               }).join('')}
                </tbody>
            </table>
            </div>`;
