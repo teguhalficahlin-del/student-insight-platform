@@ -1030,7 +1030,7 @@ async function renderStudentsPanel() {
     ]);
 
     // Fetch semua kelas + enrollment tahun ajaran aktif sekaligus
-    const [{ data: allClasses }, enrollments, { data: pendingPwUsers }, programs] = await Promise.all([
+    const [{ data: allClasses }, enrollments, pendingPwUsers, programs] = await Promise.all([
         supabase.from('classes').select('class_id, name, grade_level, program_id')
             .order('grade_level').order('name'),
         fetchAllRows('class_enrollments', q => q
@@ -1038,7 +1038,7 @@ async function renderStudentsPanel() {
             .eq('academic_year', config?.current_academic_year ?? '')
             .is('withdrawn_at', null)
             .eq('students.student_status', 'AKTIF')),
-        supabase.from('users').select('user_id').eq('role_type', 'SISWA').eq('must_change_password', true),
+        fetchAllRows('users', q => q.select('user_id').eq('role_type', 'SISWA').eq('must_change_password', true)),
         getPrograms(),
     ]);
     const programNameById = new Map(
