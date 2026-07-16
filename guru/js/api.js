@@ -1312,8 +1312,7 @@ export async function getMyTeachingSubjects(academicYear, semester) {
         .select(`
             subject_id,
             subjects ( subject_id, name, kelompok_mapel, fase_default ),
-            classes ( grade_level ),
-            programs ( program_id, name )
+            classes ( grade_level, programs ( name ) )
         `)
         .eq('academic_year', academicYear)
         .eq('semester', semester)
@@ -1328,7 +1327,7 @@ export async function getMyTeachingSubjects(academicYear, semester) {
         result.push({
             ...s,
             grade_level:  ta.classes?.grade_level ?? null,
-            program_name: ta.programs?.name ?? null,
+            program_name: ta.classes?.programs?.name ?? null,
         });
     }
     return result.sort((a, b) => a.name.localeCompare(b.name, 'id'));
