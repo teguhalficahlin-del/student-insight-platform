@@ -1306,33 +1306,29 @@ export async function withdrawForumComment(commentId) {
 
 // ─── KURIKULUM MERDEKA ───────────────────────────────────────
 
-export async function getMyTeachingSubjects(academicYear, semester) {
+export async function getMyTeachingSubjects(userId, academicYear, semester) {
     const { data, error } = await supabase
-        .from('teaching_schedules')
+        .from('teaching_assignments')
         .select(`
-            class_id,
-            classes ( grade_level, programs ( name ) ),
-            teaching_assignments (
-                subject_id,
-                subjects ( subject_id, name, kelompok_mapel, fase_default )
-            )
+            subject_id,
+            subjects ( subject_id, name, kelompok_mapel, fase_default ),
+            classes ( grade_level, programs ( name ) )
         `)
-        .eq('scheduled_teacher_id', (await supabase.auth.getUser()).data.user?.id ?? '')
+        .eq('user_id', userId)
         .eq('academic_year', academicYear)
         .eq('semester', semester)
-        .not('teaching_assignments', 'is', null);
+        .eq('is_active', true);
     if (error) throw error;
     const seen = new Set();
     const result = [];
-    for (const sched of data ?? []) {
-        const ta = sched.teaching_assignments;
-        const s  = ta?.subjects;
+    for (const ta of data ?? []) {
+        const s = ta.subjects;
         if (!s || seen.has(s.subject_id)) continue;
         seen.add(s.subject_id);
         result.push({
             ...s,
-            grade_level:  sched.classes?.grade_level ?? null,
-            program_name: sched.classes?.programs?.name ?? null,
+            grade_level:  ta.classes?.grade_level ?? null,
+            program_name: ta.classes?.programs?.name ?? null,
         });
     }
     return result.sort((a, b) => a.name.localeCompare(b.name, 'id'));

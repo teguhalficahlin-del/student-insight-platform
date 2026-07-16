@@ -4354,7 +4354,7 @@ async function initKurikulumTab() {
 
     let subjects;
     try {
-        subjects = await getMyTeachingSubjects(config.current_academic_year, config.current_semester);
+        subjects = await getMyTeachingSubjects(currentUser.user_id, config.current_academic_year, config.current_semester);
     } catch (e) {
         container.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat mapel: ${esc(e.message)}</p>`;
         return;
