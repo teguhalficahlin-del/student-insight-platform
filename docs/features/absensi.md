@@ -24,6 +24,7 @@ Nilai enum DB: HADIR, IZIN, SAKIT, ALPA
 - Hanya guru yang mengajar blok tersebut yang bisa input
 - Guru pengganti bisa input selama token pengganti belum expired
 - Tidak ada tombol hapus di UI - pembatalan via is_void = true
+- Satu blok hanya diajar oleh satu guru — tidak ada team teaching.
 
 ## 2. Kolom Rekap Kehadiran
 
@@ -82,9 +83,10 @@ Rekap semua kelas di program keahlian (agregat per kelas)
     → klik satu siswa → detail per pertemuan (tanggal, mapel, status)
 
 ### Waka / BK
-Rekap semua kelas di sekolah (agregat per kelas)
-  → klik satu kelas → rekap per siswa
-    → klik satu siswa → detail per pertemuan (tanggal, mapel, status)
+Rekap semua kelas di sekolah (agregat per program keahlian)
+  → klik satu program → rekap per kelas (agregat)
+    → klik satu kelas → rekap per siswa
+      → klik satu siswa → detail per pertemuan (tanggal, mapel, status)
 
 ### Kepsek
 Rekap agregat per kelas atau per program keahlian.
@@ -131,8 +133,9 @@ Tidak ada mekanisme terpisah untuk guru menandai diri sendiri hadir.
 ### Batas Waktu Submit
 - Guru hanya bisa submit absensi pada hari dan jam sesi yang terjadwal
 - Tidak bisa submit mundur (backdated)
-- Setelah jam sesi berakhir, tombol input/koreksi absensi di dashboard
-  guru otomatis disabled — tidak bisa diubah lagi
+- Tombol input/koreksi absensi disabled jika merged_end sesi sudah
+  terlewat pada hari tersebut. Sesi yang belum terjadi (hari yang
+  sama tapi jam belum lewat) tetap aktif dan bisa diinput.
 - Guard backdated ada di `fn_teacher_attendance_signal`:
   hanya aktif jika `session_date` = hari ini
 
