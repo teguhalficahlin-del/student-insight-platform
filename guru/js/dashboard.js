@@ -2185,7 +2185,7 @@ async function initWakaKurTab() {
         const weekAgo = localDateStr(new Date(Date.now() - 6 * 86400000));
         document.getElementById('wk-kur-start').value = weekAgo;
         document.getElementById('wk-kur-end').value   = localDateStr();
-        document.getElementById('wk-kur1-refresh').onclick = () => { loadWkKurStats(localDateStr()); loadWkKur1(localDateStr()); };
+        document.getElementById('wk-kur1-refresh').onclick = () => { loadWkKurStats(localDateStr(), localDateStr()); loadWkKur1(localDateStr()); };
         document.getElementById('wk-kur1-btn').onclick = handleWkKur1Btn;
         document.getElementById('wk-kur2-btn').onclick = handleWkKur2Btn;
     }
@@ -2194,29 +2194,64 @@ async function initWakaKurTab() {
 }
 
 async function loadWkKurStats(dateStart, dateEnd, prefix = 'wk-kur', emptyMsg = 'Tidak ada sesi hari ini') {
-    const elSudah       = document.getElementById(`${prefix}-pct-sudah`);
-    const elBelum       = document.getElementById(`${prefix}-pct-belum`);
+    const elHadir       = document.getElementById(`${prefix}-val-hadir`);
+    const elPending     = document.getElementById(`${prefix}-val-pending`);
+    const elTidak       = document.getElementById(`${prefix}-val-tidak`);
     const elDetailSudah = document.getElementById(`${prefix}-detail-sudah`);
     const elDetailBelum = document.getElementById(`${prefix}-detail-belum`);
-    elSudah.textContent = '…'; elBelum.textContent = '…';
-    elDetailSudah.textContent = ''; elDetailBelum.textContent = '';
+    const elDetailTidak = document.getElementById(`${prefix}-detail-tidak`);
+
+    if (!elHadir) return;
+
+    elHadir.textContent = '…'; elPending.textContent = '…'; elTidak.textContent = '…';
+
     try {
-        const { total, hadir, pending, tidak } = await getAttendanceFillRate(dateStart, dateEnd);
-        if (total === 0) {
-            elSudah.textContent = '—'; elBelum.textContent = '—';
-            elDetailSudah.textContent = emptyMsg;
-            return;
+        const today = new Date().toISOString().split('T')[0];
+        const isHariIniPanel = (dateStart === today && dateEnd === today)
+            || (!dateStart && !dateEnd);
+
+        let hariIniData, tidakData;
+
+        if (isHariIniPanel) {
+            // Panel 1: card 1+2 = hari ini, card 3 = 7 hari terakhir
+            const sevenDaysAgo = new Date(Date.now() - 6 * 86400000).toISOString().split('T')[0];
+            [hariIniData, tidakData] = await Promise.all([
+                getAttendanceFillRate(today, today),
+                getAttendanceFillRate(sevenDaysAgo, today),
+            ]);
+        } else {
+            // Panel 2: semua card pakai rentang yang dipilih user
+            hariIniData = await getAttendanceFillRate(dateStart, dateEnd);
+            tidakData = hariIniData;
         }
-        const pctHadir = Math.round(hadir / total * 100);
-        const pctBelum = Math.round((pending + tidak) / total * 100);
-        elSudah.textContent = pctHadir + '%';
-        elBelum.textContent = pctBelum + '%';
-        elDetailSudah.textContent = `${hadir} dari ${total} sesi`;
-        elDetailBelum.textContent = `${pending} belum diisi, ${tidak} guru tidak hadir`;
-        elSudah.style.color = hadir === total ? 'var(--color-success, #22c55e)' : '';
-        elBelum.style.color = (pending + tidak) > 0 ? 'var(--color-danger, #ef4444)' : '';
-    } catch {
-        elSudah.textContent = '!'; elBelum.textContent = '!';
+
+        // Card 1 — Sudah isi
+        elHadir.textContent = hariIniData.hadir;
+        if (elDetailSudah) {
+            elDetailSudah.textContent = hariIniData.total > 0
+                ? `${hariIniData.hadir} dari ${hariIniData.total} sesi`
+                : emptyMsg;
+        }
+
+        // Card 2 — Belum diisi
+        elPending.textContent = hariIniData.pending;
+        if (elDetailBelum) {
+            elDetailBelum.textContent = hariIniData.pending > 0
+                ? `${hariIniData.pending} sesi belum diisi`
+                : 'semua sesi sudah diproses';
+        }
+
+        // Card 3 — Tidak hadir
+        elTidak.textContent = tidakData.tidak;
+        if (elDetailTidak) {
+            elDetailTidak.textContent = isHariIniPanel
+                ? `${tidakData.tidak} sesi, 7 hari terakhir`
+                : `${tidakData.tidak} sesi dalam rentang ini`;
+        }
+
+    } catch (e) {
+        elHadir.textContent = '!'; elPending.textContent = '!'; elTidak.textContent = '!';
+        console.error('[loadWkKurStats]', e);
     }
 }
 
@@ -2279,7 +2314,7 @@ async function loadWkKur2() {
             getPendingSessionsByTeacher(dateStart || null, dateEnd || null),
             loadWkKurStats(dateStart || null, dateEnd || null, 'wk-kur2', 'Tidak ada sesi pada rentang ini'),
         ]);
-        statsRow.style.display = 'flex';
+        statsRow.style.display = 'grid';
         btn.disabled = false;
         if (groups.length === 0) {
             hintEl.textContent   = '✓ Tidak ada sesi yang menunggu pengisian absensi pada rentang ini.';
