@@ -36,6 +36,8 @@ import {
     getForumPosts, getForumCategories, getForumStudents, createForumPost,
     addForumAcknowledgement, addForumComment, getForumPostComments, getForumClasses,
     withdrawForumPost, updateForumPost, withdrawForumComment,
+    getMyTeachingSubjects, getCpBySubject, getTpBySubject,
+    saveCp, saveTp, updateTp, generateAtp,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 
@@ -247,12 +249,14 @@ const TAB_SHORT = {
     waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', waka_humas: 'Humas',
     kepsek: 'Kepsek', ks_admin: 'Admin',
     kasus: 'Pembinaan', jurnal: 'Jurnal', observasi: 'Catatan', forum: 'Forum',
+    kurikulum: 'ATP',
 };
 const TAB_ICON = {
     guru: 'ti-home', wali_kelas: 'ti-users', bk: 'ti-heart-handshake', kaprodi: 'ti-building',
     waka_kesiswaan: 'ti-school', waka_kurikulum: 'ti-book', waka_humas: 'ti-briefcase',
     kepsek: 'ti-chart-line', ks_admin: 'ti-shield-check',
     kasus: 'ti-alert-triangle', jurnal: 'ti-notebook', observasi: 'ti-notes', forum: 'ti-messages',
+    kurikulum: 'ti-school',
 };
 
 function buildTabs() {
@@ -265,6 +269,7 @@ function buildTabs() {
     if (jabatan.includes('kepsek')) tabs.push({ key: 'ks_admin', label: 'Kelola Admin' });
     if (isTeacher) tabs.push({ key: 'observasi', label: 'Catatan Siswa' });
     if (isTeacher) tabs.push({ key: 'jurnal', label: 'Jurnal Mengajar' });
+    if (isTeacher) tabs.push({ key: 'kurikulum', label: 'Kurikulum Merdeka' });
     tabs.push({ key: 'forum', label: 'Forum Kelas' });
 
     nav.innerHTML = tabs.map(t =>
@@ -309,6 +314,7 @@ async function loadTabContent(key) {
         case 'kasus':       await initKasusTab(); break;
         case 'jurnal':      await initJurnalTab(); break;
         case 'observasi':   await initObsTab(); break;
+        case 'kurikulum':   await initKurikulumTab(); break;
         case 'forum':       await initForumTab(); break;
     }
 }
@@ -4335,6 +4341,346 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
     await logout();
     window.location.replace(getLoginUrl());
 });
+
+// ─── TAB KURIKULUM MERDEKA ────────────────────────────────────
+
+let _kurmerInit = false;
+
+async function initKurikulumTab() {
+    if (_kurmerInit) return;
+    _kurmerInit = true;
+
+    const container = document.getElementById('kurmer-subject-list');
+
+    let subjects;
+    try {
+        subjects = await getMyTeachingSubjects(config.current_academic_year, config.current_semester);
+    } catch (e) {
+        container.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat mapel: ${esc(e.message)}</p>`;
+        return;
+    }
+
+    if (!subjects.length) {
+        container.innerHTML = '<p class="hint">Tidak ada mata pelajaran yang diajar semester ini.</p>';
+        return;
+    }
+
+    // Untuk setiap mapel cek status ATP (CP/TP sudah ada atau belum)
+    const rows = await Promise.all(subjects.map(async (s) => {
+        const fase = s.fase_default ?? (s.grade_level === 'X' ? 'E' : 'F');
+        const [cpList, tpList] = await Promise.all([
+            getCpBySubject(s.subject_id, fase).catch(() => []),
+            getTpBySubject(s.subject_id, fase, null).catch(() => []),
+        ]);
+        return { ...s, fase, cpCount: cpList.length, tpCount: tpList.length };
+    }));
+
+    container.innerHTML = rows.map(s => {
+        const hasAtp = s.tpCount > 0;
+        const statusBadge = s.tpCount === 0
+            ? `<span style="background:var(--color-danger-bg);color:var(--color-danger);padding:2px 8px;border-radius:12px;font-size:12px">Belum ada</span>`
+            : `<span style="background:var(--color-success-bg,#f0fdf4);color:var(--color-success,#16a34a);padding:2px 8px;border-radius:12px;font-size:12px">${s.tpCount} TP · ${s.cpCount} CP</span>`;
+        const kelompokBadge = s.kelompok_mapel
+            ? `<span style="font-size:11px;color:var(--color-muted);margin-left:6px">${s.kelompok_mapel}</span>` : '';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--color-border);flex-wrap:wrap;gap:8px" data-subject-id="${esc(s.subject_id)}">
+            <div>
+                <span style="font-weight:600">${esc(s.name)}</span>${kelompokBadge}
+                <div style="margin-top:4px">${statusBadge} <span style="font-size:12px;color:var(--color-muted);margin-left:6px">Fase ${esc(s.fase)}</span></div>
+            </div>
+            <div style="display:flex;gap:8px;flex-shrink:0">
+                ${hasAtp
+                    ? `<button class="btn btn-secondary btn-sm kurmer-view-btn" data-subject-id="${esc(s.subject_id)}" data-fase="${esc(s.fase)}" data-name="${esc(s.name)}">Lihat &amp; Edit</button>`
+                    : `<button class="btn btn-primary btn-sm kurmer-gen-btn" data-subject-id="${esc(s.subject_id)}" data-fase="${esc(s.fase)}" data-name="${esc(s.name)}" data-program="${esc(s.program_name ?? '')}" data-grade="${esc(s.grade_level ?? '')}">Generate dengan AI</button>`
+                }
+            </div>
+        </div>`;
+    }).join('');
+
+    container.addEventListener('click', async (e) => {
+        const genBtn  = e.target.closest('.kurmer-gen-btn');
+        const viewBtn = e.target.closest('.kurmer-view-btn');
+        if (genBtn)  openAtpGenerateModal(genBtn.dataset);
+        if (viewBtn) openAtpViewModal(viewBtn.dataset);
+    });
+}
+
+function openAtpGenerateModal({ subjectId, fase, name, program, grade }) {
+    const modal = document.getElementById('atp-modal');
+    const body  = document.getElementById('atp-modal-body');
+    document.getElementById('atp-modal-title').textContent = `Generate ATP — ${name}`;
+
+    body.innerHTML = `
+        <p style="color:var(--color-muted);font-size:13px;margin-bottom:16px">
+            AI akan membuat Capaian Pembelajaran dan Tujuan Pembelajaran sesuai Kurikulum Merdeka SMK.
+            Hasilnya bisa diedit sebelum disimpan.
+        </p>
+        <div style="display:grid;gap:12px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <label style="font-size:13px;font-weight:600">Fase
+                    <select id="atp-fase" class="input" style="margin-top:4px;width:100%">
+                        <option value="E" ${fase === 'E' ? 'selected' : ''}>E — Kelas X</option>
+                        <option value="F" ${fase === 'F' ? 'selected' : ''}>F — Kelas XI–XII</option>
+                    </select>
+                </label>
+                <label style="font-size:13px;font-weight:600">JP per Minggu
+                    <input id="atp-jp" type="number" class="input" min="1" max="20" value="4" style="margin-top:4px;width:100%">
+                </label>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <label style="font-size:13px;font-weight:600">Minggu Efektif Semester 1
+                    <input id="atp-minggu1" type="number" class="input" min="1" max="26" value="18" style="margin-top:4px;width:100%">
+                </label>
+                <label style="font-size:13px;font-weight:600">Minggu Efektif Semester 2
+                    <input id="atp-minggu2" type="number" class="input" min="1" max="26" value="16" style="margin-top:4px;width:100%">
+                </label>
+            </div>
+            <label style="font-size:13px;font-weight:600">Fokus Khusus (opsional)
+                <textarea id="atp-fokus" class="input" rows="2" placeholder="Contoh: tekankan pada praktik industri dan digitalisasi..." style="margin-top:4px;width:100%;resize:vertical"></textarea>
+            </label>
+        </div>
+        <div style="margin-top:20px;display:flex;gap:8px;justify-content:flex-end">
+            <button id="atp-cancel-btn" class="btn btn-secondary btn-sm">Batal</button>
+            <button id="atp-generate-btn" class="btn btn-primary btn-sm">✨ Generate ATP</button>
+        </div>
+        <div id="atp-gen-status" style="margin-top:12px"></div>`;
+
+    modal.style.display = 'flex';
+
+    document.getElementById('atp-cancel-btn').onclick  = () => { modal.style.display = 'none'; };
+    document.getElementById('atp-modal-close').onclick = () => { modal.style.display = 'none'; };
+
+    document.getElementById('atp-generate-btn').onclick = async () => {
+        const genBtn   = document.getElementById('atp-generate-btn');
+        const statusEl = document.getElementById('atp-gen-status');
+        genBtn.disabled = true;
+        genBtn.textContent = '⏳ Memproses…';
+        statusEl.innerHTML = '<p class="hint">AI sedang menyusun CP dan ATP… ini bisa memakan 15–30 detik.</p>';
+
+        const faseVal    = document.getElementById('atp-fase').value;
+        const jpVal      = parseInt(document.getElementById('atp-jp').value, 10) || 4;
+        const minggu1    = parseInt(document.getElementById('atp-minggu1').value, 10) || 18;
+        const minggu2    = parseInt(document.getElementById('atp-minggu2').value, 10) || 16;
+        const fokusVal   = document.getElementById('atp-fokus').value;
+        const kelasLabel = faseVal === 'E' ? 'Kelas X' : 'Kelas XI–XII';
+
+        try {
+            const result = await generateAtp({
+                subject_name:   name,
+                fase:           faseVal,
+                kelas:          kelasLabel,
+                program:        program || 'Umum',
+                jp_per_minggu:  jpVal,
+                minggu_sem1:    minggu1,
+                minggu_sem2:    minggu2,
+                fokus_khusus:   fokusVal,
+            });
+            renderAtpReview(body, result, subjectId, faseVal);
+        } catch (err) {
+            statusEl.innerHTML = `<p style="color:var(--color-danger);font-size:13px">❌ ${esc(err.message)}</p>`;
+            genBtn.disabled    = false;
+            genBtn.textContent = '✨ Generate ATP';
+        }
+    };
+}
+
+function renderAtpReview(container, result, subjectId, fase) {
+    const { capaian_pembelajaran: cpList = [], tujuan_pembelajaran: tpList = [] } = result;
+
+    const cpRows = cpList.map((cp, i) => `
+        <tr>
+            <td style="padding:8px;vertical-align:top;font-weight:600;white-space:nowrap">CP-${i+1}</td>
+            <td style="padding:8px;vertical-align:top">
+                <input class="input" style="width:100%;font-size:12px;margin-bottom:4px" value="${esc(cp.elemen ?? '')}" data-cp="${i}" data-field="elemen" placeholder="Elemen">
+                <textarea class="input" rows="2" style="width:100%;font-size:12px;resize:vertical" data-cp="${i}" data-field="deskripsi_cp" placeholder="Deskripsi CP">${esc(cp.deskripsi_cp ?? '')}</textarea>
+            </td>
+        </tr>`).join('');
+
+    const tpRows = tpList.map((tp, i) => `
+        <tr>
+            <td style="padding:8px;vertical-align:top;font-size:12px;white-space:nowrap">${esc(tp.kode_tp ?? `TP-${i+1}`)}</td>
+            <td style="padding:8px;vertical-align:top">
+                <textarea class="input" rows="2" style="width:100%;font-size:12px;resize:vertical" data-tp="${i}" data-field="deskripsi_tp" placeholder="Deskripsi TP">${esc(tp.deskripsi_tp ?? '')}</textarea>
+            </td>
+            <td style="padding:8px;vertical-align:top">
+                <input class="input" style="width:100%;font-size:12px" value="${esc(tp.materi_pokok ?? '')}" data-tp="${i}" data-field="materi_pokok" placeholder="Materi">
+            </td>
+            <td style="padding:8px;text-align:center;vertical-align:top">
+                <input class="input" type="number" min="1" max="99" style="width:56px;font-size:12px;text-align:center" value="${tp.alokasi_jp ?? 4}" data-tp="${i}" data-field="alokasi_jp">
+            </td>
+            <td style="padding:8px;vertical-align:top;font-size:12px;color:var(--color-muted)">Sem ${tp.semester ?? 1}</td>
+        </tr>`).join('');
+
+    container.innerHTML = `
+        <div style="margin-bottom:12px;padding:8px 12px;background:var(--color-success-bg,#f0fdf4);border-radius:6px;font-size:13px;color:var(--color-success,#16a34a)">
+            ✅ AI berhasil membuat <strong>${cpList.length} CP</strong> dan <strong>${tpList.length} TP</strong>. Review dan edit jika perlu, lalu klik Simpan ke Database.
+        </div>
+
+        <h4 style="margin:0 0 8px">Capaian Pembelajaran</h4>
+        <div style="overflow-x:auto;margin-bottom:20px">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead><tr style="background:var(--color-surface-alt,#f8fafc)">
+                    <th style="padding:8px;text-align:left;white-space:nowrap">#</th>
+                    <th style="padding:8px;text-align:left">Elemen &amp; Deskripsi</th>
+                </tr></thead>
+                <tbody id="atp-review-cp">${cpRows}</tbody>
+            </table>
+        </div>
+
+        <h4 style="margin:0 0 8px">Tujuan Pembelajaran</h4>
+        <div style="overflow-x:auto;margin-bottom:20px">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead><tr style="background:var(--color-surface-alt,#f8fafc)">
+                    <th style="padding:8px;text-align:left">Kode</th>
+                    <th style="padding:8px;text-align:left">Deskripsi TP</th>
+                    <th style="padding:8px;text-align:left">Materi Pokok</th>
+                    <th style="padding:8px;text-align:center">JP</th>
+                    <th style="padding:8px;text-align:left">Sem</th>
+                </tr></thead>
+                <tbody id="atp-review-tp">${tpRows}</tbody>
+            </table>
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button id="atp-discard-btn" class="btn btn-secondary btn-sm">Buang</button>
+            <button id="atp-save-btn" class="btn btn-primary btn-sm">💾 Simpan ke Database</button>
+        </div>
+        <div id="atp-save-status" style="margin-top:8px"></div>`;
+
+    document.getElementById('atp-discard-btn').onclick = () => {
+        document.getElementById('atp-modal').style.display = 'none';
+    };
+
+    document.getElementById('atp-save-btn').onclick = async () => {
+        const saveBtn  = document.getElementById('atp-save-btn');
+        const statusEl = document.getElementById('atp-save-status');
+        saveBtn.disabled    = true;
+        saveBtn.textContent = '⏳ Menyimpan…';
+
+        // Kumpulkan nilai dari form yang sudah diedit
+        const finalCp = cpList.map((cp, i) => ({
+            ...cp,
+            elemen:      container.querySelector(`[data-cp="${i}"][data-field="elemen"]`)?.value ?? cp.elemen,
+            deskripsi_cp: container.querySelector(`[data-cp="${i}"][data-field="deskripsi_cp"]`)?.value ?? cp.deskripsi_cp,
+        }));
+        const finalTp = tpList.map((tp, i) => ({
+            ...tp,
+            deskripsi_tp: container.querySelector(`[data-tp="${i}"][data-field="deskripsi_tp"]`)?.value ?? tp.deskripsi_tp,
+            materi_pokok: container.querySelector(`[data-tp="${i}"][data-field="materi_pokok"]`)?.value ?? tp.materi_pokok,
+            alokasi_jp:   parseInt(container.querySelector(`[data-tp="${i}"][data-field="alokasi_jp"]`)?.value ?? tp.alokasi_jp, 10) || tp.alokasi_jp,
+        }));
+
+        try {
+            // Simpan CP
+            const savedCp = await Promise.all(finalCp.map((cp, i) => saveCp({
+                school_id:    currentUser.school_id,
+                subject_id:   subjectId,
+                fase,
+                elemen:       cp.elemen,
+                deskripsi_cp: cp.deskripsi_cp,
+                generated_by: 'AI',
+                created_by:   currentUser.user_id,
+            })));
+
+            // Buat map elemen → cp_id untuk link TP ke CP
+            const cpIdMap = {};
+            savedCp.forEach((saved, i) => { cpIdMap[finalCp[i].elemen] = saved.cp_id; });
+
+            // Simpan TP
+            await Promise.all(finalTp.map((tp, i) => saveTp({
+                school_id:    currentUser.school_id,
+                subject_id:   subjectId,
+                cp_id:        cpIdMap[finalCp[0]?.elemen] ?? savedCp[0]?.cp_id ?? null,
+                fase,
+                semester:     tp.semester ?? 1,
+                urutan:       tp.urutan ?? (i + 1),
+                kode_tp:      tp.kode_tp ?? null,
+                deskripsi_tp: tp.deskripsi_tp,
+                materi_pokok: tp.materi_pokok ?? null,
+                alokasi_jp:   tp.alokasi_jp ?? null,
+                indikator:    tp.indikator ?? null,
+                generated_by: 'AI',
+                created_by:   currentUser.user_id,
+            })));
+
+            statusEl.innerHTML = `<p style="color:var(--color-success,#16a34a);font-size:13px">✅ Berhasil disimpan! ${savedCp.length} CP dan ${finalTp.length} TP tersimpan di database.</p>`;
+            saveBtn.textContent = '✅ Tersimpan';
+            // Reset tab agar list refresh saat kembali
+            _kurmerInit = false;
+        } catch (err) {
+            statusEl.innerHTML = `<p style="color:var(--color-danger);font-size:13px">❌ Gagal menyimpan: ${esc(err.message)}</p>`;
+            saveBtn.disabled    = false;
+            saveBtn.textContent = '💾 Simpan ke Database';
+        }
+    };
+}
+
+async function openAtpViewModal({ subjectId, fase, name }) {
+    const modal = document.getElementById('atp-modal');
+    const body  = document.getElementById('atp-modal-body');
+    document.getElementById('atp-modal-title').textContent = `ATP — ${name} (Fase ${fase})`;
+    body.innerHTML = '<p class="hint">Memuat data…</p>';
+    modal.style.display = 'flex';
+    document.getElementById('atp-modal-close').onclick = () => { modal.style.display = 'none'; };
+
+    try {
+        const [cpList, tpList] = await Promise.all([
+            getCpBySubject(subjectId, fase),
+            getTpBySubject(subjectId, fase, null),
+        ]);
+
+        const tpRows = tpList.map(tp => `
+            <tr data-tp-id="${esc(tp.tp_id)}">
+                <td style="padding:8px;font-size:12px;white-space:nowrap">${esc(tp.kode_tp ?? '')}</td>
+                <td style="padding:8px;font-size:12px" class="tp-edit-desc" contenteditable="true">${esc(tp.deskripsi_tp)}</td>
+                <td style="padding:8px;font-size:12px" class="tp-edit-materi" contenteditable="true">${esc(tp.materi_pokok ?? '')}</td>
+                <td style="padding:8px;font-size:12px;text-align:center">${tp.alokasi_jp ?? '—'}</td>
+                <td style="padding:8px;font-size:12px;text-align:center">S${tp.semester}</td>
+                <td style="padding:8px">
+                    <button class="btn btn-secondary btn-sm tp-save-row-btn" style="font-size:11px">Simpan</button>
+                </td>
+            </tr>`).join('');
+
+        body.innerHTML = `
+            <h4 style="margin:0 0 8px">Capaian Pembelajaran (${cpList.length})</h4>
+            ${cpList.map(cp => `<div style="padding:8px;background:var(--color-surface-alt,#f8fafc);border-radius:6px;margin-bottom:8px;font-size:13px"><strong>${esc(cp.elemen)}</strong><p style="margin:4px 0 0;color:var(--color-muted)">${esc(cp.deskripsi_cp)}</p></div>`).join('')}
+            <h4 style="margin:16px 0 8px">Tujuan Pembelajaran (${tpList.length})</h4>
+            <div style="overflow-x:auto">
+                <table style="width:100%;border-collapse:collapse;font-size:13px">
+                    <thead><tr style="background:var(--color-surface-alt,#f8fafc)">
+                        <th style="padding:8px;text-align:left">Kode</th>
+                        <th style="padding:8px;text-align:left">Deskripsi TP</th>
+                        <th style="padding:8px;text-align:left">Materi Pokok</th>
+                        <th style="padding:8px;text-align:center">JP</th>
+                        <th style="padding:8px;text-align:center">Sem</th>
+                        <th style="padding:8px"></th>
+                    </tr></thead>
+                    <tbody id="atp-view-tp-body">${tpRows}</tbody>
+                </table>
+            </div>`;
+
+        document.getElementById('atp-view-tp-body').addEventListener('click', async (e) => {
+            const btn = e.target.closest('.tp-save-row-btn');
+            if (!btn) return;
+            const row   = btn.closest('tr');
+            const tpId  = row.dataset.tpId;
+            const desc  = row.querySelector('.tp-edit-desc')?.textContent?.trim();
+            const mat   = row.querySelector('.tp-edit-materi')?.textContent?.trim();
+            btn.disabled    = true;
+            btn.textContent = '…';
+            try {
+                await updateTp(tpId, { deskripsi_tp: desc, materi_pokok: mat });
+                btn.textContent = '✅';
+                setTimeout(() => { btn.disabled = false; btn.textContent = 'Simpan'; }, 2000);
+            } catch (err) {
+                btn.disabled    = false;
+                btn.textContent = '❌';
+                alert('Gagal simpan: ' + err.message);
+            }
+        });
+    } catch (err) {
+        body.innerHTML = `<p style="color:var(--color-danger)">Gagal memuat: ${esc(err.message)}</p>`;
+    }
+}
 
 // ─── Start ───────────────────────────────────────────────────
 init();

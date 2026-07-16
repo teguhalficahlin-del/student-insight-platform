@@ -1303,3 +1303,100 @@ export async function withdrawForumComment(commentId) {
         .eq('comment_id', commentId);
     if (error) throw error;
 }
+
+// ─── KURIKULUM MERDEKA ───────────────────────────────────────
+
+export async function getMyTeachingSubjects(academicYear, semester) {
+    const { data, error } = await supabase
+        .from('teaching_assignments')
+        .select(`
+            subject_id,
+            subjects ( subject_id, name, kelompok_mapel, fase_default ),
+            classes ( grade_level ),
+            programs ( program_id, name )
+        `)
+        .eq('academic_year', academicYear)
+        .eq('semester', semester)
+        .eq('is_active', true);
+    if (error) throw error;
+    const seen = new Set();
+    const result = [];
+    for (const ta of data ?? []) {
+        const s = ta.subjects;
+        if (!s || seen.has(s.subject_id)) continue;
+        seen.add(s.subject_id);
+        result.push({
+            ...s,
+            grade_level:  ta.classes?.grade_level ?? null,
+            program_name: ta.programs?.name ?? null,
+        });
+    }
+    return result.sort((a, b) => a.name.localeCompare(b.name, 'id'));
+}
+
+export async function getCpBySubject(subjectId, fase) {
+    const { data, error } = await supabase
+        .from('capaian_pembelajaran')
+        .select('*')
+        .eq('subject_id', subjectId)
+        .eq('fase', fase)
+        .order('elemen');
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function getTpBySubject(subjectId, fase, semester) {
+    let q = supabase
+        .from('tujuan_pembelajaran')
+        .select('*')
+        .eq('subject_id', subjectId)
+        .eq('fase', fase)
+        .order('semester')
+        .order('urutan');
+    if (semester !== null && semester !== undefined) q = q.eq('semester', semester);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function saveCp(cpData) {
+    const { data, error } = await supabase
+        .from('capaian_pembelajaran')
+        .upsert(cpData, { onConflict: 'school_id,subject_id,program_id,fase,elemen', ignoreDuplicates: false })
+        .select('cp_id')
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function saveTp(tpData) {
+    const { data, error } = await supabase
+        .from('tujuan_pembelajaran')
+        .insert(tpData)
+        .select('tp_id')
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function updateTp(tpId, patch) {
+    const { error } = await supabase
+        .from('tujuan_pembelajaran')
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq('tp_id', tpId);
+    if (error) throw error;
+}
+
+export async function generateAtp(payload) {
+    const { data: authData } = await supabase.auth.getSession();
+    const token = authData?.session?.access_token;
+    if (!token) throw new Error('Sesi tidak valid. Silakan login ulang.');
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-atp`, {
+        method:  'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
+    return json;
+}
