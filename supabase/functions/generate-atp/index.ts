@@ -143,11 +143,15 @@ Buat minimal 6 TP per semester.`;
     const claudeJson = await claudeRes.json();
     const rawText = claudeJson?.content?.[0]?.text ?? '';
 
+    console.log('[generate-atp] raw response:', rawText.substring(0, 500));
+
     let parsed: { capaian_pembelajaran: unknown[]; tujuan_pembelajaran: unknown[] };
     try {
-        // Strip markdown code fences jika ada
-        const cleaned = rawText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-        parsed = JSON.parse(cleaned);
+        // Ekstrak JSON object terluar — robust terhadap teks naratif sebelum/sesudah
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON object found in response');
+        console.log('[generate-atp] jsonMatch (first 200):', jsonMatch[0].substring(0, 200));
+        parsed = JSON.parse(jsonMatch[0]);
     } catch {
         return new Response(JSON.stringify({
             error: 'AI mengembalikan respons yang tidak valid. Coba generate ulang.',
