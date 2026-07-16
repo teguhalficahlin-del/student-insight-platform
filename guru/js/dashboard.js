@@ -761,7 +761,6 @@ async function loadAttModalContent(scheduleId, classId, className) {
                 <div class="att-row">
                     <div class="att-name">
                         ${esc(s.full_name)}
-                        <span class="att-nis">${esc(s.nis)}</span>
                     </div>
                     <div class="att-radio-group">${radios}</div>
                     <input type="text" id="notes_${scheduleId}_${s.student_id}"
