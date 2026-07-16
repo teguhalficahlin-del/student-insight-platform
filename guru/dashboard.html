@@ -609,13 +609,17 @@
         <div class="page-body">
 
             <!-- Ringkasan Hari Ini -->
-            <p id="wk-kur-stats-row" style="font-size:13px;color:var(--color-text-muted);margin:0 0 12px">
-                Hari ini:
-                <strong id="wk-kur-pct-sudah" style="color:var(--color-success,#22c55e)">—</strong>
-                sudah isi (<span id="wk-kur-detail-sudah"></span>) ·
-                <strong id="wk-kur-pct-belum" style="color:var(--color-danger,#ef4444)">—</strong>
-                belum/tidak hadir (<span id="wk-kur-detail-belum"></span>)
-            </p>
+            <div id="wk-kur-stats-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+                <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;background:var(--color-surface);border:1px solid var(--color-border);font-size:13px">
+                    <span style="color:var(--color-success,#22c55e);font-weight:700;font-size:15px" id="wk-kur-pct-sudah">—</span>
+                    <span style="color:var(--color-text-muted)">sudah isi</span>
+                    <span style="color:var(--color-text-muted);font-size:11px" id="wk-kur-detail-sudah"></span>
+                </span>
+                <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;background:var(--color-surface);border:1px solid var(--color-border);font-size:13px">
+                    <span style="color:var(--color-danger,#ef4444);font-weight:700;font-size:15px" id="wk-kur-pct-belum">—</span>
+                    <span style="color:var(--color-text-muted)" id="wk-kur-detail-belum"></span>
+                </span>
+            </div>
 
             <!-- Tabel 1: Hari Ini (auto-load) -->
             <div class="section-card">
@@ -653,13 +657,17 @@
                     <label for="wk-kur-end" style="font-size:13px;color:var(--color-text)">s/d</label>
                     <input type="date" id="wk-kur-end" class="input" style="width:auto">
                 </div>
-                <p id="wk-kur2-stats-row" style="font-size:13px;color:var(--color-text-muted);margin:0 0 12px;display:none">
-                    Rentang ini:
-                    <strong id="wk-kur2-pct-sudah" style="color:var(--color-success,#22c55e)">—</strong>
-                    sudah isi (<span id="wk-kur2-detail-sudah"></span>) ·
-                    <strong id="wk-kur2-pct-belum" style="color:var(--color-danger,#ef4444)">—</strong>
-                    belum/tidak hadir (<span id="wk-kur2-detail-belum"></span>)
-                </p>
+                <div id="wk-kur2-stats-row" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+                    <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;background:var(--color-surface);border:1px solid var(--color-border);font-size:13px">
+                        <span style="color:var(--color-success,#22c55e);font-weight:700;font-size:15px" id="wk-kur2-pct-sudah">—</span>
+                        <span style="color:var(--color-text-muted)">sudah isi</span>
+                        <span style="color:var(--color-text-muted);font-size:11px" id="wk-kur2-detail-sudah"></span>
+                    </span>
+                    <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;background:var(--color-surface);border:1px solid var(--color-border);font-size:13px">
+                        <span style="color:var(--color-danger,#ef4444);font-weight:700;font-size:15px" id="wk-kur2-pct-belum">—</span>
+                        <span style="color:var(--color-text-muted)" id="wk-kur2-detail-belum"></span>
+                    </span>
+                </div>
                 <p class="hint" id="wk-kur2-hint" style="display:none"></p>
                 <div class="table-wrapper" id="wk-kur2-wrap" style="display:none">
                     <table class="table">

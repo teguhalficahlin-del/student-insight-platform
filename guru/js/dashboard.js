@@ -2279,7 +2279,7 @@ async function loadWkKur2() {
             getPendingSessionsByTeacher(dateStart || null, dateEnd || null),
             loadWkKurStats(dateStart || null, dateEnd || null, 'wk-kur2', 'Tidak ada sesi pada rentang ini'),
         ]);
-        statsRow.style.display = '';
+        statsRow.style.display = 'flex';
         btn.disabled = false;
         if (groups.length === 0) {
             hintEl.textContent   = '✓ Tidak ada sesi yang menunggu pengisian absensi pada rentang ini.';
