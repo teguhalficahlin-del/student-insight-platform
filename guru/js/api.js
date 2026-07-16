@@ -1308,26 +1308,31 @@ export async function withdrawForumComment(commentId) {
 
 export async function getMyTeachingSubjects(academicYear, semester) {
     const { data, error } = await supabase
-        .from('teaching_assignments')
+        .from('teaching_schedules')
         .select(`
-            subject_id,
-            subjects ( subject_id, name, kelompok_mapel, fase_default ),
-            classes ( grade_level, programs ( name ) )
+            class_id,
+            classes ( grade_level, programs ( name ) ),
+            teaching_assignments (
+                subject_id,
+                subjects ( subject_id, name, kelompok_mapel, fase_default )
+            )
         `)
+        .eq('scheduled_teacher_id', (await supabase.auth.getUser()).data.user?.id ?? '')
         .eq('academic_year', academicYear)
         .eq('semester', semester)
-        .eq('is_active', true);
+        .not('teaching_assignments', 'is', null);
     if (error) throw error;
     const seen = new Set();
     const result = [];
-    for (const ta of data ?? []) {
-        const s = ta.subjects;
+    for (const sched of data ?? []) {
+        const ta = sched.teaching_assignments;
+        const s  = ta?.subjects;
         if (!s || seen.has(s.subject_id)) continue;
         seen.add(s.subject_id);
         result.push({
             ...s,
-            grade_level:  ta.classes?.grade_level ?? null,
-            program_name: ta.classes?.programs?.name ?? null,
+            grade_level:  sched.classes?.grade_level ?? null,
+            program_name: sched.classes?.programs?.name ?? null,
         });
     }
     return result.sort((a, b) => a.name.localeCompare(b.name, 'id'));
