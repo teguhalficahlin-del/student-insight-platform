@@ -2206,7 +2206,7 @@ async function loadWkKurStats(dateStart, dateEnd, prefix = 'wk-kur', emptyMsg = 
     elHadir.textContent = '…'; elPending.textContent = '…'; elTidak.textContent = '…';
 
     try {
-        const today = new Date().toISOString().split('T')[0];
+        const today = localDateStr();
         const isHariIniPanel = (dateStart === today && dateEnd === today)
             || (!dateStart && !dateEnd);
 
