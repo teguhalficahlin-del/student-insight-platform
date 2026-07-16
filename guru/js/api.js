@@ -374,7 +374,7 @@ export async function getPrograms() {
     return data ?? [];
 }
 
-export async function getStudentAttendanceSessions(studentId, dateStart, dateEnd) {
+export async function getStudentAttendanceSessions(studentId, dateStart, dateEnd, teacherId = null) {
     let q = supabase
         .from('attendance')
         .select(`
@@ -388,8 +388,9 @@ export async function getStudentAttendanceSessions(studentId, dateStart, dateEnd
         .eq('student_id', studentId)
         .eq('is_void', false)
         .order('created_at', { ascending: false });
-    if (dateStart) q = q.gte('teaching_schedules.session_date', dateStart);
-    if (dateEnd)   q = q.lte('teaching_schedules.session_date', dateEnd);
+    if (dateStart)  q = q.gte('teaching_schedules.session_date', dateStart);
+    if (dateEnd)    q = q.lte('teaching_schedules.session_date', dateEnd);
+    if (teacherId)  q = q.eq('teaching_schedules.scheduled_teacher_id', teacherId);
     const { data, error } = await q;
     if (error) throw error;
     return (data ?? [])
