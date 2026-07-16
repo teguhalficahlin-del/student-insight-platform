@@ -49,6 +49,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         fase: string;
         kelas: string;
         program: string;
+        program_id?: string;
         jp_per_minggu: number;
         minggu_sem1: number;
         minggu_sem2: number;
@@ -62,7 +63,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         });
     }
 
-    const { subject_name, fase, kelas, program, jp_per_minggu, minggu_sem1, minggu_sem2, fokus_khusus, cp_referensi } = body;
+    const { subject_name, fase, kelas, program, program_id, jp_per_minggu, minggu_sem1, minggu_sem2, fokus_khusus, cp_referensi } = body;
     if (!subject_name || !fase || !kelas || !program || !jp_per_minggu) {
         return new Response(JSON.stringify({ error: 'Field wajib tidak lengkap.' }), {
             status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -217,6 +218,14 @@ Buat minimal 6 TP per semester.`;
         }), {
             status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
+    }
+
+    // Inject program_id ke setiap CP dan TP agar frontend bisa meneruskan ke DB
+    if (program_id) {
+        const cpList = Array.isArray(parsed.capaian_pembelajaran) ? parsed.capaian_pembelajaran : [];
+        const tpList = Array.isArray(parsed.tujuan_pembelajaran)  ? parsed.tujuan_pembelajaran  : [];
+        parsed.capaian_pembelajaran = cpList.map((cp: Record<string, unknown>) => ({ ...cp, program_id }));
+        parsed.tujuan_pembelajaran  = tpList.map((tp: Record<string, unknown>) => ({ ...tp, program_id }));
     }
 
     return new Response(JSON.stringify(parsed), {

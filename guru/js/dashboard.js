@@ -4390,7 +4390,7 @@ async function initKurikulumTab() {
             <div style="display:flex;gap:8px;flex-shrink:0">
                 ${hasAtp
                     ? `<button class="btn btn-secondary btn-sm kurmer-view-btn" data-subject-id="${esc(s.subject_id)}" data-fase="${esc(s.fase)}" data-name="${esc(s.name)}">Lihat &amp; Edit</button>`
-                    : `<button class="btn btn-primary btn-sm kurmer-gen-btn" data-subject-id="${esc(s.subject_id)}" data-fase="${esc(s.fase)}" data-name="${esc(s.name)}" data-program="${esc(s.program_name ?? '')}" data-grade="${esc(s.grade_level ?? '')}">Generate dengan AI</button>`
+                    : `<button class="btn btn-primary btn-sm kurmer-gen-btn" data-subject-id="${esc(s.subject_id)}" data-fase="${esc(s.fase)}" data-name="${esc(s.name)}" data-program="${esc(s.program_name ?? '')}" data-program-id="${esc(s.program_id ?? '')}" data-grade="${esc(s.grade_level ?? '')}">Generate dengan AI</button>`
                 }
             </div>
         </div>`;
@@ -4404,7 +4404,7 @@ async function initKurikulumTab() {
     });
 }
 
-function openAtpGenerateModal({ subjectId, fase, name, program, grade }) {
+function openAtpGenerateModal({ subjectId, fase, name, program, programId, grade }) {
     const modal = document.getElementById('atp-modal');
     const body  = document.getElementById('atp-modal-body');
     document.getElementById('atp-modal-title').textContent = `Generate ATP — ${name}`;
@@ -4484,6 +4484,7 @@ function openAtpGenerateModal({ subjectId, fase, name, program, grade }) {
                 fase:           faseVal,
                 kelas:          kelasLabel,
                 program:        program || 'Umum',
+                program_id:     programId || undefined,
                 jp_per_minggu:  jpVal,
                 minggu_sem1:    minggu1,
                 minggu_sem2:    minggu2,
@@ -4586,10 +4587,14 @@ function renderAtpReview(container, result, subjectId, fase) {
         }));
 
         try {
+            // program_id di-inject edge function ke setiap CP/TP object
+            const programId = finalCp[0]?.program_id ?? null;
+
             // Simpan CP
             const savedCp = await Promise.all(finalCp.map((cp, i) => saveCp({
                 school_id:    currentUser.school_id,
                 subject_id:   subjectId,
+                program_id:   programId,
                 fase,
                 elemen:       cp.elemen,
                 deskripsi_cp: cp.deskripsi_cp,
@@ -4605,6 +4610,7 @@ function renderAtpReview(container, result, subjectId, fase) {
             await Promise.all(finalTp.map((tp, i) => saveTp({
                 school_id:    currentUser.school_id,
                 subject_id:   subjectId,
+                program_id:   programId,
                 cp_id:        cpIdMap[finalCp[0]?.elemen] ?? savedCp[0]?.cp_id ?? null,
                 fase,
                 semester:     tp.semester ?? 1,
