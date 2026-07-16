@@ -16,6 +16,9 @@
 - Tidak ada mekanisme hadir sebagian (terlambat/keluar awal)
 - Jika hadir di satu slot blok, statusnya HADIR penuh
 
+Nilai enum DB: HADIR, IZIN, SAKIT, ALPA
+(ALPA sebelumnya bernama TIDAK_HADIR di DB — diganti via migration 20260716164801)
+
 ### Input Absensi
 - Dilakukan per blok (bukan per slot)
 - Hanya guru yang mengajar blok tersebut yang bisa input
@@ -60,13 +63,14 @@ Langsung melihat detail absensi milik diri sendiri per pertemuan.
 Tidak ada drill down - langsung ke level paling detail.
 
 ### Orang Tua
-Langsung melihat detail absensi anak per pertemuan.
-Tidak ada drill down - langsung ke level paling detail.
+Tabel detail per sesi langsung tampil — tanggal, waktu, mapel, guru, status, catatan.
+Tidak ada klik tambahan — semua sesi tampil sekaligus dalam rentang tanggal yang dipilih.
 
 ### Guru Mapel
 Rekap kelas yang diajar (per mapel)
-  → klik satu kelas → rekap per siswa
-    → klik satu siswa → detail per pertemuan (tanggal, mapel, status)
+  → klik satu kelas → accordion per siswa
+    → klik accordion siswa → detail sesi mapel yang diajar guru itu saja
+    (filter by teacher_id — sesi mapel lain tidak tampil)
 
 ### Wali Kelas
 Rekap semua siswa di kelas yang diwalikan
