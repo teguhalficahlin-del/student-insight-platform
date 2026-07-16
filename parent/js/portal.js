@@ -94,7 +94,7 @@ let tabLoaded = { pkl:false, schedule:false, attendance:false,
 
 const STATUS_LABELS = {
     HADIR:       'Hadir',
-    TIDAK_HADIR: 'Alpa',
+    ALPA: 'Alpa',
     IZIN:        'Izin',
     SAKIT:       'Sakit',
     EKSKUL:      'Hadir',   // EKSKUL dihapus dari absensi → tampil sebagai Hadir (data lama)
@@ -102,7 +102,7 @@ const STATUS_LABELS = {
 
 const STATUS_BADGE = {
     HADIR:       'badge-hadir',
-    TIDAK_HADIR: 'badge-tidak-hadir',
+    ALPA: 'badge-tidak-hadir',
     IZIN:        'badge-izin',
     SAKIT:       'badge-sakit',
     EKSKUL:      'badge-hadir',   // idem
@@ -301,7 +301,7 @@ async function loadAttendance(studentId) {
     try {
         const rows = await fetchAttendance(studentId, filterStart.value, filterEnd.value);
 
-        const counts = { HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0 };
+        const counts = { HADIR: 0, ALPA: 0, IZIN: 0, SAKIT: 0 };
         for (const r of rows) {
             // EKSKUL dihapus dari absensi → dihitung sebagai HADIR (kompat data lama)
             const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
@@ -322,7 +322,7 @@ async function loadAttendance(studentId) {
                 <span class="label">Izin</span>
             </div>
             <div class="summary-card card-alpha">
-                <span class="count">${counts.TIDAK_HADIR}</span>
+                <span class="count">${counts.ALPA}</span>
                 <span class="label">Alpa</span>
             </div>
         `;
@@ -385,13 +385,13 @@ async function loadPkl(studentId) {
 
         const rows = await fetchPklAttendanceSummary(studentId);
         pklAttWrap.style.display = 'block';
-        const counts = { HADIR: 0, TIDAK_HADIR: 0, IZIN: 0, SAKIT: 0 };
+        const counts = { HADIR: 0, ALPA: 0, IZIN: 0, SAKIT: 0 };
         for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1;
         pklSummary.innerHTML = `
             <div class="summary-card card-hadir"><span class="count">${counts.HADIR}</span><span class="label">Hadir</span></div>
             <div class="summary-card card-sakit"><span class="count">${counts.SAKIT}</span><span class="label">Sakit</span></div>
             <div class="summary-card card-izin"><span class="count">${counts.IZIN}</span><span class="label">Izin</span></div>
-            <div class="summary-card card-alpha"><span class="count">${counts.TIDAK_HADIR}</span><span class="label">Alpa</span></div>`;
+            <div class="summary-card card-alpha"><span class="count">${counts.ALPA}</span><span class="label">Alpa</span></div>`;
         if (!rows.length) {
             pklTbody.innerHTML = '';
             pklEmpty.style.display = 'block';

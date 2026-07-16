@@ -331,7 +331,7 @@ export async function getWaliKelasInfo(classId) {
 
 /**
  * Rekap kehadiran per siswa di kelas wali kelas (untuk dashboard wali).
- * Returns [{ student_id, full_name, nis, HADIR, TIDAK_HADIR, IZIN, SAKIT, total }]
+ * Returns [{ student_id, full_name, nis, HADIR, ALPA, IZIN, SAKIT, total }]
  * Catatan: EKSKUL dihapus dari absensi → data lama berstatus EKSKUL dihitung HADIR.
  */
 export async function getWaliAttendanceSummary(classId, academicYear, dateStart, dateEnd) {
@@ -348,7 +348,7 @@ export async function getWaliAttendanceSummary(classId, academicYear, dateStart,
         full_name:   r.full_name,
         nis:         r.nis,
         HADIR:       Number(r.hadir),
-        TIDAK_HADIR: Number(r.tidak_hadir),
+        ALPA:        Number(r.tidak_hadir),
         IZIN:        Number(r.izin),
         SAKIT:       Number(r.sakit),
         total:       Number(r.total),
@@ -456,7 +456,7 @@ export async function fetchPklAttendance(studentIds, dateStart, dateEnd) {
     return (data ?? []).map(r => ({
         student_id:  r.student_id,
         HADIR:       Number(r.hadir),
-        TIDAK_HADIR: Number(r.tidak_hadir),
+        ALPA:        Number(r.tidak_hadir),
         IZIN:        Number(r.izin),
         SAKIT:       Number(r.sakit),
         total:       Number(r.total),
@@ -684,7 +684,7 @@ export async function getAttendanceRecapPerClass(dateStart, dateEnd) {
         class_id:    r.class_id,
         name:        r.name,
         HADIR:       Number(r.hadir),
-        TIDAK_HADIR: Number(r.tidak_hadir),
+        ALPA:        Number(r.tidak_hadir),
         IZIN:        Number(r.izin),
         SAKIT:       Number(r.sakit),
         total:       Number(r.total),
@@ -720,7 +720,7 @@ export async function getAttendanceSummaryByStudents(classId, academicYear, date
         full_name:   r.full_name,
         nis:         r.nis,
         HADIR:       Number(r.hadir),
-        TIDAK_HADIR: Number(r.tidak_hadir),
+        ALPA:        Number(r.tidak_hadir),
         IZIN:        Number(r.izin),
         SAKIT:       Number(r.sakit),
         total:       Number(r.total),

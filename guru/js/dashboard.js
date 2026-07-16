@@ -392,7 +392,7 @@ function renderGuruRekapPage() {
     if (!tbody) return;
 
     tbody.innerHTML = slice.map(s => {
-        const pctDenom = s.HADIR + s.IZIN + s.SAKIT + s.TIDAK_HADIR;
+        const pctDenom = s.HADIR + s.IZIN + s.SAKIT + s.ALPA;
         const pct = pctDenom > 0 ? Math.round((s.HADIR / pctDenom) * 100) : 0;
         const color = pct >= 80 ? 'var(--color-success)' : pct >= 60 ? 'var(--color-warning)' : 'var(--color-danger)';
         return `<tr>
@@ -400,7 +400,7 @@ function renderGuruRekapPage() {
             <td style="text-align:center">${s.HADIR}</td>
             <td style="text-align:center">${s.IZIN}</td>
             <td style="text-align:center">${s.SAKIT}</td>
-            <td style="text-align:center">${s.TIDAK_HADIR}</td>
+            <td style="text-align:center">${s.ALPA}</td>
             <td style="text-align:center">${s.total}</td>
             <td style="text-align:center;font-weight:600;color:${color}">${s.total > 0 ? pct + '%' : '—'}</td>
         </tr>`;
@@ -466,9 +466,9 @@ async function loadGuruRecap() {
         document.getElementById('guru-recap-export').addEventListener('click', () => {
             const header = 'Nama,NIS,Hadir,Izin,Sakit,Alpa,Total Sesi,% Hadir';
             const csvRows = rows.map(s => {
-                const pctDenom = s.HADIR + s.IZIN + s.SAKIT + s.TIDAK_HADIR;
+                const pctDenom = s.HADIR + s.IZIN + s.SAKIT + s.ALPA;
                 const pct = pctDenom > 0 ? Math.round((s.HADIR / pctDenom) * 100) : 0;
-                return [s.full_name, s.nis, s.HADIR, s.IZIN, s.SAKIT, s.TIDAK_HADIR, s.total, s.total > 0 ? pct + '%' : '—']
+                return [s.full_name, s.nis, s.HADIR, s.IZIN, s.SAKIT, s.ALPA, s.total, s.total > 0 ? pct + '%' : '—']
                     .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',');
             });
             const blob = new Blob(['﻿' + [header, ...csvRows].join('\r\n')], { type: 'text/csv;charset=utf-8;' });
@@ -713,8 +713,8 @@ async function loadAttModalContent(scheduleId, classId, className) {
             return;
         }
 
-        const statuses = ['HADIR','IZIN','SAKIT','TIDAK_HADIR'];
-        const statusLabel = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Alpa' };
+        const statuses = ['HADIR','IZIN','SAKIT','ALPA'];
+        const statusLabel = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', ALPA:'Alpa' };
 
         function renderStudentRow(s) {
             const cur      = existing.get(s.student_id)?.status ?? 'HADIR';
@@ -1174,9 +1174,9 @@ async function loadWaliSummary() {
                         HADIR: 'var(--color-success)',
                         IZIN:  'var(--color-warning,#f59e0b)',
                         SAKIT: 'var(--color-primary)',
-                        TIDAK_HADIR: 'var(--color-danger)',
+                        ALPA: 'var(--color-danger)',
                     };
-                    const STATUS_LABEL = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Alpa' };
+                    const STATUS_LABEL = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', ALPA:'Alpa' };
                     body.innerHTML = sessions.map(s => `
                         <div style="display:flex;align-items:center;gap:8px;
                             padding:7px 16px;border-top:0.5px solid var(--color-border)">
@@ -1251,11 +1251,11 @@ async function loadBkAttendanceRecap() {
             const classAccordions = prog.classes
                 .sort((a, b) => a.name.localeCompare(b.name, 'id'))
                 .map(r => {
-                    const tot  = r.HADIR + r.IZIN + r.SAKIT + r.TIDAK_HADIR;
+                    const tot  = r.HADIR + r.IZIN + r.SAKIT + r.ALPA;
                     const pctH = tot > 0 ? Math.round(r.HADIR       / tot * 100) : 0;
                     const pctI = tot > 0 ? Math.round(r.IZIN        / tot * 100) : 0;
                     const pctS = tot > 0 ? Math.round(r.SAKIT       / tot * 100) : 0;
-                    const pctA = tot > 0 ? Math.round(r.TIDAK_HADIR / tot * 100) : 0;
+                    const pctA = tot > 0 ? Math.round(r.ALPA / tot * 100) : 0;
                     const colH = pctH >= 80 ? 'var(--color-success)' : pctH >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
                     return `
                     <details class="att-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
@@ -1351,9 +1351,9 @@ async function loadBkAttendanceRecap() {
                                     HADIR: 'var(--color-success)',
                                     IZIN:  'var(--color-warning,#f59e0b)',
                                     SAKIT: 'var(--color-primary)',
-                                    TIDAK_HADIR: 'var(--color-danger)',
+                                    ALPA: 'var(--color-danger)',
                                 };
-                                const STATUS_LABEL = { HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', TIDAK_HADIR: 'Alpa' };
+                                const STATUS_LABEL = { HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', ALPA: 'Alpa' };
                                 sBody.innerHTML = sessions.map(s => `
                                     <div style="display:flex;align-items:center;gap:8px;
                                         padding:7px 24px;border-top:0.5px solid var(--color-border)">
@@ -1397,11 +1397,11 @@ async function initWakaKesiswaanTab() {
 }
 
 function buildAttStatCards(rows) {
-    const tot  = rows.reduce((s,r) => s + r.HADIR + r.IZIN + r.SAKIT + r.TIDAK_HADIR, 0);
+    const tot  = rows.reduce((s,r) => s + r.HADIR + r.IZIN + r.SAKIT + r.ALPA, 0);
     const h    = rows.reduce((s,r) => s + r.HADIR,       0);
     const i    = rows.reduce((s,r) => s + r.IZIN,        0);
     const sk   = rows.reduce((s,r) => s + r.SAKIT,       0);
-    const a    = rows.reduce((s,r) => s + r.TIDAK_HADIR, 0);
+    const a    = rows.reduce((s,r) => s + r.ALPA, 0);
     const pctH = tot > 0 ? Math.round(h  / tot * 100) : 0;
     const pctI = tot > 0 ? Math.round(i  / tot * 100) : 0;
     const pctS = tot > 0 ? Math.round(sk / tot * 100) : 0;
@@ -1477,11 +1477,11 @@ async function loadWkAttendanceRecap() {
             const classAccordions = prog.classes
                 .sort((a, b) => a.name.localeCompare(b.name, 'id'))
                 .map(r => {
-                    const tot  = r.HADIR + r.IZIN + r.SAKIT + r.TIDAK_HADIR;
+                    const tot  = r.HADIR + r.IZIN + r.SAKIT + r.ALPA;
                     const pctH = tot > 0 ? Math.round(r.HADIR       / tot * 100) : 0;
                     const pctI = tot > 0 ? Math.round(r.IZIN        / tot * 100) : 0;
                     const pctS = tot > 0 ? Math.round(r.SAKIT       / tot * 100) : 0;
-                    const pctA = tot > 0 ? Math.round(r.TIDAK_HADIR / tot * 100) : 0;
+                    const pctA = tot > 0 ? Math.round(r.ALPA / tot * 100) : 0;
                     const colH = pctH >= 80 ? 'var(--color-success)' : pctH >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
                     const safeId = r.class_id.replace(/[^a-z0-9]/gi, '_');
                     return `
@@ -1584,9 +1584,9 @@ async function loadWkAttendanceRecap() {
                                     HADIR: 'var(--color-success)',
                                     IZIN:  'var(--color-warning,#f59e0b)',
                                     SAKIT: 'var(--color-primary)',
-                                    TIDAK_HADIR: 'var(--color-danger)',
+                                    ALPA: 'var(--color-danger)',
                                 };
-                                const STATUS_LABEL = { HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', TIDAK_HADIR: 'Alpa' };
+                                const STATUS_LABEL = { HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', ALPA: 'Alpa' };
                                 sBody.innerHTML = sessions.map(s => `
                                     <div style="display:flex;align-items:center;gap:8px;
                                         padding:7px 24px;border-top:0.5px solid var(--color-border)">
@@ -1776,7 +1776,7 @@ async function loadKpRecap() {
                 <td style="text-align:center">${a.HADIR}</td>
                 <td style="text-align:center">${a.IZIN}</td>
                 <td style="text-align:center">${a.SAKIT}</td>
-                <td style="text-align:center">${a.TIDAK_HADIR}</td>
+                <td style="text-align:center">${a.ALPA}</td>
                 <td style="text-align:center;font-weight:600;color:${color}">${a.total > 0 ? pct+'%' : '—'}</td>
             </tr>`;
         }).join('');
@@ -1817,11 +1817,11 @@ async function loadKpClsRecap() {
         const html = rows
             .sort((a, b) => a.name.localeCompare(b.name, 'id'))
             .map(r => {
-                const tot  = r.HADIR + r.IZIN + r.SAKIT + r.TIDAK_HADIR;
+                const tot  = r.HADIR + r.IZIN + r.SAKIT + r.ALPA;
                 const pctH = tot > 0 ? Math.round(r.HADIR       / tot * 100) : 0;
                 const pctI = tot > 0 ? Math.round(r.IZIN        / tot * 100) : 0;
                 const pctS = tot > 0 ? Math.round(r.SAKIT       / tot * 100) : 0;
-                const pctA = tot > 0 ? Math.round(r.TIDAK_HADIR / tot * 100) : 0;
+                const pctA = tot > 0 ? Math.round(r.ALPA / tot * 100) : 0;
                 const colH = pctH >= 80 ? 'var(--color-success)' : pctH >= 60 ? 'var(--color-warning,#f59e0b)' : 'var(--color-danger)';
                 return `
                 <details class="att-accordion" style="margin-bottom:8px">
@@ -1908,9 +1908,9 @@ async function loadKpClsRecap() {
                                     HADIR: 'var(--color-success)',
                                     IZIN:  'var(--color-warning,#f59e0b)',
                                     SAKIT: 'var(--color-primary)',
-                                    TIDAK_HADIR: 'var(--color-danger)',
+                                    ALPA: 'var(--color-danger)',
                                 };
-                                const STATUS_LABEL = { HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', TIDAK_HADIR: 'Alpa' };
+                                const STATUS_LABEL = { HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', ALPA: 'Alpa' };
                                 sBody.innerHTML = sessions.map(s => `
                                     <div style="display:flex;align-items:center;gap:8px;
                                         padding:7px 24px;border-top:0.5px solid var(--color-border)">
@@ -2409,7 +2409,7 @@ async function loadWhRecap() {
     try {
         const rows = await fetchPklAttendance(ids, start, end);
         const nameMap = new Map(whStudents.map(s => [s.student_id, { name: s.full_name, prog: s.program_name }]));
-        const byStudent = new Map(whStudents.map(s => [s.student_id, { name: s.full_name, prog: s.program_name, HADIR:0, TIDAK_HADIR:0, IZIN:0, SAKIT:0, total:0 }]));
+        const byStudent = new Map(whStudents.map(s => [s.student_id, { name: s.full_name, prog: s.program_name, HADIR:0, ALPA:0, IZIN:0, SAKIT:0, total:0 }]));
         for (const r of rows) {
             const a = byStudent.get(r.student_id);
             if (!a) continue;
@@ -2420,7 +2420,7 @@ async function loadWhRecap() {
         if (recap.every(a => a.total === 0)) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
         tbody.innerHTML = recap.map(a => {
             const pct = a.total > 0 ? Math.round(a.HADIR / a.total * 100) : 0;
-            return `<tr><td>${esc(a.name)}</td><td>${esc(a.prog)}</td><td>${a.HADIR}</td><td>${a.SAKIT}</td><td>${a.IZIN}</td><td>${a.TIDAK_HADIR}</td><td>${a.total > 0 ? pct+'%' : '—'}</td></tr>`;
+            return `<tr><td>${esc(a.name)}</td><td>${esc(a.prog)}</td><td>${a.HADIR}</td><td>${a.SAKIT}</td><td>${a.IZIN}</td><td>${a.ALPA}</td><td>${a.total > 0 ? pct+'%' : '—'}</td></tr>`;
         }).join('');
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="7" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;

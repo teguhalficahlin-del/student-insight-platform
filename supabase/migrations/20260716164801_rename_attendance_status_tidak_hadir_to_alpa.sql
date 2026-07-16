@@ -1,0 +1,1 @@
+ALTER TYPE attendance_status RENAME VALUE 'TIDAK_HADIR' TO 'ALPA';

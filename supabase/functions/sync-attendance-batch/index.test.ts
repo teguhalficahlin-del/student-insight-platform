@@ -41,7 +41,7 @@ function makeValidPayload(overrides: Record<string, unknown> = {}) {
         session_date:    '2024-01-15',
         records: [
             { student_id: UUID.student1, status: 'HADIR',       source: 'AUTO_DETECTED' },
-            { student_id: UUID.student2, status: 'TIDAK_HADIR', source: 'MANUAL_OVERRIDE' },
+            { student_id: UUID.student2, status: 'ALPA', source: 'MANUAL_OVERRIDE' },
         ],
         ...overrides,
     };
@@ -187,11 +187,11 @@ Deno.test('V.str(10, 100) — rejects too long', () => {
 });
 
 Deno.test('V.enum — accepts value in list', () => {
-    assertEquals(V.enum(['HADIR', 'TIDAK_HADIR'])('HADIR', 'f'), null);
+    assertEquals(V.enum(['HADIR', 'ALPA'])('HADIR', 'f'), null);
 });
 
 Deno.test('V.enum — rejects value not in list', () => {
-    assertExists(V.enum(['HADIR', 'TIDAK_HADIR'])('CUTI', 'f'));
+    assertExists(V.enum(['HADIR', 'ALPA'])('CUTI', 'f'));
 });
 
 Deno.test('V.bool — accepts boolean', () => {
@@ -237,7 +237,7 @@ Deno.test('Student validation — detects students not in enrolled set', () => {
     const enrolledIds = new Set([UUID.student1]);
     const records = [
         { student_id: UUID.student1, status: 'HADIR',   source: 'AUTO_DETECTED' },
-        { student_id: UUID.student2, status: 'TIDAK_HADIR', source: 'MANUAL_OVERRIDE' }, // not enrolled
+        { student_id: UUID.student2, status: 'ALPA', source: 'MANUAL_OVERRIDE' }, // not enrolled
     ];
     const invalid = records.filter(r => !enrolledIds.has(r.student_id));
     assertEquals(invalid.length, 1);
@@ -248,7 +248,7 @@ Deno.test('Student validation — passes when all students enrolled', () => {
     const enrolledIds = new Set([UUID.student1, UUID.student2]);
     const records = [
         { student_id: UUID.student1, status: 'HADIR',       source: 'AUTO_DETECTED' },
-        { student_id: UUID.student2, status: 'TIDAK_HADIR',  source: 'MANUAL_OVERRIDE' },
+        { student_id: UUID.student2, status: 'ALPA',  source: 'MANUAL_OVERRIDE' },
     ];
     const invalid = records.filter(r => !enrolledIds.has(r.student_id));
     assertEquals(invalid.length, 0);

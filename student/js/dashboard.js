@@ -27,8 +27,8 @@ let pklLoaded   = false;
 
 const DIMENSION_LABELS = { AKADEMIK:'Akademik', KEHADIRAN:'Kehadiran', PERILAKU:'Perilaku', SOSIAL:'Sosial', AFEKTIF:'Afektif', BAKAT_MINAT:'Bakat & Minat', FISIK:'Fisik', LAINNYA:'Lainnya' };
 // EKSKUL dihapus dari absensi → dipetakan ke Hadir (kompat data lama)
-const STATUS_LABELS    = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Alpa', EKSKUL:'Hadir' };
-const STATUS_BADGE     = { HADIR:'badge-hadir', IZIN:'badge-izin', SAKIT:'badge-sakit', TIDAK_HADIR:'badge-tidak-hadir', EKSKUL:'badge-hadir' };
+const STATUS_LABELS    = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', ALPA:'Alpa', EKSKUL:'Hadir' };
+const STATUS_BADGE     = { HADIR:'badge-hadir', IZIN:'badge-izin', SAKIT:'badge-sakit', ALPA:'badge-tidak-hadir', EKSKUL:'badge-hadir' };
 
 // ─── Read cache (LF-2) ───────────────────────────────────────
 const LC = {
@@ -374,7 +374,7 @@ async function loadAttendance() {
 
     try {
         const rows = await getMyAttendance(student.student_id, start, end);
-        const agg = { HADIR:0, IZIN:0, SAKIT:0, TIDAK_HADIR:0, total:0 };
+        const agg = { HADIR:0, IZIN:0, SAKIT:0, ALPA:0, total:0 };
         for (const r of rows) {
             // EKSKUL dihapus dari absensi → dihitung sebagai HADIR (kompat data lama)
             const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
@@ -385,7 +385,7 @@ async function loadAttendance() {
         document.getElementById('att-hadir').textContent = agg.HADIR;
         document.getElementById('att-izin').textContent  = agg.IZIN;
         document.getElementById('att-sakit').textContent = agg.SAKIT;
-        document.getElementById('att-alpha').textContent = agg.TIDAK_HADIR;
+        document.getElementById('att-alpha').textContent = agg.ALPA;
         document.getElementById('att-pct').textContent   = agg.total > 0 ? pct + '%' : '—';
 
         if (rows.length === 0) {
@@ -613,7 +613,7 @@ async function loadPkl() {
             </div>`;
 
         const att = await getMyPklAttendance(student.student_id);
-        const agg = { HADIR:0, IZIN:0, SAKIT:0, TIDAK_HADIR:0, total:0 };
+        const agg = { HADIR:0, IZIN:0, SAKIT:0, ALPA:0, total:0 };
         for (const r of att) {
             if (agg[r.status] !== undefined) agg[r.status]++;
             agg.total++;
@@ -622,7 +622,7 @@ async function loadPkl() {
         document.getElementById('pkl-hadir').textContent = agg.HADIR;
         document.getElementById('pkl-izin').textContent  = agg.IZIN;
         document.getElementById('pkl-sakit').textContent = agg.SAKIT;
-        document.getElementById('pkl-alpha').textContent = agg.TIDAK_HADIR;
+        document.getElementById('pkl-alpha').textContent = agg.ALPA;
         document.getElementById('pkl-pct').textContent   = agg.total > 0 ? pct + '%' : '—';
         statsEl.style.display = 'flex';
 

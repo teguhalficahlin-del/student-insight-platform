@@ -1585,7 +1585,7 @@ async function printAlumniRecap(studentId) {
     const s = recap.student;
     const schoolName = document.getElementById('dashboard-school-name')?.textContent?.trim() || 'Sekolah';
     const kelas = alumniClassName(s.enrollment, s.graduated_academic_year);
-    const ATT_LABEL = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', TIDAK_HADIR:'Alpa' };
+    const ATT_LABEL = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', ALPA:'Alpa' };
     // EKSKUL dihapus dari absensi → dilebur ke HADIR (kompat data lama)
     const att = { ...recap.attendance };
     if (att.EKSKUL) { att.HADIR = (att.HADIR ?? 0) + att.EKSKUL; delete att.EKSKUL; }

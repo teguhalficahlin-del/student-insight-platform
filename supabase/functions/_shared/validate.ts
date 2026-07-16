@@ -126,7 +126,7 @@ export function validatePayload(
 // Mirror of Postgres enums and event_schema.js.
 // ─────────────────────────────────────────────────────────────
 
-export const ATTENDANCE_STATUS  = ['HADIR','TIDAK_HADIR','IZIN','SAKIT'] as const;  // EKSKUL dihapus (mig 20260703220000)
+export const ATTENDANCE_STATUS  = ['HADIR','ALPA','IZIN','SAKIT'] as const;  // EKSKUL dihapus (mig 20260703220000); TIDAK_HADIR → ALPA (mig 20260716164801)
 export const ATTENDANCE_SOURCE  = ['AUTO_DETECTED','MANUAL_OVERRIDE','TEACHER_DECLARED'] as const;
 export const MEETING_STATUS     = ['NORMAL','KEGIATAN_SEKOLAH','GURU_TIDAK_HADIR'] as const;
 export const ROLE_TYPE          = ['GURU','BK','WALI_KELAS','KAPRODI','KEPSEK','WAKA_KURIKULUM','WAKA_KESISWAAN','WAKA_HUMAS','STAKEHOLDER','DUDI','SISWA','ORTU','ADMINISTRATIVE'] as const;
