@@ -4367,7 +4367,7 @@ async function initKurikulumTab() {
 
     // Untuk setiap mapel cek status ATP (CP/TP sudah ada atau belum)
     const rows = await Promise.all(subjects.map(async (s) => {
-        const fase = s.fase_default ?? (s.grade_level === 'X' ? 'E' : 'F');
+        const fase = s.fase_default ?? (s.grade_level === 10 ? 'E' : 'F');
         const [cpList, tpList] = await Promise.all([
             getCpBySubject(s.subject_id, fase).catch(() => []),
             getTpBySubject(s.subject_id, fase, null).catch(() => []),
