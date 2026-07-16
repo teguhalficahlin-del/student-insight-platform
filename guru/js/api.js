@@ -1372,7 +1372,7 @@ export async function saveCp(cpData) {
 export async function saveTp(tpData) {
     const { data, error } = await supabase
         .from('tujuan_pembelajaran')
-        .insert(tpData)
+        .upsert(tpData, { onConflict: 'school_id,subject_id,program_id,fase,semester,urutan', ignoreDuplicates: false })
         .select('tp_id')
         .single();
     if (error) throw error;
