@@ -4447,7 +4447,7 @@ function openAtpGenerateModal({ subjectId, fase, name, program, grade }) {
                 <textarea id="atp-cp-referensi" class="input" rows="6"
                     style="margin-top:4px;width:100%;resize:vertical;font-size:12px"
                     placeholder="Paste teks CP resmi dari dokumen Kemdikbud di sini.\nContoh: Pada akhir Fase E, peserta didik menggunakan bahasa Inggris untuk berkomunikasi...\n\nJika dikosongkan, AI akan generate berdasarkan pengetahuan umum Kurikulum Merdeka."></textarea>
-                <small style="color:var(--color-muted);font-size:11px">💡 Hasil lebih akurat jika CP resmi diisi. Download CP dari <a href="https://kurikulum.kemdikbud.go.id" target="_blank" rel="noopener">kurikulum.kemdikbud.go.id</a></small>
+                <small style="color:var(--color-muted);font-size:11px">💡 Hasil lebih akurat jika CP resmi diisi. Download CP dari <a href="https://guru.kemdikbud.go.id/kurikulum/referensi-penerapan/capaian-pembelajaran" target="_blank" rel="noopener">guru.kemdikbud.go.id</a></small>
             </div>
         </div>
         <div style="margin-top:20px;display:flex;gap:8px;justify-content:flex-end">
