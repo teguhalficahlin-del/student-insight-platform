@@ -4415,6 +4415,11 @@ function openAtpGenerateModal({ subjectId, fase, name, program, grade }) {
             Hasilnya bisa diedit sebelum disimpan.
         </p>
         <div style="display:grid;gap:12px">
+            <label style="font-size:13px;font-weight:600">Nama Mata Pelajaran
+                <input type="text" id="atp-subject-name" class="input" value="${esc(name)}"
+                    placeholder="Contoh: Bahasa Inggris" style="margin-top:4px;width:100%">
+                <small style="color:var(--color-muted);font-size:11px">Pastikan nama sudah benar sebelum generate</small>
+            </label>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
                 <label style="font-size:13px;font-weight:600">Fase
                     <select id="atp-fase" class="input" style="margin-top:4px;width:100%">
@@ -4456,6 +4461,7 @@ function openAtpGenerateModal({ subjectId, fase, name, program, grade }) {
         genBtn.textContent = '⏳ Memproses…';
         statusEl.innerHTML = '<p class="hint">AI sedang menyusun CP dan ATP… ini bisa memakan 15–30 detik.</p>';
 
+        const namaMapel  = document.getElementById('atp-subject-name').value.trim() || name;
         const faseVal    = document.getElementById('atp-fase').value;
         const jpVal      = parseInt(document.getElementById('atp-jp').value, 10) || 4;
         const minggu1    = parseInt(document.getElementById('atp-minggu1').value, 10) || 18;
@@ -4465,7 +4471,7 @@ function openAtpGenerateModal({ subjectId, fase, name, program, grade }) {
 
         try {
             const result = await generateAtp({
-                subject_name:   name,
+                subject_name:   namaMapel,
                 fase:           faseVal,
                 kelas:          kelasLabel,
                 program:        program || 'Umum',
