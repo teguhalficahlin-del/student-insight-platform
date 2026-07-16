@@ -1030,14 +1030,14 @@ async function renderStudentsPanel() {
     ]);
 
     // Fetch semua kelas + enrollment tahun ajaran aktif sekaligus
-    const [{ data: allClasses }, { data: enrollments }, { data: pendingPwUsers }, programs] = await Promise.all([
+    const [{ data: allClasses }, enrollments, { data: pendingPwUsers }, programs] = await Promise.all([
         supabase.from('classes').select('class_id, name, grade_level, program_id')
             .order('grade_level').order('name'),
-        supabase.from('class_enrollments')
+        fetchAllRows('class_enrollments', q => q
             .select('class_id, student:students!inner(student_id, full_name, nis, user_id)')
             .eq('academic_year', config?.current_academic_year ?? '')
             .is('withdrawn_at', null)
-            .eq('students.student_status', 'AKTIF'),
+            .eq('students.student_status', 'AKTIF')),
         supabase.from('users').select('user_id').eq('role_type', 'SISWA').eq('must_change_password', true),
         getPrograms(),
     ]);
