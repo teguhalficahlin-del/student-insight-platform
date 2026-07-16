@@ -21,6 +21,13 @@ Nilai enum DB: HADIR, IZIN, SAKIT, ALPA
 
 ### Input Absensi
 - Dilakukan per blok (bukan per slot)
+- Modal input absensi menampilkan daftar siswa yang terdaftar
+  di kelas tempat guru mengajar pada sesi tersebut
+- Tidak ada siswa dari kelas lain yang tampil — isolasi per kelas
+  ditegakkan di level query
+- Guru dapat memilih status per siswa: Hadir, Izin, Sakit, atau Alpa
+- Daftar siswa ditampilkan dengan paginasi (5 siswa per halaman)
+- Tombol "Simpan Kehadiran (N siswa)" menyimpan semua status sekaligus
 - Hanya guru yang mengajar blok tersebut yang bisa input
 - Guru pengganti bisa input selama token pengganti belum expired
 - Tidak ada tombol hapus di UI - pembatalan via is_void = true
