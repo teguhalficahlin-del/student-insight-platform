@@ -108,6 +108,45 @@ Tidak bisa drill down ke level siswa individual.
   - attendance: 5 policy (rw_guru, rw_substitute, read_parent, read_staff, read_student)
   - teaching_schedules: dipakai sebagai join untuk verifikasi hak akses guru
 
+## 7. Hubungan Absensi Siswa dengan Kehadiran Guru
+
+### Prinsip Dasar
+Guru submit absensi siswa = bukti guru hadir mengajar pada sesi tersebut.
+Tidak ada mekanisme terpisah untuk guru menandai diri sendiri hadir.
+
+### Alur Teknis
+1. Guru submit absensi siswa pada sesi terjadwal
+2. Trigger `fn_teacher_attendance_signal` aktif
+3. `sync-attendance-batch` membalik `teacher_indicator`:
+   `PENDING_EVALUATION → HADIR`
+4. Rekap kehadiran guru di tab Waka Kurikulum
+   menghitung dari `teacher_indicator` via `fn_attendance_fill_rate`
+
+### Jika Guru Tidak Submit
+1. Guru tidak submit absensi sebelum sesi berakhir
+2. `fn_evaluate_teacher_indicators` (scheduled job server-side)
+   membalik `PENDING_EVALUATION → TIDAK_HADIR`
+3. Tercatat sebagai tidak hadir di rekap Waka Kurikulum
+
+### Batas Waktu Submit
+- Guru hanya bisa submit absensi pada hari dan jam sesi yang terjadwal
+- Tidak bisa submit mundur (backdated)
+- Setelah jam sesi berakhir, tombol input/koreksi absensi di dashboard
+  guru otomatis disabled — tidak bisa diubah lagi
+- Guard backdated ada di `fn_teacher_attendance_signal`:
+  hanya aktif jika `session_date` = hari ini
+
+### Nilai teacher_indicator
+| Nilai | Arti |
+|---|---|
+| `PENDING_EVALUATION` | Sesi belum diisi absensi siswa — status awal saat jadwal dibuat |
+| `HADIR` | Guru sudah submit absensi siswa sebelum sesi berakhir |
+| `TIDAK_HADIR` | Guru tidak submit sampai sesi berakhir — diset oleh scheduled job |
+
+Catatan: `teacher_indicator` menggunakan enum `teacher_attendance_indicator`
+(berbeda dengan `attendance_status` siswa yang memakai HADIR/IZIN/SAKIT/ALPA).
+Nilai `TIDAK_HADIR` di sini merujuk ketidakhadiran GURU, bukan siswa.
+
 ---
 
 Dokumen ini adalah referensi definitif.
