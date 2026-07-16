@@ -4442,6 +4442,13 @@ function openAtpGenerateModal({ subjectId, fase, name, program, grade }) {
             <label style="font-size:13px;font-weight:600">Fokus Khusus (opsional)
                 <textarea id="atp-fokus" class="input" rows="2" placeholder="Contoh: tekankan pada praktik industri dan digitalisasi..." style="margin-top:4px;width:100%;resize:vertical"></textarea>
             </label>
+            <div>
+                <label style="font-size:13px;font-weight:600">CP Referensi <span style="font-weight:400;color:var(--color-muted)">(opsional tapi dianjurkan)</span></label>
+                <textarea id="atp-cp-referensi" class="input" rows="6"
+                    style="margin-top:4px;width:100%;resize:vertical;font-size:12px"
+                    placeholder="Paste teks CP resmi dari dokumen Kemdikbud di sini.\nContoh: Pada akhir Fase E, peserta didik menggunakan bahasa Inggris untuk berkomunikasi...\n\nJika dikosongkan, AI akan generate berdasarkan pengetahuan umum Kurikulum Merdeka."></textarea>
+                <small style="color:var(--color-muted);font-size:11px">💡 Hasil lebih akurat jika CP resmi diisi. Download CP dari <a href="https://kurikulum.kemdikbud.go.id" target="_blank" rel="noopener">kurikulum.kemdikbud.go.id</a></small>
+            </div>
         </div>
         <div style="margin-top:20px;display:flex;gap:8px;justify-content:flex-end">
             <button id="atp-cancel-btn" class="btn btn-secondary btn-sm">Batal</button>
@@ -4450,6 +4457,7 @@ function openAtpGenerateModal({ subjectId, fase, name, program, grade }) {
         <div id="atp-gen-status" style="margin-top:12px"></div>`;
 
     modal.style.display = 'flex';
+    document.getElementById('atp-cp-referensi').value = '';
 
     document.getElementById('atp-cancel-btn').onclick  = () => { modal.style.display = 'none'; };
     document.getElementById('atp-modal-close').onclick = () => { modal.style.display = 'none'; };
@@ -4461,13 +4469,14 @@ function openAtpGenerateModal({ subjectId, fase, name, program, grade }) {
         genBtn.textContent = '⏳ Memproses…';
         statusEl.innerHTML = '<p class="hint">AI sedang menyusun CP dan ATP… ini bisa memakan 15–30 detik.</p>';
 
-        const namaMapel  = document.getElementById('atp-subject-name').value.trim() || name;
-        const faseVal    = document.getElementById('atp-fase').value;
-        const jpVal      = parseInt(document.getElementById('atp-jp').value, 10) || 4;
-        const minggu1    = parseInt(document.getElementById('atp-minggu1').value, 10) || 18;
-        const minggu2    = parseInt(document.getElementById('atp-minggu2').value, 10) || 16;
-        const fokusVal   = document.getElementById('atp-fokus').value;
-        const kelasLabel = faseVal === 'E' ? 'Kelas X' : 'Kelas XI–XII';
+        const namaMapel    = document.getElementById('atp-subject-name').value.trim() || name;
+        const faseVal      = document.getElementById('atp-fase').value;
+        const jpVal        = parseInt(document.getElementById('atp-jp').value, 10) || 4;
+        const minggu1      = parseInt(document.getElementById('atp-minggu1').value, 10) || 18;
+        const minggu2      = parseInt(document.getElementById('atp-minggu2').value, 10) || 16;
+        const fokusVal     = document.getElementById('atp-fokus').value;
+        const cpReferensi  = document.getElementById('atp-cp-referensi').value.trim();
+        const kelasLabel   = faseVal === 'E' ? 'Kelas X' : 'Kelas XI–XII';
 
         try {
             const result = await generateAtp({
@@ -4479,6 +4488,7 @@ function openAtpGenerateModal({ subjectId, fase, name, program, grade }) {
                 minggu_sem1:    minggu1,
                 minggu_sem2:    minggu2,
                 fokus_khusus:   fokusVal,
+                cp_referensi:   cpReferensi || undefined,
             });
             renderAtpReview(body, result, subjectId, faseVal);
         } catch (err) {

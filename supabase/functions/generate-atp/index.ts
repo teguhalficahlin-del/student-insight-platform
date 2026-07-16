@@ -62,7 +62,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         });
     }
 
-    const { subject_name, fase, kelas, program, jp_per_minggu, minggu_sem1, minggu_sem2, fokus_khusus } = body;
+    const { subject_name, fase, kelas, program, jp_per_minggu, minggu_sem1, minggu_sem2, fokus_khusus, cp_referensi } = body;
     if (!subject_name || !fase || !kelas || !program || !jp_per_minggu) {
         return new Response(JSON.stringify({ error: 'Field wajib tidak lengkap.' }), {
             status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -76,9 +76,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
         });
     }
 
-    const fokusLine = fokus_khusus?.trim()
-        ? `Fokus khusus: ${fokus_khusus.trim()}`
-        : '';
+    const fokusLine   = fokus_khusus?.trim() ? `Fokus khusus: ${fokus_khusus.trim()}` : '';
+    const cpRef       = cp_referensi?.trim() ?? '';
+
+    const systemPrompt = cpRef
+        ? `Anda adalah ahli kurikulum SMK Indonesia yang berpengalaman dalam Kurikulum Merdeka (SK BSKAP No. 8 Tahun 2022).
+
+REFERENSI CP RESMI YANG DIBERIKAN GURU:
+${cpRef}
+
+Gunakan CP di atas sebagai acuan UTAMA dalam membuat ATP. Setiap TP harus mengacu pada elemen CP yang tercantum.
+Respond ONLY dengan JSON valid, tanpa teks apapun di luar JSON.`
+        : `Anda adalah ahli kurikulum SMK Indonesia yang berpengalaman dalam Kurikulum Merdeka (SK BSKAP No. 8 Tahun 2022).
+Buat ATP berdasarkan pengetahuan Kurikulum Merdeka untuk SMK. Gunakan pendekatan Genre-Based untuk bahasa, STEM untuk sains, dan konteks kejuruan SMK untuk mapel produktif.
+Respond ONLY dengan JSON valid, tanpa teks apapun di luar JSON.`;
+
+    const cpInstruction = cpRef
+        ? `PENTING: Setiap TP HARUS mengacu pada elemen CP yang diberikan di system prompt. Cantumkan nama elemen CP di field "elemen_cp" setiap TP.`
+        : `Buat ATP sesuai Kurikulum Merdeka untuk SMK.`;
 
     const userPrompt = `Buat CP dan ATP untuk:
 Mata Pelajaran: ${subject_name}
@@ -88,6 +103,8 @@ JP per minggu: ${jp_per_minggu}
 Minggu efektif Semester 1: ${minggu_sem1}
 Minggu efektif Semester 2: ${minggu_sem2}
 ${fokusLine}
+
+${cpInstruction}
 
 Format JSON:
 {
@@ -123,7 +140,7 @@ Buat minimal 6 TP per semester.`;
             body: JSON.stringify({
                 model:      CLAUDE_MODEL,
                 max_tokens: MAX_TOKENS,
-                system:     'Anda adalah asisten kurikulum SMK Indonesia ahli Kurikulum Merdeka. Buat CP dan ATP yang sesuai panduan resmi Kemdikbud untuk SMK. Respond ONLY dengan JSON valid, tanpa penjelasan apapun.',
+                system:     systemPrompt,
                 messages:   [{ role: 'user', content: userPrompt }],
             }),
         });
