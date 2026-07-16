@@ -19,7 +19,7 @@ import { resolveAuth, isAuthError } from '../_shared/auth.ts';
 import { getAdminClient }           from '../_shared/db.ts';
 
 const CLAUDE_MODEL   = 'claude-sonnet-4-6';
-const MAX_TOKENS     = 4000;
+const MAX_TOKENS     = 8000;
 const ANTHROPIC_URL  = 'https://api.anthropic.com/v1/messages';
 
 const STAFF_ROLES = [
@@ -86,10 +86,12 @@ REFERENSI CP RESMI YANG DIBERIKAN GURU:
 ${cpRef}
 
 Gunakan CP di atas sebagai acuan UTAMA dalam membuat ATP. Setiap TP harus mengacu pada elemen CP yang tercantum.
-Respond ONLY dengan JSON valid, tanpa teks apapun di luar JSON.`
+Respond ONLY with a valid JSON object. No explanation, no markdown fences, no preamble. Start your response directly with { and end with }.
+Be concise. For deskripsi_cp and deskripsi_tp fields, maximum 2 sentences each. Do not elaborate beyond what is necessary.`
         : `Anda adalah ahli kurikulum SMK Indonesia yang berpengalaman dalam Kurikulum Merdeka (SK BSKAP No. 8 Tahun 2022).
 Buat ATP berdasarkan pengetahuan Kurikulum Merdeka untuk SMK. Gunakan pendekatan Genre-Based untuk bahasa, STEM untuk sains, dan konteks kejuruan SMK untuk mapel produktif.
-Respond ONLY dengan JSON valid, tanpa teks apapun di luar JSON.`;
+Respond ONLY with a valid JSON object. No explanation, no markdown fences, no preamble. Start your response directly with { and end with }.
+Be concise. For deskripsi_cp and deskripsi_tp fields, maximum 2 sentences each. Do not elaborate beyond what is necessary.`;
 
     const cpInstruction = cpRef
         ? `PENTING: Setiap TP HARUS mengacu pada elemen CP yang diberikan di system prompt. Cantumkan nama elemen CP di field "elemen_cp" setiap TP.`
@@ -158,21 +160,60 @@ Buat minimal 6 TP per semester.`;
     }
 
     const claudeJson = await claudeRes.json();
-    const rawText = claudeJson?.content?.[0]?.text ?? '';
+    const rawText: string = claudeJson?.content?.[0]?.text ?? '';
+    const finishReason = claudeJson?.stop_reason ?? 'unknown';
 
+    console.log('[generate-atp] finish_reason:', finishReason);
     console.log('[generate-atp] raw response:', rawText.substring(0, 500));
+
+    if (finishReason === 'max_tokens') {
+        return new Response(JSON.stringify({
+            error:         'Response truncated',
+            message:       'Claude response terpotong — JSON tidak lengkap. Coba kurangi jumlah minggu atau sederhanakan CP Referensi.',
+            finish_reason: finishReason,
+        }), {
+            status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+    }
+
+    if (!rawText) {
+        return new Response(JSON.stringify({
+            error: 'Empty response from Claude',
+            raw:   JSON.stringify(claudeJson).slice(0, 500),
+        }), {
+            status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+    }
+
+    function extractJson(text: string): string | null {
+        // Strategy 1: strip markdown fences
+        const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (fenced) return fenced[1].trim();
+        // Strategy 2: find outermost { }
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        if (start !== -1 && end !== -1 && end > start) return text.slice(start, end + 1);
+        return null;
+    }
+
+    const extracted = extractJson(rawText);
+    if (!extracted) {
+        return new Response(JSON.stringify({
+            error: 'Cannot extract JSON from Claude response',
+            raw:   rawText.slice(0, 500),
+        }), {
+            status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+    }
 
     let parsed: { capaian_pembelajaran: unknown[]; tujuan_pembelajaran: unknown[] };
     try {
-        // Ekstrak JSON object terluar — robust terhadap teks naratif sebelum/sesudah
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error('No JSON object found in response');
-        console.log('[generate-atp] jsonMatch (first 200):', jsonMatch[0].substring(0, 200));
-        parsed = JSON.parse(jsonMatch[0]);
-    } catch {
+        parsed = JSON.parse(extracted);
+    } catch (e) {
         return new Response(JSON.stringify({
-            error: 'AI mengembalikan respons yang tidak valid. Coba generate ulang.',
-            raw:   rawText.slice(0, 500),
+            error:   'JSON.parse failed',
+            message: (e as Error).message,
+            raw:     extracted.slice(0, 500),
         }), {
             status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
