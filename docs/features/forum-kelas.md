@@ -89,16 +89,28 @@ Hanya author posting yang bisa menarik — dikunci oleh RLS UPDATE
 
 ## 6. Komentar
 
-Guru, siswa, dan orang tua yang bisa membaca posting dapat berkomentar.
-Akses komentar dikontrol oleh `rls_forum_comments_read`:
-  `school_id = fn_current_school_id() AND fn_can_read_forum_post(post_id)`
+### Siapa yang Bisa Berkomentar
+Siapapun yang bisa membaca posting tersebut bisa berkomentar —
+tidak ada pembatasan role tambahan. Ini berarti siswa dan orang tua
+yang ada di audience posting juga bisa berkomentar.
 
-### Tarik Komentar
-Berbeda dengan posting, komentar yang ditarik dihapus **permanen (hard delete)**
-— tidak ada soft delete, tidak ada jejak di DB.
+Dikontrol oleh RLS INSERT forum_post_comments:
+- school_id = fn_current_school_id()
+- author_user_id = fn_current_user_id()
+- fn_can_read_forum_post(post_id) = true
 
-Tabel `forum_post_comments` tidak memiliki kolom `is_withdrawn`.
-Ini by design — komentar tidak memerlukan audit trail seperti posting.
+### Edit Komentar
+Policy UPDATE ada di DB (rls_forum_comments_update) tapi tidak ada
+tombol edit komentar di UI manapun (guru, siswa, ortu).
+Dicatat sebagai backlog — belum diimplementasi.
+
+### Hapus Komentar
+Komentar bisa dihapus oleh:
+- Author komentar sendiri
+- KEPSEK dan WAKA_KESISWAAN
+
+Hapus komentar bersifat hard delete (permanen) — berbeda dengan
+posting yang menggunakan soft delete (is_withdrawn).
 
 ---
 
