@@ -49,6 +49,15 @@ View **Hari ini** menggunakan cache lokal (`LC.get/set`):
 - Data tidak di-reload otomatis saat Sembunyikan → Tampilkan — klik Tampilkan
   ulang untuk refresh
 
+### Tampilan Hasil
+Header menampilkan: nama kelas · jumlah siswa · rentang tanggal akumulasi
+
+Accordion per siswa:
+- Baris ringkasan: nama siswa · jumlah H/I/S/A · % hadir
+- Klik accordion → expand detail sesi yang diajar guru ini saja
+  (filter by teacher_id — sesi mapel lain tidak tampil)
+- Detail sesi: tanggal, jam, mapel, status kehadiran
+
 ### Kolom Rekap
 Lihat `docs/features/absensi.md` §2 untuk definisi lengkap
 HADIR / IZIN / SAKIT / ALPA / TOTAL / % HADIR.
