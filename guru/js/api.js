@@ -1234,9 +1234,10 @@ export async function getForumMemberDetails(classId, academicYear) {
     );
     if (error) throw error;
     return (data ?? []).map(r => ({
-        user_id:   r.user_id,
-        full_name: r.full_name,
-        role_type: r.role_type,
+        user_id:      r.user_id,
+        full_name:    r.full_name,
+        role_type:    r.role_type,
+        student_name: r.student_name ?? null,
     }));
 }
 
