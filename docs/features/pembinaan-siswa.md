@@ -79,7 +79,21 @@ tidak ada pilihan ubah status, hanya bisa CLOSE.
 
 ---
 
-## 5. Eskalasi
+## 5. Audience (Visibilitas Kasus)
+
+| Nilai | Label | Siapa yang bisa lihat |
+|---|---|---|
+| PRIVATE | 🔒 Privat | Pembuat kasus dan handler aktif saja |
+| RESTRICTED | 👥 Orang Tertentu | Pembuat, handler, dan individu yang ditambahkan secara eksplisit |
+| PUBLIC | 🌐 Semua Internal | Semua staf internal sekolah |
+
+Audience dapat diubah setelah kasus dibuat.
+Hanya role internal (GURU, BK, WALI_KELAS, KAPRODI, WAKA_KESISWAAN, KEPSEK)
+yang bisa mengelola audience. DUDI tidak bisa mengubah audience.
+
+---
+
+## 6. Eskalasi
 
 ### Rantai Referensi
 Jalur Sekolah: GURU → BK → WALI_KELAS → KAPRODI → WAKA_KESISWAAN → KEPSEK
@@ -96,7 +110,7 @@ Catatan penting:
 
 ---
 
-## 6. Tindakan dalam Kasus
+## 7. Tindakan dalam Kasus
 
 Panel tindakan tersembunyi jika kasus sudah CLOSED.
 
@@ -110,7 +124,7 @@ Panel tindakan tersembunyi jika kasus sudah CLOSED.
 
 ---
 
-## 7. Timeline Kasus
+## 8. Timeline Kasus
 
 Setiap tindakan tercatat sebagai event di timeline kasus:
 
@@ -124,7 +138,7 @@ Setiap tindakan tercatat sebagai event di timeline kasus:
 
 ---
 
-## 8. Pencarian Siswa
+## 9. Pencarian Siswa
 
 Scope pencarian siswa saat membuat kasus berbeda per role:
 
@@ -139,7 +153,7 @@ Pencarian lokal diprioritaskan; fallback ke server jika tidak ditemukan.
 
 ---
 
-## 9. Isolasi Akses
+## 10. Isolasi Akses
 
 | Aspek | Aturan |
 |---|---|
@@ -151,7 +165,7 @@ Pencarian lokal diprioritaskan; fallback ke server jika tidak ditemukan.
 
 ---
 
-## 10. Fitur Offline
+## 11. Fitur Offline
 
 - Tombol **Buat Kasus** dinonaktifkan saat tidak ada koneksi internet
 - Banner peringatan offline ditampilkan di atas daftar kasus
@@ -160,7 +174,7 @@ Pencarian lokal diprioritaskan; fallback ke server jika tidak ditemukan.
 
 ---
 
-## 11. Fungsi yang Dipanggil
+## 12. Fungsi yang Dipanggil
 
 | Fungsi | Kegunaan |
 |---|---|
