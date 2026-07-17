@@ -129,6 +129,9 @@ Panel tindakan tersembunyi jika kasus sudah CLOSED.
 | Tindakan | Siapa |
 |---|---|
 | Tambah komentar | Semua yang punya akses lihat kasus |
+
+Semua komentar bersifat INTERNAL_SCHOOL — hanya bisa dibaca staf internal,
+tidak oleh siswa atau orang tua meskipun mereka ada di audience kasus.
 | Eskalasi ke role lain | Handler aktif + role internal |
 | Kelola audience | Role internal (bukan DUDI) |
 | Ubah status | Handler aktif + Kepsek + BK + Waka Kesiswaan |
@@ -174,6 +177,7 @@ Pencarian lokal diprioritaskan; fallback ke server jika tidak ditemukan.
 | ADMINISTRATIVE | Tidak bisa membuat kasus |
 | DUDI | Hanya bisa buat kasus PKL, hanya bisa eskalasi ke KAPRODI |
 | Kasus CLOSED | Panel tindakan disembunyikan — tidak ada aksi yang bisa dilakukan |
+| Komentar | Selalu INTERNAL_SCHOOL — tidak terlihat oleh siswa/ortu |
 
 ---
 
@@ -201,6 +205,13 @@ Pencarian lokal diprioritaskan; fallback ke server jika tidak ditemukan.
 | `getCaseEvents()` | API: ambil timeline events kasus |
 | `fn_sync_case` | RPC — INSERT kasus baru dengan idempotency key (dipakai offline sync) |
 | `fn_case_sync_handler` | Trigger function — otomatis update cases.current_handler_role, status, closed_at setelah setiap INSERT ke case_events |
+| `addCaseComment` | Insert event COMMENT_ADDED ke case_events, privacy_level = INTERNAL_SCHOOL |
+| `changeCaseStatus` | Insert event STATUS_CHANGED ke case_events |
+| `closeCase` | Insert event DECISION_CLOSE ke case_events, update status = CLOSED |
+| `escalateCase` | Insert event DECISION_ESCALATE, otomatis upgrade PRIVATE→RESTRICTED |
+| `updateCaseAudience` | Update audience di tabel cases |
+| `addCaseAudienceMember` | Tambah anggota ke case_audience_members (RESTRICTED) |
+| `removeCaseAudienceMember` | Hapus anggota dari case_audience_members |
 
 ---
 
