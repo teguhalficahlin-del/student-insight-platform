@@ -103,6 +103,23 @@ Audience dapat diubah setelah kasus dibuat.
 Hanya role internal (GURU, BK, WALI_KELAS, KAPRODI, WAKA_KESISWAAN, KEPSEK)
 yang bisa mengelola audience. DUDI tidak bisa mengubah audience.
 
+### Kelola Audience di Panel Tindakan
+Setelah kasus dibuat, audience bisa diubah via panel Tindakan di detail kasus.
+
+**Toggle audience:**
+Tiga tombol: Privat · Orang Tertentu · Semua Internal
+Tombol aktif menunjukkan audience saat ini.
+
+**Jika audience = Orang Tertentu (RESTRICTED):**
+- Checkbox siswa dan orang tua terkait — bisa ditambahkan ke audience
+- Field pencarian staf (min. 2 huruf) — cari dan tambah staf internal
+- Daftar staf yang sudah ditambahkan tampil di atas field pencarian
+- Staf yang ditambahkan bisa dihapus dari audience
+
+**Catatan:**
+- Hanya role internal (bukan DUDI) yang bisa mengelola audience
+- Perubahan audience langsung tersimpan tanpa tombol Simpan terpisah
+
 ---
 
 ## 6. Eskalasi
