@@ -50,6 +50,22 @@ Saat membuat posting, guru memilih siapa yang bisa melihat via kolom
 Visibilitas tidak bisa diubah setelah posting dibuat
 (dikunci oleh RLS WITH CHECK pada policy `rls_forum_posts_update`).
 
+### Dua Dropdown Audience (Kombinasi)
+Guru bisa memilih dua audience sekaligus via dua dropdown:
+
+- **Dropdown 1** (wajib): audience utama
+- **Dropdown 2** (opsional): audience tambahan — hasil digabung (union)
+
+Contoh kombinasi:
+| Dropdown 1 | Dropdown 2 | Hasil |
+|---|---|---|
+| Staf saja | Orang tua & siswa yang dibahas | Staf + ortu + siswa subjek |
+| Staf saja | (kosong) | Hanya staf |
+| Orang tua & siswa yang dibahas | Staf saja | Sama dengan baris pertama |
+
+Kedua nilai disimpan di kolom `audience_type` dan `audience_type_2`
+di tabel `forum_posts`.
+
 ### Kapan Menggunakan ORANG_TERTENTU
 Gunakan ORANG_TERTENTU ketika tidak ada pilihan visibility lain yang tepat:
 
