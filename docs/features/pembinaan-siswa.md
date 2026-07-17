@@ -129,13 +129,20 @@ Panel tindakan tersembunyi jika kasus sudah CLOSED.
 | Tindakan | Siapa |
 |---|---|
 | Tambah komentar | Semua yang punya akses lihat kasus |
-
-Semua komentar bersifat INTERNAL_SCHOOL — hanya bisa dibaca staf internal,
-tidak oleh siswa atau orang tua meskipun mereka ada di audience kasus.
 | Eskalasi ke role lain | Handler aktif + role internal |
 | Kelola audience | Role internal (bukan DUDI) |
 | Ubah status | Handler aktif + Kepsek + BK + Waka Kesiswaan |
 | Tutup kasus | Handler aktif + Kepsek |
+
+Semua komentar bersifat INTERNAL_SCHOOL — hanya bisa dibaca staf internal,
+tidak oleh siswa atau orang tua meskipun mereka ada di audience kasus.
+
+### Tidak Ada Fitur Hapus
+Komentar dan kasus tidak bisa dihapus — ini disengaja untuk menjaga
+integritas audit trail. Setiap tindakan tercatat permanen di timeline.
+
+- Komentar yang salah: tambahkan komentar koreksi di bawahnya
+- Kasus yang tidak relevan: gunakan Tutup Kasus sebagai penutupan formal
 
 ---
 
