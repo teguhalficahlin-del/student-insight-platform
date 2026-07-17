@@ -92,11 +92,17 @@ hanya ADMINISTRATIVE yang bisa memvoid.
 
 | Role | Akses |
 |---|---|
-| GURU | Hanya bisa tulis dan baca catatan milik sendiri |
-| SISWA | Hanya bisa baca catatan dengan visibility SISWA_SAJA atau SISWA_DAN_ORTU, is_void = false |
-| ORTU | Hanya bisa baca catatan dengan visibility ORTU_SAJA atau SISWA_DAN_ORTU, is_void = false |
-| ADMINISTRATIVE | Bisa memvoid catatan (UPDATE is_void) |
+| GURU pembuat | Tulis dan baca catatan milik sendiri saja |
+| SISWA | Baca catatan milik sendiri, visibility SISWA_SAJA atau SISWA_DAN_ORTU, is_void = false |
+| ORTU | Baca catatan milik anak, visibility ORTU_SAJA atau SISWA_DAN_ORTU, is_void = false |
+| ADMINISTRATIVE | Hanya bisa memvoid catatan (UPDATE is_void) — tidak bisa baca isi |
+| Staf lain (BK, Waka, Kepsek, dll) | Tidak ada akses apapun |
 | Antar sekolah | Tidak ada akses silang (RLS school_id) |
+
+Catatan observasi adalah milik guru pembuat — staf lain termasuk BK,
+Waka, Kaprodi, dan Kepsek tidak bisa membaca catatan guru lain.
+Ini berbeda dengan tab Pembinaan Siswa (kasus) yang memungkinkan
+koordinasi antar staf.
 
 ### Batasan Insert
 Guru hanya bisa membuat catatan untuk siswa yang diajarnya
