@@ -19,6 +19,7 @@
   <link rel="icon" href="../favicon.ico" sizes="any">
   <link rel="manifest" href="manifest.json">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 </head>
 <body>
 
@@ -319,6 +320,8 @@
                     <label for="wali-date-end">s/d:</label>
                     <input type="date" id="wali-date-end" class="input" style="width:auto">
                     <button class="btn btn-secondary btn-sm" id="wali-filter-btn">Filter</button>
+                    <button id="wali-recap-export" class="btn btn-secondary btn-sm"
+                        style="display:none">Unduh Excel</button>
                 </div>
                 <div id="wali-att-recap"><p class="hint">Pilih rentang tanggal lalu klik Filter.</p></div>
             </div>

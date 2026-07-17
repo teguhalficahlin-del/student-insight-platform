@@ -326,6 +326,7 @@ let _guruRekapRows      = [];
 let _guruRekapPage      = 0;
 let _guruRekapDateStart = null;
 let _guruRekapDateEnd   = null;
+let _guruRekapClassName = null;
 async function initGuruTab() {
     const dateEl = document.getElementById('sched-date');
     if (!dateEl.value) dateEl.value = localDateStr();
@@ -479,30 +480,36 @@ async function loadGuruRecap() {
         _guruRekapPage      = 0;
         _guruRekapDateStart = dateStart || null;
         _guruRekapDateEnd   = dateEnd   || null;
+        _guruRekapClassName = className;
 
         content.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
                 <p style="font-size:0.82rem;color:var(--color-text-muted);margin:0">
                     ${esc(className)} · ${rows.length} siswa · akumulasi ${dateStart || '—'} s/d ${dateEnd || '—'}
                 </p>
-                <button class="btn btn-secondary btn-sm" id="guru-recap-export">Unduh CSV</button>
+                <button class="btn btn-secondary btn-sm" id="guru-recap-export">Unduh Excel</button>
             </div>
             <div id="guru-rekap-accordion"></div>`;
 
         document.getElementById('guru-recap-export').addEventListener('click', () => {
-            const header = 'Nama,NIS,Hadir,Izin,Sakit,Alpa,Total Sesi,% Hadir';
-            const csvRows = rows.map(s => {
-                const pctDenom = s.HADIR + s.IZIN + s.SAKIT + s.ALPA;
-                const pct = pctDenom > 0 ? Math.round((s.HADIR / pctDenom) * 100) : 0;
-                return [s.full_name, s.nis, s.HADIR, s.IZIN, s.SAKIT, s.ALPA, s.total, s.total > 0 ? pct + '%' : '—']
-                    .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',');
-            });
-            const blob = new Blob(['﻿' + [header, ...csvRows].join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `kehadiran_${esc(className)}_${dateStart || 'all'}_${dateEnd || 'all'}.csv`.replace(/\s+/g, '_');
-            a.click();
-            URL.revokeObjectURL(a.href);
+            const rows = _guruRekapRows;
+            if (!rows.length) return;
+
+            const wsData = [
+                ['Nama', 'Hadir', 'Izin', 'Sakit', 'Alpa', 'Total Sesi', '% Hadir'],
+                ...rows.map(s => {
+                    const tot = s.HADIR + s.IZIN + s.SAKIT + s.ALPA;
+                    const pct = tot > 0 ? Math.round(s.HADIR / tot * 100) : 0;
+                    return [s.full_name, s.HADIR, s.IZIN, s.SAKIT, s.ALPA, s.total, tot > 0 ? pct + '%' : '—'];
+                })
+            ];
+
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Rekap Kehadiran');
+            const start = document.getElementById('guru-recap-start').value;
+            const end   = document.getElementById('guru-recap-end').value;
+            XLSX.writeFile(wb, `kehadiran_${_guruRekapClassName ?? 'kelas'}_${start}_${end}.xlsx`);
         });
 
         renderGuruRekapPage();
@@ -1139,6 +1146,65 @@ async function initWaliTab() {
     document.getElementById('wali-date-end').value   = today;
 
     document.getElementById('wali-filter-btn').onclick = loadWaliSummary;
+
+    document.getElementById('wali-recap-export').onclick = async () => {
+        const btn = document.getElementById('wali-recap-export');
+        btn.disabled = true;
+        btn.textContent = 'Menyiapkan…';
+
+        try {
+            const classId   = currentUser.wali_kelas_class_id;
+            const dateStart = document.getElementById('wali-date-start').value;
+            const dateEnd   = document.getElementById('wali-date-end').value;
+
+            const students = await getWaliAttendanceSummary(classId, config.current_academic_year, dateStart, dateEnd);
+
+            const allSessions = await Promise.all(
+                students.map(s => getStudentAttendanceSessions(s.student_id, dateStart, dateEnd)
+                    .then(sessions => ({ student: s, sessions }))
+                )
+            );
+
+            const wb = XLSX.utils.book_new();
+
+            const summaryData = [
+                ['Nama', 'Hadir', 'Izin', 'Sakit', 'Alpa', 'Total Sesi', '% Hadir'],
+                ...students.map(s => {
+                    const tot = s.HADIR + s.IZIN + s.SAKIT + s.ALPA;
+                    const pct = tot > 0 ? Math.round(s.HADIR / tot * 100) : 0;
+                    return [s.full_name, s.HADIR, s.IZIN, s.SAKIT, s.ALPA, s.total,
+                            tot > 0 ? pct + '%' : '—'];
+                })
+            ];
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryData), 'Ringkasan');
+
+            for (const { student, sessions } of allSessions) {
+                const sheetData = [
+                    ['Tanggal', 'Jam', 'Mata Pelajaran', 'Guru', 'Status'],
+                    ...sessions.map(s => [
+                        s.schedule?.session_date ?? '',
+                        s.schedule?.session_start ? fmtTime(s.schedule.session_start) : '',
+                        s.schedule?.subject?.name ?? '',
+                        s.schedule?.teacher?.full_name ?? '',
+                        s.status ?? '',
+                    ])
+                ];
+                const sheetName = student.full_name.slice(0, 31);
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheetData), sheetName);
+            }
+
+            const className = document.getElementById('wali-class-title')
+                .textContent.replace('Kelas Walian — ', '').trim();
+            XLSX.writeFile(wb, `rekap_wali_${className}_${dateStart}_${dateEnd}.xlsx`);
+
+        } catch (err) {
+            alert('Gagal mengunduh: ' + fe(err));
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Unduh Excel';
+        }
+    };
+
     await loadWaliSummary();
 }
 
@@ -1224,6 +1290,8 @@ async function loadWaliSummary() {
                 }
             });
         });
+
+        document.getElementById('wali-recap-export').style.display = '';
 
     } catch (err) {
         container.innerHTML = `<div class="alert alert-danger">${esc(fe(err))}</div>`;
