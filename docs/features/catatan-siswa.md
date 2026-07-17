@@ -17,7 +17,7 @@ Field yang tersedia:
 
 | Field | Keterangan |
 |---|---|
-| Siswa | Autocomplete dari daftar siswa yang diajar guru (min. 2 karakter) |
+| Siswa | Autocomplete dari daftar siswa yang diajar guru (min. 2 karakter). Scope sama dengan tab Pembinaan Siswa — lihat docs/features/pembinaan-siswa.md §9. Ditegakkan juga di RLS: fn_guru_teaches_student(student_id). |
 
 Scope pencarian siswa sama dengan tab Pembinaan Siswa —
 lihat docs/features/pembinaan-siswa.md §9 untuk detail per role.
