@@ -153,15 +153,34 @@ Jika belum ada siswa PKL → tabel kosong, tampil pesan "Belum ada siswa PKL pad
 ## 6. Rekap Absensi PKL
 
 Rekap kehadiran harian siswa PKL di tempat PKL masing-masing.
+Data diambil via RPC `fn_pkl_attendance_recap` — server-side aggregation.
 
 ### Filter
 - **Dari / s/d**: rentang tanggal — default 30 hari ke belakang s/d hari ini
+- Tombol **Filter** memuat ulang data
 
 ### Tabel
-Kolom: Nama/NIS · H · I · S · A · %
-Satu baris per siswa PKL.
+Layout: `table-layout: fixed` dengan `<colgroup>`.
 
-Fungsi: `loadKpRecap()`, `fetchPklAttendance(studentIds, dateStart, dateEnd)`
+| Kolom | Lebar | Isi |
+|---|---|---|
+| Nama / NIS | 40% | `full_name` + `nis` siswa PKL |
+| H | 12% | Jumlah hari Hadir |
+| I | 12% | Jumlah hari Izin |
+| S | 12% | Jumlah hari Sakit |
+| A | 12% | Jumlah hari Alpa |
+| % | 12% | Persentase kehadiran — warna sesuai threshold platform |
+
+Warna %: hijau ≥ 80%, kuning ≥ 60%, merah < 60%.
+Jika belum ada data → tampil pesan "Belum ada data absensi pada rentang ini."
+
+### Catatan
+- Hanya siswa yang berstatus PKL (`kpStudents`) yang direkap
+- Jika tidak ada siswa PKL → tidak ada RPC call (guard `ids.length === 0`)
+
+### Fungsi
+- `loadKpRecap()` — load dan render rekap
+- `fetchPklAttendance(studentIds, dateStart, dateEnd)` — RPC `fn_pkl_attendance_recap`
 
 ---
 
