@@ -982,14 +982,10 @@
                                 <option value="PKL">PKL</option>
                             </select>
                         </div>
-                        <div class="field" id="kasus-c-audience-field">
-                            <label for="kasus-c-audience">Siapa yang boleh melihat kasus ini?</label>
-                            <select id="kasus-c-audience" class="input">
-                                <option value="PRIVATE">🔒 Privat — hanya pihak terlibat</option>
-                                <option value="RESTRICTED">👥 Orang Tertentu — pilih setelah disimpan</option>
-                                <option value="PUBLIC">🌐 Semua Internal — seluruh staf sekolah</option>
-                            </select>
-                        </div>
+                        <p class="hint" style="margin:0 0 12px; padding:8px 10px; background:var(--color-bg-alt,#f8f8f8); border-left:3px solid var(--color-border); border-radius:4px; font-size:12px">
+                            🔒 Kasus baru selalu dimulai sebagai <strong>Privat</strong> — hanya Anda yang bisa melihat.
+                            Visibilitas dapat diubah setelah kasus disimpan.
+                        </p>
                         <div class="field">
                             <label for="kasus-c-title">Judul Kasus</label>
                             <input type="text" id="kasus-c-title" class="input" placeholder="Ringkasan singkat masalah…" maxlength="200">

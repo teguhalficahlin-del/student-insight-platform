@@ -3013,13 +3013,12 @@ async function initKasusTab() {
 
         btnEl.disabled = true; btnEl.textContent = 'Menyimpan…';
         try {
-            const audience = document.getElementById('kasus-c-audience')?.value ?? 'PRIVATE';
             const r = await createCase({
                 studentId:   sId,
                 title,
                 description: desc,
                 track,
-                audience,
+                audience: 'PRIVATE',
                 authorUserId: currentUser.user_id,
                 authorRole:   currentUser.role_type,
             });
