@@ -369,17 +369,17 @@ async function loadAttendance() {
     const end     = document.getElementById('att-date-end').value;
     const tbody   = document.getElementById('att-body');
     const emptyEl = document.getElementById('att-empty');
-    tbody.innerHTML = '<tr><td colspan="4" class="hint">Memuat…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="hint">Memuat…</td></tr>';
     emptyEl.style.display = 'none';
 
     try {
         const rows = await getMyAttendance(student.student_id, start, end);
         const agg = { HADIR:0, IZIN:0, SAKIT:0, ALPA:0, total:0 };
-        for (const r of rows) {
-            // EKSKUL dihapus dari absensi → dihitung sebagai HADIR (kompat data lama)
-            const st = r.status === 'EKSKUL' ? 'HADIR' : r.status;
-            if (agg[st] !== undefined) agg[st]++;
-            agg.total++;
+        for (const block of rows) {
+            for (const s of (block.slots ?? [])) {
+                if (agg[s.status] !== undefined) agg[s.status]++;
+                agg.total++;
+            }
         }
         const pct = agg.total > 0 ? Math.round(agg.HADIR / agg.total * 100) : 0;
         document.getElementById('att-hadir').textContent = agg.HADIR;
@@ -393,17 +393,49 @@ async function loadAttendance() {
             emptyEl.style.display = 'block';
             return;
         }
-        tbody.innerHTML = rows.map(r => {
-            const dt = r.schedule?.session_date ?? r.created_at;
-            return `<tr>
-                <td>${fmt(dt)}</td>
-                <td>${esc(r.schedule?.subject?.name ?? '—')}</td>
-                <td>${esc(r.schedule?.teacher?.full_name ?? '—')}</td>
-                <td><span class="badge ${STATUS_BADGE[r.status] ?? ''}">${esc(STATUS_LABELS[r.status] ?? r.status)}</span></td>
-            </tr>`;
+        const STATUS_BADGE_MAP = {
+            HADIR: 'badge-success', IZIN: 'badge-warning',
+            SAKIT: 'badge-info',    ALPA: 'badge-danger', CAMPURAN: 'badge-secondary'
+        };
+        const STATUS_LABEL_MAP = {
+            HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', ALPA: 'Alfa', CAMPURAN: 'Campuran'
+        };
+
+        tbody.innerHTML = rows.map(block => {
+            const multiSlot = block.slots.length > 1;
+            const detailRows = multiSlot ? block.slots.map(s => `
+                <tr class="att-slot-detail" style="display:none">
+                    <td></td>
+                    <td style="color:var(--color-text-muted);font-size:.85em">
+                        ${s.start} – ${s.end}
+                    </td>
+                    <td></td>
+                    <td><span class="badge ${STATUS_BADGE_MAP[s.status] ?? ''}">
+                        ${STATUS_LABEL_MAP[s.status] ?? s.status}
+                    </span></td>
+                    <td>${esc(s.notes || '—')}</td>
+                </tr>`).join('') : '';
+
+            return `
+                <tr class="att-block-row ${multiSlot ? 'att-block-expandable' : ''}"
+                    ${multiSlot ? `onclick="this.classList.toggle('att-block-open');
+                        let n=this.nextElementSibling;
+                        while(n&&n.classList.contains('att-slot-detail')){
+                            n.style.display=n.style.display==='none'?'':'none';n=n.nextElementSibling;
+                        }"` : ''}>
+                    <td>${fmt(block.date)}</td>
+                    <td>${esc(block.time_range)}</td>
+                    <td>${esc(block.subject)}</td>
+                    <td>${esc(block.teacher)}</td>
+                    <td><span class="badge ${STATUS_BADGE_MAP[block.summary_status] ?? ''}">
+                        ${STATUS_LABEL_MAP[block.summary_status] ?? block.summary_status}
+                        ${multiSlot ? `<span class="att-slot-count">${block.slots.length} sesi</span>` : ''}
+                    </span></td>
+                </tr>
+                ${detailRows}`;
         }).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="4" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     } finally {
         if (filterBtn) { filterBtn.disabled = false; filterBtn.textContent = prevLabel; }
     }

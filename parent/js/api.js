@@ -115,65 +115,63 @@ export async function fetchSchedule(classId, date) {
 }
 
 export async function fetchAttendance(studentId, dateStart, dateEnd) {
-    // PostgREST silently ignores filters on embedded (non-!inner) relations.
-    // Flip the query: start from teaching_schedules (date filter works directly),
-    // then !inner-join attendance filtered by student_id + is_void.
-    let query = supabase
+    let q = supabase
         .from('teaching_schedules')
         .select(`
+            schedule_id,
+            block_group_id,
             session_date,
             session_start,
             session_end,
             subject:subjects ( name ),
             teacher:users ( full_name ),
-            attendance!inner (
-                attendance_id,
-                status,
-                is_void,
-                notes
-            )
+            attendance!inner ( attendance_id, status, is_void, notes )
         `)
         .eq('attendance.student_id', studentId)
         .eq('attendance.is_void', false)
-        .order('session_date', { ascending: false });
+        .order('session_date', { ascending: false })
+        .order('session_start', { ascending: true });
 
-    if (dateStart) {
-        query = query.gte('session_date', dateStart);
-    }
-    if (dateEnd) {
-        query = query.lte('session_date', dateEnd);
-    }
+    if (dateStart) q = q.gte('session_date', dateStart);
+    if (dateEnd)   q = q.lte('session_date', dateEnd);
 
-    const { data, error } = await query;
+    const { data, error } = await q;
     if (error) throw error;
 
-    // Reshape to match the original shape callers expect:
-    // { attendance_id, status, is_void, notes, schedule: { session_date, ... } }
-    const reshaped = (data ?? []).flatMap(sched =>
-        (sched.attendance ?? []).map(att => ({
-            attendance_id: att.attendance_id,
-            status: att.status,
-            is_void: att.is_void,
-            notes: att.notes,
-            schedule: {
-                session_date: sched.session_date,
-                session_start: sched.session_start,
-                session_end: sched.session_end,
-                subject: sched.subject,
-                teacher: sched.teacher,
-            },
-        }))
-    );
+    const blockMap = new Map();
+    for (const sched of (data ?? [])) {
+        const att = (sched.attendance ?? [])[0];
+        if (!att) continue;
+        const key = sched.block_group_id ?? `${sched.session_date}_${sched.session_start}`;
+        if (!blockMap.has(key)) {
+            blockMap.set(key, {
+                block_group_id:  key,
+                date:            sched.session_date,
+                subject:         sched.subject?.name ?? 'KBM',
+                teacher:         sched.teacher?.full_name ?? '—',
+                slots:           [],
+            });
+        }
+        blockMap.get(key).slots.push({
+            start:  sched.session_start?.slice(0, 5),
+            end:    sched.session_end?.slice(0, 5),
+            status: att.status === 'EKSKUL' ? 'HADIR' : att.status,
+            notes:  att.notes ?? '',
+        });
+    }
 
-    return reshaped.map(r => ({
-        date:    r.schedule.session_date,
-        start:   r.schedule.session_start,
-        end:     r.schedule.session_end,
-        subject: r.schedule.subject?.name ?? 'KBM',
-        teacher: r.schedule.teacher?.full_name ?? '-',
-        status:  r.status,
-        notes:   r.notes,
-    }));
+    return Array.from(blockMap.values()).map(block => {
+        const statuses = block.slots.map(s => s.status);
+        const unique   = [...new Set(statuses)];
+        const summary  = unique.length === 1 ? unique[0] : 'CAMPURAN';
+        const first    = block.slots[0];
+        const last     = block.slots[block.slots.length - 1];
+        return {
+            ...block,
+            time_range:     `${first.start} – ${last.end}`,
+            summary_status: summary,
+        };
+    });
 }
 
 export async function fetchObservations(studentId, dateStart = null, dateEnd = null) {

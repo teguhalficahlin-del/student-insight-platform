@@ -123,38 +123,64 @@ export async function getScheduleForDate(classId, date) {
  * RLS rls_attendance_read_student membatasi otomatis ke student_id ini (non-void).
  */
 export async function getMyAttendance(studentId, dateStart, dateEnd) {
-    // Filter berdasarkan TANGGAL SESI KELAS (session_date), bukan created_at
-    // (waktu input). PostgREST tak bisa memfilter kolom relasi embedded non-inner,
-    // jadi mulai dari teaching_schedules lalu !inner ke attendance milik siswa ini.
     let q = supabase
         .from('teaching_schedules')
         .select(`
-            session_date, session_start, session_end,
+            schedule_id,
+            block_group_id,
+            session_date,
+            session_start,
+            session_end,
             subject:subjects ( name ),
             teacher:users!teaching_schedules_scheduled_teacher_id_fkey ( full_name ),
-            attendance!inner ( attendance_id, status, is_void )
+            attendance!inner ( attendance_id, status, is_void, notes )
         `)
         .eq('attendance.student_id', studentId)
         .eq('attendance.is_void', false)
-        .order('session_date', { ascending: false });
+        .order('session_date', { ascending: false })
+        .order('session_start', { ascending: true });
+
     if (dateStart) q = q.gte('session_date', dateStart);
     if (dateEnd)   q = q.lte('session_date', dateEnd);
+
     const { data, error } = await q;
     if (error) throw error;
-    // Reshape ke bentuk lama { status, schedule:{ session_date, subject } }.
-    return (data ?? []).flatMap(sched =>
-        (sched.attendance ?? []).map(att => ({
-            attendance_id: att.attendance_id,
-            status:        att.status,
-            schedule: {
-                session_date:  sched.session_date,
-                session_start: sched.session_start,
-                session_end:   sched.session_end,
-                subject:       sched.subject,
-                teacher:       sched.teacher,
-            },
-        }))
-    );
+
+    // Group by block_group_id
+    const blockMap = new Map();
+    for (const sched of (data ?? [])) {
+        const att = (sched.attendance ?? [])[0];
+        if (!att) continue;
+        const key = sched.block_group_id ?? `${sched.session_date}_${sched.session_start}`;
+        if (!blockMap.has(key)) {
+            blockMap.set(key, {
+                block_group_id:  key,
+                date:            sched.session_date,
+                subject:         sched.subject?.name ?? 'KBM',
+                teacher:         sched.teacher?.full_name ?? '—',
+                slots:           [],
+            });
+        }
+        blockMap.get(key).slots.push({
+            start:  sched.session_start?.slice(0, 5),
+            end:    sched.session_end?.slice(0, 5),
+            status: att.status === 'EKSKUL' ? 'HADIR' : att.status,
+            notes:  att.notes ?? '',
+        });
+    }
+
+    return Array.from(blockMap.values()).map(block => {
+        const statuses = block.slots.map(s => s.status);
+        const unique   = [...new Set(statuses)];
+        const summary  = unique.length === 1 ? unique[0] : 'CAMPURAN';
+        const first    = block.slots[0];
+        const last     = block.slots[block.slots.length - 1];
+        return {
+            ...block,
+            time_range:     `${first.start} – ${last.end}`,
+            summary_status: summary,
+        };
+    });
 }
 
 /**
