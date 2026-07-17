@@ -187,9 +187,31 @@ Jika belum ada data → tampil pesan "Belum ada data absensi pada rentang ini."
 ## 7. Observasi dari DUDI
 
 Daftar observasi yang dikirim oleh mitra DUDI terhadap siswa PKL
-di program keahlian ini.
+di program keahlian ini. Ditampilkan sebagai card per observasi.
 
-Fungsi: `loadKpObs()`
+### Sumber Data
+- Tabel `observations`, filter `student_id IN (siswa PKL program ini)`
+- Filter `role_type = 'DUDI'` diterapkan di server via `.eq('author.role_type', 'DUDI')`
+- Client-side filter tetap ada sebagai guard
+- Diurutkan terbaru di atas (`created_at DESC`), limit 200
+
+### Card Observasi
+Setiap card menampilkan:
+- Nama siswa · Nama DUDI (`dudi_org_name`) · Dimensi · Tanggal observasi
+- Isi observasi (`content`)
+- Warna card mengikuti `sentiment` (positif/negatif/netral)
+
+### Kondisi Kosong
+Jika tidak ada siswa PKL atau tidak ada observasi →
+tampil pesan "Belum ada observasi dari DUDI."
+
+### Fungsi
+- `loadKpObs()` — load dan render observasi
+- `fetchDudiObservations(studentIds)` — fetch dari tabel `observations`
+
+### Catatan Teknis
+- Tanggal observasi menggunakan `observed_at`, fallback ke `created_at`
+- Guard `studentIds.length === 0` → tidak ada query jika tidak ada siswa PKL
 
 ---
 
