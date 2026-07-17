@@ -1018,6 +1018,25 @@ export async function escalateCase({ caseId, previousHandlerRole, newHandlerRole
             payload:               note ? { text: note } : {},
         });
     if (error) throw error;
+
+    // Jika kasus PRIVATE, otomatis upgrade audience ke RESTRICTED
+    // agar handler baru bisa lihat kasus
+    const { data: caseData } = await supabase
+        .from('cases')
+        .select('audience')
+        .eq('case_id', caseId)
+        .single();
+
+    if (caseData?.audience === 'PRIVATE') {
+        await updateCaseAudience({ caseId, audience: 'RESTRICTED' });
+        await logCaseAudienceChange({
+            caseId,
+            previousAudience: 'PRIVATE',
+            newAudience: 'RESTRICTED',
+            authorUserId,
+            authorRole,
+        });
+    }
 }
 
 export async function changeCaseStatus({ caseId, previousStatus, newStatus, note, authorUserId, authorRole }) {
