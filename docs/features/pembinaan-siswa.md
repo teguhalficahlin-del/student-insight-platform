@@ -199,6 +199,8 @@ Pencarian lokal diprioritaskan; fallback ke server jika tidak ditemukan.
 | `createCase()` | API: buat kasus baru |
 | `getCase()` | API: ambil detail satu kasus |
 | `getCaseEvents()` | API: ambil timeline events kasus |
+| `fn_sync_case` | RPC — INSERT kasus baru dengan idempotency key (dipakai offline sync) |
+| `fn_case_sync_handler` | Trigger function — otomatis update cases.current_handler_role, status, closed_at setelah setiap INSERT ke case_events |
 
 ---
 
