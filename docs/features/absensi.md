@@ -95,12 +95,19 @@ dan fungsi helper (fn_can_see_student, fn_teaches_student, dst).
 ## 4. Drill Down Rekap Absensi
 
 ### Siswa
-Langsung melihat detail absensi milik diri sendiri per pertemuan.
-Tidak ada drill down - langsung ke level paling detail.
+Tabel absensi ditampilkan collapsed per blok pertemuan.
+Satu baris = satu blok (1–7 slot berurutan dalam satu hari).
+Kolom: Tanggal, Jam (range first–last slot), Mata Pelajaran, Guru, Status.
+Jika blok punya lebih dari 1 slot: baris bisa diklik untuk expand detail per slot.
+Status summary per blok: HADIR/IZIN/SAKIT/ALPA jika semua slot sama,
+CAMPURAN jika ada slot dengan status berbeda.
+Stat cards (Hadir/Izin/Sakit/Alpa/%) dihitung per slot, bukan per blok.
 
 ### Orang Tua
-Tabel detail per sesi langsung tampil — tanggal, waktu, mapel, guru, status, catatan.
-Tidak ada klik tambahan — semua sesi tampil sekaligus dalam rentang tanggal yang dipilih.
+Sama dengan portal Siswa — tabel collapsed per blok pertemuan.
+Kolom: Tanggal, Jam, Mata Pelajaran, Guru, Status, Catatan.
+Klik baris multi-slot → expand detail per slot.
+Stat cards dihitung per slot.
 
 ### Guru Mapel
 Rekap kelas yang diajar (per mapel)
