@@ -54,6 +54,24 @@ Nilai enum DB: HADIR, IZIN, SAKIT, ALPA
 Catatan: jika belum ada absensi yang diinput untuk suatu blok,
 blok tersebut tidak dihitung di TOTAL — nilainya 0 bukan terjadwal.
 
+### Kode Warna % Hadir
+
+Berlaku di semua portal dan semua role yang menampilkan % hadir:
+
+| Rentang | Warna | Arti |
+|---|---|---|
+| ≥ 80% | Hijau | Kehadiran baik |
+| ≥ 60% dan < 80% | Kuning | Kehadiran perlu perhatian |
+| < 60% | Merah | Kehadiran bermasalah |
+
+Threshold ini diterapkan secara konsisten di:
+- Tab Guru — rekap kehadiran kelas yang diajar
+- Tab Wali Kelas — rekap kehadiran kelas walian
+- Tab Kaprodi — rekap kehadiran kelas di program keahlian
+- Tab Waka Kesiswaan — rekap kehadiran semua kelas
+- Portal Siswa — % hadir milik sendiri
+- Portal Orang Tua — % hadir anak
+
 ## 3. Isolasi Akses
 
 Setiap level akses dibatasi secara ketat.
