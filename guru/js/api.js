@@ -468,17 +468,26 @@ export async function fetchDudiObservations(studentIds) {
     if (!studentIds?.length) return [];
     const { data, error } = await supabase
         .from('observations')
-        .select(`observation_id, student_id, sentiment, dimension, content, observed_at, created_at, author:users!observations_author_user_id_fkey ( full_name, role_type, dudi_org_name )`)
+        .select(`
+            observation_id, student_id, sentiment, dimension, content, observed_at, created_at,
+            author:users!observations_author_user_id_fkey ( full_name, role_type, dudi_org_name )
+        `)
         .in('student_id', studentIds)
+        .eq('author.role_type', 'DUDI')
         .order('created_at', { ascending: false })
         .limit(200);
     if (error) throw error;
-    return (data ?? []).filter(r => r.author?.role_type === 'DUDI').map(r => ({
-        id: r.observation_id, student_id: r.student_id, sentiment: r.sentiment,
-        dimension: r.dimension, content: r.content,
-        author: r.author?.dudi_org_name ?? r.author?.full_name ?? '—',
-        date: r.observed_at ?? r.created_at,
-    }));
+    return (data ?? [])
+        .filter(r => r.author?.role_type === 'DUDI')
+        .map(r => ({
+            id:         r.observation_id,
+            student_id: r.student_id,
+            sentiment:  r.sentiment,
+            dimension:  r.dimension,
+            content:    r.content,
+            author:     r.author?.dudi_org_name ?? r.author?.full_name ?? '—',
+            date:       r.observed_at ?? r.created_at,
+        }));
 }
 
 // Semua siswa PKL lintas program (untuk Waka Humas)
