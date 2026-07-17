@@ -499,3 +499,7 @@ body.has-login-banner .app-header { margin-top: 94px; }
 .kp-acc-arrow { font-size: .85rem; transition: transform .2s; }
 .kp-acc-item.open .kp-acc-arrow { transform: rotate(90deg); }
 .kp-acc-body { margin-top: 12px; }
+
+/* Kaprodi rekap kelas — rata kiri */
+#kp-cls-recap .stat-card { text-align: left; }
+#kp-cls-recap .stat-value { font-size: 1.1rem; }
