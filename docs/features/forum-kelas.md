@@ -90,14 +90,19 @@ Hanya author posting yang bisa menarik — dikunci oleh RLS UPDATE
 ## 6. Komentar
 
 ### Siapa yang Bisa Berkomentar
-Siapapun yang bisa membaca posting tersebut bisa berkomentar —
-tidak ada pembatasan role tambahan. Ini berarti siswa dan orang tua
-yang ada di audience posting juga bisa berkomentar.
+Komentar dibatasi via RLS allowlist — hanya role berikut yang bisa berkomentar:
+- Staf internal: GURU, BK, WALI_KELAS, KAPRODI, KEPSEK, ADMINISTRATIVE,
+  WAKA_KURIKULUM, WAKA_KESISWAAN, WAKA_HUMAS
+- Orang Tua (ORTU)
 
-Dikontrol oleh RLS INSERT forum_post_comments:
-- school_id = fn_current_school_id()
-- author_user_id = fn_current_user_id()
-- fn_can_read_forum_post(post_id) = true
+Yang tidak bisa berkomentar:
+- SISWA — hanya bisa membaca
+- DUDI — tidak terlibat di forum kelas internal
+- STAKEHOLDER — pihak eksternal, tidak punya akses forum
+
+Ditegakkan di level RLS (bukan hanya UI):
+school_id + author_user_id + fn_can_read_forum_post(post_id)
++ fn_current_user_role() = ANY([10 role di atas])
 
 ### Edit Komentar
 Policy UPDATE ada di DB (rls_forum_comments_update) tapi tidak ada
