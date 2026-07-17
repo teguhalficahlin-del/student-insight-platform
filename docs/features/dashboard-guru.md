@@ -8,10 +8,10 @@ jadwal mengajar harian/mingguan dan rekap kehadiran siswa kelas yang diajar.
 ## 1. Jadwal Mengajar
 
 ### Toggle Tampilan
-- **Minggu ini** (default): menampilkan jadwal Senin–Jumat minggu berjalan
-- **Hari ini**: menampilkan jadwal hari ini saja
+- **Hari ini** (default): menampilkan jadwal hari ini saja
   - Ada `input[type=date]` tersembunyi — selalu default ke hari ini,
     tidak ada UI untuk mengubah tanggal secara manual
+- **Minggu ini**: menampilkan jadwal Senin–Jumat minggu berjalan
 
 ### Tabel Jadwal
 Kolom yang ditampilkan:
@@ -99,7 +99,7 @@ Kolom: Nama, NIS, Hadir, Izin, Sakit, Alpa, Total Sesi, % Hadir
 
 ## 5. Catatan Teknis
 
-- Default tampilan saat tab dibuka: **Minggu ini**
+- Default tampilan saat tab dibuka: **Hari ini**
 - Default rentang rekap: **awal bulan ini s/d hari ini** (diset otomatis)
 - Data rekap tidak di-reload saat tombol Sembunyikan → Tampilkan — harus
   klik Tampilkan ulang jika ingin refresh data
