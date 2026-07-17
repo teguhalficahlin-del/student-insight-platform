@@ -35,9 +35,16 @@ Tombol **+ Buat Kasus** membuka modal. Tidak tersedia jika:
   - Kaprodi: bisa pilih
   - DUDI: selalu PKL (field disembunyikan)
   - Semua lain: selalu Sekolah (field disembunyikan)
-- **Audience**: Privat / Orang Tertentu / Semua Internal
 - **Judul**: min. 5 karakter
 - **Deskripsi**: min. 20 karakter
+
+Kasus baru selalu dibuat dengan audience **PRIVATE** secara otomatis.
+Tidak ada pilihan audience di form — visibilitas hanya bisa diubah
+setelah kasus disimpan via panel Tindakan di detail kasus.
+
+Teks pengingat ditampilkan di form:
+> "Kasus baru selalu dimulai sebagai Privat — hanya Anda yang bisa melihat.
+> Visibilitas dapat diubah setelah kasus disimpan."
 
 ---
 
