@@ -365,7 +365,7 @@ async function initGuruTab() {
         });
     }
 
-    await loadWeekSchedule();
+    await loadSchedule();
     await initObsForm();
 }
 
