@@ -241,7 +241,7 @@ function renderScheduleRows(rows, contentEl, date) {
     contentEl.innerHTML = `
         <details class="att-accordion" ${isToday || sesiCount > 0 ? 'open' : ''}>
             <summary class="att-accordion-summary">
-                <span>${esc(label)}</span>
+                <span class="att-acc-name">${esc(label)}</span>
                 <span class="att-acc-names">${sesiCount > 0 ? `${sesiCount} sesi` : 'tidak ada jadwal'}</span>
             </summary>
             <div style="padding:0 12px 8px">${tableHtml}</div>
@@ -336,7 +336,7 @@ async function loadWeekSchedule() {
             return `
                 <details class="att-accordion" ${isToday || sesiCount > 0 ? 'open' : ''}>
                     <summary class="att-accordion-summary">
-                        <span>${esc(dayLabel)}</span>
+                        <span class="att-acc-name">${esc(dayLabel)}</span>
                         <span class="att-acc-names">${sesiCount > 0 ? `${sesiCount} sesi` : 'tidak ada jadwal'}</span>
                     </summary>
                     <div style="padding:0 12px 8px">${tableHtml}</div>
