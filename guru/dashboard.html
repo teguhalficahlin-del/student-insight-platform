@@ -414,15 +414,25 @@
                     <button class="btn btn-secondary btn-sm" id="kp-filter-btn">Filter</button>
                 </div>
                 <div class="table-wrapper">
-                    <table class="table" style="table-layout:fixed;width:100%"><thead><tr>
-                        <th style="width:40%">Nama / NIS</th>
-                        <th style="width:12%;text-align:center">H</th>
-                        <th style="width:12%;text-align:center">I</th>
-                        <th style="width:12%;text-align:center">S</th>
-                        <th style="width:12%;text-align:center">A</th>
-                        <th style="width:12%;text-align:center">%</th>
-                    </tr></thead>
-                    <tbody id="kp-recap-body"></tbody></table>
+                    <table class="table" style="table-layout:fixed;width:100%">
+                        <colgroup>
+                            <col style="width:40%">
+                            <col style="width:12%">
+                            <col style="width:12%">
+                            <col style="width:12%">
+                            <col style="width:12%">
+                            <col style="width:12%">
+                        </colgroup>
+                        <thead><tr>
+                            <th>Nama / NIS</th>
+                            <th style="text-align:center">H</th>
+                            <th style="text-align:center">I</th>
+                            <th style="text-align:center">S</th>
+                            <th style="text-align:center">A</th>
+                            <th style="text-align:center">%</th>
+                        </tr></thead>
+                        <tbody id="kp-recap-body"></tbody>
+                    </table>
                 </div>
                 <p class="hint" id="kp-recap-empty" style="display:none">Belum ada data absensi pada rentang ini.</p>
                 </div>
