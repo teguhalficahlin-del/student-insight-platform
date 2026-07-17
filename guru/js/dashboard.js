@@ -35,7 +35,7 @@ import {
     registerLoginDevice,
     getForumPosts, getForumCategories, getForumStudents, createForumPost,
     addForumAcknowledgement, addForumComment, getForumPostComments, getForumClasses,
-    withdrawForumPost, updateForumPost, withdrawForumComment,
+    withdrawForumPost, updateForumPost, withdrawForumComment, getForumMemberDetails,
     getMyTeachingSubjects, getCpBySubject, getTpBySubject,
     saveCp, saveTp, updateTp, generateAtp,
 } from './api.js';
@@ -4099,7 +4099,6 @@ async function openCreatePostModal() {
                 _forumClassId, _forumAcademicYear
             );
         } catch (err) {
-            console.error('[Forum] getForumMemberDetails error:', JSON.stringify(err), err);
             const searchEl = document.getElementById('forum-specific-search');
             if (searchEl) searchEl.placeholder = 'Gagal memuat daftar anggota — coba tutup dan buka modal lagi';
         }
