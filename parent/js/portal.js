@@ -66,11 +66,10 @@ const btnObsFilter   = document.getElementById('btn-obs-filter');
 const notifBellBtn   = document.getElementById('notif-bell-btn');
 const notifDropdown  = document.getElementById('notif-dropdown');
 const sectionForum   = document.getElementById('section-forum');
-const sectionAch     = document.getElementById('section-achievements');
 const tabNav         = document.getElementById('tab-nav');
 const tabBtns        = document.querySelectorAll('.tab-btn');
 const ALL_SECTIONS   = [sectionPkl, sectionSched, sectionAtt,
-                        sectionObs, sectionCases, sectionForum, sectionAch];
+                        sectionObs, sectionCases, sectionForum];
 let _notifPollTimer  = null;
 
 let currentUser = null;
@@ -92,7 +91,7 @@ const LC = {
 let children    = [];
 let currentClassId = null;
 let tabLoaded = { pkl:false, schedule:false, attendance:false,
-                  observations:false, cases:false, forum:false, achievements:false };
+                  observations:false, cases:false, forum:false };
 
 const STATUS_LABELS = {
     HADIR:       'Hadir',
@@ -186,7 +185,6 @@ function getTabKey(sectionId) {
         'section-observations': 'observations',
         'section-cases':        'cases',
         'section-forum':         'forum',
-        'section-achievements':  'achievements',
     };
     return map[sectionId] ?? null;
 }
@@ -221,7 +219,6 @@ async function showTab(sectionId) {
     if (key === 'observations') await loadObservations(child.student_id);
     if (key === 'cases')        await loadCases(child.student_id);
     if (key === 'forum')         await initForumSection();
-    if (key === 'achievements')  await loadAchievements(child.student_id);
 }
 
 const STATUS_STUDENT_LABEL = { AKTIF: 'Aktif', PKL: 'Sedang PKL', LULUS: 'Lulus', KELUAR: 'Tidak aktif' };
@@ -245,7 +242,7 @@ async function loadChildData(index) {
 
     // Reset lazy-load flags untuk anak baru
     tabLoaded = { pkl:false, schedule:false, attendance:false,
-                  observations:false, cases:false, forum:false, achievements:false };
+                  observations:false, cases:false, forum:false };
     forumInitDone = false;
 
     // Tampilkan tab-nav, atur tombol mana yang visible
@@ -541,45 +538,6 @@ function fe(err) {
 
 function localDateStr(d = new Date()) {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-
-const ACH_CATEGORY_LABEL = { AKADEMIK: 'Akademik', NON_AKADEMIK: 'Non-Akademik', SERTIFIKASI: 'Sertifikasi', PENGHARGAAN: 'Penghargaan' };
-const ACH_SCOPE_LABEL    = { SEKOLAH: 'Sekolah', KABUPATEN: 'Kab/Kota', PROVINSI: 'Provinsi', NASIONAL: 'Nasional', INTERNASIONAL: 'Internasional' };
-
-async function loadAchievements(studentId) {
-    const hintEl = document.getElementById('ach-hint');
-    const listEl = document.getElementById('ach-list');
-    hintEl.textContent   = 'Memuat…';
-    hintEl.style.display = 'block';
-    listEl.innerHTML     = '';
-    try {
-        const { data, error } = await supabase
-            .from('v_student_portal_achievements')
-            .select('achievement_id, title, description, category, scope, achieved_at, recorded_by_name')
-            .eq('student_id', studentId)
-            .order('achieved_at', { ascending: false })
-            .limit(50);
-        if (error) throw error;
-        const rows = data ?? [];
-        if (!rows.length) {
-            hintEl.textContent = 'Belum ada prestasi yang tercatat untuk anak Anda.';
-            return;
-        }
-        hintEl.style.display = 'none';
-        listEl.innerHTML = rows.map(r => `
-            <div style="border:1px solid var(--color-border);border-left:3px solid var(--color-primary);border-radius:var(--radius);padding:12px;margin-bottom:10px">
-                <div style="font-weight:600;margin-bottom:4px">${esc(r.title)}</div>
-                <div style="font-size:12px;color:var(--color-text-muted)">
-                    ${ACH_CATEGORY_LABEL[r.category] ?? r.category}
-                    &middot; ${ACH_SCOPE_LABEL[r.scope] ?? r.scope}
-                    &middot; ${formatDate(r.achieved_at)}
-                    &middot; dicatat oleh ${esc(r.recorded_by_name ?? '—')}
-                </div>
-                ${r.description ? `<p style="margin:6px 0 0;font-size:13px">${esc(r.description)}</p>` : ''}
-            </div>`).join('');
-    } catch (err) {
-        hintEl.textContent = `Gagal memuat prestasi. ${err.message ?? ''}`;
-    }
 }
 
 const CASE_STATUS_LABEL = { OPEN: 'Terbuka', CLOSED: 'Selesai' };
