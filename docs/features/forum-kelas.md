@@ -50,6 +50,28 @@ Saat membuat posting, guru memilih siapa yang bisa melihat via kolom
 Visibilitas tidak bisa diubah setelah posting dibuat
 (dikunci oleh RLS WITH CHECK pada policy `rls_forum_posts_update`).
 
+### Kapan Menggunakan ORANG_TERTENTU
+Gunakan ORANG_TERTENTU ketika tidak ada pilihan visibility lain yang tepat:
+
+| Skenario | Mengapa perlu ORANG_TERTENTU |
+|---|---|
+| Hanya BK tertentu yang perlu tahu | STAF_SAJA mencakup semua staf kelas |
+| Orang tua siswa tahu, tapi siswa tidak | ORTU_SISWA_SUBJEK selalu menyertakan siswa |
+| Kombinasi staf tertentu + ortu tertentu | Tidak ada visibility tunggal yang cover ini |
+| Hanya Waka atau Kaprodi tanpa staf lain | STAF_SAJA mencakup semua staf kelas |
+
+Untuk skenario lain, gunakan visibility yang lebih tepat:
+- Semua staf kelas → STAF_SAJA
+- Siswa yang dibahas + orang tuanya → ORTU_SISWA_SUBJEK
+- Seluruh kelas (siswa + ortu) → ORTU_SISWA_KELAS
+- Semua pihak → PUBLIK
+
+### Siapa yang Bisa Dipilih di ORANG_TERTENTU
+- Staf internal yang bertugas di kelas (guru, BK, wali kelas, kaprodi, waka, kepsek)
+- Orang tua siswa aktif di kelas
+- Siswa tidak bisa dipilih secara individual — untuk menyertakan siswa
+  gunakan ORTU_SISWA_SUBJEK atau ORTU_SISWA_KELAS
+
 ---
 
 ## 4. Forum Per Kelas
