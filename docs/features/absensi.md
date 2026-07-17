@@ -36,6 +36,9 @@ Nilai enum DB: HADIR, IZIN, SAKIT, ALPA
 ### Keterbatasan
 - Tidak ada team teaching — satu blok hanya diajar satu guru
 - Tidak ada mekanisme guru pengganti di portal ini
+- Fitur guru pengganti (substitute_schedules) sudah ada di DB dan backend
+  tapi DEPRECATED — tidak ada UI di portal guru dan tidak akan dipakai.
+  Akan dihapus dalam sprint tersendiri setelah go-live.
 
 ## 2. Kolom Rekap Kehadiran
 
