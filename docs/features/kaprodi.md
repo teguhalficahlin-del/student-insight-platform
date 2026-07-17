@@ -54,14 +54,19 @@ Kelas → Siswa → Sesi (3 level):
 
 ## 3. Mitra DUDI
 
-Daftar perusahaan/instansi mitra PKL yang terdaftar untuk program keahlian ini.
+Daftar akun pengguna dengan role DUDI yang terdaftar di program keahlian ini.
+Section ini bersifat referensi — data DUDI di sini dipakai sebagai sumber
+dropdown di form Penempatan PKL. Kaprodi tidak bisa menambah atau menghapus
+DUDI dari section ini — manajemen akun DUDI dilakukan di portal Admin.
 
-| Kolom | Isi |
+| Kolom | Sumber Data |
 |---|---|
-| Nama Usaha | `dudi_org_name` dari tabel users (role DUDI) |
-| Penanggung Jawab | `full_name` akun DUDI |
+| Nama Usaha | `dudi_org_name` dari view `v_users_staff_directory` |
+| Penanggung Jawab | `full_name` akun DUDI (nama PIC) |
 
-Fungsi: `fetchDudiPartners(programId)`
+Filter query: `role_type = 'DUDI'` dan `program_id = kaprodi_program_id`.
+
+Fungsi: `fetchDudiPartners(programId)`, `renderKpDudi()`
 
 ---
 
