@@ -14,6 +14,7 @@ import {
     logout,
     fetchChildren,
     fetchSchedule,
+    fetchWeekSchedule,
     fetchAttendance,
     fetchObservations,
     fetchCases,
@@ -89,6 +90,7 @@ const LC = {
     },
 };
 let children    = [];
+let currentClassId = null;
 let tabLoaded = { pkl:false, schedule:false, attendance:false,
                   observations:false, cases:false, forum:false, achievements:false };
 
@@ -211,7 +213,10 @@ async function showTab(sectionId) {
     const child = children[idx];
     if (!child) return;
     if (key === 'pkl')          await loadPkl(child.student_id);
-    if (key === 'schedule')     await loadSchedule(child.class_id);
+    if (key === 'schedule') {
+        currentClassId = child.class_id;
+        await loadSchedule(child.class_id);
+    }
     if (key === 'attendance')   await loadAttendance(child.student_id);
     if (key === 'observations') await loadObservations(child.student_id);
     if (key === 'cases')        await loadCases(child.student_id);
@@ -260,37 +265,90 @@ async function loadChildData(index) {
 }
 
 async function loadSchedule(classId) {
-    schedTbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--color-text-muted)">Memuat...</td></tr>';
-    schedEmpty.style.display = 'none';
-
+    const contentEl = document.getElementById('sched-content');
+    contentEl.innerHTML = '<p class="hint">Memuat jadwal…</p>';
     if (!classId) {
-        schedTbody.innerHTML = '';
-        schedEmpty.textContent = 'Anak belum terdaftar di kelas pada tahun ajaran ini.';
-        schedEmpty.style.display = 'block';
+        contentEl.innerHTML = '<p class="hint">Anak belum terdaftar di kelas.</p>';
         return;
     }
-
+    const date     = localDateStr();
+    const label    = new Date(date + 'T00:00:00')
+        .toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     try {
-        const date = schedDate.value;
         const rows = await fetchSchedule(classId, date);
-        const dayLabel = date ? new Date(date + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
-        const dayLabelEl = document.getElementById('schedule-day-label');
-        if (dayLabelEl) dayLabelEl.textContent = dayLabel;
-        if (rows.length === 0) {
-            schedTbody.innerHTML = '';
-            schedEmpty.textContent = 'Tidak ada jadwal pelajaran pada tanggal ini.';
-            schedEmpty.style.display = 'block';
+        const sesiCount = rows.length;
+        const tableHtml = sesiCount === 0
+            ? '<p class="hint" style="margin:8px 0 4px">Tidak ada jadwal pada hari ini.</p>'
+            : `<div class="table-wrapper">
+               <table class="table">
+                   <thead><tr><th>Jam</th><th>Mata Pelajaran</th><th>Guru</th></tr></thead>
+                   <tbody>${rows.map(r => `
+                       <tr>
+                           <td>${r.start?.slice(0,5)} – ${r.end?.slice(0,5)}</td>
+                           <td>${esc(r.subject)}</td>
+                           <td>${esc(r.teacher)}</td>
+                       </tr>`).join('')}
+                   </tbody>
+               </table>
+               </div>`;
+        contentEl.innerHTML = `
+            <details class="att-accordion" open>
+                <summary class="att-accordion-summary">
+                    <span class="att-acc-name">${esc(label)}</span>
+                    <span class="att-acc-names">${sesiCount > 0 ? `${sesiCount} sesi` : 'tidak ada jadwal'}</span>
+                </summary>
+                <div style="padding:0 12px 8px">${tableHtml}</div>
+            </details>`;
+    } catch (err) {
+        contentEl.innerHTML = `<div class="status-err">Gagal memuat jadwal. ${esc(fe(err))}</div>`;
+    }
+}
+
+async function loadWeekSchedule(classId) {
+    const contentEl = document.getElementById('sched-week-content');
+    contentEl.innerHTML = '<p class="hint">Memuat jadwal minggu ini…</p>';
+    if (!classId) {
+        contentEl.innerHTML = '<p class="hint">Anak belum terdaftar di kelas.</p>';
+        return;
+    }
+    try {
+        const results  = await fetchWeekSchedule(classId);
+        const todayStr = localDateStr();
+        const DAY_NAMES = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
+        const hasAny = results.some(r => r.rows.length > 0);
+        if (!hasAny) {
+            contentEl.innerHTML = '<p class="hint">Tidak ada jadwal pelajaran minggu ini.</p>';
             return;
         }
-        schedTbody.innerHTML = rows.map(r => `
-            <tr>
-                <td>${r.start?.slice(0, 5)} – ${r.end?.slice(0, 5)}</td>
-                <td>${esc(r.subject)}</td>
-                <td>${esc(r.teacher)}</td>
-            </tr>
-        `).join('');
+        contentEl.innerHTML = results.map((r, idx) => {
+            const label     = `${DAY_NAMES[idx]}, ${new Date(r.date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+            const isToday   = r.date === todayStr;
+            const sesiCount = r.rows.length;
+            const tableHtml = sesiCount === 0
+                ? '<p class="hint" style="margin:8px 0 4px">Tidak ada jadwal</p>'
+                : `<div class="table-wrapper">
+                   <table class="table">
+                       <thead><tr><th>Jam</th><th>Mata Pelajaran</th><th>Guru</th></tr></thead>
+                       <tbody>${r.rows.map(s => `
+                           <tr>
+                               <td>${s.start?.slice(0,5)} – ${s.end?.slice(0,5)}</td>
+                               <td>${esc(s.subject)}</td>
+                               <td>${esc(s.teacher)}</td>
+                           </tr>`).join('')}
+                       </tbody>
+                   </table>
+                   </div>`;
+            return `
+                <details class="att-accordion" ${isToday ? 'open' : ''}>
+                    <summary class="att-accordion-summary">
+                        <span class="att-acc-name">${esc(label)}</span>
+                        <span class="att-acc-names">${sesiCount > 0 ? `${sesiCount} sesi` : 'tidak ada jadwal'}</span>
+                    </summary>
+                    <div style="padding:0 12px 8px">${tableHtml}</div>
+                </details>`;
+        }).join('');
     } catch (err) {
-        schedTbody.innerHTML = `<tr><td colspan="3" class="hint">Gagal memuat data. ${esc(fe(err))}</td></tr>`;
+        contentEl.innerHTML = `<div class="status-err">Gagal memuat jadwal. ${esc(fe(err))}</div>`;
     }
 }
 
@@ -667,17 +725,21 @@ btnFilter.addEventListener('click', async () => {
     }
 });
 
-btnSchedule.addEventListener('click', async () => {
-    const idx = Number(selectChild.value);
-    const prev = btnSchedule.textContent;
-    btnSchedule.disabled = true;
-    btnSchedule.textContent = 'Memuat…';
-    try {
-        await loadSchedule(children[idx].class_id);
-    } finally {
-        btnSchedule.disabled = false;
-        btnSchedule.textContent = prev;
-    }
+// Toggle Hari ini / Minggu ini
+document.querySelectorAll('.sched-view-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        document.querySelectorAll('.sched-view-btn').forEach(b => {
+            b.classList.remove('active', 'btn-primary');
+            b.classList.add('btn-secondary');
+        });
+        btn.classList.add('active', 'btn-primary');
+        btn.classList.remove('btn-secondary');
+        const isWeek = btn.dataset.view === 'minggu';
+        document.getElementById('sched-view-hari-panel').style.display  = isWeek ? 'none' : 'block';
+        document.getElementById('sched-view-minggu-panel').style.display = isWeek ? 'block' : 'none';
+        if (isWeek) await loadWeekSchedule(currentClassId);
+        else await loadSchedule(currentClassId);
+    });
 });
 
 logoutBtn.addEventListener('click', async () => {

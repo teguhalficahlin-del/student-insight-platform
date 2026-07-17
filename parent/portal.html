@@ -65,26 +65,20 @@
         </section>
 
         <section id="section-schedule" class="section" style="display:none">
-            <h3>Jadwal Pelajaran</h3>
-            <div class="filter-row">
-                <div class="field" style="margin-bottom:0">
-                    <label for="schedule-date">Tanggal</label>
-                    <input id="schedule-date" class="input" type="date" />
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+                <h3 style="margin:0">Jadwal Pelajaran</h3>
+                <div style="display:flex;gap:4px">
+                    <button class="btn btn-sm btn-primary sched-view-btn active" data-view="hari">Hari ini</button>
+                    <button class="btn btn-sm btn-secondary sched-view-btn" data-view="minggu">Minggu ini</button>
                 </div>
-                <button id="btn-schedule" class="btn btn-primary">Tampilkan</button>
             </div>
-            <p id="schedule-day-label" class="hint" style="margin-bottom:6px"></p>
-            <table class="data-table" id="schedule-table">
-                <thead>
-                    <tr>
-                        <th>Jam</th>
-                        <th>Mata Pelajaran</th>
-                        <th>Guru</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-            <p id="schedule-empty" class="hint" style="display:none">Tidak ada jadwal pelajaran pada tanggal ini.</p>
+            <div id="sched-view-hari-panel">
+                <input type="date" id="schedule-date" style="display:none">
+                <div id="sched-content"><p class="hint">Memuat jadwal…</p></div>
+            </div>
+            <div id="sched-view-minggu-panel" style="display:none">
+                <div id="sched-week-content"><p class="hint">Memuat jadwal minggu ini…</p></div>
+            </div>
         </section>
 
         <section id="section-attendance" class="section" style="display:none">

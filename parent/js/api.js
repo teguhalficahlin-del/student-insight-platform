@@ -114,6 +114,30 @@ export async function fetchSchedule(classId, date) {
     }));
 }
 
+export async function fetchWeekSchedule(classId) {
+    if (!classId) return [];
+    const today  = new Date();
+    const dow    = today.getDay();
+    const diff   = dow === 0 ? -6 : 1 - dow;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diff);
+
+    const days = Array.from({ length: 5 }, (_, i) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        return d.toISOString().slice(0, 10);
+    });
+
+    const results = await Promise.all(
+        days.map(date =>
+            fetchSchedule(classId, date)
+                .then(rows => ({ date, rows }))
+                .catch(() => ({ date, rows: [] }))
+        )
+    );
+    return results;
+}
+
 export async function fetchAttendance(studentId, dateStart, dateEnd) {
     let q = supabase
         .from('teaching_schedules')
