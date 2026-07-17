@@ -4064,7 +4064,7 @@ async function openCreatePostModal() {
     const modal = document.getElementById('modal-create-post');
     modal.style.display = 'flex';
     const searchEl = document.getElementById('forum-specific-search');
-    if (searchEl) { searchEl.placeholder = 'Ketik nama staf atau orang tua…'; searchEl.value = ''; }
+    if (searchEl) { searchEl.placeholder = 'Ketik nama staf, orang tua, atau nama siswa…'; searchEl.value = ''; }
     document.getElementById('forum-post-content').value = '';
     document.getElementById('forum-post-error').style.display = 'none';
     document.getElementById('forum-category-section').style.display = 'none';
@@ -4162,7 +4162,8 @@ function initForumSpecificPicker() {
         const alreadyIds = new Set(_forumSpecificUsers.map(u => u.user_id));
         const matches = _forumAllMembers.filter(m =>
             !alreadyIds.has(m.user_id) &&
-            m.full_name.toLowerCase().includes(q)
+            (m.full_name.toLowerCase().includes(q) ||
+             (m.student_name && m.student_name.toLowerCase().includes(q)))
         );
         if (!matches.length) {
             dropdownEl.innerHTML =
@@ -4171,19 +4172,25 @@ function initForumSpecificPicker() {
             dropdownEl.style.display = 'block';
             return;
         }
-        dropdownEl.innerHTML = matches.slice(0, 10).map(m => `
+        dropdownEl.innerHTML = matches.slice(0, 10).map(m => {
+            const sublabel = m.role_type === 'ORTU' && m.student_name
+                ? `Orang tua dari: ${esc(m.student_name)}`
+                : esc(m.role_type);
+            return `
             <div data-uid="${esc(m.user_id)}"
                  data-name="${esc(m.full_name)}"
                  data-role="${esc(m.role_type)}"
+                 data-student="${esc(m.student_name ?? '')}"
                  style="padding:8px 12px;cursor:pointer;font-size:13px;
                         border-bottom:1px solid var(--color-border-subtle,
                         var(--color-border))">
                 <span style="font-weight:500">${esc(m.full_name)}</span>
                 <span style="color:var(--color-text-muted);
                              margin-left:6px;font-size:11px">
-                    ${esc(m.role_type)}
+                    ${sublabel}
                 </span>
-            </div>`).join('');
+            </div>`;
+        }).join('');
         dropdownEl.style.display = 'block';
         dropdownEl.querySelectorAll('div[data-uid]').forEach(item => {
             item.addEventListener('mouseenter', () =>
@@ -4192,9 +4199,10 @@ function initForumSpecificPicker() {
                 item.style.background = '');
             item.addEventListener('click', () => {
                 _forumSpecificUsers.push({
-                    user_id:   item.dataset.uid,
-                    full_name: item.dataset.name,
-                    role_type: item.dataset.role,
+                    user_id:      item.dataset.uid,
+                    full_name:    item.dataset.name,
+                    role_type:    item.dataset.role,
+                    student_name: item.dataset.student || null,
                 });
                 searchEl.value           = '';
                 dropdownEl.style.display = 'none';
