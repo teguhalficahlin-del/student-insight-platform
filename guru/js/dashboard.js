@@ -1794,16 +1794,7 @@ function renderKpSummary() {
 
 function renderKpStudents() {
     const tbody = document.getElementById('kp-students-body');
-    const thead = tbody.closest('table').querySelector('thead tr');
     const empty = document.getElementById('kp-students-empty');
-
-    // Pastikan kolom Aksi ada di header
-    if (!thead.querySelector('th[data-aksi]')) {
-        const th = document.createElement('th');
-        th.dataset.aksi = '1';
-        th.textContent = 'Aksi';
-        thead.appendChild(th);
-    }
 
     if (kpStudents.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';

@@ -376,17 +376,31 @@
             <div class="section-card kp-acc-item">
                 <div class="kp-acc-header" data-target="kp-body-students"><span>Daftar Siswa PKL</span><span class="kp-acc-arrow">▸</span></div>
                 <div class="kp-acc-body" id="kp-body-students" style="display:none">
-                <div class="table-wrapper">
-                    <table class="table"><thead><tr><th>Nama</th><th>NIS</th><th>Tempat PKL</th><th>Periode</th></tr></thead>
-                    <tbody id="kp-students-body"></tbody></table>
-                </div>
-                <p class="hint" id="kp-students-empty" style="display:none">Belum ada siswa PKL pada program ini.</p>
-                <!-- Ringkasan — agregat dari Daftar PKL -->
-                <div class="stats-row">
+                <div class="stats-row" style="margin-bottom:16px">
                     <div class="stat-card"><span class="stat-value" id="kp-stat-total">—</span><div class="stat-label">Total Siswa PKL</div></div>
                     <div class="stat-card"><span class="stat-value" id="kp-stat-placed">—</span><div class="stat-label">Sudah Ditempatkan</div></div>
                     <div class="stat-card"><span class="stat-value" id="kp-stat-unplaced">—</span><div class="stat-label">Belum Ditempatkan</div></div>
                 </div>
+                <div class="table-wrapper">
+                    <table class="table" style="table-layout:fixed;width:100%">
+                        <colgroup>
+                            <col style="width:22%">
+                            <col style="width:12%">
+                            <col style="width:28%">
+                            <col style="width:24%">
+                            <col style="width:14%">
+                        </colgroup>
+                        <thead><tr>
+                            <th>Nama</th>
+                            <th>NIS</th>
+                            <th>Tempat PKL</th>
+                            <th>Periode</th>
+                            <th>Aksi</th>
+                        </tr></thead>
+                        <tbody id="kp-students-body"></tbody>
+                    </table>
+                </div>
+                <p class="hint" id="kp-students-empty" style="display:none">Belum ada siswa PKL pada program ini.</p>
                 </div>
             </div>
 
