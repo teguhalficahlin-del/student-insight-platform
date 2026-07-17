@@ -139,5 +139,14 @@ Ini menjaga integritas riwayat observasi siswa.
 
 ---
 
+---
+
+## Catatan Perubahan
+
+Fitur Catat Prestasi dihapus pada Juli 2026 — tabel, RLS, API, dan UI dihapus
+sepenuhnya. Tidak ada data yang hilang karena fitur belum pernah dipakai.
+
+---
+
 *Dokumen ini adalah referensi definitif.
 Setiap perubahan perilaku fitur harus diupdate di sini sebelum diimplementasi.*
