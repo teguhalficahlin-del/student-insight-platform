@@ -39,26 +39,26 @@ Warna status: HADIR = hijau, IZIN = kuning, SAKIT = biru primer, ALPA = merah.
 mapel** siswa. Tab Guru hanya menampilkan sesi mapel yang diajar guru itu
 sendiri (filter teacher_id).
 
+### Unduh Excel
+Tombol **Unduh Excel** muncul setelah data berhasil dimuat via Filter.
+
+Format file: `rekap_wali_{kelas}_{tanggal_mulai}_{tanggal_akhir}.xlsx`
+
+Struktur workbook:
+- Sheet pertama "Ringkasan": semua siswa dengan kolom
+  Nama, Hadir, Izin, Sakit, Alpa, Total Sesi, % Hadir
+- Sheet per siswa: detail seluruh sesi dalam rentang yang dipilih
+  dengan kolom Tanggal, Jam, Mata Pelajaran, Guru, Status
+
+Catatan: saat tombol Unduh diklik, sistem fetch detail sesi
+semua siswa secara paralel — bukan hanya siswa yang accordionnya
+sudah dibuka. Ini memastikan Excel selalu lengkap.
+
+Nama sheet per siswa dibatasi 31 karakter (batasan Excel).
+
 ---
 
-## 2. Unduh Excel
-
-Tombol **Unduh Excel** muncul setelah data berhasil dimuat.
-Klik → fetch ulang semua sesi semua siswa secara paralel, lalu buat file Excel.
-
-### Struktur File
-Format: `rekap_wali_{nama_kelas}_{tanggal_mulai}_{tanggal_akhir}.xlsx`
-
-| Sheet | Isi |
-|---|---|
-| Ringkasan | Satu baris per siswa: Nama, Hadir, Izin, Sakit, Alpa, Total Sesi, % Hadir |
-| {Nama Siswa} | Detail semua sesi siswa tersebut (maks 31 karakter — batasan Excel) |
-
-Sheet detail per siswa berisi kolom: Tanggal, Jam, Mata Pelajaran, Guru, Status.
-
----
-
-## 3. Isolasi Akses
+## 2. Isolasi Akses
 
 | Aspek | Aturan |
 |---|---|
@@ -69,7 +69,7 @@ Sheet detail per siswa berisi kolom: Tanggal, Jam, Mata Pelajaran, Guru, Status.
 
 ---
 
-## 4. Fungsi yang Dipanggil
+## 3. Fungsi yang Dipanggil
 
 | Fungsi | Kegunaan |
 |---|---|
@@ -82,7 +82,7 @@ Sheet detail per siswa berisi kolom: Tanggal, Jam, Mata Pelajaran, Guru, Status.
 
 ---
 
-## 5. Catatan Teknis
+## 4. Catatan Teknis
 
 - Default rentang: 30 hari ke belakang s/d hari ini (berbeda dari tab Guru: awal bulan ini)
 - Tombol Unduh Excel melakukan fetch ulang ke server — bukan dari cache accordion
