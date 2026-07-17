@@ -87,6 +87,11 @@ Untuk skenario lain, gunakan visibility yang lebih tepat:
 - Orang tua siswa aktif di kelas
 - Siswa tidak bisa dipilih secara individual — untuk menyertakan siswa
   gunakan ORTU_SISWA_SUBJEK atau ORTU_SISWA_KELAS
+- Untuk mencari orang tua siswa tertentu, ketik nama siswa —
+  sistem akan menampilkan orang tua siswa tersebut dengan label
+  'Orang tua dari: Nama Siswa'
+- DUDI dan STAKEHOLDER tidak muncul di picker — hanya staf internal
+  dan orang tua siswa aktif di kelas
 
 ---
 
