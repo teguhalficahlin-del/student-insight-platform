@@ -73,18 +73,42 @@ Fungsi: `fetchDudiPartners(programId)`, `renderKpDudi()`
 ## 4. Penempatan PKL
 
 Form untuk menempatkan siswa aktif ke mitra DUDI.
+Tersedia tiga cara input: form manual (satu siswa), impor CSV (bulk), dan selesaikan PKL.
 
-### Input
-- Dropdown siswa (hanya siswa AKTIF di program ini)
-- Dropdown mitra DUDI (hanya DUDI di program ini)
-- Tanggal Mulai dan Tanggal Selesai
+### Form Manual
+- Dropdown Siswa — hanya menampilkan siswa `AKTIF` di program ini (belum PKL)
+- Dropdown Mitra DUDI — dari daftar DUDI yang sudah dimuat di section Mitra DUDI
+- Input Tanggal Mulai dan Tanggal Selesai
+- Klik **Simpan Penempatan** → panggil `fn_create_placement` via RPC
 
-### Aksi
-- **Simpan Penempatan** — submit satu siswa ke satu DUDI
-- **Impor CSV** — bulk import penempatan via file CSV
-- **Unduh Template CSV** — unduh template CSV untuk diisi
+### Impor CSV (Bulk)
+- Klik **Impor CSV** → pilih file `.csv`
+- Format kolom: `nis, login_dudi, tanggal_mulai, tanggal_selesai`
+- Diproses via edge function `bulk-import-pkl`
+- Return: `{ success, skipped, failed }`
 
-Fungsi: `initKpPlacementForm(programId)`, `handleFinishPkl(btn)`
+### Unduh Template CSV
+- Generate file `template_penempatan_pkl.csv` dengan satu baris contoh
+- Dibuat langsung di browser via Blob — tidak ada request ke server
+
+### Setelah Penempatan Berhasil
+- Siswa berpindah status `AKTIF → PKL`
+- Muncul di Daftar Siswa PKL
+- Hilang dari dropdown form
+- Stat cards direfresh otomatis
+
+### Selesaikan PKL
+Tombol **Selesaikan PKL** ada di Daftar Siswa PKL (bukan di section ini).
+Klik → konfirmasi → panggil `fn_finish_placement` via RPC → siswa kembali `PKL → AKTIF`.
+
+### Fungsi
+- `fn_create_placement(p_student_id, p_dudi_user_id, p_start_date, p_end_date)` —
+  atomic: INSERT pkl_placements + UPDATE student_status = 'PKL' dalam satu transaksi
+- `fn_finish_placement(p_student_id, p_placement_id)` —
+  atomic: UPDATE is_active = false + UPDATE student_status = 'AKTIF' dalam satu transaksi
+- `bulkImportPkl(csvText)` — edge function bulk-import-pkl
+- `initKpPlacementForm(programId)` — init form, bind event listeners
+- `handleFinishPkl(btn)` — handler tombol Selesaikan PKL
 
 ---
 
