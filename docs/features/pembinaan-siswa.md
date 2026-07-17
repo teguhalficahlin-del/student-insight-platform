@@ -166,12 +166,16 @@ Scope pencarian siswa saat membuat kasus berbeda per role:
 
 | Role | Scope Pencarian |
 |---|---|
-| BK, Waka Kesiswaan, Kepsek | Seluruh siswa aktif di sekolah |
-| Guru, Wali Kelas, Kaprodi | Hanya siswa yang diajar/diwalikan/di program |
+| GURU biasa | Hanya siswa yang diajarnya semester ini |
+| WALI KELAS | Hanya siswa yang diajarnya semester ini |
+| KAPRODI | Siswa yang diajar + seluruh siswa aktif di program keahliannya (termasuk PKL) |
+| BK, WAKA KESISWAAN, KEPSEK | Seluruh siswa aktif di sekolah (remote search) |
 | DUDI | Hanya siswa yang sedang PKL di DUDI tersebut |
 
-Autocomplete aktif setelah minimal 2 karakter diketik.
-Pencarian lokal diprioritaskan; fallback ke server jika tidak ditemukan.
+Scope ditentukan dari jabatan-flag user (bk, waka_kesiswaan, kepsek),
+bukan dari role_type — konsisten dengan pola jabatan di seluruh sistem.
+Pencarian lokal diprioritaskan; BK/Waka/Kepsek mendapat fallback remote
+search ke seluruh sekolah jika tidak ditemukan secara lokal.
 
 ---
 

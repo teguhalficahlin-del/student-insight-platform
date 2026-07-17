@@ -18,6 +18,12 @@ Field yang tersedia:
 | Field | Keterangan |
 |---|---|
 | Siswa | Autocomplete dari daftar siswa yang diajar guru (min. 2 karakter) |
+
+Scope pencarian siswa sama dengan tab Pembinaan Siswa —
+lihat docs/features/pembinaan-siswa.md §9 untuk detail per role.
+Guru biasa hanya bisa mencatat untuk siswa yang diajarnya
+(ditegakkan juga di level RLS: fn_guru_teaches_student).
+
 | Dimensi | Kategori observasi — 8 pilihan |
 | Sentimen | Penilaian umum — 3 pilihan |
 | Visibilitas | Siapa yang bisa membaca catatan ini |
