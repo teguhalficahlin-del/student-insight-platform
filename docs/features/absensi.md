@@ -51,6 +51,9 @@ Nilai enum DB: HADIR, IZIN, SAKIT, ALPA
 | TOTAL | Jumlah blok yang sudah diinput absensinya (bukan jumlah blok terjadwal) |
 | % HADIR | HADIR dibagi TOTAL dikali 100 |
 
+Catatan: jika belum ada absensi yang diinput untuk suatu blok,
+blok tersebut tidak dihitung di TOTAL — nilainya 0 bukan terjadwal.
+
 ## 3. Isolasi Akses
 
 Setiap level akses dibatasi secara ketat.
@@ -125,7 +128,10 @@ Tidak bisa drill down ke level siswa individual.
 - Hard DELETE diizinkan di level DB untuk guru mapel,
   tapi tidak ada tombol hapus di UI portal guru
 - RLS policy aktif di semua tabel terkait:
-  - attendance: 5 policy (rw_guru, rw_substitute, read_parent, read_staff, read_student)
+  - attendance: 4 policy aktif (rw_guru, read_parent, read_staff, read_student)
+     + 1 deprecated (rw_substitute — akan dihapus setelah go-live)
+     read_staff berlaku untuk role: WALI_KELAS, KAPRODI, WAKA_KESISWAAN,
+     WAKA_KURIKULUM, BK, KEPSEK
   - teaching_schedules: dipakai sebagai join untuk verifikasi hak akses guru
 
 ## 7. Hubungan Absensi Siswa dengan Kehadiran Guru
@@ -136,12 +142,15 @@ Tidak ada mekanisme terpisah untuk guru menandai diri sendiri hadir.
 
 ### Alur Teknis
 1. Guru submit absensi siswa pada sesi terjadwal
-2. Trigger `fn_teacher_attendance_signal` aktif
-3. `fn_sync_attendance_batch` (RPC) membalik `teacher_indicator`:
-   `PENDING_EVALUATION → HADIR` secara real-time dalam transaksi yang sama
-   dengan penyimpanan absensi siswa. Hanya berlaku untuk session_date = hari ini.
-4. Rekap kehadiran guru di tab Waka Kurikulum
-   menghitung dari `teacher_indicator` via `fn_attendance_fill_rate`
+2. `fn_sync_attendance_batch` (RPC) dijalankan — dalam satu transaksi:
+   - UPSERT record absensi siswa ke tabel `attendance`
+   - Flip `teacher_indicator`: PENDING_EVALUATION → HADIR (real-time)
+   - Hanya berlaku jika session_date = hari ini
+3. Trigger `fn_teacher_attendance_signal` aktif setelah INSERT ke `attendance`:
+   - Insert sinyal ke `teacher_attendance_log` sebagai audit trail
+   - Hanya aktif jika session_date = hari ini dan teacher_indicator masih PENDING_EVALUATION
+4. Rekap kehadiran guru di tab Waka Kurikulum membaca `teacher_indicator`
+   via `fn_attendance_fill_rate` — nilai sudah HADIR secara real-time
 
 ### Jika Guru Tidak Submit
 1. Guru tidak submit absensi sebelum sesi berakhir
