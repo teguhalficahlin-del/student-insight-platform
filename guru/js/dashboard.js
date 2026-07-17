@@ -4070,6 +4070,7 @@ async function openCreatePostModal() {
     document.getElementById('forum-category-section').style.display = 'none';
     document.getElementById('forum-audience-warning').style.display = 'none';
     document.getElementById('forum-audience-select').value = 'STAF_SAJA';
+    document.getElementById('forum-audience-select-2').value = '';
 
     const studentListEl = document.getElementById('forum-student-list');
     studentListEl.innerHTML = '<p class="hint" style="margin:0">Memuat…</p>';
@@ -4297,6 +4298,10 @@ async function submitCreatePost() {
     const submitBtn = document.getElementById('btn-submit-post');
     const content   = document.getElementById('forum-post-content').value.trim();
     const audience  = document.getElementById('forum-audience-select').value;
+    const audienceType2 = document.getElementById('forum-audience-select-2')?.value || null;
+    const specificUserIds2 = audienceType2 === 'ORANG_TERTENTU'
+        ? (_forumSpecificUsers2 ?? []).map(u => u.user_id)
+        : [];
 
     errEl.style.display = 'none';
 
@@ -4325,7 +4330,9 @@ async function submitCreatePost() {
             _forumSelectedCategory,
             _forumSelectedStudents,
             audience,
-            _forumSpecificUsers.map(u => u.user_id)
+            _forumSpecificUsers.map(u => u.user_id),
+            audienceType2,
+            specificUserIds2
         );
         closeCreatePostModal();
         _forumOffset = 0;

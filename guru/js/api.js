@@ -1243,19 +1243,23 @@ export async function getForumMemberDetails(classId, academicYear) {
 export async function createForumPost(
     classId, academicYear, content,
     categoryCode, subjectStudentIds, audienceType,
-    specificUserIds = []
+    specificUserIds = [],
+    audienceType2 = null,
+    specificUserIds2 = []
 ) {
     const { data, error } = await supabase.rpc('fn_create_forum_post', {
-        p_class_id:            classId,
-        p_academic_year:       academicYear,
-        p_content:             content,
-        p_category_code:       categoryCode  || null,
-        p_subject_student_ids: subjectStudentIds ?? [],
-        p_audience_type:       audienceType,
-        p_specific_user_ids:   specificUserIds,
+        p_class_id:              classId,
+        p_academic_year:         academicYear,
+        p_content:               content,
+        p_category_code:         categoryCode || null,
+        p_subject_student_ids:   subjectStudentIds ?? [],
+        p_audience_type:         audienceType,
+        p_specific_user_ids:     specificUserIds,
+        p_audience_type_2:       audienceType2 || null,
+        p_specific_user_ids_2:   specificUserIds2,
     });
     if (error) throw error;
-    return data; // UUID post_id
+    return data;
 }
 
 export async function addForumAcknowledgement(postId, userId, schoolId) {
