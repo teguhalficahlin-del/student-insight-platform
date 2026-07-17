@@ -1351,7 +1351,7 @@ async function loadBkAttendanceRecap() {
                     return `
                     <details class="att-accordion wz-accordion-inner" style="margin:4px 0 4px 16px">
                         <summary class="att-accordion-summary">
-                            <span>${esc(r.name)}</span>
+                            <span class="att-acc-name">${esc(r.name)}</span>
                             <span class="att-acc-names" style="display:flex;gap:10px;font-size:11px;font-weight:500">
                                 <span style="color:${colH}">${pctH}%H</span>
                                 <span style="color:var(--color-warning,#f59e0b)">${pctI}%I</span>
@@ -1409,7 +1409,7 @@ async function loadBkAttendanceRecap() {
                                      data-date-start="${esc(dStart ?? '')}"
                                      data-date-end="${esc(dEnd ?? '')}">
                                 <summary class="att-accordion-summary">
-                                    <span>
+                                    <span class="att-acc-name">
                                         ${esc(s.full_name)}
                                         <span class="sub-label" style="margin-left:4px">${esc(s.nis)}</span>
                                     </span>
@@ -1641,7 +1641,7 @@ async function loadWkAttendanceRecap() {
                                      data-date-start="${esc(dStart ?? '')}"
                                      data-date-end="${esc(dEnd ?? '')}">
                                 <summary class="att-accordion-summary">
-                                    <span>
+                                    <span class="att-acc-name">
                                         ${esc(s.full_name)}
                                         <span class="sub-label" style="margin-left:4px">${esc(s.nis)}</span>
                                     </span>
@@ -1923,7 +1923,7 @@ async function loadKpClsRecap() {
                 return `
                 <details class="att-accordion" style="margin-bottom:8px">
                     <summary class="att-accordion-summary">
-                        <span>${esc(r.name)}</span>
+                        <span class="att-acc-name">${esc(r.name)}</span>
                         <span class="att-acc-names" style="display:flex;gap:10px;font-size:11px;font-weight:500">
                             <span style="color:${colH}">${pctH}%H</span>
                             <span style="color:var(--color-warning,#f59e0b)">${pctI}%I</span>
@@ -1972,7 +1972,7 @@ async function loadKpClsRecap() {
                                      data-date-start="${esc(dStart ?? '')}"
                                      data-date-end="${esc(dEnd ?? '')}">
                                 <summary class="att-accordion-summary">
-                                    <span>
+                                    <span class="att-acc-name">
                                         ${esc(s.full_name)}
                                         <span class="sub-label" style="margin-left:4px">${esc(s.nis)}</span>
                                     </span>
