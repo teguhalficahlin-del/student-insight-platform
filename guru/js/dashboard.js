@@ -1059,7 +1059,14 @@ async function initObsTab() {
     await initObsForm();
     if (!_obsTabInit) {
         _obsTabInit = true;
-        initAchievementForm('ach', myStudents);
+        const canRecordAchievement = currentUser.wali_kelas_class_id
+            || currentUser.is_kepsek
+            || jabatan.includes('kaprodi');
+        if (canRecordAchievement) {
+            initAchievementForm('ach', myStudents);
+        } else {
+            document.getElementById('ach-form-card')?.remove();
+        }
     }
     await loadObsHistory();
 }
