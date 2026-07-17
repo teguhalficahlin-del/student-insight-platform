@@ -83,9 +83,14 @@ tidak ada pilihan ubah status, hanya bisa CLOSE.
 
 | Nilai | Label | Siapa yang bisa lihat |
 |---|---|---|
-| PRIVATE | 🔒 Privat | Pembuat kasus dan handler aktif saja |
+| PRIVATE | 🔒 Privat | Hanya pembuat kasus — tidak ada orang lain yang bisa lihat, termasuk handler role yang sama. Saat kasus dieskalasi ke pihak lain, audience otomatis berubah ke RESTRICTED. |
 | RESTRICTED | 👥 Orang Tertentu | Pembuat, handler, dan individu yang ditambahkan secara eksplisit |
 | PUBLIC | 🌐 Semua Internal | Semua staf internal sekolah |
+
+Catatan teknis: untuk kasus PRIVATE, fn_matches_case_handler tidak berlaku.
+Hanya fn_involved_in_case (pembuat + yang pernah berkomentar) yang bisa lihat.
+Saat eskalasi dari PRIVATE, sistem otomatis upgrade audience ke RESTRICTED
+agar handler baru bisa mengakses kasus.
 
 Audience dapat diubah setelah kasus dibuat.
 Hanya role internal (GURU, BK, WALI_KELAS, KAPRODI, WAKA_KESISWAAN, KEPSEK)
