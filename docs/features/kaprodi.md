@@ -115,21 +115,38 @@ Klik → konfirmasi → panggil `fn_finish_placement` via RPC → siswa kembali 
 ## 5. Daftar Siswa PKL
 
 Tabel semua siswa yang berstatus PKL di program keahlian ini.
+Data diambil dari `fetchPklStudents(programId)` — filter `student_status = 'PKL'`.
 
-| Kolom | Isi |
+### Stat Cards (ditampilkan di atas tabel)
+| Card | Nilai |
 |---|---|
-| Nama | full_name siswa |
-| NIS | nomor induk siswa |
-| Tempat PKL | dudi_org_name mitra aktif |
-| Periode | start_date – end_date penempatan aktif |
-| Aksi | Tombol "Selesaikan PKL" jika sudah ditempatkan |
+| Total Siswa PKL | Jumlah seluruh siswa PKL di program ini |
+| Sudah Ditempatkan | Siswa yang punya placement aktif (`is_active = true`) |
+| Belum Ditempatkan | Total PKL dikurangi yang sudah ditempatkan |
 
-### Stat Cards (di dalam section ini)
-- Total Siswa PKL
-- Sudah Ditempatkan
-- Belum Ditempatkan
+### Tabel
+Layout: `table-layout: fixed`, lebar kolom ditentukan via `<colgroup>`.
 
-Fungsi: `fetchPklStudents(programId)`, `renderKpStudents()`
+| Kolom | Lebar | Isi |
+|---|---|---|
+| Nama | 22% | `full_name` siswa |
+| NIS | 12% | Nomor induk siswa |
+| Tempat PKL | 28% | `dudi_org_name` mitra aktif |
+| Periode | 24% | `start_date – end_date` penempatan aktif |
+| Aksi | 14% | Tombol "Selesaikan PKL" jika sudah ditempatkan, `—` jika belum |
+
+Jika belum ada siswa PKL → tabel kosong, tampil pesan "Belum ada siswa PKL pada program ini."
+
+### Selesaikan PKL
+- Klik tombol **Selesaikan PKL** → konfirmasi dialog
+- Panggil `fn_finish_placement` via RPC → siswa kembali `PKL → AKTIF`
+- Setelah berhasil: refresh tabel, stat cards, dan dropdown siswa di form Penempatan PKL
+
+### Fungsi
+- `fetchPklStudents(programId)` — fetch siswa PKL + placement aktif
+- `renderKpStudents()` — render tabel
+- `renderKpSummary()` — render stat cards
+- `handleFinishPkl(btn)` — handler tombol Selesaikan PKL
 
 ---
 
