@@ -29,9 +29,13 @@ Nilai enum DB: HADIR, IZIN, SAKIT, ALPA
 - Daftar siswa ditampilkan dengan paginasi (5 siswa per halaman)
 - Tombol "Simpan Kehadiran (N siswa)" menyimpan semua status sekaligus
 - Hanya guru yang mengajar blok tersebut yang bisa input
-- Guru pengganti bisa input selama token pengganti belum expired
+- Default status semua siswa adalah HADIR saat modal dibuka —
+  guru hanya perlu mengubah siswa yang tidak hadir
 - Tidak ada tombol hapus di UI - pembatalan via is_void = true
-- Satu blok hanya diajar oleh satu guru — tidak ada team teaching.
+
+### Keterbatasan
+- Tidak ada team teaching — satu blok hanya diajar satu guru
+- Tidak ada mekanisme guru pengganti di portal ini
 
 ## 2. Kolom Rekap Kehadiran
 
@@ -109,7 +113,7 @@ Tidak bisa drill down ke level siswa individual.
 | fn_class_attendance_summary | Rekap per siswa dalam satu kelas |
 | fn_attendance_recap_per_class | Rekap per kelas (agregat) |
 | fn_attendance_fill_rate | Fill rate absensi guru (berapa sesi sudah diisi) |
-| evaluate-teacher-indicators | Edge function + cron job harian 00:00 WIB — membalik PENDING_EVALUATION → HADIR/TIDAK_HADIR |
+| fn_sync_attendance_batch | RPC yang dipanggil saat guru submit — UPSERT absensi siswa + flip teacher_indicator PENDING→HADIR real-time (session_date = hari ini) |
 
 ## 6. Catatan Teknis
 
@@ -130,15 +134,16 @@ Tidak ada mekanisme terpisah untuk guru menandai diri sendiri hadir.
 ### Alur Teknis
 1. Guru submit absensi siswa pada sesi terjadwal
 2. Trigger `fn_teacher_attendance_signal` aktif
-3. `sync-attendance-batch` membalik `teacher_indicator`:
-   `PENDING_EVALUATION → HADIR`
+3. `fn_sync_attendance_batch` (RPC) membalik `teacher_indicator`:
+   `PENDING_EVALUATION → HADIR` secara real-time dalam transaksi yang sama
+   dengan penyimpanan absensi siswa. Hanya berlaku untuk session_date = hari ini.
 4. Rekap kehadiran guru di tab Waka Kurikulum
    menghitung dari `teacher_indicator` via `fn_attendance_fill_rate`
 
 ### Jika Guru Tidak Submit
 1. Guru tidak submit absensi sebelum sesi berakhir
-2. `fn_evaluate_teacher_indicators` dipanggil oleh cron job harian
-   (evaluate-teacher-indicators, jadwal: 00:00 WIB via pg_cron + pg_net)
+2. `fn_evaluate_teacher_indicators` dipanggil oleh edge function
+   `evaluate-teacher-indicators` via cron job harian (00:00 WIB, pg_cron + pg_net)
    membalik `PENDING_EVALUATION → TIDAK_HADIR`
 3. Tercatat sebagai tidak hadir di rekap Waka Kurikulum
 
