@@ -313,21 +313,37 @@
          TAB: KAPRODI
     ════════════════════════════════════════════════════════ -->
     <div class="tab-panel" id="tab-kaprodi">
-        <div class="page-body">
+        <div class="page-body" id="kp-accordion">
+
+            <!-- Rekap Absensi Kelas — kehadiran sesi siswa AKTIF di sekolah -->
+            <div class="section-card kp-acc-item">
+                <div class="kp-acc-header" data-target="kp-body-cls"><span>Rekap Absensi Kelas</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="kp-body-cls" style="display:none">
+                <div class="date-row" style="margin-bottom:12px">
+                    <label for="kp-cls-start">Dari:</label><input type="date" id="kp-cls-start" class="input" style="width:auto">
+                    <label for="kp-cls-end">s/d:</label><input type="date" id="kp-cls-end" class="input" style="width:auto">
+                    <button class="btn btn-secondary btn-sm" id="kp-cls-filter-btn">Filter</button>
+                </div>
+                <div id="kp-cls-recap"><p class="hint">Pilih rentang tanggal lalu klik Filter.</p></div>
+                </div>
+            </div>
 
             <!-- Mitra DUDI — referensi dipilih di Form Penempatan -->
-            <div class="section-card">
-                <h3>Mitra DUDI</h3>
+            <div class="section-card kp-acc-item">
+                <div class="kp-acc-header" data-target="kp-body-dudi"><span>Mitra DUDI</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="kp-body-dudi" style="display:none">
                 <div class="table-wrapper">
                     <table class="table"><thead><tr><th>Nama Usaha</th><th>Penanggung Jawab</th></tr></thead>
                     <tbody id="kp-dudi-body"></tbody></table>
                 </div>
                 <p class="hint" id="kp-dudi-empty" style="display:none">Belum ada mitra DUDI terdaftar untuk program ini.</p>
+                </div>
             </div>
 
             <!-- Penempatan PKL — siswa AKTIF masuk PKL -->
-            <div class="section-card">
-                <h3>Penempatan PKL</h3>
+            <div class="section-card kp-acc-item">
+                <div class="kp-acc-header" data-target="kp-body-placement"><span>Penempatan PKL</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="kp-body-placement" style="display:none">
                 <form id="kp-placement-form" style="display:grid; gap:12px; grid-template-columns:1fr 1fr; margin-bottom:16px">
                     <div class="field" style="margin:0">
                         <label for="kp-pl-student">Siswa</label>
@@ -353,28 +369,31 @@
                     </div>
                     <div id="kp-placement-result" style="grid-column:1/-1"></div>
                 </form>
+                </div>
             </div>
 
             <!-- Daftar Siswa PKL — monitor siapa yang sedang PKL -->
-            <div class="section-card">
-                <h3>Daftar Siswa PKL</h3>
+            <div class="section-card kp-acc-item">
+                <div class="kp-acc-header" data-target="kp-body-students"><span>Daftar Siswa PKL</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="kp-body-students" style="display:none">
                 <div class="table-wrapper">
                     <table class="table"><thead><tr><th>Nama</th><th>NIS</th><th>Tempat PKL</th><th>Periode</th></tr></thead>
                     <tbody id="kp-students-body"></tbody></table>
                 </div>
                 <p class="hint" id="kp-students-empty" style="display:none">Belum ada siswa PKL pada program ini.</p>
-            </div>
-
-            <!-- Ringkasan — agregat dari Daftar PKL -->
-            <div class="stats-row">
-                <div class="stat-card"><span class="stat-value" id="kp-stat-total">—</span><div class="stat-label">Total Siswa PKL</div></div>
-                <div class="stat-card"><span class="stat-value" id="kp-stat-placed">—</span><div class="stat-label">Sudah Ditempatkan</div></div>
-                <div class="stat-card"><span class="stat-value" id="kp-stat-unplaced">—</span><div class="stat-label">Belum Ditempatkan</div></div>
+                <!-- Ringkasan — agregat dari Daftar PKL -->
+                <div class="stats-row">
+                    <div class="stat-card"><span class="stat-value" id="kp-stat-total">—</span><div class="stat-label">Total Siswa PKL</div></div>
+                    <div class="stat-card"><span class="stat-value" id="kp-stat-placed">—</span><div class="stat-label">Sudah Ditempatkan</div></div>
+                    <div class="stat-card"><span class="stat-value" id="kp-stat-unplaced">—</span><div class="stat-label">Belum Ditempatkan</div></div>
+                </div>
+                </div>
             </div>
 
             <!-- Rekap Absensi PKL — kehadiran harian siswa PKL di DUDI -->
-            <div class="section-card">
-                <h3>Rekap Absensi PKL</h3>
+            <div class="section-card kp-acc-item">
+                <div class="kp-acc-header" data-target="kp-body-pkl"><span>Rekap Absensi PKL</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="kp-body-pkl" style="display:none">
                 <div class="date-row" style="margin-bottom:12px">
                     <label for="kp-date-start">Dari:</label><input type="date" id="kp-date-start" class="input" style="width:auto">
                     <label for="kp-date-end">s/d:</label><input type="date" id="kp-date-end" class="input" style="width:auto">
@@ -392,24 +411,16 @@
                     <tbody id="kp-recap-body"></tbody></table>
                 </div>
                 <p class="hint" id="kp-recap-empty" style="display:none">Belum ada data absensi pada rentang ini.</p>
-            </div>
-
-            <!-- Rekap Absensi Kelas — kehadiran sesi siswa AKTIF di sekolah -->
-            <div class="section-card">
-                <h3>Rekap Absensi Kelas</h3>
-                <div class="date-row" style="margin-bottom:12px">
-                    <label for="kp-cls-start">Dari:</label><input type="date" id="kp-cls-start" class="input" style="width:auto">
-                    <label for="kp-cls-end">s/d:</label><input type="date" id="kp-cls-end" class="input" style="width:auto">
-                    <button class="btn btn-secondary btn-sm" id="kp-cls-filter-btn">Filter</button>
                 </div>
-                <div id="kp-cls-recap"><p class="hint">Pilih rentang tanggal lalu klik Filter.</p></div>
             </div>
 
             <!-- Observasi DUDI -->
-            <div class="section-card">
-                <h3>Observasi dari DUDI</h3>
+            <div class="section-card kp-acc-item">
+                <div class="kp-acc-header" data-target="kp-body-obs"><span>Observasi dari DUDI</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="kp-body-obs" style="display:none">
                 <p class="hint" id="kp-obs-hint" style="display:none">Belum ada observasi dari DUDI.</p>
                 <div id="kp-obs-list"></div>
+                </div>
             </div>
 
         </div>

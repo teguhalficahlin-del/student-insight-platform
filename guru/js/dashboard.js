@@ -1765,6 +1765,21 @@ async function initKaprodiTab() {
         });
 
         await Promise.all([loadKpRecap(), loadKpClsRecap(), loadKpObs(), initKpPlacementForm(programId)]);
+        document.querySelectorAll('#kp-accordion .kp-acc-header').forEach(header => {
+            header.addEventListener('click', () => {
+                const targetId = header.dataset.target;
+                const isOpen   = header.closest('.kp-acc-item').classList.contains('open');
+                document.querySelectorAll('#kp-accordion .kp-acc-item').forEach(item => {
+                    item.classList.remove('open');
+                    item.querySelector('.kp-acc-body').style.display = 'none';
+                });
+                if (!isOpen) {
+                    const item = header.closest('.kp-acc-item');
+                    item.classList.add('open');
+                    document.getElementById(targetId).style.display = 'block';
+                }
+            });
+        });
     } catch (err) {
         console.error('[kaprodi]', err);
     }

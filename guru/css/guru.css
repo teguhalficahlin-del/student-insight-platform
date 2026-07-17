@@ -483,3 +483,19 @@ body.has-login-banner .app-header { margin-top: 94px; }
     .section-card, .card { box-shadow: none; border: 1px solid #ccc; }
     @page { margin: 15mm; }
 }
+
+/* Kaprodi accordion single-expand */
+.kp-acc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    padding: 4px 0;
+    user-select: none;
+    font-weight: 600;
+    font-size: 1rem;
+}
+.kp-acc-header:hover { opacity: .8; }
+.kp-acc-arrow { font-size: .85rem; transition: transform .2s; }
+.kp-acc-item.open .kp-acc-arrow { transform: rotate(90deg); }
+.kp-acc-body { margin-top: 12px; }
