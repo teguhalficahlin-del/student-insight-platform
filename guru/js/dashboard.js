@@ -207,6 +207,7 @@ async function init() {
         initLoginGuard(supabase, currentUser),
         getSchoolConfig().then(c => { config = c; }),
     ]);
+    if (!config) throw new Error('School config tidak tersedia. Hubungi admin sekolah.');
     jabatan   = getJabatan(currentUser);
     isTeacher = !!currentUser.teacher_code
         || (currentUser.teaching_assignments?.[0]?.count ?? 0) > 0;
