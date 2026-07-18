@@ -143,6 +143,7 @@ let kpStudents      = [];  // kaprodi PKL students
 let kpAktifStudents = [];  // kaprodi siswa AKTIF (kelas)
 let kpProgramId     = null;
 let kpDudiList      = [];
+let kpTabInitialized = false;
 
 const DIMENSION_LABELS = { AKADEMIK:'Akademik', KEHADIRAN:'Kehadiran', PERILAKU:'Perilaku', SOSIAL:'Sosial', AFEKTIF:'Afektif', BAKAT_MINAT:'Bakat & Minat', FISIK:'Fisik', LAINNYA:'Lainnya' };
 
@@ -1719,7 +1720,15 @@ const HANDLER_ROLE_LABELS = {
 
 // ─── TAB KAPRODI ─────────────────────────────────────────────
 
+function handleKpStudentsClick(e) {
+    const btn = e.target.closest('.kp-finish-btn');
+    if (btn) handleFinishPkl(btn);
+}
+
 async function initKaprodiTab() {
+    if (kpTabInitialized) return;
+    kpTabInitialized = true;
+
     const programId = currentUser.kaprodi_program_id ??
         (currentUser.role_type === 'KAPRODI' ? currentUser.program_id : null);
     kpProgramId = programId;
@@ -1759,22 +1768,23 @@ async function initKaprodiTab() {
         document.getElementById('kp-filter-btn').onclick     = loadKpRecap;
         document.getElementById('kp-cls-filter-btn').onclick = loadKpClsRecap;
 
-        document.getElementById('kp-students-body').addEventListener('click', e => {
-            const btn = e.target.closest('.kp-finish-btn');
-            if (btn) handleFinishPkl(btn);
-        });
+        const studentsBody = document.getElementById('kp-students-body');
+        studentsBody.removeEventListener('click', handleKpStudentsClick);
+        studentsBody.addEventListener('click', handleKpStudentsClick);
 
         await Promise.all([loadKpRecap(), loadKpClsRecap(), loadKpObs(), initKpPlacementForm(programId)]);
         document.querySelectorAll('#kp-accordion .kp-acc-header').forEach(header => {
-            header.addEventListener('click', () => {
-                const targetId = header.dataset.target;
-                const isOpen   = header.closest('.kp-acc-item').classList.contains('open');
+            const newHeader = header.cloneNode(true);
+            header.parentNode.replaceChild(newHeader, header);
+            newHeader.addEventListener('click', () => {
+                const targetId = newHeader.dataset.target;
+                const isOpen   = newHeader.closest('.kp-acc-item').classList.contains('open');
                 document.querySelectorAll('#kp-accordion .kp-acc-item').forEach(item => {
                     item.classList.remove('open');
                     item.querySelector('.kp-acc-body').style.display = 'none';
                 });
                 if (!isOpen) {
-                    const item = header.closest('.kp-acc-item');
+                    const item = newHeader.closest('.kp-acc-item');
                     item.classList.add('open');
                     document.getElementById(targetId).style.display = 'block';
                 }
