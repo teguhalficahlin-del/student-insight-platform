@@ -232,6 +232,9 @@ tampil pesan "Belum ada observasi dari DUDI."
 - Accordion single-expand: buka satu section otomatis menutup yang lain
 - Lazy load: detail siswa dan sesi hanya di-fetch saat accordion dibuka,
   tidak fetch ulang jika sudah dibuka sebelumnya
+- `kpTabInitialized`: guard boolean — `initKaprodiTab()` hanya dieksekusi
+  sekali per sesi. Klik tab berikutnya langsung return tanpa fetch ulang.
+  Untuk melihat data terbaru, guru perlu reload halaman.
 - `kaprodiAllStudents`: gabungan siswa PKL + siswa aktif,
   dipakai sebagai pool pencarian di fitur Observasi dan Buat Kasus
 
