@@ -1817,6 +1817,10 @@ async function initKaprodiTab() {
         });
     } catch (err) {
         console.error('[kaprodi]', err);
+        const panel = document.getElementById('tab-kaprodi')?.querySelector('.page-body');
+        if (panel) {
+            panel.innerHTML = '<div class="section-card"><p style="color:red;padding:8px">Gagal memuat tab Kaprodi. Silakan coba lagi atau refresh halaman.</p></div>';
+        }
     }
 }
 
