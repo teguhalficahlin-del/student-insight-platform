@@ -478,7 +478,10 @@ async function renderBrandingPanel() {
     panelContent.innerHTML = '<p class="hint">Memuat data sekolah…</p>';
 
     let current = {};
-    try { current = await getSchoolBranding(); } catch { /* biarkan kosong */ }
+    let brandingLoadFailed = false;
+    try { current = await getSchoolBranding(); } catch {
+        brandingLoadFailed = true;
+    }
 
     const field = (id, label, value, type = 'text', hint = '') => `
         <div style="margin-bottom:14px">
@@ -522,9 +525,11 @@ async function renderBrandingPanel() {
                 </div>
             </div>
 
-            <div id="br-msg" style="display:none; margin-bottom:12px; font-size:13px"></div>
+            <div id="br-msg" style="display:${brandingLoadFailed ? 'block' : 'none'}; margin-bottom:12px; font-size:13px; color:red">
+                ${brandingLoadFailed ? 'Gagal memuat data branding. Silakan refresh halaman sebelum menyimpan.' : ''}
+            </div>
 
-            <button class="btn btn-primary" id="br-save-btn">Simpan Perubahan</button>
+            <button class="btn btn-primary" id="br-save-btn" ${brandingLoadFailed ? 'disabled' : ''}>Simpan Perubahan</button>
         </div>
     `;
 
