@@ -8,69 +8,83 @@ const CORS_HEADERS = {
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-6";
-const MAX_TOKENS = 4096;
+const MAX_TOKENS = 8000;
 
 interface GenerateATPRequest {
   subject_name: string;
-  phase: string;        // "E" atau "F"
+  fase: string;           // "E" atau "F"
+  kelas?: string;
+  program?: string;
+  program_id?: string;
   jp_per_minggu: number;
   minggu_sem1: number;
   minggu_sem2: number;
-  special_focus?: string;
-  cp_reference?: string;
-  subject_id: string;
-  program_id?: string;
-  school_id: string;
+  fokus_khusus?: string;
+  cp_referensi?: string;
 }
 
-function buildSystemPrompt(): string {
-  return `Kamu adalah asisten kurikulum Merdeka Belajar untuk SMK Indonesia.
-Tugasmu menghasilkan Alur Tujuan Pembelajaran (ATP) yang sesuai dengan Capaian Pembelajaran (CP) yang diberikan.
-PENTING: Kamu HARUS merespons HANYA dengan JSON yang valid. Tidak ada teks lain, tidak ada markdown, tidak ada penjelasan.
-Format respons wajib:
+function buildSystemPrompt(cpRef: string): string {
+  const cpSection = cpRef
+    ? `REFERENSI CP RESMI YANG DIBERIKAN GURU:\n${cpRef}\n\nGunakan CP di atas sebagai acuan UTAMA dalam membuat ATP. Setiap TP harus mengacu pada elemen CP yang tercantum.`
+    : `Buat ATP berdasarkan pengetahuan Kurikulum Merdeka untuk SMK. Gunakan pendekatan Genre-Based untuk bahasa, STEM untuk sains, dan konteks kejuruan SMK untuk mapel produktif.`;
+
+  return `Anda adalah ahli kurikulum SMK Indonesia yang berpengalaman dalam Kurikulum Merdeka (SK BSKAP No. 8 Tahun 2022).
+${cpSection}
+Respond ONLY with a valid JSON object. No explanation, no markdown fences, no preamble. Start your response directly with { and end with }.
+Be concise. For deskripsi_cp and deskripsi_tp fields, maximum 2 sentences each.`;
+}
+
+function buildUserPrompt(req: GenerateATPRequest): string {
+  const fokusLine = req.fokus_khusus?.trim() ? `Fokus khusus: ${req.fokus_khusus.trim()}` : "";
+  const cpInstruction = req.cp_referensi?.trim()
+    ? `PENTING: Setiap TP HARUS mengacu pada elemen CP yang diberikan di system prompt. Cantumkan nama elemen CP di field "elemen_cp" setiap TP.`
+    : `Buat ATP sesuai Kurikulum Merdeka untuk SMK.`;
+
+  return `Buat CP dan ATP untuk:
+Mata Pelajaran: ${req.subject_name}
+Fase: ${req.fase}${req.kelas ? ` (${req.kelas})` : ""}
+Program Keahlian: ${req.program ?? "Umum"}
+JP per minggu: ${req.jp_per_minggu}
+Minggu efektif Semester 1: ${req.minggu_sem1}
+Minggu efektif Semester 2: ${req.minggu_sem2}
+${fokusLine}
+
+${cpInstruction}
+
+Format JSON:
 {
+  "capaian_pembelajaran": [
+    {
+      "elemen": "...",
+      "deskripsi_cp": "..."
+    }
+  ],
   "tujuan_pembelajaran": [
     {
-      "kode_tp": "TP-E-01",
-      "deskripsi_tp": "Peserta didik mampu ...",
-      "fase": "E",
       "semester": 1,
       "urutan": 1,
-      "alokasi_jp": 4,
+      "kode_tp": "TP-XXX-E-01",
+      "deskripsi_tp": "Peserta didik mampu...",
       "materi_pokok": "...",
+      "alokasi_jp": 4,
       "indikator": ["...", "..."]
     }
   ]
 }
-Catatan: field "semester" wajib berisi 1 atau 2.`;
-}
-
-function buildUserPrompt(req: GenerateATPRequest): string {
-  const jp_sem1 = req.jp_per_minggu * req.minggu_sem1;
-  const jp_sem2 = req.jp_per_minggu * req.minggu_sem2;
-  const focusLine = req.special_focus ? `\n- Fokus Khusus: ${req.special_focus}` : "";
-  const cpSection = req.cp_reference
-    ? `\nCapaian Pembelajaran Referensi:\n${req.cp_reference}`
-    : "";
-
-  return `Buat ATP untuk:
-- Mata Pelajaran: ${req.subject_name}
-- Fase: ${req.phase}
-- JP per minggu: ${req.jp_per_minggu}
-- Semester 1: ${req.minggu_sem1} minggu (${jp_sem1} JP)
-- Semester 2: ${req.minggu_sem2} minggu (${jp_sem2} JP)${focusLine}${cpSection}
-
-Distribusikan TP secara proporsional antara semester 1 dan 2.
-Total JP harus mendekati ${jp_sem1 + jp_sem2} JP.
-Buat minimal 6 TP per semester.
-Ingat: respons HANYA JSON, tidak ada teks lain.`;
+Buat minimal 6 TP per semester.`;
 }
 
 function extractJSON(raw: string): string {
+  // Strategy 1: strip markdown code fences
   const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenceMatch) return fenceMatch[1].trim();
-  const braceMatch = raw.match(/\{[\s\S]*\}/);
-  if (braceMatch) return braceMatch[0];
+
+  // Strategy 2: extract outermost { } block
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start !== -1 && end !== -1 && end > start) return raw.slice(start, end + 1);
+
+  // Strategy 3: return as-is, let JSON.parse throw with context
   return raw;
 }
 
@@ -102,13 +116,18 @@ serve(async (req: Request) => {
   // ── Role check ────────────────────────────────────────────────────────────
   const { data: userRow, error: userError } = await supabase
     .from("users")
-    .select("role_type, school_id, user_id")
+    .select("role_type, school_id")
     .eq("auth_user_id", user.id)
     .single();
 
   if (userError || !userRow) return errorResponse(403, "User not found");
-  if (!["GURU", "WAKA_KURIKULUM", "KEPALA_SEKOLAH"].includes(userRow.role_type)) {
-    return errorResponse(403, "Insufficient role");
+
+  const ALLOWED_ROLES = [
+    "GURU", "WALI_KELAS", "BK", "KAPRODI", "KEPSEK",
+    "WAKA_KURIKULUM", "WAKA_KESISWAAN", "WAKA_HUMAS", "ADMINISTRATIVE",
+  ];
+  if (!ALLOWED_ROLES.includes(userRow.role_type)) {
+    return errorResponse(403, "Akses ditolak.");
   }
 
   // ── Parse request body ────────────────────────────────────────────────────
@@ -116,134 +135,86 @@ serve(async (req: Request) => {
   try {
     body = await req.json();
   } catch {
-    return errorResponse(400, "Invalid JSON in request body");
+    return errorResponse(400, "Body JSON tidak valid.");
   }
 
-  const required: (keyof GenerateATPRequest)[] = [
-    "subject_name", "phase", "jp_per_minggu", "minggu_sem1", "minggu_sem2",
-    "subject_id", "school_id",
-  ];
-  for (const field of required) {
-    if (body[field] === undefined || body[field] === null || body[field] === "") {
-      return errorResponse(400, `Missing required field: ${field}`);
-    }
-  }
-
-  // Tenant isolation
-  if (body.school_id !== userRow.school_id) {
-    return errorResponse(403, "school_id mismatch");
+  if (!body.subject_name || !body.fase || !body.jp_per_minggu) {
+    return errorResponse(400, "Field wajib tidak lengkap: subject_name, fase, jp_per_minggu");
   }
 
   // ── Call Anthropic API ────────────────────────────────────────────────────
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) return errorResponse(500, "ANTHROPIC_API_KEY not configured");
+  if (!apiKey) return errorResponse(503, "Konfigurasi AI belum diatur.");
 
-  let claudeRaw = "";
+  const cpRef = body.cp_referensi?.trim() ?? "";
+
+  let claudeRes: Response;
   try {
-    const claudeRes = await fetch(ANTHROPIC_URL, {
+    claudeRes = await fetch(ANTHROPIC_URL, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
       },
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        system: buildSystemPrompt(),
+        system: buildSystemPrompt(cpRef),
         messages: [{ role: "user", content: buildUserPrompt(body) }],
       }),
     });
-
-    if (!claudeRes.ok) {
-      const errText = await claudeRes.text();
-      return errorResponse(502, "Anthropic API error", { status: claudeRes.status, body: errText });
-    }
-
-    const claudeData = await claudeRes.json();
-
-    if (claudeData.stop_reason === "max_tokens") {
-      return errorResponse(422, "Response truncated by max_tokens — kurangi minggu atau sederhanakan CP", {
-        stop_reason: "max_tokens",
-      });
-    }
-
-    const textBlocks = (claudeData.content ?? [])
-      .filter((b: { type: string }) => b.type === "text")
-      .map((b: { text: string }) => b.text);
-
-    claudeRaw = textBlocks.join("\n").trim();
-
-    if (!claudeRaw) {
-      return errorResponse(502, "Empty response from Claude", { content: claudeData.content });
-    }
-
   } catch (e) {
-    return errorResponse(502, "Network error calling Anthropic", { message: String(e) });
+    return errorResponse(502, "Gagal menghubungi API AI.", { message: String(e) });
+  }
+
+  if (!claudeRes.ok) {
+    const errText = await claudeRes.text().catch(() => "");
+    return errorResponse(502, `API AI error ${claudeRes.status}`, { body: errText });
+  }
+
+  const claudeJson = await claudeRes.json();
+  const finishReason = claudeJson?.stop_reason ?? "unknown";
+
+  if (finishReason === "max_tokens") {
+    return errorResponse(422, "Response truncated — JSON tidak lengkap. Kurangi jumlah minggu atau sederhanakan CP Referensi.", {
+      finish_reason: finishReason,
+    });
+  }
+
+  // Extract text across all content blocks
+  const rawText: string = (claudeJson?.content ?? [])
+    .filter((b: { type: string }) => b.type === "text")
+    .map((b: { text: string }) => b.text)
+    .join("\n")
+    .trim();
+
+  if (!rawText) {
+    return errorResponse(502, "Empty response from Claude", { content: claudeJson?.content });
   }
 
   // ── Parse Claude response ─────────────────────────────────────────────────
-  let atpData: { tujuan_pembelajaran: Array<Record<string, unknown>> };
-
+  let parsed: { capaian_pembelajaran: unknown[]; tujuan_pembelajaran: unknown[] };
   try {
-    const extracted = extractJSON(claudeRaw);
-    atpData = JSON.parse(extracted);
+    const extracted = extractJSON(rawText);
+    parsed = JSON.parse(extracted);
   } catch (e) {
     return errorResponse(422, "Failed to parse Claude response as JSON", {
-      raw: claudeRaw,
+      raw: rawText,
       extractError: String(e),
     });
   }
 
-  if (!Array.isArray(atpData.tujuan_pembelajaran) || atpData.tujuan_pembelajaran.length === 0) {
-    return errorResponse(422, "ATP response missing tujuan_pembelajaran array", { raw: claudeRaw });
+  // Inject program_id into CP and TP arrays for frontend to use when saving
+  if (body.program_id) {
+    const cpList = Array.isArray(parsed.capaian_pembelajaran) ? parsed.capaian_pembelajaran : [];
+    const tpList = Array.isArray(parsed.tujuan_pembelajaran) ? parsed.tujuan_pembelajaran : [];
+    parsed.capaian_pembelajaran = cpList.map((cp) => ({ ...(cp as object), program_id: body.program_id }));
+    parsed.tujuan_pembelajaran = tpList.map((tp) => ({ ...(tp as object), program_id: body.program_id }));
   }
 
-  // ── Save to DB (schema: tujuan_pembelajaran per migration 75b6fa8) ─────────
-  // Delete existing AI-generated TPs for this subject+fase+school before re-insert
-  const { error: deleteError } = await supabase
-    .from("tujuan_pembelajaran")
-    .delete()
-    .eq("school_id", body.school_id)
-    .eq("subject_id", body.subject_id)
-    .eq("fase", body.phase)
-    .eq("generated_by", "AI");
-
-  if (deleteError) {
-    return errorResponse(500, "Failed to delete existing TPs", { error: deleteError });
-  }
-
-  const tpRows = atpData.tujuan_pembelajaran.map((tp, idx) => ({
-    school_id: body.school_id,
-    subject_id: body.subject_id,
-    program_id: body.program_id ?? null,
-    fase: (tp.fase as string) ?? body.phase,
-    semester: Number(tp.semester) === 2 ? 2 : 1,
-    urutan: Number(tp.urutan) || idx + 1,
-    kode_tp: (tp.kode_tp as string) ?? `TP-${body.phase}-${String(idx + 1).padStart(2, "0")}`,
-    deskripsi_tp: (tp.deskripsi_tp as string) ?? "",
-    materi_pokok: (tp.materi_pokok as string) ?? null,
-    alokasi_jp: Number(tp.alokasi_jp) || null,
-    indikator: Array.isArray(tp.indikator) ? tp.indikator as string[] : [],
-    generated_by: "AI",
-    created_by: userRow.user_id,
-  }));
-
-  const { error: insertError } = await supabase
-    .from("tujuan_pembelajaran")
-    .insert(tpRows);
-
-  if (insertError) {
-    return errorResponse(500, "Failed to save tujuan_pembelajaran", { error: insertError });
-  }
-
-  return new Response(
-    JSON.stringify({
-      success: true,
-      tp_count: tpRows.length,
-      tp_sem1: tpRows.filter(r => r.semester === 1).length,
-      tp_sem2: tpRows.filter(r => r.semester === 2).length,
-    }),
-    { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-  );
+  return new Response(JSON.stringify(parsed), {
+    status: 200,
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+  });
 });
