@@ -113,7 +113,9 @@ Stat cards dihitung per slot.
 Rekap kelas yang diajar (per mapel)
   → klik satu kelas → accordion per siswa
     → klik accordion siswa → detail sesi mapel yang diajar guru itu saja
-    (filter by teacher_id — sesi mapel lain tidak tampil)
+    (filter by teacher_id — sesi mapel lain tidak tampil).
+    Detail sesi hanya dimuat jika filter tanggal (start dan end) sudah diset.
+    Jika belum, accordion menampilkan hint untuk memilih tanggal atau menggunakan fitur Unduh Excel.
 - Tersedia tombol **Unduh CSV** untuk export rekap kehadiran
   semua siswa kelas yang dipilih dalam rentang tanggal yang ditentukan
 - CSV berisi: Nama, NIS, Hadir, Izin, Sakit, Alpa, Total Sesi, % Hadir

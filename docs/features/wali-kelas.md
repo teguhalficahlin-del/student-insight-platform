@@ -77,7 +77,7 @@ Nama sheet per siswa dibatasi 31 karakter (batasan Excel).
 | `loadWaliSummary()` | Load rekap ringkasan + render accordion |
 | `getWaliKelasInfo(classId)` | Ambil nama kelas untuk judul |
 | `getWaliAttendanceSummary(classId, year, start, end)` | Rekap H/I/S/A per siswa |
-| `getStudentAttendanceSessions(studentId, start, end)` | Detail sesi per siswa (lazy) |
+| `getStudentAttendanceSessions(studentId, start, end)` | Detail sesi per siswa (lazy). **`start` dan `end` wajib diisi** — jika kosong, return `[]` tanpa query DB dan UI menampilkan hint untuk memilih tanggal atau menggunakan fitur Unduh Excel |
 | `buildAttStatCards(students)` | Render stat cards agregat di atas accordion |
 
 ---

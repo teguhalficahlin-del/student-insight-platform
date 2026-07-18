@@ -48,7 +48,10 @@ Kelas → Siswa → Sesi (3 level):
 ### Fungsi yang Dipanggil
 - `getAttendanceRecapPerClass(dateStart, dateEnd)` — rekap per kelas
 - `getWaliAttendanceSummary(classId, year, start, end)` — rekap per siswa
-- `getStudentAttendanceSessions(studentId, start, end)` — detail sesi per siswa
+- `getStudentAttendanceSessions(studentId, start, end)` — detail sesi per siswa.
+  **`start` dan `end` wajib diisi.** Jika kosong, fungsi return `[]` tanpa query DB
+  dan UI menampilkan: *"Pilih rentang tanggal untuk melihat detail sesi. Untuk data
+  lengkap, gunakan fitur Unduh Excel."*
 
 ---
 
@@ -231,7 +234,9 @@ tampil pesan "Belum ada observasi dari DUDI."
 - Default rentang: 30 hari ke belakang s/d hari ini
 - Accordion single-expand: buka satu section otomatis menutup yang lain
 - Lazy load: detail siswa dan sesi hanya di-fetch saat accordion dibuka,
-  tidak fetch ulang jika sudah dibuka sebelumnya
+  tidak fetch ulang jika sudah dibuka sebelumnya. Filter tanggal (`start`
+  dan `end`) wajib diset — jika belum, accordion menampilkan hint untuk
+  memilih tanggal atau menggunakan fitur Unduh Excel
 - `kpTabInitialized`: guard boolean — `initKaprodiTab()` hanya dieksekusi
   sekali per sesi. Klik tab berikutnya langsung return tanpa fetch ulang.
   Untuk melihat data terbaru, guru perlu reload halaman.

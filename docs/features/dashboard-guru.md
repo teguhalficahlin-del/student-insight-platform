@@ -55,7 +55,9 @@ Header menampilkan: nama kelas · jumlah siswa · rentang tanggal akumulasi
 Accordion per siswa:
 - Baris ringkasan: nama siswa · jumlah H/I/S/A · % hadir
 - Klik accordion → expand detail sesi yang diajar guru ini saja
-  (filter by teacher_id — sesi mapel lain tidak tampil)
+  (filter by teacher_id — sesi mapel lain tidak tampil).
+  Detail sesi hanya dimuat jika filter tanggal (start dan end) sudah diset.
+  Jika belum, accordion menampilkan hint untuk memilih tanggal atau menggunakan fitur Unduh Excel.
 - Detail sesi: tanggal, jam, mapel, status kehadiran
 
 ### Kolom Rekap
