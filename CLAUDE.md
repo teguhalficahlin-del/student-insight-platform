@@ -13,7 +13,36 @@ Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). 
 3. **Missing RLS policy bukan otomatis celah.** RLS default-deny: tidak ada policy = akses ditolak. Verifikasi live dulu (simulasi cross-tenant nyata) SEBELUM fix, jangan asumsi dari pola kode saja.
 4. Lihat `docs/audit-handoff.md §3a` untuk daftar lengkap standing rules.
 
-## Status Singkat (terakhir diperbarui: 15 Juli 2026)
+## Sprint 1 — Foundation Schema (18 Juli 2026) — SELESAI
+
+10 migration files: `20260718001000` s/d `20260718010000`
+
+**Schema `core` (11 tabel, append-only):**
+`curriculum_versions`, `education_levels`, `phases`,
+`vocational_fields`, `vocational_programs`, `vocational_concentrations`,
+`subjects`, `subject_phases`, `capaian_pembelajaran`,
+`cp_elements`, `knowledge_national`
+
+**Schema `public` baru (8 tabel, Teacher Workspace + AI Pipeline):**
+`teacher_profiles`, `teaching_contexts`, `teacher_documents`,
+`teacher_document_classes`, `teacher_document_approvals`,
+`prompt_templates`, `generation_jobs`, `evaluation_logs`
+
+**Seed live:**
+1 curriculum version (Kurikulum Nasional 2025) · 1 education level (SMK) ·
+2 phases (Fase E, Fase F) · 20 subjects (15 UMUM + 5 Kejuruan Lintas Prodi) ·
+37 subject_phases · 37 capaian_pembelajaran placeholder `[PENDING]`
+
+**Catatan penting:**
+- `core.*` bersifat **append-only** — tidak pernah DELETE
+- Semua migration idempotent; semua seed menggunakan UPSERT
+- CP placeholder `[PENDING]` diisi SIP Team dari SK BSKAP No. 046/H/KR/2025
+- Migration `20260718100214` ada di remote (dibuat via dashboard),
+  sudah di-repair di migration history (`--status reverted`)
+
+---
+
+## Status Singkat (terakhir diperbarui: 18 Juli 2026)
 
 - **Fase 1**: ✅ Selesai
 - **Fase 2**: ✅ **SELESAI (9 Juli 2026).** Kelompok A-E selesai 100%,
