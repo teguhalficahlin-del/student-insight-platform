@@ -748,7 +748,14 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
 });
 
 // ─── Start ───────────────────────────────────────────────────
-init();
+init().catch(err => {
+    console.error('[init]', err);
+    const el = document.getElementById('loading');
+    if (el) {
+        el.textContent = 'Gagal memuat. Silakan refresh halaman.';
+        el.style.color = 'red';
+    }
+});
 
 // ─── TAB FORUM ───────────────────────────────────────────────
 
