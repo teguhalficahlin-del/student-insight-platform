@@ -6,6 +6,15 @@ const supabase = createClient(
 )
 
 Deno.serve(async (req) => {
+  const superadminKey = Deno.env.get('SUPERADMIN_KEY');
+  const reqKey        = req.headers.get('x-superadmin-key');
+  if (!superadminKey || reqKey !== superadminKey) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     // Evaluasi untuk kemarin dan hari ini
     // (kemarin untuk sesi yang berakhir tapi belum dievaluasi)
