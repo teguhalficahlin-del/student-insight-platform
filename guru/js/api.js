@@ -375,6 +375,9 @@ export async function getPrograms() {
 }
 
 export async function getStudentAttendanceSessions(studentId, dateStart, dateEnd, teacherId = null) {
+    if (!dateStart || !dateEnd) {
+        return [];
+    }
     let q = supabase
         .from('attendance')
         .select(`

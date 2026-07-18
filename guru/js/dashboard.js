@@ -433,6 +433,10 @@ function renderGuruRekapPage() {
             const sid = det.dataset.studentId;
             const ds  = det.dataset.dateStart || null;
             const de  = det.dataset.dateEnd   || null;
+            if (!ds || !de) {
+                body.innerHTML = '<p class="acc-empty">Pilih rentang tanggal untuk melihat detail sesi. Untuk data lengkap, gunakan fitur Unduh Excel.</p>';
+                return;
+            }
             try {
                 const sessions = await getStudentAttendanceSessions(sid, ds, de, currentUser.user_id);
                 if (!sessions.length) {
@@ -1255,6 +1259,10 @@ async function loadWaliSummary() {
                 const sid = det.dataset.studentId;
                 const ds  = det.dataset.dateStart || null;
                 const de  = det.dataset.dateEnd   || null;
+                if (!ds || !de) {
+                    body.innerHTML = '<p class="acc-empty">Pilih rentang tanggal untuk melihat detail sesi. Untuk data lengkap, gunakan fitur Unduh Excel.</p>';
+                    return;
+                }
                 try {
                     const sessions = await getStudentAttendanceSessions(sid, ds, de);
                     if (!sessions.length) {
@@ -1434,6 +1442,10 @@ async function loadBkAttendanceRecap() {
                             const sid = stuDet.dataset.studentId;
                             const ds  = stuDet.dataset.dateStart || null;
                             const de  = stuDet.dataset.dateEnd   || null;
+                            if (!ds || !de) {
+                                sBody.innerHTML = '<p class="hint" style="padding:8px 24px">Pilih rentang tanggal untuk melihat detail sesi. Untuk data lengkap, gunakan fitur Unduh Excel.</p>';
+                                return;
+                            }
                             try {
                                 const sessions = await getStudentAttendanceSessions(sid, ds, de);
                                 if (!sessions.length) {
@@ -1667,6 +1679,10 @@ async function loadWkAttendanceRecap() {
                             const sid    = stuDet.dataset.studentId;
                             const ds     = stuDet.dataset.dateStart || null;
                             const de     = stuDet.dataset.dateEnd   || null;
+                            if (!ds || !de) {
+                                sBody.innerHTML = '<p class="hint" style="padding:8px 24px">Pilih rentang tanggal untuk melihat detail sesi. Untuk data lengkap, gunakan fitur Unduh Excel.</p>';
+                                return;
+                            }
                             try {
                                 const sessions = await getStudentAttendanceSessions(sid, ds, de);
                                 if (!sessions.length) {
@@ -2006,6 +2022,10 @@ async function loadKpClsRecap() {
                             const sid = stuDet.dataset.studentId;
                             const ds  = stuDet.dataset.dateStart || null;
                             const de  = stuDet.dataset.dateEnd   || null;
+                            if (!ds || !de) {
+                                sBody.innerHTML = '<p class="hint" style="padding:8px 24px">Pilih rentang tanggal untuk melihat detail sesi. Untuk data lengkap, gunakan fitur Unduh Excel.</p>';
+                                return;
+                            }
                             try {
                                 const sessions = await getStudentAttendanceSessions(sid, ds, de);
                                 if (!sessions.length) {
