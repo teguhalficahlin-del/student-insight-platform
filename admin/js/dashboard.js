@@ -1836,7 +1836,7 @@ async function renderJadwalPanel() {
         }
     }
 
-    document.getElementById('jadwal-grade-tabs').addEventListener('click', e => {
+    document.getElementById('jadwal-grade-tabs')?.addEventListener('click', e => {
         const grade = Number(e.target.dataset?.grade);
         if (!grade || grade === activeGrade) return;
         activeGrade = grade;
@@ -1845,7 +1845,7 @@ async function renderJadwalPanel() {
         loadGrid();
     });
 
-    document.getElementById('jadwal-day-tabs').addEventListener('click', e => {
+    document.getElementById('jadwal-day-tabs')?.addEventListener('click', e => {
         const day = e.target.dataset?.day;
         if (!day || day === activeDay) return;
         activeDay = day;
