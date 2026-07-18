@@ -32,7 +32,7 @@ Fase-fase berikut direncanakan di awal sesi audit (6–7 Juli 2026). Fase 1 dan 
 |------|------|--------|
 | **1** | Temuan Langsung — Branding, Credential & Privilege Exposure | ✅ SELESAI |
 | **2** | RLS & Tenant Isolation (semua tabel/policy) | ✅ SELESAI (9 Juli 2026) |
-| **3** | Access Control per Aktor (capability audit per portal) | ⏳ Belum dimulai |
+| **3** | Access Control per Aktor (capability audit per portal) | ✅ SELESAI (12 Juli 2026) |
 | **4** | Frontend Security (input validation, XSS, offline queue) | ⏳ Belum dimulai |
 | **5** | Skalabilitas & Performance | ⏸ DITUNDA (lihat §3) |
 | **6** | Go-live Readiness Check & Penetration Test | ⏳ Belum dimulai |
@@ -267,7 +267,7 @@ WHERE u.kaprodi_program_id IS NOT NULL ORDER BY sc.slug LIMIT 6;
 ```bash
 SUPABASE_ACCESS_TOKEN="sbp_..." node tests/tenant-isolation.mjs
 ```
-**Status terverifikasi:** 90/90 ✓ LULUS — `✅ LULUS — invarian isolasi tenant utuh.` (9 Juli 2026, pasca CHECK 14). Catatan: Forum Kelas tidak menambah CHECK baru — test suite tidak berubah dari angka 90.
+**Status terverifikasi:** 93/93 ✓ LULUS — `✅ LULUS — invarian isolasi tenant utuh.` (11 Juli 2026, pasca CHECK 15). Naik dari 90 setelah Forum Kelas CHECK 15 ditambahkan.
 
 > **Catatan angka historis:** Dokumen ini sempat mencatat "42/42 CHECK lulus" — angka itu
 > berasal dari run sebelum commit `c19b164` (8 Juli 2026) menambahkan CHECK 10/11 (+13 ✓ → 55).
@@ -936,7 +936,7 @@ Migration yang applied:
 | **FORUM-4** | Wizard Admin penugasan Guru Wali & BK | ✅ SELESAI (11 Juli 2026) |
 | **FORUM-5** | Test end-to-end siklus lengkap + CHECK 15 permanen | ✅ SELESAI (11 Juli 2026) |
 
-**Audit keamanan Fase 3** — masih ditunda, belum dimulai. Item yang menunggu: 14 fungsi `anon=true`, WAKA_HUMAS/PKL, column-restriction `rls_users_read_staff`.
+**Audit keamanan Fase 3** — ✅ SELESAI (12 Juli 2026). Item yang diselesaikan: zero anon-executable functions, WAKA_HUMAS/PKL scope konsisten, column-restriction `rls_users_read_staff` → documented risk acceptance.
 
 ### 14.4 Fitur yang TIDAK DISENTUH (Keputusan Romo — Sesi Ini)
 
@@ -1343,3 +1343,91 @@ Semua `switch case` di `loadTabContent()` sudah punya handler untuk setiap tab. 
 - `fn_attendance_recap_per_class` (SECURITY DEFINER): filter `c.school_id = fn_current_school_id()` di WHERE + `ts.school_id = fn_current_school_id()` di JOIN + REVOKE anon/public ✅
 
 **Catatan:** File `contracts/06_rls_policies.sql` menampilkan policy lama (stale — tanpa filter `school_id`). Yang berlaku di database live adalah migration `20260701130000_*` yang sudah lebih baru. File contracts perlu disinkronkan sebagai technical debt.
+
+---
+
+## 18. Sesi 18 Juli 2026 — Health Check Komprehensif 4 Layer
+
+### 18.1 Bug Fix — generate-atp 422
+
+Edge function `generate-atp` return 422 karena 3 bug berlapis:
+
+| # | Bug | Fix |
+|---|-----|-----|
+| 1 | JSON parse gagal — Claude return markdown fence | `extractJSON()` robust: strip fence → brace match → raw |
+| 2 | Auth query kolom salah: `role` → `role_type`, `id` → `auth_user_id` | Fix kolom query |
+| 3 | Contract mismatch frontend vs edge function | Kembalikan ke contract lama: input `fase/cp_referensi`, output JSON ke client |
+
+**Status:** ✅ SELESAI — test live 200, UI ATP berfungsi end-to-end.
+
+---
+
+### 18.2 Audit 1 — Health Check JS Layer
+
+22 temuan dari audit mandiri Claude Code. 9 temuan yang belum difix diselesaikan di sesi ini:
+
+| ID | Severity | Deskripsi | Status |
+|----|----------|-----------|--------|
+| CAT-3-A/B | 🔴 HIGH | Listener leak di `initKaprodiTab()` | ✅ SELESAI — commit `00bb70f` |
+| CAT-1-A | 🔴 HIGH | `init()` tanpa `.catch()` di 4 portal | ✅ SELESAI — commit `ab47f60` |
+| CAT-7-A | 🟡 MEDIUM | `config=null` cascade TypeError guru | ✅ SELESAI — commit `5a05035` |
+| CAT-9-A | 🟡 MEDIUM | Query attendance tanpa filter tanggal | ✅ SELESAI — commit `09c3ac6` |
+| CAT-9-B | 🟡 MEDIUM | Admin query tanpa `.count()` | ⏸️ Ditunda — refactor ke `.count()` |
+| CAT-8-B | 🟡 MEDIUM | Admin bisa save branding kosong | ✅ SELESAI — commit `0d1a3e5` |
+| CAT-4-B | 🟡 MEDIUM | `loadTabContent` tanpa try/catch | ✅ SELESAI — commit `c8f57c0` |
+| CAT-1-B | 🟡 MEDIUM | Kaprodi outer catch silent | ✅ SELESAI — commit `7e8bfa8` |
+| CAT-5-A | 🟡 MEDIUM | `getElementById` tanpa null check | ✅ SELESAI — commit `60ef065` |
+| CAT-2-B | 🟡 MEDIUM | Supabase credentials duplikat superadmin | ⏸️ Ditunda — refactor ke `shared/config.js` |
+
+**Dokumen baru:** `docs/features/admin-portal.md` dibuat — commit `80372a5`.
+
+---
+
+### 18.3 Audit 2 — Health Check Komprehensif 4 Layer
+
+#### Layer A — RLS & Edge Functions
+
+| Finding | Deskripsi | Status |
+|---------|-----------|--------|
+| A-1a | `spike-schema-test` aktif di production tanpa auth, pakai service role key | ✅ Dihapus — tidak pernah di-commit ke repo |
+| A-1b | `evaluate-teacher-indicators` aktif tanpa auth, endpoint terbuka | ✅ Guard `X-Superadmin-Key` ditambahkan — commit `1284ab4` |
+| A-1c | Cron job tidak menyertakan auth header | ✅ Diupdate via migration (tidak di-commit — berisi key) |
+| A-2 | `ld_prompt_templates` USING (true) | ✅ Aman — hanya prompt template AI, bukan data personal |
+
+#### Layer B — Cross-portal Consistency
+
+Tidak ada temuan. Semua konsisten:
+- Status label absensi: `TIDAK_HADIR` di DUDI adalah tabel `pkl_attendance` terpisah — bukan inkonsistensi
+- Format tanggal: semua `toLocaleDateString('id-ID')`
+- Role name: semua UPPERCASE
+- academic_year: tidak ada hardcode
+
+#### Layer C — User Flow End-to-End
+
+Tidak ada temuan. Semua flow aman:
+- Wizard: `setup_completed` di-set benar di step terakhir
+- Login → role check → redirect: semua portal punya guard
+- Logout: `clearOfflineQueue` → `LC.clear` → `signOut` → redirect
+- School slug: portal user pakai `school_id` dari session, bukan URL param
+- Service Worker: self-destruct mode, tidak ada cache sensitif
+
+#### Layer D — Feature Audit Spesifik
+
+| Finding | Deskripsi | Status |
+|---------|-----------|--------|
+| D-1 | Bulk import tidak ada validasi file size di client | ⚠️ Low priority — UX issue, bukan security |
+| Forum Kelas | Filter ganda `class_id` + `forum_post_audience` | ✅ Aman |
+| Case RESTRICTED | Murni RLS di student/parent — desain sengaja | ✅ Aman |
+| Tutup Tahun Ajaran | 2 lapis konfirmasi: dialog + ketik "BATALKAN" | ✅ Aman |
+| Delete operations | Konfirmasi berlapis, soft-delete 30 hari, FK check | ✅ Aman |
+
+---
+
+### 18.4 Technical Debt yang Dicatat
+
+| Item | Lokasi | Prioritas |
+|------|--------|-----------|
+| CAT-9-B: refactor query ke `.count()` | `admin/js/api.js:110` | Low |
+| CAT-2-B: konsolidasi credentials ke `shared/config.js` | `superadmin/js/dashboard.js:1-2` | Low |
+| FINDING D-1: validasi file size di bulk import | `admin/js/wizard.js` | Low |
+| evaluate-teacher-indicators: pengujian fungsional | `supabase/functions/evaluate-teacher-indicators/` | Medium — sebelum go-live |
