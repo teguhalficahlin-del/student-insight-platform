@@ -12,13 +12,14 @@ const MAX_TOKENS = 4096;
 
 interface GenerateATPRequest {
   subject_name: string;
-  phase: string;       // e.g. "E" atau "F"
-  jp_total: number;    // jam pelajaran total
-  effective_weeks: number;
+  phase: string;        // "E" atau "F"
+  jp_per_minggu: number;
+  minggu_sem1: number;
+  minggu_sem2: number;
   special_focus?: string;
-  cp_reference: string; // paste dari Kemdikbud
+  cp_reference?: string;
   subject_id: string;
-  academic_year: string;
+  program_id?: string;
   school_id: string;
 }
 
@@ -30,47 +31,46 @@ Format respons wajib:
 {
   "tujuan_pembelajaran": [
     {
-      "kode": "TP.1",
-      "deskripsi": "...",
-      "jp": 4,
-      "minggu": 1,
+      "kode_tp": "TP-E-01",
+      "deskripsi_tp": "Peserta didik mampu ...",
       "fase": "E",
-      "domain": "...",
-      "kata_kerja_operasional": ["..."],
-      "indikator": ["..."]
+      "semester": 1,
+      "urutan": 1,
+      "alokasi_jp": 4,
+      "materi_pokok": "...",
+      "indikator": ["...", "..."]
     }
-  ],
-  "total_jp": 72,
-  "catatan_pengembang": "..."
-}`;
+  ]
+}
+Catatan: field "semester" wajib berisi 1 atau 2.`;
 }
 
 function buildUserPrompt(req: GenerateATPRequest): string {
+  const jp_sem1 = req.jp_per_minggu * req.minggu_sem1;
+  const jp_sem2 = req.jp_per_minggu * req.minggu_sem2;
+  const focusLine = req.special_focus ? `\n- Fokus Khusus: ${req.special_focus}` : "";
+  const cpSection = req.cp_reference
+    ? `\nCapaian Pembelajaran Referensi:\n${req.cp_reference}`
+    : "";
+
   return `Buat ATP untuk:
 - Mata Pelajaran: ${req.subject_name}
 - Fase: ${req.phase}
-- Total JP: ${req.jp_total}
-- Minggu Efektif: ${req.effective_weeks}
-- Rata-rata JP per minggu: ${(req.jp_total / req.effective_weeks).toFixed(1)}
-${req.special_focus ? `- Fokus Khusus: ${req.special_focus}` : ""}
+- JP per minggu: ${req.jp_per_minggu}
+- Semester 1: ${req.minggu_sem1} minggu (${jp_sem1} JP)
+- Semester 2: ${req.minggu_sem2} minggu (${jp_sem2} JP)${focusLine}${cpSection}
 
-Capaian Pembelajaran:
-${req.cp_reference}
-
-Hasilkan ATP dengan distribusi JP yang realistis dan tujuan pembelajaran yang terukur.
+Distribusikan TP secara proporsional antara semester 1 dan 2.
+Total JP harus mendekati ${jp_sem1 + jp_sem2} JP.
+Buat minimal 6 TP per semester.
 Ingat: respons HANYA JSON, tidak ada teks lain.`;
 }
 
 function extractJSON(raw: string): string {
-  // Strategy 1: strip markdown code fences
   const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenceMatch) return fenceMatch[1].trim();
-
-  // Strategy 2: extract first {...} block (greedy, handles leading/trailing text)
   const braceMatch = raw.match(/\{[\s\S]*\}/);
   if (braceMatch) return braceMatch[0];
-
-  // Strategy 3: return as-is and let JSON.parse throw with context
   return raw;
 }
 
@@ -99,15 +99,15 @@ serve(async (req: Request) => {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return errorResponse(401, "Unauthorized");
 
-  // ── Role check: hanya GURU boleh generate ATP ─────────────────────────────
+  // ── Role check ────────────────────────────────────────────────────────────
   const { data: userRow, error: userError } = await supabase
     .from("users")
-    .select("role, school_id")
-    .eq("id", user.id)
+    .select("role_type, school_id, user_id")
+    .eq("auth_user_id", user.id)
     .single();
 
   if (userError || !userRow) return errorResponse(403, "User not found");
-  if (!["GURU", "WAKA_KURIKULUM", "KEPALA_SEKOLAH"].includes(userRow.role)) {
+  if (!["GURU", "WAKA_KURIKULUM", "KEPALA_SEKOLAH"].includes(userRow.role_type)) {
     return errorResponse(403, "Insufficient role");
   }
 
@@ -120,14 +120,16 @@ serve(async (req: Request) => {
   }
 
   const required: (keyof GenerateATPRequest)[] = [
-    "subject_name", "phase", "jp_total", "effective_weeks",
-    "cp_reference", "subject_id", "academic_year", "school_id"
+    "subject_name", "phase", "jp_per_minggu", "minggu_sem1", "minggu_sem2",
+    "subject_id", "school_id",
   ];
   for (const field of required) {
-    if (!body[field]) return errorResponse(400, `Missing required field: ${field}`);
+    if (body[field] === undefined || body[field] === null || body[field] === "") {
+      return errorResponse(400, `Missing required field: ${field}`);
+    }
   }
 
-  // Tenant isolation: school_id dari body harus sama dengan user
+  // Tenant isolation
   if (body.school_id !== userRow.school_id) {
     return errorResponse(403, "school_id mismatch");
   }
@@ -160,7 +162,12 @@ serve(async (req: Request) => {
 
     const claudeData = await claudeRes.json();
 
-    // Extract text from Claude response (handles multi-block)
+    if (claudeData.stop_reason === "max_tokens") {
+      return errorResponse(422, "Response truncated by max_tokens — kurangi minggu atau sederhanakan CP", {
+        stop_reason: "max_tokens",
+      });
+    }
+
     const textBlocks = (claudeData.content ?? [])
       .filter((b: { type: string }) => b.type === "text")
       .map((b: { text: string }) => b.text);
@@ -176,93 +183,66 @@ serve(async (req: Request) => {
   }
 
   // ── Parse Claude response ─────────────────────────────────────────────────
-  let atpData: {
-    tujuan_pembelajaran: unknown[];
-    total_jp: number;
-    catatan_pengembang: string;
-  };
+  let atpData: { tujuan_pembelajaran: Array<Record<string, unknown>> };
 
   try {
     const extracted = extractJSON(claudeRaw);
     atpData = JSON.parse(extracted);
   } catch (e) {
-    // Expose raw for debugging — critical for diagnosing prompt issues
     return errorResponse(422, "Failed to parse Claude response as JSON", {
       raw: claudeRaw,
       extractError: String(e),
     });
   }
 
-  // Validate structure
   if (!Array.isArray(atpData.tujuan_pembelajaran) || atpData.tujuan_pembelajaran.length === 0) {
     return errorResponse(422, "ATP response missing tujuan_pembelajaran array", { raw: claudeRaw });
   }
 
-  // ── Save to DB ────────────────────────────────────────────────────────────
-  // Save ATP header
-  const { data: atpRow, error: atpError } = await supabase
-    .from("alur_tujuan_pembelajaran")
-    .upsert({
-      subject_id: body.subject_id,
-      school_id: body.school_id,
-      academic_year: body.academic_year,
-      phase: body.phase,
-      jp_total: body.jp_total,
-      effective_weeks: body.effective_weeks,
-      special_focus: body.special_focus ?? null,
-      cp_reference: body.cp_reference,
-      catatan_pengembang: atpData.catatan_pengembang ?? null,
-      generated_at: new Date().toISOString(),
-      generated_by: user.id,
-    }, { onConflict: "subject_id,school_id,academic_year" })
-    .select("id")
-    .single();
-
-  if (atpError || !atpRow) {
-    return errorResponse(500, "Failed to save ATP header", { error: atpError });
-  }
-
-  // Save TP rows — delete existing first for clean regeneration
-  await supabase
+  // ── Save to DB (schema: tujuan_pembelajaran per migration 75b6fa8) ─────────
+  // Delete existing AI-generated TPs for this subject+fase+school before re-insert
+  const { error: deleteError } = await supabase
     .from("tujuan_pembelajaran")
     .delete()
-    .eq("atp_id", atpRow.id);
+    .eq("school_id", body.school_id)
+    .eq("subject_id", body.subject_id)
+    .eq("fase", body.phase)
+    .eq("generated_by", "AI");
 
-  const tpRows = (atpData.tujuan_pembelajaran as Array<{
-    kode: string;
-    deskripsi: string;
-    jp: number;
-    minggu: number;
-    domain?: string;
-    kata_kerja_operasional?: string[];
-    indikator?: string[];
-  }>).map((tp, idx) => ({
-    atp_id: atpRow.id,
+  if (deleteError) {
+    return errorResponse(500, "Failed to delete existing TPs", { error: deleteError });
+  }
+
+  const tpRows = atpData.tujuan_pembelajaran.map((tp, idx) => ({
     school_id: body.school_id,
-    kode: tp.kode ?? `TP.${idx + 1}`,
-    deskripsi: tp.deskripsi ?? "",
-    jp: Number(tp.jp) || 0,
-    minggu: Number(tp.minggu) || idx + 1,
-    domain: tp.domain ?? null,
-    kata_kerja_operasional: tp.kata_kerja_operasional ?? [],
-    indikator: tp.indikator ?? [],
-    urutan: idx + 1,
+    subject_id: body.subject_id,
+    program_id: body.program_id ?? null,
+    fase: (tp.fase as string) ?? body.phase,
+    semester: Number(tp.semester) === 2 ? 2 : 1,
+    urutan: Number(tp.urutan) || idx + 1,
+    kode_tp: (tp.kode_tp as string) ?? `TP-${body.phase}-${String(idx + 1).padStart(2, "0")}`,
+    deskripsi_tp: (tp.deskripsi_tp as string) ?? "",
+    materi_pokok: (tp.materi_pokok as string) ?? null,
+    alokasi_jp: Number(tp.alokasi_jp) || null,
+    indikator: Array.isArray(tp.indikator) ? tp.indikator as string[] : [],
+    generated_by: "AI",
+    created_by: userRow.user_id,
   }));
 
-  const { error: tpError } = await supabase
+  const { error: insertError } = await supabase
     .from("tujuan_pembelajaran")
     .insert(tpRows);
 
-  if (tpError) {
-    return errorResponse(500, "Failed to save tujuan_pembelajaran", { error: tpError });
+  if (insertError) {
+    return errorResponse(500, "Failed to save tujuan_pembelajaran", { error: insertError });
   }
 
   return new Response(
     JSON.stringify({
       success: true,
-      atp_id: atpRow.id,
       tp_count: tpRows.length,
-      total_jp: atpData.total_jp,
+      tp_sem1: tpRows.filter(r => r.semester === 1).length,
+      tp_sem2: tpRows.filter(r => r.semester === 2).length,
     }),
     { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
   );
