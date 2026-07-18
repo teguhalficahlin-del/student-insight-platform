@@ -303,21 +303,29 @@ function activateTab(key) {
 }
 
 async function loadTabContent(key) {
-    switch (key) {
-        case 'guru':        await initGuruTab(); break;
-        case 'wali_kelas':  await initWaliTab(); break;
-        case 'bk':          await initBkTab(); break;
-        case 'kaprodi':     await initKaprodiTab(); break;
-        case 'waka_kesiswaan': await initWakaKesiswaanTab(); break;
-        case 'waka_kurikulum': await initWakaKurTab(); break;
-        case 'waka_humas':  await initWakaHumasTab(); break;
-        case 'kepsek':      await initKepsekTab(); break;
-        case 'ks_admin':    await initKsAdminTab(); break;
-        case 'kasus':       await initKasusTab(); break;
-        case 'jurnal':      await initJurnalTab(); break;
-        case 'observasi':   await initObsTab(); break;
-        case 'kurikulum':   await initKurikulumTab(); break;
-        case 'forum':       await initForumTab(); break;
+    try {
+        switch (key) {
+            case 'guru':        await initGuruTab(); break;
+            case 'wali_kelas':  await initWaliTab(); break;
+            case 'bk':          await initBkTab(); break;
+            case 'kaprodi':     await initKaprodiTab(); break;
+            case 'waka_kesiswaan': await initWakaKesiswaanTab(); break;
+            case 'waka_kurikulum': await initWakaKurTab(); break;
+            case 'waka_humas':  await initWakaHumasTab(); break;
+            case 'kepsek':      await initKepsekTab(); break;
+            case 'ks_admin':    await initKsAdminTab(); break;
+            case 'kasus':       await initKasusTab(); break;
+            case 'jurnal':      await initJurnalTab(); break;
+            case 'observasi':   await initObsTab(); break;
+            case 'kurikulum':   await initKurikulumTab(); break;
+            case 'forum':       await initForumTab(); break;
+        }
+    } catch (err) {
+        console.error('[loadTabContent]', key, err);
+        const activePanel = document.querySelector('.tab-panel.active .page-body');
+        if (activePanel) {
+            activePanel.innerHTML = '<p style="padding:1.5rem; color:red">Gagal memuat tab ini. Silakan coba lagi atau refresh halaman.</p>';
+        }
     }
 }
 
