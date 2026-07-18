@@ -1,3 +1,5 @@
+// TODO(CAT-2-B): duplikasi dari shared/branding.js — konsolidasikan ke shared/config.js
+// saat shared module direfactor. Jika SUPABASE_URL/ANON berubah, update di sini juga.
 const SUPABASE_URL  = 'https://xovvuuwexoweoqyltepq.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvdnZ1dXdleG93ZW9xeWx0ZXBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDk0NzUsImV4cCI6MjA5Nzc4NTQ3NX0.mFwmVfSqYM7ITURtLC143BsurK6Yr31WFViJe5PFGN8';
 
