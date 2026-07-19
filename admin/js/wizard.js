@@ -2237,7 +2237,7 @@ const STEP_LIST = {
                       .order('full_name'));
             return data.map(u => {
                 const jabatan = [];
-                if (u.role_type === 'GURU') jabatan.push('Guru');
+                if (u.role_type === 'GURU' || u.teacher_code) jabatan.push('Guru');
                 if (u.wali_kelas_class_id) jabatan.push('Wali Kelas');
                 if (u.is_bk) jabatan.push('BK');
                 if (u.kaprodi_program_id) jabatan.push('Kaprodi');
