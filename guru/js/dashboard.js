@@ -4537,8 +4537,10 @@ async function loadPerangkatAjarDashboard() {
                 <div class="section-card" style="text-align:center;padding:32px 16px;color:var(--color-text-muted)">
                     <div style="font-size:32px;margin-bottom:8px">📚</div>
                     <p style="margin:0 0 12px">Belum ada perangkat ajar yang dibuat.</p>
-                    <button class="btn btn-primary btn-sm" onclick="openBuatDokumenModal(null)">Buat Dokumen Pertama</button>
+                    <button class="btn btn-primary btn-sm pa-buat-btn" data-subject-id="" data-phase-id="">Buat Dokumen Pertama</button>
                 </div>`;
+            // Wire tombol empty-state via event delegation di bawah
+            listEl.querySelector('.pa-buat-btn')?.addEventListener('click', () => openBuatDokumenModal(null));
             return;
         }
 
