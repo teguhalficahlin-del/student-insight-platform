@@ -1400,7 +1400,7 @@ export async function getPendingDocApprovals(schoolId) {
     const { data, error } = await supabase
         .from('teacher_documents')
         .select(`
-            doc_id, document_type, academic_year, status, created_at,
+            doc_id, document_type, academic_year, semester, status, created_at,
             content_json,
             core_subject_id,
             phase_id

@@ -4558,15 +4558,9 @@ async function loadPerangkatAjarDashboard() {
 
             const dokRows = ['PROGRAM_TAHUNAN','PROGRAM_SEMESTER','ATP','PPM','LKPD','SOAL','RUBRIK'].map(dtype => {
                 const typeDocs = group.docs.filter(d => d.document_type === dtype);
-                let badgeHtml;
-                if (!typeDocs.length) {
-                    badgeHtml = `<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:var(--color-bg-alt);color:var(--color-text-muted)">Belum ada</span>`;
-                } else {
-                    const latestStatus = typeDocs[0].status;
-                    const col = DOC_STATUS_COLOR[latestStatus] ?? 'inherit';
-                    const lbl = DOC_STATUS_LABEL[latestStatus] ?? latestStatus;
-                    badgeHtml = `<span style="font-size:11px;padding:2px 8px;border-radius:12px;color:${col};background:var(--color-bg-alt)">${esc(lbl)}</span>`;
-                }
+                const badgeHtml = typeDocs.length
+                    ? `<span style="font-size:11px;color:var(--color-success,#16a34a)">✓ Ada</span>`
+                    : `<span style="font-size:11px;color:var(--color-text-muted)">—</span>`;
                 return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:13px">
                     <span>${esc(DOC_TYPE_LABEL[dtype] ?? dtype)}</span>
                     ${badgeHtml}
@@ -4875,7 +4869,6 @@ async function loadKepsekDocApprovals() {
 
     const listEl = document.getElementById('kepsek-approval-list');
     listEl.innerHTML = '<p class="hint">Memuat...</p>';
-    section.style.display = '';
 
     try {
         const docs = await getPendingDocApprovals(currentUser.school_id);
