@@ -1419,14 +1419,28 @@ export async function getKepsekApprovalHistory(schoolId) {
             approval_id, status, approved_at, catatan,
             teacher_documents (
                 doc_id, document_type, academic_year, semester,
-                content_json, core_subject_id, phase_id
+                content_json, core_subject_id, phase_id, teacher_user_id
             )
         `)
         .eq('school_id', schoolId)
         .order('approved_at', { ascending: false })
         .limit(20);
     if (error) throw error;
-    return data ?? [];
+    if (!data?.length) return [];
+
+    // teacher_user_id = auth.users.id, bukan FK ke public.users —
+    // perlu lookup terpisah via auth_user_id
+    const authIds = [...new Set(data.map(r => r.teacher_documents?.teacher_user_id).filter(Boolean))];
+    const { data: users } = await supabase
+        .from('users')
+        .select('auth_user_id, full_name')
+        .in('auth_user_id', authIds);
+    const nameMap = new Map((users ?? []).map(u => [u.auth_user_id, u.full_name]));
+
+    return data.map(r => ({
+        ...r,
+        teacher_name: nameMap.get(r.teacher_documents?.teacher_user_id) ?? null,
+    }));
 }
 
 export async function kepsekApproveDoc(docId, action, catatan = null) {

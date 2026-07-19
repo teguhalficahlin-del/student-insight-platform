@@ -4930,11 +4930,15 @@ async function loadKepsekDocApprovals() {
                 const catatanHtml = row.catatan
                     ? `<p style="margin:4px 0 0;font-size:12px;color:var(--color-text-muted);font-style:italic">"${esc(row.catatan)}"</p>`
                     : '';
+                const guruHtml = row.teacher_name
+                    ? `<p style="margin:2px 0 0;font-size:12px;color:var(--color-text-muted)">Guru: ${esc(row.teacher_name)}</p>`
+                    : '';
                 return `
                 <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;opacity:.9">
                     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">
                         <div>
                             <p style="margin:0 0 2px;font-weight:600;font-size:13px">${esc(dtype)}${esc(semLabel)}</p>
+                            ${guruHtml}
                             <p style="margin:0;font-size:12px;color:var(--color-text-muted)">${phase ? `Fase ${phase.code}` : ''} · ${td?.academic_year ?? ''} · ${fmt(row.approved_at)}</p>
                             ${catatanHtml}
                         </div>
