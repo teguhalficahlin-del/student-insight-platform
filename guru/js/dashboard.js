@@ -5172,10 +5172,7 @@ function buildProfilMengajarHTML(p) {
       ).join('')}
     </div>
 
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--color-border)">
-      <button class="btn btn-secondary" id="pm-batal-btn">Batal</button>
-      <button class="btn btn-primary" id="pm-simpan-btn">💾 Simpan Profil</button>
-    </div>`;
+    `;
 }
 
 function collectProfilMengajar(form) {
@@ -5214,8 +5211,15 @@ async function openProfilMengajarModal() {
         overlay = document.createElement('div');
         overlay.id = 'profil-mengajar-modal';
         overlay.className = 'modal-overlay';
-        overlay.style.cssText = 'align-items:flex-start;overflow-y:auto';
-        overlay.innerHTML = `<div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:600px;margin:24px auto;position:relative"><div id="pm-body"></div></div>`;
+        overlay.style.cssText = 'align-items:center';
+        overlay.innerHTML = `
+          <div class="sip-modal-panel" style="max-width:600px">
+            <div class="sip-modal-scroll"><div id="pm-body"></div></div>
+            <div class="sip-modal-footer">
+              <button class="btn btn-secondary" id="pm-batal-btn">Batal</button>
+              <button class="btn btn-primary" id="pm-simpan-btn">💾 Simpan Profil</button>
+            </div>
+          </div>`;
         overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
         document.body.appendChild(overlay);
     }
@@ -5244,9 +5248,9 @@ async function openProfilMengajarModal() {
         body.querySelector('#pm-avoided-lain-detail').style.display = e.target.checked ? '' : 'none';
     });
 
-    body.querySelector('#pm-batal-btn').addEventListener('click', () => { overlay.style.display = 'none'; });
-    body.querySelector('#pm-simpan-btn').addEventListener('click', async () => {
-        const btn = body.querySelector('#pm-simpan-btn');
+    overlay.querySelector('#pm-batal-btn').addEventListener('click', () => { overlay.style.display = 'none'; });
+    overlay.querySelector('#pm-simpan-btn').addEventListener('click', async () => {
+        const btn = overlay.querySelector('#pm-simpan-btn');
         btn.disabled = true; btn.textContent = '…';
         try {
             await saveTeacherProfile(currentUser.school_id, collectProfilMengajar(body));
@@ -5355,10 +5359,7 @@ function buildKonteksKelasHTML(ctx, subjName, ay) {
       </div>
     </div>
 
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--color-border)">
-      <button class="btn btn-secondary" id="kk-batal-btn">Batal</button>
-      <button class="btn btn-primary" id="kk-simpan-btn">💾 Simpan Konteks</button>
-    </div>`;
+    `;
 }
 
 function collectKonteksKelas(form, subjectId, ay) {
@@ -5429,14 +5430,22 @@ async function openKonteksKelasModal() {
         overlay = document.createElement('div');
         overlay.id = 'konteks-kelas-modal';
         overlay.className = 'modal-overlay';
-        overlay.style.cssText = 'align-items:flex-start;overflow-y:auto';
-        overlay.innerHTML = `<div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:600px;margin:24px auto;position:relative"><div id="kk-body"></div></div>`;
+        overlay.style.cssText = 'align-items:center';
+        overlay.innerHTML = `
+          <div class="sip-modal-panel" style="max-width:600px">
+            <div class="sip-modal-scroll"><div id="kk-body"></div></div>
+            <div class="sip-modal-footer" id="kk-footer" style="display:none">
+              <button class="btn btn-secondary" id="kk-batal-btn">Batal</button>
+              <button class="btn btn-primary" id="kk-simpan-btn">💾 Simpan Konteks</button>
+            </div>
+          </div>`;
         overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
         document.body.appendChild(overlay);
     }
 
     const openForSubject = async (subj) => {
         overlay.style.display = 'flex';
+        document.getElementById('kk-footer').style.display = 'none';
         document.getElementById('kk-body').innerHTML = '<p class="hint">Memuat konteks…</p>';
         let ctx = null;
         try { ctx = await getTeachingContext(currentUser.school_id, subj.subject_id, ay); } catch (e) { /* */ }
@@ -5468,9 +5477,16 @@ async function openKonteksKelasModal() {
             body.querySelector('#kk-media-lain-detail').style.display = e.target.checked ? '' : 'none';
         });
 
-        body.querySelector('#kk-batal-btn').addEventListener('click', () => { overlay.style.display = 'none'; });
-        body.querySelector('#kk-simpan-btn').addEventListener('click', async () => {
-            const btn = body.querySelector('#kk-simpan-btn');
+        // Tampilkan footer dan wire tombol
+        const footer = document.getElementById('kk-footer');
+        footer.style.display = '';
+        const batalBtn  = overlay.querySelector('#kk-batal-btn');
+        const simpanBtn = overlay.querySelector('#kk-simpan-btn');
+        batalBtn.replaceWith(batalBtn.cloneNode(true));
+        simpanBtn.replaceWith(simpanBtn.cloneNode(true));
+        overlay.querySelector('#kk-batal-btn').addEventListener('click', () => { overlay.style.display = 'none'; });
+        overlay.querySelector('#kk-simpan-btn').addEventListener('click', async () => {
+            const btn = overlay.querySelector('#kk-simpan-btn');
             btn.disabled = true; btn.textContent = '…';
             try {
                 await saveTeachingContext(currentUser.school_id, collectKonteksKelas(body, subj.subject_id, ay));
