@@ -4780,8 +4780,7 @@ async function openBuatDokumenModal(preselect) {
             msgEl.style.display = '';
             setTimeout(async () => {
                 modal.style.display = 'none';
-                _paTabInit = false; // force refresh
-                await initPerangkatAjarTab();
+                await loadPerangkatAjarDashboard();
             }, 900);
         } catch (err) {
             msgEl.style.color   = 'var(--color-danger)';
@@ -4860,8 +4859,7 @@ async function openDetailDokumenModal(docId, coreSubjectId, phaseId) {
                 showMsg(`✓ Status diubah ke: ${DOC_STATUS_LABEL[newStatus]}`);
                 setTimeout(async () => {
                     modal.style.display = 'none';
-                    _paTabInit = false;
-                    await initPerangkatAjarTab();
+                    await loadPerangkatAjarDashboard();
                 }, 900);
             } catch (err) {
                 showMsg(`✗ ${fe(err, 's')}`, true);
