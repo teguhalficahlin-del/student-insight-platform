@@ -245,14 +245,15 @@ async function loadChildData(index) {
                   observations:false, cases:false, forum:false };
     forumInitDone = false;
 
-    // Tampilkan tab-nav, atur tombol mana yang visible
+    // Tampilkan tab-nav dan bottom-nav, atur tombol mana yang visible
     tabNav.style.display = 'flex';
-    document.querySelector('[data-tab="section-pkl"]')
-        .toggleAttribute('hidden', !isPkl);
-    document.querySelector('[data-tab="section-schedule"]')
-        .toggleAttribute('hidden', isPkl || isInactive);
-    document.querySelector('[data-tab="section-attendance"]')
-        .toggleAttribute('hidden', isInactive);
+    document.getElementById('parent-bottom-nav').style.display = 'block';
+    document.querySelectorAll('[data-tab="section-pkl"]')
+        .forEach(el => el.toggleAttribute('hidden', !isPkl));
+    document.querySelectorAll('[data-tab="section-schedule"]')
+        .forEach(el => el.toggleAttribute('hidden', isPkl || isInactive));
+    document.querySelectorAll('[data-tab="section-attendance"]')
+        .forEach(el => el.toggleAttribute('hidden', isInactive));
 
     // Tentukan tab default berdasarkan status anak
     const defaultTab = isPkl          ? 'section-pkl'
