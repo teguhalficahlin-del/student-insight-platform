@@ -5086,15 +5086,32 @@ function buildProfilMengajarHTML(p) {
 
     <div class="pm-q"><p class="pm-label">1. Tujuan Utama Pembelajaran</p>
       ${[
-        ['PKL','Persiapan PKL'],['DUNIA_KERJA','Persiapan Dunia Kerja'],
-        ['SERTIFIKASI','Persiapan Sertifikasi'],['LKS','Persiapan LKS'],
-        ['KONSEP_DASAR','Penguatan Konsep Dasar'],['KEWIRAUSAHAAN','Projek Kewirausahaan'],
-        ['UMKM','UMKM Lokal'],['LAINNYA','Lainnya'],
-      ].map(([val,lbl]) => `
-        <label class="pm-radio-row"><input type="radio" name="instructional_intent" value="${val}" ${sel('instructional_intent',val)}> ${lbl}</label>
-        ${val === 'SERTIFIKASI' ? `<div class="pm-cond" id="pm-cond-sertifikasi" style="display:${v.instructional_intent==='SERTIFIKASI'?'block':'none'};margin:4px 0 4px 24px"><input type="text" class="input input-sm" name="intent_detail_sertifikasi" placeholder="Nama sertifikasi" value="${esc(v.instructional_intent==='SERTIFIKASI'?(v.intent_detail??''):'')}" style="max-width:280px"></div>` : ''}
-        ${val === 'LAINNYA' ? `<div class="pm-cond" id="pm-cond-intent-lain" style="display:${v.instructional_intent==='LAINNYA'?'block':'none'};margin:4px 0 4px 24px"><input type="text" class="input input-sm" name="intent_detail_lain" placeholder="Jelaskan" value="${esc(v.instructional_intent==='LAINNYA'?(v.intent_detail??''):'')}" style="max-width:280px"></div>` : ''}
-      `).join('')}
+        ['PKL',                  'Persiapan PKL',                      null],
+        ['DUNIA_KERJA',          'Persiapan Dunia Kerja',               null],
+        ['SERTIFIKASI',          'Persiapan Sertifikasi',               'Nama sertifikasi (contoh: Mikrotik MTCNA)'],
+        ['LKS',                  'Persiapan LKS',                       'Bidang/skill yang difokuskan'],
+        ['KONSEP_DASAR',         'Penguatan Konsep Dasar',              null],
+        ['KEWIRAUSAHAAN',        'Projek Kewirausahaan',                null],
+        ['UMKM',                 'UMKM Lokal',                          null],
+        ['LITERASI',             'Penguatan Literasi',                   'Jenis literasi (membaca, menulis, dst)'],
+        ['NUMERASI',             'Penguatan Numerasi',                   null],
+        ['KOMUNIKASI',           'Komunikasi dan Interaksi',             'Konteks komunikasi (formal, informal, dunia kerja, dst)'],
+        ['PENGEMBANGAN_KARAKTER','Pengembangan Karakter',               null],
+        ['PERSIAPAN_AN',         'Persiapan Asesmen Nasional',          null],
+        ['LAINNYA',              'Lainnya',                              'Jelaskan tujuan pembelajaran Anda'],
+      ].map(([val, lbl, placeholder]) => {
+        const isSelected = v.instructional_intent === val;
+        const condDetail  = isSelected ? (v.intent_detail ?? '') : '';
+        const condHtml    = placeholder ? `
+          <div class="pm-cond-intent" id="pm-cond-${val}" style="display:${isSelected?'':'none'};margin:6px 0 4px 24px">
+            <input type="text" class="input input-sm pm-cond-input" placeholder="${esc(placeholder)}" value="${esc(condDetail)}" style="width:100%;max-width:320px">
+          </div>` : '';
+        return `<label class="pm-radio-row"><input type="radio" name="instructional_intent" value="${val}" ${sel('instructional_intent',val)}> ${lbl}</label>${condHtml}`;
+      }).join('')}
+      <div style="margin-top:12px">
+        <label style="font-size:13px;display:block;margin-bottom:4px;color:var(--color-text-muted)">Informasi tambahan <span style="font-weight:400">(opsional)</span></label>
+        <textarea name="intent_detail" class="input" rows="3" placeholder="Tuliskan informasi tambahan tentang tujuan pembelajaran Anda..." style="width:100%;resize:vertical;font-size:13px">${esc(v.intent_detail ?? '')}</textarea>
+      </div>
     </div>
 
     <div class="pm-q"><p class="pm-label">2. Cara Penilaian Utama</p>
@@ -5181,9 +5198,11 @@ function collectProfilMengajar(form) {
     const txt = name => form.querySelector(`input[name="${name}"]`)?.value.trim() || null;
 
     const intent = radio('instructional_intent');
-    let intent_detail = null;
-    if (intent === 'SERTIFIKASI') intent_detail = txt('intent_detail_sertifikasi');
-    else if (intent === 'LAINNYA') intent_detail = txt('intent_detail_lain');
+    // Ambil dari input kondisional yang terlihat, fallback ke textarea intent_detail
+    const visibleCond = form.querySelector(`.pm-cond-intent:not([style*="display:none"]):not([style*="display: none"]) .pm-cond-input`);
+    const condVal = visibleCond?.value.trim() || null;
+    const txtareaVal = form.querySelector('textarea[name="intent_detail"]')?.value.trim() || null;
+    const intent_detail = condVal || txtareaVal || null;
 
     return {
         instructional_intent: intent,
@@ -5234,13 +5253,12 @@ async function openProfilMengajarModal() {
     const body = document.getElementById('pm-body');
     body.innerHTML = buildProfilMengajarHTML(profile);
 
-    // Kondisional: tujuan
+    // Kondisional: tujuan — sembunyikan semua lalu tampilkan yang sesuai
     body.querySelectorAll('input[name="instructional_intent"]').forEach(r => {
         r.addEventListener('change', () => {
-            body.querySelector('#pm-cond-sertifikasi').style.display = r.value === 'SERTIFIKASI' && r.checked ? '' : (body.querySelector('input[name="instructional_intent"][value="SERTIFIKASI"]:checked') ? '' : 'none');
-            body.querySelector('#pm-cond-intent-lain').style.display = r.value === 'LAINNYA' && r.checked ? '' : (body.querySelector('input[name="instructional_intent"][value="LAINNYA"]:checked') ? '' : 'none');
-            body.querySelector('#pm-cond-sertifikasi').style.display = body.querySelector('input[value="SERTIFIKASI"]:checked') ? '' : 'none';
-            body.querySelector('#pm-cond-intent-lain').style.display = body.querySelector('input[value="LAINNYA"][name="instructional_intent"]:checked') ? '' : 'none';
+            body.querySelectorAll('.pm-cond-intent').forEach(el => el.style.display = 'none');
+            const active = body.querySelector(`#pm-cond-${r.value}`);
+            if (active) active.style.display = '';
         });
     });
     // Kondisional: avoided lainnya
@@ -5526,7 +5544,7 @@ async function openKonteksKelasModal() {
 
 // ─── Modal: Konfirmasi Generate ───────────────────────────────
 const PROFIL_LABEL = {
-    instructional_intent: { label: 'Tujuan', map: { PKL:'Persiapan PKL', DUNIA_KERJA:'Persiapan Dunia Kerja', SERTIFIKASI:'Persiapan Sertifikasi', LKS:'Persiapan LKS', KONSEP_DASAR:'Penguatan Konsep Dasar', KEWIRAUSAHAAN:'Projek Kewirausahaan', UMKM:'UMKM Lokal', LAINNYA:'Lainnya' } },
+    instructional_intent: { label: 'Tujuan', map: { PKL:'Persiapan PKL', DUNIA_KERJA:'Persiapan Dunia Kerja', SERTIFIKASI:'Persiapan Sertifikasi', LKS:'Persiapan LKS', KONSEP_DASAR:'Penguatan Konsep Dasar', KEWIRAUSAHAAN:'Projek Kewirausahaan', UMKM:'UMKM Lokal', LITERASI:'Penguatan Literasi', NUMERASI:'Penguatan Numerasi', KOMUNIKASI:'Komunikasi dan Interaksi', PENGEMBANGAN_KARAKTER:'Pengembangan Karakter', PERSIAPAN_AN:'Persiapan Asesmen Nasional', LAINNYA:'Lainnya' } },
     assessment_philosophy: { label: 'Cara penilaian', map: { PRAKTIK:'Praktik', PORTOFOLIO:'Portofolio', PRESENTASI:'Presentasi', OBSERVASI:'Observasi', TES_TERTULIS:'Tes Tertulis', KOMBINASI:'Kombinasi' } },
     teaching_style: { label: 'Gaya mengajar', map: { GURU_DOMINAN:'Guru dominan', SISWA_DOMINAN:'Siswa dominan', SEIMBANG:'Seimbang' } },
     learning_model: { label: 'Model', map: { PBL_PROJECT:'Project-Based Learning', PBL_PROBLEM:'Problem-Based Learning', DISCOVERY:'Discovery Learning', CERAMAH_LATIHAN:'Ceramah + Latihan' } },
