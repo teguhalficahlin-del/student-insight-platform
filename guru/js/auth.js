@@ -50,6 +50,7 @@ form.addEventListener('submit', async (e) => {
             throw new Error('Akun Anda telah dinonaktifkan. Hubungi admin sekolah.');
         }
         await checkMustChangePassword(supabase, row);
+        sessionStorage.setItem('pwa_show_install_banner', '1');
         window.location.replace('dashboard.html');
     } catch (err) {
         errEl.textContent    = err.message ?? 'Login gagal. Periksa NIP/NIK dan password Anda.';

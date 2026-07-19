@@ -247,6 +247,75 @@ async function init() {
     // Notifikasi: cek unread count lalu poll tiap 1 menit.
     refreshNotifBadge();
     startNotifPolling();
+
+    initPWAInstallBanner();
+}
+
+function initPWAInstallBanner() {
+    if (!sessionStorage.getItem('pwa_show_install_banner')) return;
+    sessionStorage.removeItem('pwa_show_install_banner');
+
+    if (localStorage.getItem('pwa_install_dismissed')) return;
+
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+    if (isStandalone) return;
+
+    const banner = document.getElementById('pwa-install-banner');
+    if (!banner) return;
+    banner.style.display = 'flex';
+
+    const autoHide = setTimeout(() => { banner.style.display = 'none'; }, 10000);
+
+    document.getElementById('pwa-install-btn')?.addEventListener('click', () => {
+        clearTimeout(autoHide);
+        banner.style.display = 'none';
+        localStorage.setItem('pwa_install_dismissed', '1');
+        showPWAInstallInstructions();
+    });
+
+    document.getElementById('pwa-dismiss-btn')?.addEventListener('click', () => {
+        clearTimeout(autoHide);
+        banner.style.display = 'none';
+    });
+}
+
+function showPWAInstallInstructions() {
+    const isIOS     = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/.test(navigator.userAgent);
+
+    let steps = '';
+    if (isIOS) {
+        steps = `<li>Tap tombol <strong>Bagikan</strong> (□↑) di Safari</li>
+                 <li>Scroll ke bawah, tap <strong>"Tambahkan ke Layar Utama"</strong></li>
+                 <li>Tap <strong>Tambahkan</strong></li>`;
+    } else if (isAndroid) {
+        steps = `<li>Tap menu <strong>⋮</strong> di Chrome</li>
+                 <li>Tap <strong>"Tambahkan ke layar utama"</strong></li>
+                 <li>Tap <strong>Tambahkan</strong></li>`;
+    } else {
+        steps = `<li>Klik ikon <strong>Install</strong> (⊕) di address bar browser</li>
+                 <li>Klik <strong>Install</strong></li>`;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.innerHTML = `
+      <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);
+                  z-index:9999;display:flex;align-items:center;
+                  justify-content:center;padding:16px">
+        <div style="background:var(--color-surface,#1e293b);border-radius:16px;
+                    padding:24px;max-width:360px;width:100%;color:var(--color-text,#fff)">
+          <h3 style="margin:0 0 16px;font-size:18px">📱 Pasang Aplikasi SIP</h3>
+          <ol style="margin:0;padding-left:20px;line-height:1.8">${steps}</ol>
+          <button onclick="this.closest('div[style]').remove()"
+                  style="margin-top:16px;width:100%;padding:10px;
+                         background:var(--color-primary,#1d4ed8);color:white;
+                         border:none;border-radius:8px;cursor:pointer;font-size:14px">
+            Mengerti
+          </button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
 }
 
 // ─── Tab navigation ──────────────────────────────────────────

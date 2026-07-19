@@ -457,6 +457,50 @@ body.has-login-banner .app-header { margin-top: 94px; }
 /* Dropdown pencarian siswa */
 #obs-student-list { left: 0; right: 0; top: 100%; }
 
+/* ── PWA Install Banner ──────────────────────────────────── */
+.pwa-install-banner {
+  position: fixed;
+  bottom: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 480px;
+  background: var(--color-primary, #1d4ed8);
+  color: white;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  z-index: 999;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  animation: pwaSlideUp 0.3s ease;
+}
+.pwa-install-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+.pwa-install-icon { font-size: 24px; }
+.pwa-install-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pwa-install-text strong { font-size: 14px; }
+.pwa-install-text small  { font-size: 12px; opacity: 0.85; }
+.pwa-install-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+@keyframes pwaSlideUp {
+  from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+}
+
 /* ── Kasus status badges ─────────────────────────────────── */
 .kasus-badge-open, .kasus-badge-under_review, .kasus-badge-intervention,
 .kasus-badge-monitoring, .kasus-badge-closed { border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
