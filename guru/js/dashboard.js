@@ -5409,34 +5409,29 @@ function collectKonteksKelas(form, subjectId, ay) {
 async function openKonteksKelasModal() {
     const ay = config?.current_academic_year ?? getCurrentAcademicYear();
 
-    // Ambil mapel dari teaching_assignments (lebih akurat dari dokumen)
+    // Ambil mapel dari teaching_assignments — join ke public.subjects untuk nama
+    // teaching_contexts.subject_id FK ke public.subjects (bukan core.subjects)
     let mySubjects = [];
     try {
-        const { data: assignments } = await supabase
+        const { data: assignments, error } = await supabase
             .from('teaching_assignments')
-            .select('subject_id')
+            .select('subject_id, subject:subjects(subject_id, name, code)')
             .eq('school_id', currentUser.school_id)
             .eq('user_id', currentUser.user_id)
             .eq('academic_year', ay)
             .eq('is_active', true);
-        const assignedIds = [...new Set((assignments ?? []).map(a => a.subject_id).filter(Boolean))];
-        if (assignedIds.length) {
-            const allSubjects = await ensureCoreSubjects();
-            mySubjects = allSubjects.filter(s => assignedIds.includes(s.subject_id));
+        if (!error && assignments?.length) {
+            const seen = new Set();
+            for (const a of assignments) {
+                const s = a.subject;
+                if (s && !seen.has(s.subject_id)) {
+                    seen.add(s.subject_id);
+                    mySubjects.push({ subject_id: s.subject_id, name: s.name, code: s.code });
+                }
+            }
+            mySubjects.sort((a, b) => a.name.localeCompare(b.name, 'id'));
         }
     } catch (e) { /* */ }
-
-    // Fallback: ambil dari dokumen yang sudah dibuat
-    if (!mySubjects.length) {
-        try {
-            const docs = await getMyTeacherDocuments(currentUser.school_id, ay);
-            const docSubjectIds = [...new Set(docs.map(d => d.core_subject_id).filter(Boolean))];
-            if (docSubjectIds.length) {
-                const allSubjects = await ensureCoreSubjects();
-                mySubjects = allSubjects.filter(s => docSubjectIds.includes(s.subject_id));
-            }
-        } catch (e) { /* */ }
-    }
 
     if (!mySubjects.length) {
         alert('Belum ada mata pelajaran yang diajar. Hubungi administrator untuk mengatur jadwal mengajar.');
