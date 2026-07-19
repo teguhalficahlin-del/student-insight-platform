@@ -54,6 +54,7 @@ p { margin: 0 0 8px; color: var(--color-text-muted); }
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
+    min-height: 44px;
     transition: background-color 0.15s, border-color 0.15s;
 }
 
@@ -250,7 +251,7 @@ label {
 
 .summary-card.card-hadir   { background: var(--color-success-bg); color: var(--color-success); }
 .summary-card.card-sakit   { background: var(--color-warning-bg); color: var(--color-warning); }
-.summary-card.card-izin    { background: #eff4ff; color: var(--color-primary); }
+.summary-card.card-izin    { background: var(--color-primary-bg); color: var(--color-primary); }
 .summary-card.card-alpha   { background: var(--color-danger-bg);  color: var(--color-danger); }
 
 /* ── Data table ──────────────────────────────────────────── */
@@ -318,6 +319,7 @@ label {
     top: calc(100% + 6px);
     right: 0;
     width: 300px;
+    max-width: calc(100vw - 16px);
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
@@ -369,6 +371,7 @@ label {
         gap: 10px;
         align-items: flex-start;
     }
+    .topbar > div:last-child { align-self: flex-end; }
 
     .filter-row {
         flex-direction: column;
@@ -396,11 +399,11 @@ label {
     .child-selector { flex-direction: column; align-items: flex-start; }
     .child-selector select.input { width: 100%; }
 
-    /* Table: hide Waktu (col 2) dan Guru (col 4) di 375px */
-    .data-table td:nth-child(2),
-    .data-table th:nth-child(2),
-    .data-table td:nth-child(4),
-    .data-table th:nth-child(4) { display: none; }
+    /* Tabel kehadiran: hide Waktu (col 2) dan Guru (col 4) — spesifik hanya attendance-table */
+    #attendance-table td:nth-child(2),
+    #attendance-table th:nth-child(2),
+    #attendance-table td:nth-child(4),
+    #attendance-table th:nth-child(4) { display: none; }
 
     /* Summary card 2-per-row */
     .summary-card { min-width: calc(50% - 5px); }
@@ -464,7 +467,7 @@ label {
   flex-wrap: wrap;
   padding: 8px 0 0;
   margin-bottom: 12px;
-  border-bottom: 2px solid var(--border, #e2e8f0);
+  border-bottom: 2px solid var(--color-border);
 }
 .tab-btn {
   background: none;
@@ -474,19 +477,19 @@ label {
   padding: 8px 14px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-muted, #64748b);
+  color: var(--color-text-muted);
   cursor: pointer;
   border-radius: 4px 4px 0 0;
   white-space: nowrap;
   transition: color 0.15s, border-color 0.15s;
 }
 .tab-btn:hover {
-  color: var(--text, #1e293b);
-  background: var(--surface-hover, #f1f5f9);
+  color: var(--color-text);
+  background: var(--color-surface);
 }
 .tab-btn.active {
-  color: var(--primary, #2563eb);
-  border-bottom-color: var(--primary, #2563eb);
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
   font-weight: 600;
 }
 .tab-btn[hidden] {

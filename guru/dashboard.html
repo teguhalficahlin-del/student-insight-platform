@@ -296,9 +296,11 @@
                     <input type="date" id="wali-date-start" class="input" style="width:auto">
                     <label for="wali-date-end">s/d:</label>
                     <input type="date" id="wali-date-end" class="input" style="width:auto">
-                    <button class="btn btn-secondary btn-sm" id="wali-filter-btn">Filter</button>
-                    <button id="wali-recap-export" class="btn btn-secondary btn-sm"
-                        style="display:none">Unduh Excel</button>
+                    <div class="date-row-actions">
+                        <button class="btn btn-secondary btn-sm" id="wali-filter-btn">Filter</button>
+                        <button id="wali-recap-export" class="btn btn-secondary btn-sm"
+                            style="display:none">Unduh Excel</button>
+                    </div>
                 </div>
                 <div id="wali-att-recap"><p class="hint">Pilih rentang tanggal lalu klik Filter.</p></div>
             </div>
@@ -312,12 +314,16 @@
         <div class="page-body">
             <div class="section-card">
                 <h3>Kehadiran Per Kelas</h3>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
-                    <label for="bk-att-start" style="font-size:13px;color:var(--color-text-muted)">Dari:</label>
-                    <input type="date" id="bk-att-start" class="input" style="width:auto">
-                    <label for="bk-att-end" style="font-size:13px;color:var(--color-text-muted)">s/d:</label>
-                    <input type="date" id="bk-att-end" class="input" style="width:auto">
-                    <button class="btn btn-secondary btn-sm" id="bk-att-filter-btn">Filter</button>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="bk-att-start" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">Dari:</label>
+                        <input type="date" id="bk-att-start" class="input" style="flex:1;min-width:0">
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="bk-att-end" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">s/d:</label>
+                        <input type="date" id="bk-att-end" class="input" style="flex:1;min-width:0">
+                        <button class="btn btn-secondary btn-sm" id="bk-att-filter-btn">Filter</button>
+                    </div>
                 </div>
                 <div id="bk-att-recap"><p class="hint">Pilih rentang tanggal lalu klik Filter.</p></div>
             </div>
@@ -552,12 +558,16 @@
         <div class="page-body">
             <div class="section-card">
                 <h3>Kehadiran Per Kelas</h3>
-                <div class="date-row" style="margin-bottom:12px">
-                    <label for="wk-att-start">Dari:</label>
-                    <input type="date" id="wk-att-start" class="input" style="width:auto">
-                    <label for="wk-att-end">s/d:</label>
-                    <input type="date" id="wk-att-end" class="input" style="width:auto">
-                    <button class="btn btn-secondary btn-sm" id="wk-att-filter-btn">Filter</button>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="wk-att-start" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">Dari:</label>
+                        <input type="date" id="wk-att-start" class="input" style="flex:1;min-width:0">
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="wk-att-end" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">s/d:</label>
+                        <input type="date" id="wk-att-end" class="input" style="flex:1;min-width:0">
+                        <button class="btn btn-secondary btn-sm" id="wk-att-filter-btn">Filter</button>
+                    </div>
                 </div>
                 <div id="wk-att-recap"><p class="hint">Pilih rentang tanggal lalu klik Filter.</p></div>
             </div>
@@ -572,7 +582,7 @@
         <div class="page-body">
 
             <!-- Ringkasan Hari Ini -->
-            <div id="wk-kur-stats-row" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+            <div id="wk-kur-stats-row" class="wk-stats-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:16px;text-align:center">
                     <div style="font-size:13px;color:var(--color-text-muted);margin-bottom:6px">Sudah isi absensi</div>
                     <div id="wk-kur-val-hadir" style="font-size:28px;font-weight:500;color:var(--color-success,#22c55e)">—</div>
@@ -616,17 +626,15 @@
 
             <!-- Tabel 2: Rentang Waktu -->
             <div class="section-card">
-                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-                    <h2 style="margin:0;font-size:15px">Sesi Belum Diisi — Rentang Waktu</h2>
-                    <button class="btn" id="wk-kur2-btn">Tampilkan</button>
-                </div>
+                <h2 style="margin:0 0 12px;font-size:15px">Sesi Belum Diisi — Rentang Waktu</h2>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
                     <label for="wk-kur-start" style="font-size:13px;color:var(--color-text)">Dari</label>
                     <input type="date" id="wk-kur-start" class="input" style="width:auto">
                     <label for="wk-kur-end" style="font-size:13px;color:var(--color-text)">s/d</label>
                     <input type="date" id="wk-kur-end" class="input" style="width:auto">
+                    <button class="btn" id="wk-kur2-btn">Tampilkan</button>
                 </div>
-                <div id="wk-kur2-stats-row" style="display:none;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+                <div id="wk-kur2-stats-row" class="wk-stats-grid" style="display:none;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
                     <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:16px;text-align:center">
                         <div style="font-size:13px;color:var(--color-text-muted);margin-bottom:6px">Sudah isi absensi</div>
                         <div id="wk-kur2-val-hadir" style="font-size:28px;font-weight:500;color:var(--color-success,#22c55e)">—</div>
@@ -691,11 +699,11 @@
 
                 <!-- Tombol periode preset -->
                 <div id="ks-period-toggle" role="group" aria-label="Pilih periode" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">
-                    <button class="btn btn-sm ks-period-btn active" data-period="7_hari" style="white-space:nowrap">7 Hari Terakhir</button>
+                    <button class="btn btn-sm ks-period-btn active" data-period="7_hari" style="white-space:nowrap">7 Hari</button>
                     <button class="btn btn-sm ks-period-btn" data-period="hari_ini" style="white-space:nowrap">Hari Ini</button>
                     <button class="btn btn-sm ks-period-btn" data-period="minggu_lalu" style="white-space:nowrap">Minggu Lalu</button>
                     <button class="btn btn-sm ks-period-btn" data-period="bulan_lalu" style="white-space:nowrap">Bulan Lalu</button>
-                    <button class="btn btn-sm ks-period-btn" data-period="tahun_ajaran_lalu" style="white-space:nowrap">Tahun Ajaran Lalu</button>
+                    <button class="btn btn-sm ks-period-btn" data-period="tahun_ajaran_lalu" style="white-space:nowrap">Tahun Lalu</button>
                 </div>
 
                 <!-- Divider -->
@@ -722,7 +730,7 @@
                 <div id="ks-monitoring-error" style="display:none;color:var(--color-danger);font-size:13px;margin-bottom:8px"></div>
 
                 <!-- Grafik -->
-                <div style="position:relative;height:220px">
+                <div style="position:relative;height:220px;width:100%">
                     <canvas id="ks-chart" aria-label="Grafik tren kehadiran siswa dan guru"></canvas>
                 </div>
 

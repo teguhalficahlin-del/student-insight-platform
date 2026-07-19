@@ -84,12 +84,16 @@
             </div>
             <div class="section-card">
                 <h3>Rekap Kehadiran</h3>
-                <div class="date-row" style="margin-bottom:12px">
-                    <label for="att-date-start">Dari:</label>
-                    <input type="date" id="att-date-start" class="input" style="width:auto">
-                    <label for="att-date-end">s/d:</label>
-                    <input type="date" id="att-date-end" class="input" style="width:auto">
-                    <button class="btn btn-secondary btn-sm" id="att-filter-btn">Filter</button>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="att-date-start" style="min-width:32px;margin:0;font-size:13px">Dari:</label>
+                        <input type="date" id="att-date-start" class="input" style="flex:1;min-width:0">
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="att-date-end" style="min-width:32px;margin:0;font-size:13px">s/d:</label>
+                        <input type="date" id="att-date-end" class="input" style="flex:1;min-width:0">
+                        <button class="btn btn-secondary btn-sm" id="att-filter-btn">Filter</button>
+                    </div>
                 </div>
                 <div class="table-wrapper">
                     <table class="table" id="att-table">
@@ -109,12 +113,16 @@
         <div class="page-body">
             <div class="section-card">
                 <h3>Catatan dari Guru</h3>
-                <div class="date-row" style="margin-bottom:12px">
-                    <label for="obs-date-start">Dari:</label>
-                    <input type="date" id="obs-date-start" class="input" style="width:auto">
-                    <label for="obs-date-end">s/d:</label>
-                    <input type="date" id="obs-date-end" class="input" style="width:auto">
-                    <button class="btn btn-secondary btn-sm" id="obs-filter-btn">Filter</button>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="obs-date-start" style="min-width:32px;margin:0;font-size:13px">Dari:</label>
+                        <input type="date" id="obs-date-start" class="input" style="flex:1;min-width:0">
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="obs-date-end" style="min-width:32px;margin:0;font-size:13px">s/d:</label>
+                        <input type="date" id="obs-date-end" class="input" style="flex:1;min-width:0">
+                        <button class="btn btn-secondary btn-sm" id="obs-filter-btn">Filter</button>
+                    </div>
                 </div>
                 <p class="hint" id="obs-hint">Memuat…</p>
                 <div id="obs-list"></div>
@@ -164,12 +172,16 @@
          TAB: FORUM KELAS
     ════════════════════════════════════════════════════════ -->
     <div class="tab-panel" id="tab-forum">
-        <div id="forum-loading" class="hint">Memuat forum…</div>
-        <div id="forum-posts-list"></div>
-        <button id="btn-load-more-forum" class="btn btn-secondary"
-            style="display:none;margin:16px auto">
-            Muat lebih banyak
-        </button>
+        <div class="page-body">
+            <div id="forum-loading" class="hint">Memuat forum…</div>
+            <div id="forum-posts-list"></div>
+            <div style="text-align:center">
+                <button id="btn-load-more-forum" class="btn btn-secondary"
+                    style="display:none;margin:16px auto">
+                    Muat lebih banyak
+                </button>
+            </div>
+        </div>
     </div>
 
 </div><!-- #app -->

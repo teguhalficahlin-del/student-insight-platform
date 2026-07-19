@@ -126,7 +126,7 @@ async function init() {
 
 // ─── Tab navigation ──────────────────────────────────────────
 const TAB_SHORT = { jadwal: 'Jadwal', kehadiran: 'Hadir', observasi: 'Catatan', pkl: 'PKL' };
-const TAB_ICON  = { jadwal: 'ti-calendar', kehadiran: 'ti-clipboard-check', observasi: 'ti-notes', pkl: 'ti-briefcase' };
+const TAB_ICON  = { jadwal: 'ti-calendar', kehadiran: 'ti-clipboard-check', observasi: 'ti-notes', pkl: 'ti-briefcase', forum: 'ti-messages' };
 
 function buildTabs() {
     const nav    = document.getElementById('tab-nav');

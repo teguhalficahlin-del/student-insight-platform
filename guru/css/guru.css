@@ -264,6 +264,9 @@ details[open] .att-accordion-summary::before { transform: rotate(90deg); }
 
 /* ── Sync banner ─────────────────────────────────────────── */
 .sync-banner { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2000; padding: 8px 14px; font-size: 13px; text-align: center; display: none; background: var(--color-warning-bg); color: var(--color-warning); border-top: 1px solid var(--color-warning); }
+@media (max-width: 640px) {
+    .sync-banner { bottom: calc(12px + 57px + env(safe-area-inset-bottom, 0)); border-top: none; border-radius: 8px; left: 16px; right: 16px; }
+}
 
 /* ── Audience chip ───────────────────────────────────────── */
 .audience-chip { display: inline-flex; align-items: center; gap: 4px; margin: 2px 4px 2px 0; padding: 2px 8px; border: 1px solid var(--color-border); border-radius: 20px; font-size: 12px; }
@@ -303,6 +306,11 @@ body.has-login-banner .app-header { margin-top: 94px; }
 .stat-label { font-size: 13px; color: var(--color-text-muted); margin-top: 2px; }
 
 /* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .app-header h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wk-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    .date-row-actions { display: flex; gap: 8px; }
+}
 /* ── Bottom nav (mobile only) ──────────────────────────────── */
 .bottom-nav { display: none; }
 
@@ -348,6 +356,15 @@ body.has-login-banner .app-header { margin-top: 94px; }
         -webkit-backdrop-filter: blur(12px);
     }
     .bottom-nav-inner::-webkit-scrollbar { display: none; }
+    .bottom-nav-inner::after {
+        content: '';
+        position: sticky;
+        right: 0;
+        width: 24px;
+        flex-shrink: 0;
+        background: linear-gradient(to right, transparent, rgba(11,17,32,.96));
+        pointer-events: none;
+    }
 
     .bottom-nav .tab-btn {
         flex: 1 0 auto;

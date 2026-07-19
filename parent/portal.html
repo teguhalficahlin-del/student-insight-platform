@@ -94,6 +94,7 @@
                 <button id="btn-filter" class="btn btn-primary">Tampilkan</button>
             </div>
             <div class="summary-cards" id="attendance-summary"></div>
+            <div style="overflow-x:auto">
             <table class="data-table" id="attendance-table">
                 <thead>
                     <tr>
@@ -107,6 +108,7 @@
                 </thead>
                 <tbody></tbody>
             </table>
+            </div>
             <p id="attendance-empty" class="hint" style="display:none">Tidak ada data kehadiran untuk periode ini.</p>
         </section>
 
@@ -142,7 +144,9 @@
             </div>
             <div id="forum-loading" class="hint">Pilih anak untuk melihat forum kelasnya.</div>
             <div id="forum-posts-list"></div>
-            <button id="btn-load-more-forum" class="btn btn-secondary" style="display:none;margin:16px auto">Muat lebih banyak</button>
+            <div style="text-align:center">
+                <button id="btn-load-more-forum" class="btn btn-secondary" style="display:none;margin:16px auto">Muat lebih banyak</button>
+            </div>
         </section>
 
     </div>
