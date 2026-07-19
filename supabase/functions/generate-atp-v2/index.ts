@@ -135,57 +135,27 @@ FORMAT RESPONSE:
 
 // ── Gemini Call ─────────────────────────────────────────────────────────────────
 
-const GEMINI_BODY = (prompt: string) => JSON.stringify({
-  contents: [{ parts: [{ text: prompt }] }],
-  generationConfig: {
-    temperature:      0.3,
-    maxOutputTokens:  8192,
-    responseMimeType: "application/json",
-  },
-});
-
-async function callGeminiOnce(prompt: string, apiKey: string): Promise<Response> {
-  // Deteksi format key: AIzaSy... = API key (query param)
-  // AQ.xxx / ya29.xxx / oauth2.xxx = Bearer token (Authorization header)
-  const isApiKey = apiKey.startsWith("AIza");
-
-  if (isApiKey) {
-    return await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: GEMINI_BODY(prompt),
-    });
-  } else {
-    // OAuth2 / newer token format — kirim sebagai Bearer token
-    return await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: GEMINI_BODY(prompt),
-    });
-  }
-}
-
 async function callGemini(prompt: string, apiKey: string): Promise<unknown> {
-  let res = await callGeminiOnce(prompt, apiKey);
-
-  // Jika auth gagal dan kita pakai query param, coba sekali lagi sbg Bearer
-  if ((res.status === 401 || res.status === 403) && apiKey.startsWith("AIza")) {
-    console.warn(`[gemini] query-param auth ${res.status}, retry as Bearer`);
-    res = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${apiKey}`,
+  // Format key AQ.xxx benar dipakai sebagai ?key= query param (bukan Bearer)
+  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature:      0.3,
+        maxOutputTokens:  8192,
+        responseMimeType: "application/json",
       },
-      body: GEMINI_BODY(prompt),
-    });
-  }
+    }),
+  });
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    // 429 = quota habis, berikan pesan yang jelas
+    if (res.status === 429) {
+      throw new Error(`Quota Gemini API habis. Coba lagi beberapa menit. Detail: ${body.slice(0, 200)}`);
+    }
     throw new Error(`Gemini API ${res.status}: ${body.slice(0, 400)}`);
   }
 
