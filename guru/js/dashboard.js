@@ -4608,6 +4608,13 @@ async function loadPerangkatAjarDashboard() {
                         </button>`;
                     }).join('')}
                     ${group.docs.length > 3 ? `<span style="font-size:12px;color:var(--color-text-muted);align-self:center">+${group.docs.length - 3} lainnya</span>` : ''}
+                    <button class="btn btn-primary btn-sm pa-generate-atp-btn"
+                        data-core-subject-id="${esc(group.core_subject_id)}"
+                        data-phase-id="${esc(group.phase_id)}"
+                        data-subject-name="${esc(subjectMap.get(group.core_subject_id)?.name ?? '')}"
+                        style="font-size:12px;margin-left:auto">
+                        ✨ Generate ATP
+                    </button>
                 </div>
             </div>`;
         }).join('');
@@ -4617,6 +4624,15 @@ async function loadPerangkatAjarDashboard() {
             const detailBtn = e.target.closest('.pa-detail-btn');
             if (detailBtn) {
                 openDetailDokumenModal(detailBtn.dataset.docId, detailBtn.dataset.subjectId, detailBtn.dataset.phaseId);
+            }
+            const genBtn = e.target.closest('.pa-generate-atp-btn');
+            if (genBtn) {
+                openConfirmGenerateModal(
+                    genBtn.dataset.coreSubjectId,
+                    genBtn.dataset.phaseId,
+                    genBtn.dataset.subjectName,
+                    ay,
+                );
             }
         });
 
@@ -5550,7 +5566,7 @@ const KONTEKS_LABEL = {
 };
 const MEDIA_LABEL = { PROYEKTOR:'Proyektor/TV', SPEAKER:'Speaker', LAPTOP_SISWA:'Laptop siswa', TABLET:'Tablet', KARTU:'Kartu', INTERNET_STABIL:'Internet stabil', PAPAN_TULIS:'Papan tulis', LAINNYA:'Lainnya' };
 
-async function openConfirmGenerateModal(subjectId, subjName, ay) {
+async function openConfirmGenerateModal(coreSubjectId, phaseId, subjName, ay) {
     let overlay = document.getElementById('confirm-generate-modal');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -5566,7 +5582,7 @@ async function openConfirmGenerateModal(subjectId, subjName, ay) {
     let profil = null, ctx = null;
     try { [profil, ctx] = await Promise.all([
         getTeacherProfile(currentUser.school_id),
-        getTeachingContext(currentUser.school_id, subjectId, ay),
+        getTeachingContext(currentUser.school_id, coreSubjectId, ay),
     ]); } catch (e) { /* */ }
 
     const row = (label, val) => val
@@ -5607,13 +5623,35 @@ async function openConfirmGenerateModal(subjectId, subjName, ay) {
     }
 
     document.getElementById('cg-body').innerHTML = `
-        <h2 style="margin:0 0 16px;font-size:18px">Konfirmasi Generate</h2>
+        <h2 style="margin:0 0 16px;font-size:18px">Konfirmasi Generate ATP</h2>
         <p style="margin:0 0 12px;font-size:13px;color:var(--color-text-muted)">Mapel: <strong>${esc(subjName)}</strong> · ${esc(ay)}</p>
         ${profilSection}
         ${ctxSection}
+        <div style="margin-bottom:12px;padding:12px;background:var(--color-bg-alt);border-radius:var(--radius)">
+          <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase">Parameter JP</p>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">JP/minggu
+              <input type="number" id="cg-jp-per-week" value="2" min="1" max="10"
+                style="width:70px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
+            </label>
+            <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">Minggu efektif
+              <input type="number" id="cg-weeks-effective" value="18" min="1" max="26"
+                style="width:70px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
+            </label>
+            <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">Semester
+              <select id="cg-semester"
+                style="width:90px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
+                <option value="1">1</option>
+                <option value="2">2</option>
+              </select>
+            </label>
+          </div>
+          <p style="margin:8px 0 0;font-size:12px;color:var(--color-text-muted)">Total JP: <span id="cg-total-jp-preview">36</span> JP</p>
+        </div>
+        <div id="cg-generate-msg" style="display:none;font-size:13px;margin-bottom:8px"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:16px;border-top:1px solid var(--color-border)">
           <button class="btn btn-secondary" id="cg-batal-btn">Batal</button>
-          <button class="btn btn-primary" id="cg-generate-btn" disabled title="Tersedia di Sprint 5">✨ Generate</button>
+          <button class="btn btn-primary" id="cg-generate-btn">✨ Generate</button>
         </div>`;
 
     const body = document.getElementById('cg-body');
@@ -5621,7 +5659,199 @@ async function openConfirmGenerateModal(subjectId, subjName, ay) {
     body.querySelector('#cg-ubah-profil')?.addEventListener('click', () => { overlay.style.display = 'none'; openProfilMengajarModal(); });
     body.querySelector('#cg-ubah-konteks')?.addEventListener('click', () => { overlay.style.display = 'none'; openKonteksKelasModal(); });
     body.querySelector('#cg-isi-profil')?.addEventListener('click', () => { overlay.style.display = 'none'; openProfilMengajarModal(); });
-    body.querySelector('#cg-lanjut-tanpa-profil')?.addEventListener('click', () => { /* placeholder Sprint 5 */ });
+    body.querySelector('#cg-lanjut-tanpa-profil')?.addEventListener('click', () => {
+        body.querySelector('#cg-generate-btn')?.removeAttribute('disabled');
+    });
+
+    // Update total JP preview saat input berubah
+    const updateTotalJP = () => {
+        const jp = parseInt(document.getElementById('cg-jp-per-week')?.value ?? '2', 10) || 0;
+        const wk = parseInt(document.getElementById('cg-weeks-effective')?.value ?? '18', 10) || 0;
+        const el = document.getElementById('cg-total-jp-preview');
+        if (el) el.textContent = String(jp * wk);
+    };
+    body.querySelector('#cg-jp-per-week')?.addEventListener('input', updateTotalJP);
+    body.querySelector('#cg-weeks-effective')?.addEventListener('input', updateTotalJP);
+
+    body.querySelector('#cg-generate-btn')?.addEventListener('click', async () => {
+        const btn   = body.querySelector('#cg-generate-btn');
+        const msgEl = document.getElementById('cg-generate-msg');
+        const jpPerWeek      = parseInt(document.getElementById('cg-jp-per-week')?.value ?? '2', 10);
+        const weeksEffective = parseInt(document.getElementById('cg-weeks-effective')?.value ?? '18', 10);
+        const semester       = parseInt(document.getElementById('cg-semester')?.value ?? '1', 10);
+
+        btn.disabled    = true;
+        btn.textContent = '⏳ Generating…';
+        msgEl.style.display = 'none';
+
+        try {
+            overlay.style.display = 'none';
+            await generateATP({
+                coreSubjectId,
+                phaseId,
+                subjectName: subjName,
+                academicYear: ay,
+                semester,
+                jpPerWeek,
+                weeksEffective,
+            });
+        } catch (e) {
+            overlay.style.display = 'flex';
+            msgEl.textContent   = `✗ ${e.message ?? 'Gagal menghubungi AI'}`;
+            msgEl.style.color   = 'var(--color-danger)';
+            msgEl.style.display = '';
+            btn.disabled    = false;
+            btn.textContent = '✨ Generate';
+        }
+    });
+}
+
+async function generateATP({ coreSubjectId, phaseId, subjectName, academicYear, semester, jpPerWeek, weeksEffective }) {
+    // Tampilkan loading overlay
+    let loadingEl = document.getElementById('atp-loading-overlay');
+    if (!loadingEl) {
+        loadingEl = document.createElement('div');
+        loadingEl.id = 'atp-loading-overlay';
+        loadingEl.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
+        loadingEl.innerHTML = `<div style="background:var(--color-surface);border-radius:12px;padding:32px 40px;text-align:center;max-width:320px">
+            <div style="font-size:32px;margin-bottom:12px">✨</div>
+            <p style="margin:0 0 6px;font-weight:600">Gemini sedang menyusun ATP…</p>
+            <p style="margin:0;font-size:13px;color:var(--color-text-muted)">Mohon tunggu, proses ini memerlukan 10–30 detik</p>
+        </div>`;
+        document.body.appendChild(loadingEl);
+    }
+    loadingEl.style.display = 'flex';
+
+    try {
+        const { data, error } = await supabase.functions.invoke('generate-atp-v2', {
+            body: {
+                school_id:       currentUser.school_id,
+                subject_id:      coreSubjectId,
+                core_subject_id: coreSubjectId,
+                phase_id:        phaseId,
+                academic_year:   academicYear,
+                semester,
+                jp_per_week:     jpPerWeek,
+                weeks_effective: weeksEffective,
+            },
+        });
+
+        loadingEl.style.display = 'none';
+
+        if (error) throw new Error(error.message ?? 'Edge Function error');
+
+        const result = data?.data ?? data;
+        if (!result?.tujuan_pembelajaran?.length) throw new Error('Respons AI kosong atau format tidak valid');
+
+        openATPReviewModal(result, data?.metadata ?? {}, {
+            coreSubjectId, phaseId, subjectName, academicYear, semester,
+        });
+    } catch (e) {
+        loadingEl.style.display = 'none';
+        throw e;
+    }
+}
+
+function openATPReviewModal(result, metadata, params) {
+    let overlay = document.getElementById('atp-review-modal');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'atp-review-modal';
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `<div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:760px;margin:auto;position:relative;max-height:90vh;display:flex;flex-direction:column">
+            <h2 style="margin:0 0 4px;font-size:18px">Hasil Generate ATP</h2>
+            <p id="atp-review-meta" style="margin:0 0 16px;font-size:12px;color:var(--color-text-muted)"></p>
+            <div id="atp-review-body" style="overflow-y:auto;flex:1"></div>
+            <div id="atp-review-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:16px;border-top:1px solid var(--color-border);flex-shrink:0"></div>
+        </div>`;
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+        document.body.appendChild(overlay);
+    }
+
+    const tps   = result.tujuan_pembelajaran ?? [];
+    const total = result.total_jp ?? 0;
+    const catatan = result.catatan ?? '';
+
+    document.getElementById('atp-review-meta').textContent =
+        `${params.subjectName} · Semester ${params.semester} · Total ${total} JP · Model: ${metadata.model ?? 'gemini-2.0-flash'}`;
+
+    document.getElementById('atp-review-body').innerHTML = `
+        <div style="overflow-x:auto;margin-bottom:12px">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead>
+                    <tr style="background:var(--color-bg-alt)">
+                        <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:40px">No</th>
+                        <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border)">Deskripsi TP</th>
+                        <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:140px">Elemen CP</th>
+                        <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:50px">JP</th>
+                        <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:160px">Materi Pokok</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tps.map(tp => `
+                        <tr style="border-bottom:1px solid var(--color-border)">
+                            <td style="padding:8px;vertical-align:top;color:var(--color-text-muted)">${esc(String(tp.nomor ?? ''))}</td>
+                            <td style="padding:8px;vertical-align:top">${esc(tp.deskripsi ?? '')}</td>
+                            <td style="padding:8px;vertical-align:top;color:var(--color-text-muted);font-size:12px">${esc(tp.elemen_cp ?? '')}</td>
+                            <td style="padding:8px;vertical-align:top;text-align:center;font-weight:600">${esc(String(tp.jp ?? ''))}</td>
+                            <td style="padding:8px;vertical-align:top;font-size:12px">${esc(tp.materi_pokok ?? '')}</td>
+                        </tr>`).join('')}
+                    <tr style="background:var(--color-bg-alt);font-weight:600">
+                        <td colspan="3" style="padding:8px;text-align:right">Total JP</td>
+                        <td style="padding:8px;text-align:center">${esc(String(total))}</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        ${catatan ? `<p style="font-size:12px;color:var(--color-text-muted);margin:0">📝 ${esc(catatan)}</p>` : ''}`;
+
+    document.getElementById('atp-review-actions').innerHTML = `
+        <button class="btn btn-secondary" id="atp-regen-btn">🔄 Generate Ulang</button>
+        <button class="btn btn-primary" id="atp-save-btn">💾 Simpan sebagai Draft</button>`;
+
+    document.getElementById('atp-regen-btn').addEventListener('click', () => {
+        overlay.style.display = 'none';
+        openConfirmGenerateModal(params.coreSubjectId, params.phaseId, params.subjectName, params.academicYear);
+    });
+
+    document.getElementById('atp-save-btn').addEventListener('click', async () => {
+        const saveBtn = document.getElementById('atp-save-btn');
+        saveBtn.disabled    = true;
+        saveBtn.textContent = '💾 Menyimpan…';
+        try {
+            await createTeacherDocument({
+                schoolId:      currentUser.school_id,
+                academicYear:  params.academicYear,
+                documentType:  'ATP',
+                coreSubjectId: params.coreSubjectId,
+                phaseId:       params.phaseId,
+                programId:     null,
+                scopeType:     'SEMUA_KELAS',
+                semester:      params.semester,
+                tpUrutan:      null,
+                contentJson:   {
+                    judul:               `ATP ${params.subjectName} Semester ${params.semester}`,
+                    tujuan_pembelajaran: result.tujuan_pembelajaran,
+                    total_jp:            result.total_jp,
+                    catatan:             result.catatan ?? '',
+                    model_version:       metadata.model ?? 'gemini-2.0-flash',
+                    generated_at:        metadata.generated_at ?? new Date().toISOString(),
+                },
+            });
+            saveBtn.textContent = '✓ Tersimpan!';
+            setTimeout(async () => {
+                overlay.style.display = 'none';
+                await loadPerangkatAjarDashboard();
+            }, 900);
+        } catch (e) {
+            saveBtn.disabled    = false;
+            saveBtn.textContent = '💾 Simpan sebagai Draft';
+            alert(`Gagal menyimpan: ${e.message}`);
+        }
+    });
+
+    overlay.style.display = 'flex';
 }
 
 // ─── Start ───────────────────────────────────────────────────
