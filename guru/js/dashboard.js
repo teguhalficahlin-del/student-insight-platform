@@ -5389,19 +5389,38 @@ function collectKonteksKelas(form, subjectId, ay) {
 
 async function openKonteksKelasModal() {
     const ay = config?.current_academic_year ?? getCurrentAcademicYear();
-    let subjects = [];
-    try { subjects = await ensureCoreSubjects(); } catch (e) { subjects = []; }
 
-    // Filter hanya mapel yang guru ini ajar (ambil dari dokumen yang ada)
-    let myDocs = [];
-    try { myDocs = await getMyTeacherDocuments(currentUser.school_id, ay); } catch (e) { /* */ }
-    const mySubjectIds = [...new Set(myDocs.map(d => d.core_subject_id).filter(Boolean))];
-    const mySubjects = mySubjectIds.length
-        ? subjects.filter(s => mySubjectIds.includes(s.subject_id))
-        : subjects;
+    // Ambil mapel dari teaching_assignments (lebih akurat dari dokumen)
+    let mySubjects = [];
+    try {
+        const { data: assignments } = await supabase
+            .from('teaching_assignments')
+            .select('subject_id')
+            .eq('school_id', currentUser.school_id)
+            .eq('user_id', currentUser.user_id)
+            .eq('academic_year', ay)
+            .eq('is_active', true);
+        const assignedIds = [...new Set((assignments ?? []).map(a => a.subject_id).filter(Boolean))];
+        if (assignedIds.length) {
+            const allSubjects = await ensureCoreSubjects();
+            mySubjects = allSubjects.filter(s => assignedIds.includes(s.subject_id));
+        }
+    } catch (e) { /* */ }
+
+    // Fallback: ambil dari dokumen yang sudah dibuat
+    if (!mySubjects.length) {
+        try {
+            const docs = await getMyTeacherDocuments(currentUser.school_id, ay);
+            const docSubjectIds = [...new Set(docs.map(d => d.core_subject_id).filter(Boolean))];
+            if (docSubjectIds.length) {
+                const allSubjects = await ensureCoreSubjects();
+                mySubjects = allSubjects.filter(s => docSubjectIds.includes(s.subject_id));
+            }
+        } catch (e) { /* */ }
+    }
 
     if (!mySubjects.length) {
-        alert('Belum ada mata pelajaran. Buat dokumen perangkat ajar terlebih dahulu.');
+        alert('Belum ada mata pelajaran yang diajar. Hubungi administrator untuk mengatur jadwal mengajar.');
         return;
     }
 

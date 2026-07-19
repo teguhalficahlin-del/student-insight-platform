@@ -1552,8 +1552,8 @@ export async function getTeacherProfile(schoolId) {
         .select('*')
         .eq('school_id', schoolId)
         .eq('teacher_user_id', user.id)
-        .single();
-    if (error && error.code !== 'PGRST116') throw error;
+        .maybeSingle();
+    if (error) throw error;
     return data ?? null;
 }
 
