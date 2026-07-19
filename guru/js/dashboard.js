@@ -40,6 +40,8 @@ import {
     getMyTeacherDocuments, createTeacherDocument,
     updateDocumentStatus, getPendingDocApprovals, wakaApproveDoc,
     getKepsekApprovalHistory, getWakaApprovalHistory, getDisahkanWakaDocs,
+    getTeacherProfile, saveTeacherProfile,
+    getTeachingContext, saveTeachingContext,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 
@@ -4505,13 +4507,19 @@ async function initPerangkatAjarTab() {
 async function loadPerangkatAjarDashboard() {
     const container = document.getElementById('perangkat-ajar-container');
     container.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">
-            <h3 style="margin:0">Perangkat Ajar Saya</h3>
-            <button class="btn btn-primary btn-sm" id="pa-new-doc-btn">+ Buat Dokumen</button>
+        <div class="pa-header" style="margin-bottom:16px">
+            <h3 style="margin:0 0 10px">Perangkat Ajar Saya</h3>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                <button class="btn btn-secondary btn-sm" id="btn-profil-mengajar">1. Profil Mengajar</button>
+                <button class="btn btn-secondary btn-sm" id="btn-konteks-kelas">2. Konteks Kelas</button>
+                <button class="btn btn-primary btn-sm" id="pa-new-doc-btn">+ Buat Dokumen</button>
+            </div>
         </div>
         <div id="pa-mapel-list"><p class="hint">Memuat...</p></div>`;
 
     document.getElementById('pa-new-doc-btn').addEventListener('click', () => openBuatDokumenModal(null));
+    document.getElementById('btn-profil-mengajar').addEventListener('click', () => openProfilMengajarModal());
+    document.getElementById('btn-konteks-kelas').addEventListener('click', () => openKonteksKelasModal());
 
     const ay = config?.current_academic_year ?? getCurrentAcademicYear();
 
@@ -5065,6 +5073,507 @@ async function loadKepsekDisahkanDocs() {
     } catch (err) {
         listEl.innerHTML = `<div class="status-err">Gagal memuat. ${esc(fe(err))}</div>`;
     }
+}
+
+// ─── Modal: Profil Mengajar ───────────────────────────────────
+function buildProfilMengajarHTML(p) {
+    const v = p ?? {};
+    const chk = (arr, val) => (arr ?? []).includes(val) ? 'checked' : '';
+    const sel = (field, val) => v[field] === val ? 'checked' : '';
+    return `
+    <h2 style="margin:0 0 4px;font-size:18px">Profil Mengajar</h2>
+    <p style="margin:0 0 20px;font-size:13px;color:var(--color-text-muted)">Diisi sekali, berlaku untuk semua mata pelajaran</p>
+
+    <div class="pm-q"><p class="pm-label">1. Tujuan Utama Pembelajaran</p>
+      ${[
+        ['PKL','Persiapan PKL'],['DUNIA_KERJA','Persiapan Dunia Kerja'],
+        ['SERTIFIKASI','Persiapan Sertifikasi'],['LKS','Persiapan LKS'],
+        ['KONSEP_DASAR','Penguatan Konsep Dasar'],['KEWIRAUSAHAAN','Projek Kewirausahaan'],
+        ['UMKM','UMKM Lokal'],['LAINNYA','Lainnya'],
+      ].map(([val,lbl]) => `
+        <label class="pm-radio-row"><input type="radio" name="instructional_intent" value="${val}" ${sel('instructional_intent',val)}> ${lbl}</label>
+        ${val === 'SERTIFIKASI' ? `<div class="pm-cond" id="pm-cond-sertifikasi" style="display:${v.instructional_intent==='SERTIFIKASI'?'block':'none'};margin:4px 0 4px 24px"><input type="text" class="input input-sm" name="intent_detail_sertifikasi" placeholder="Nama sertifikasi" value="${esc(v.instructional_intent==='SERTIFIKASI'?(v.intent_detail??''):'')}" style="max-width:280px"></div>` : ''}
+        ${val === 'LAINNYA' ? `<div class="pm-cond" id="pm-cond-intent-lain" style="display:${v.instructional_intent==='LAINNYA'?'block':'none'};margin:4px 0 4px 24px"><input type="text" class="input input-sm" name="intent_detail_lain" placeholder="Jelaskan" value="${esc(v.instructional_intent==='LAINNYA'?(v.intent_detail??''):'')}" style="max-width:280px"></div>` : ''}
+      `).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">2. Cara Penilaian Utama</p>
+      ${[['PRAKTIK','Praktik'],['PORTOFOLIO','Portofolio'],['PRESENTASI','Presentasi'],
+         ['OBSERVASI','Observasi'],['TES_TERTULIS','Tes Tertulis'],['KOMBINASI','Kombinasi']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="assessment_philosophy" value="${val}" ${sel('assessment_philosophy',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">3. Gaya Mengajar</p>
+      ${[['GURU_DOMINAN','Guru dominan (saya memandu setiap langkah)'],
+         ['SISWA_DOMINAN','Siswa dominan (saya sebagai fasilitator)'],
+         ['SEIMBANG','Seimbang']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="teaching_style" value="${val}" ${sel('teaching_style',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">4. Model Pembelajaran</p>
+      ${[['PBL_PROJECT','Project-Based Learning'],['PBL_PROBLEM','Problem-Based Learning'],
+         ['DISCOVERY','Discovery Learning'],['CERAMAH_LATIHAN','Ceramah + Latihan']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="learning_model" value="${val}" ${sel('learning_model',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">5. Gaya Penyampaian</p>
+      ${[['PRAKTIK','Banyak praktik'],['DISKUSI','Banyak diskusi'],['DEMONSTRASI','Banyak demonstrasi']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="delivery_style" value="${val}" ${sel('delivery_style',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">6. Pola Jadwal Mengajar</p>
+      ${[['SPLIT_2JP','2 JP × beberapa hari terpisah'],['BLOCK_6JP','6 JP sekaligus (block)'],
+         ['TEORI_PRAKTIK','Teori dulu lalu praktik'],['PRAKTIK_PENUH','Praktik penuh']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="schedule_pattern" value="${val}" ${sel('schedule_pattern',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">7. Durasi Proyek</p>
+      ${[['1_MINGGU','1 minggu'],['2_4_MINGGU','2–4 minggu'],['SATU_SEMESTER','Satu semester']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="project_duration" value="${val}" ${sel('project_duration',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">8. Tingkat Kedalaman Materi</p>
+      ${[['DASAR','Dasar'],['MENENGAH','Menengah'],['MAHIR','Mahir']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="depth_level" value="${val}" ${sel('depth_level',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">9. Konteks Lokal <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></p>
+      <div style="display:grid;gap:8px;max-width:360px">
+        <label style="font-size:13px">Kota/daerah<input type="text" class="input input-sm" name="local_city" value="${esc(v.local_city??'')}" style="margin-top:4px"></label>
+        <label style="font-size:13px">Industri lokal<input type="text" class="input input-sm" name="local_industry" value="${esc(v.local_industry??'')}" style="margin-top:4px"></label>
+        <label style="font-size:13px">Nama DUDI mitra<input type="text" class="input input-sm" name="local_dudi_partners" value="${esc(v.local_dudi_partners??'')}" style="margin-top:4px"></label>
+        <label style="font-size:13px">Produk/jasa lokal<input type="text" class="input input-sm" name="local_products" value="${esc(v.local_products??'')}" style="margin-top:4px"></label>
+      </div>
+    </div>
+
+    <div class="pm-q"><p class="pm-label">10. Aktivitas yang Dihindari <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></p>
+      ${[['ROLE_PLAY','Role play'],['DEBAT','Debat'],['PRESENTASI_INDIVIDU','Presentasi individu'],
+         ['TUGAS_RUMAH','Tugas rumah'],['OUTDOOR','Praktik outdoor']].map(val_lbl =>
+        `<label class="pm-radio-row"><input type="checkbox" name="avoided_activities" value="${val_lbl[0]}" ${chk(v.avoided_activities, val_lbl[0])}> ${val_lbl[1]}</label>`
+      ).join('')}
+      <label class="pm-radio-row"><input type="checkbox" name="avoided_activities" value="LAINNYA" id="pm-avoided-lain-chk" ${chk(v.avoided_activities,'LAINNYA')}> Lainnya</label>
+      <div id="pm-avoided-lain-detail" style="display:${(v.avoided_activities??[]).includes('LAINNYA')?'block':'none'};margin:4px 0 0 24px">
+        <input type="text" class="input input-sm" name="avoided_detail" placeholder="Jelaskan" value="${esc(v.avoided_detail??'')}" style="max-width:280px">
+      </div>
+    </div>
+
+    <div class="pm-q"><p class="pm-label">11. Preferensi Integrasi <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></p>
+      ${[['NUMERASI','Numerasi'],['LITERASI','Literasi'],['AI_TEKNOLOGI','AI/Teknologi'],
+         ['KEWIRAUSAHAAN','Kewirausahaan'],['BUDAYA_LOKAL','Budaya lokal'],
+         ['PROFIL_LULUSAN','Profil Lulusan 8 Dimensi']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="checkbox" name="integration_prefs" value="${val}" ${chk(v.integration_prefs,val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--color-border)">
+      <button class="btn btn-secondary" id="pm-batal-btn">Batal</button>
+      <button class="btn btn-primary" id="pm-simpan-btn">💾 Simpan Profil</button>
+    </div>`;
+}
+
+function collectProfilMengajar(form) {
+    const radio = name => form.querySelector(`input[name="${name}"]:checked`)?.value ?? null;
+    const checks = name => [...form.querySelectorAll(`input[name="${name}"]:checked`)].map(el => el.value);
+    const txt = name => form.querySelector(`input[name="${name}"]`)?.value.trim() || null;
+
+    const intent = radio('instructional_intent');
+    let intent_detail = null;
+    if (intent === 'SERTIFIKASI') intent_detail = txt('intent_detail_sertifikasi');
+    else if (intent === 'LAINNYA') intent_detail = txt('intent_detail_lain');
+
+    return {
+        instructional_intent: intent,
+        intent_detail,
+        assessment_philosophy: radio('assessment_philosophy'),
+        teaching_style: radio('teaching_style'),
+        learning_model: radio('learning_model'),
+        delivery_style: radio('delivery_style'),
+        schedule_pattern: radio('schedule_pattern'),
+        project_duration: radio('project_duration'),
+        depth_level: radio('depth_level'),
+        local_city: txt('local_city'),
+        local_industry: txt('local_industry'),
+        local_dudi_partners: txt('local_dudi_partners'),
+        local_products: txt('local_products'),
+        avoided_activities: checks('avoided_activities'),
+        avoided_detail: txt('avoided_detail'),
+        integration_prefs: checks('integration_prefs'),
+    };
+}
+
+async function openProfilMengajarModal() {
+    let overlay = document.getElementById('profil-mengajar-modal');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'profil-mengajar-modal';
+        overlay.className = 'modal-overlay';
+        overlay.style.cssText = 'align-items:flex-start;overflow-y:auto';
+        overlay.innerHTML = `<div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:600px;margin:24px auto;position:relative"><div id="pm-body"></div></div>`;
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+        document.body.appendChild(overlay);
+    }
+    overlay.style.display = 'flex';
+    document.getElementById('pm-body').innerHTML = '<p class="hint">Memuat profil…</p>';
+
+    let profile = null;
+    try {
+        profile = await getTeacherProfile(currentUser.school_id);
+    } catch (e) { /* biarkan kosong */ }
+
+    const body = document.getElementById('pm-body');
+    body.innerHTML = buildProfilMengajarHTML(profile);
+
+    // Kondisional: tujuan
+    body.querySelectorAll('input[name="instructional_intent"]').forEach(r => {
+        r.addEventListener('change', () => {
+            body.querySelector('#pm-cond-sertifikasi').style.display = r.value === 'SERTIFIKASI' && r.checked ? '' : (body.querySelector('input[name="instructional_intent"][value="SERTIFIKASI"]:checked') ? '' : 'none');
+            body.querySelector('#pm-cond-intent-lain').style.display = r.value === 'LAINNYA' && r.checked ? '' : (body.querySelector('input[name="instructional_intent"][value="LAINNYA"]:checked') ? '' : 'none');
+            body.querySelector('#pm-cond-sertifikasi').style.display = body.querySelector('input[value="SERTIFIKASI"]:checked') ? '' : 'none';
+            body.querySelector('#pm-cond-intent-lain').style.display = body.querySelector('input[value="LAINNYA"][name="instructional_intent"]:checked') ? '' : 'none';
+        });
+    });
+    // Kondisional: avoided lainnya
+    body.querySelector('#pm-avoided-lain-chk').addEventListener('change', e => {
+        body.querySelector('#pm-avoided-lain-detail').style.display = e.target.checked ? '' : 'none';
+    });
+
+    body.querySelector('#pm-batal-btn').addEventListener('click', () => { overlay.style.display = 'none'; });
+    body.querySelector('#pm-simpan-btn').addEventListener('click', async () => {
+        const btn = body.querySelector('#pm-simpan-btn');
+        btn.disabled = true; btn.textContent = '…';
+        try {
+            await saveTeacherProfile(currentUser.school_id, collectProfilMengajar(body));
+            overlay.style.display = 'none';
+        } catch (err) {
+            alert(`Gagal menyimpan: ${fe(err)}`);
+        } finally {
+            btn.disabled = false; btn.textContent = '💾 Simpan Profil';
+        }
+    });
+}
+
+// ─── Modal: Konteks Kelas ─────────────────────────────────────
+function buildKonteksKelasHTML(ctx, subjName, ay) {
+    const v = ctx ?? {};
+    const chk = (arr, val) => (arr ?? []).includes(val) ? 'checked' : '';
+    const sel = (field, val) => v[field] === val ? 'checked' : '';
+    return `
+    <h2 style="margin:0 0 2px;font-size:18px">Konteks Kelas</h2>
+    <p style="margin:0 0 2px;font-size:13px;color:var(--color-text-muted)">Mata pelajaran: <strong>${esc(subjName)}</strong></p>
+    <p style="margin:0 0 20px;font-size:13px;color:var(--color-text-muted)">Tahun ajaran: <strong>${esc(ay)}</strong></p>
+
+    <div class="pm-q"><p class="pm-label">1. Latar Belakang Siswa</p>
+      ${[['PETANI','Anak petani'],['PEDAGANG','Pedagang'],['PENGRAJIN','Pengrajin'],['CAMPURAN','Campuran']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="student_background" value="${val}" ${sel('student_background',val)}> ${lbl}</label>`
+      ).join('')}
+      <div style="margin-top:8px;max-width:280px">
+        <label style="font-size:13px">Bahasa sehari-hari <span style="color:var(--color-text-muted)">(opsional)</span>
+          <input type="text" class="input input-sm" name="daily_language" value="${esc(v.daily_language??'')}" style="margin-top:4px">
+        </label>
+      </div>
+    </div>
+
+    <div class="pm-q"><p class="pm-label">2. Akses Teknologi Siswa</p>
+      ${[['SMARTPHONE','Smartphone saja'],['LAPTOP','Laptop/komputer tersedia'],['TANPA_INTERNET','Tidak ada internet']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="tech_access" value="${val}" ${sel('tech_access',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">3. Karakteristik Kelas</p>
+      ${[['PASIF','Pasif'],['AKTIF_BERTANYA','Aktif bertanya'],['SULIT_KELOMPOK','Sulit bekerja kelompok'],
+         ['DISIPLIN_TINGGI','Disiplin tinggi'],['CEPAT_BOSAN','Cepat bosan'],['SANGAT_HETEROGEN','Sangat heterogen']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="checkbox" name="class_characteristics" value="${val}" ${chk(v.class_characteristics,val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">4. Tingkat Kemandirian Siswa</p>
+      ${[['SANGAT_MANDIRI','Sangat mandiri (bisa bekerja tanpa arahan terus)'],
+         ['PERLU_ARAHAN','Perlu arahan (butuh panduan setiap tahap)'],
+         ['SANGAT_BERGANTUNG','Sangat bergantung (perlu scaffolding penuh)']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="student_autonomy" value="${val}" ${sel('student_autonomy',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">5. Kendala di Kelas</p>
+      ${[['INTERNET_MATI','Internet sering mati'],['LAB_BERGANTIAN','Lab dipakai bergantian'],
+         ['HP_DILARANG','HP tidak boleh dibawa'],['PRAKTIK_SEMINGGU_SEKALI','Praktik hanya seminggu sekali'],
+         ['WAKTU_MAKS_2JP','Waktu praktik maksimal 2 JP']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="checkbox" name="learning_constraints" value="${val}" ${chk(v.learning_constraints,val)}> ${lbl}</label>`
+      ).join('')}
+      <label class="pm-radio-row"><input type="checkbox" name="learning_constraints" value="LAINNYA" id="kk-kendala-lain-chk" ${chk(v.learning_constraints,'LAINNYA')}> Lainnya</label>
+      <div id="kk-kendala-lain-detail" style="display:${(v.learning_constraints??[]).includes('LAINNYA')?'block':'none'};margin:4px 0 0 24px">
+        <input type="text" class="input input-sm" name="constraints_detail" placeholder="Jelaskan" value="${esc(v.constraints_detail??'')}" style="max-width:280px">
+      </div>
+    </div>
+
+    <div class="pm-q"><p class="pm-label">6. Sumber Belajar yang Tersedia</p>
+      ${[['BUKU_PAKET','Buku paket resmi'],['MODUL_SEKOLAH','Modul sekolah'],
+         ['INTERNET_STABIL','Internet stabil'],['VIDEO_PEMBELAJARAN','Video pembelajaran'],
+         ['LABORATORIUM','Laboratorium'],['TEACHING_FACTORY','Teaching Factory']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="checkbox" name="resources_available" value="${val}" ${chk(v.resources_available,val)}> ${lbl}</label>`
+      ).join('')}
+      <label class="pm-radio-row"><input type="checkbox" name="resources_available" value="DUDI_AKTIF" id="kk-dudi-chk" ${chk(v.resources_available,'DUDI_AKTIF')}> DUDI aktif</label>
+      <div id="kk-dudi-detail" style="display:${(v.resources_available??[]).includes('DUDI_AKTIF')?'block':'none'};margin:4px 0 0 24px">
+        <input type="text" class="input input-sm" name="dudi_name" placeholder="Nama DUDI" value="${esc(v.dudi_name??'')}" style="max-width:280px">
+      </div>
+      <label class="pm-radio-row"><input type="checkbox" name="resources_available" value="NARASUMBER" id="kk-narasumber-chk" ${chk(v.resources_available,'NARASUMBER')}> Narasumber industri</label>
+      <div id="kk-narasumber-detail" style="display:${(v.resources_available??[]).includes('NARASUMBER')?'block':'none'};margin:4px 0 0 24px">
+        <input type="text" class="input input-sm" name="narasumber_detail" placeholder="Detail" value="${esc(v.narasumber_detail??'')}" style="max-width:280px">
+      </div>
+    </div>
+
+    <div class="pm-q"><p class="pm-label">7. Output Nyata yang Diharapkan</p>
+      ${[['LAPORAN','Laporan tertulis'],['PRESENTASI','Presentasi'],['PRODUK_FISIK','Produk fisik'],
+         ['WEB_APLIKASI','Website/Aplikasi'],['VIDEO','Video'],
+         ['KONFIGURASI','Konfigurasi jaringan/sistem'],['PROTOTYPE','Prototype'],
+         ['POSTER','Poster'],['SIMULASI','Simulasi']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="expected_output" value="${val}" ${sel('expected_output',val)}> ${lbl}</label>`
+      ).join('')}
+      <label class="pm-radio-row"><input type="radio" name="expected_output" value="LAINNYA" ${sel('expected_output','LAINNYA')}> Lainnya</label>
+      <div id="kk-output-lain-detail" style="display:${v.expected_output==='LAINNYA'?'block':'none'};margin:4px 0 0 24px">
+        <input type="text" class="input input-sm" name="output_detail" placeholder="Jelaskan" value="${esc(v.output_detail??'')}" style="max-width:280px">
+      </div>
+    </div>
+
+    <div class="pm-q"><p class="pm-label">8. Media & Alat yang Tersedia</p>
+      ${[['PROYEKTOR','Proyektor/TV'],['SPEAKER','Speaker'],
+         ['LAPTOP_SISWA','Laptop/komputer siswa'],['TABLET','Tablet'],
+         ['KARTU','Kartu/flashcard'],['INTERNET_STABIL','Akses internet stabil'],
+         ['PAPAN_TULIS','Papan tulis']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="checkbox" name="media_available" value="${val}" ${chk(v.media_available,val)}> ${lbl}</label>`
+      ).join('')}
+      <label class="pm-radio-row"><input type="checkbox" name="media_available" value="LAINNYA" id="kk-media-lain-chk" ${chk(v.media_available,'LAINNYA')}> Lainnya</label>
+      <div id="kk-media-lain-detail" style="display:${(v.media_available??[]).includes('LAINNYA')?'block':'none'};margin:4px 0 0 24px">
+        <input type="text" class="input input-sm" name="media_detail" placeholder="Jelaskan" value="${esc(v.media_detail??'')}" style="max-width:280px">
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--color-border)">
+      <button class="btn btn-secondary" id="kk-batal-btn">Batal</button>
+      <button class="btn btn-primary" id="kk-simpan-btn">💾 Simpan Konteks</button>
+    </div>`;
+}
+
+function collectKonteksKelas(form, subjectId, ay) {
+    const radio = name => form.querySelector(`input[name="${name}"]:checked`)?.value ?? null;
+    const checks = name => [...form.querySelectorAll(`input[name="${name}"]:checked`)].map(el => el.value);
+    const txt = name => form.querySelector(`input[name="${name}"]`)?.value.trim() || null;
+    const output = radio('expected_output');
+    return {
+        subject_id: subjectId,
+        academic_year: ay,
+        class_id: null,
+        student_background: radio('student_background'),
+        tech_access: radio('tech_access'),
+        daily_language: txt('daily_language'),
+        class_characteristics: checks('class_characteristics'),
+        student_autonomy: radio('student_autonomy'),
+        learning_constraints: checks('learning_constraints'),
+        constraints_detail: txt('constraints_detail'),
+        resources_available: checks('resources_available'),
+        dudi_name: txt('dudi_name'),
+        narasumber_detail: txt('narasumber_detail'),
+        expected_output: output,
+        output_detail: output === 'LAINNYA' ? txt('output_detail') : null,
+        media_available: checks('media_available'),
+        media_detail: txt('media_detail'),
+    };
+}
+
+async function openKonteksKelasModal() {
+    const ay = config?.current_academic_year ?? getCurrentAcademicYear();
+    let subjects = [];
+    try { subjects = await ensureCoreSubjects(); } catch (e) { subjects = []; }
+
+    // Filter hanya mapel yang guru ini ajar (ambil dari dokumen yang ada)
+    let myDocs = [];
+    try { myDocs = await getMyTeacherDocuments(currentUser.school_id, ay); } catch (e) { /* */ }
+    const mySubjectIds = [...new Set(myDocs.map(d => d.core_subject_id).filter(Boolean))];
+    const mySubjects = mySubjectIds.length
+        ? subjects.filter(s => mySubjectIds.includes(s.subject_id))
+        : subjects;
+
+    if (!mySubjects.length) {
+        alert('Belum ada mata pelajaran. Buat dokumen perangkat ajar terlebih dahulu.');
+        return;
+    }
+
+    let overlay = document.getElementById('konteks-kelas-modal');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'konteks-kelas-modal';
+        overlay.className = 'modal-overlay';
+        overlay.style.cssText = 'align-items:flex-start;overflow-y:auto';
+        overlay.innerHTML = `<div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:600px;margin:24px auto;position:relative"><div id="kk-body"></div></div>`;
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+        document.body.appendChild(overlay);
+    }
+
+    const openForSubject = async (subj) => {
+        overlay.style.display = 'flex';
+        document.getElementById('kk-body').innerHTML = '<p class="hint">Memuat konteks…</p>';
+        let ctx = null;
+        try { ctx = await getTeachingContext(currentUser.school_id, subj.subject_id, ay); } catch (e) { /* */ }
+
+        const body = document.getElementById('kk-body');
+        body.innerHTML = buildKonteksKelasHTML(ctx, subj.name, ay);
+
+        // Kondisional: kendala lainnya
+        body.querySelector('#kk-kendala-lain-chk').addEventListener('change', e => {
+            body.querySelector('#kk-kendala-lain-detail').style.display = e.target.checked ? '' : 'none';
+        });
+        // Kondisional: DUDI
+        body.querySelector('#kk-dudi-chk').addEventListener('change', e => {
+            body.querySelector('#kk-dudi-detail').style.display = e.target.checked ? '' : 'none';
+        });
+        // Kondisional: narasumber
+        body.querySelector('#kk-narasumber-chk').addEventListener('change', e => {
+            body.querySelector('#kk-narasumber-detail').style.display = e.target.checked ? '' : 'none';
+        });
+        // Kondisional: output lainnya
+        body.querySelectorAll('input[name="expected_output"]').forEach(r => {
+            r.addEventListener('change', () => {
+                body.querySelector('#kk-output-lain-detail').style.display =
+                    body.querySelector('input[name="expected_output"][value="LAINNYA"]:checked') ? '' : 'none';
+            });
+        });
+        // Kondisional: media lainnya
+        body.querySelector('#kk-media-lain-chk').addEventListener('change', e => {
+            body.querySelector('#kk-media-lain-detail').style.display = e.target.checked ? '' : 'none';
+        });
+
+        body.querySelector('#kk-batal-btn').addEventListener('click', () => { overlay.style.display = 'none'; });
+        body.querySelector('#kk-simpan-btn').addEventListener('click', async () => {
+            const btn = body.querySelector('#kk-simpan-btn');
+            btn.disabled = true; btn.textContent = '…';
+            try {
+                await saveTeachingContext(currentUser.school_id, collectKonteksKelas(body, subj.subject_id, ay));
+                overlay.style.display = 'none';
+            } catch (err) {
+                alert(`Gagal menyimpan: ${fe(err)}`);
+            } finally {
+                btn.disabled = false; btn.textContent = '💾 Simpan Konteks';
+            }
+        });
+    };
+
+    if (mySubjects.length === 1) {
+        await openForSubject(mySubjects[0]);
+    } else {
+        // Tampilkan dropdown pilih mapel
+        overlay.style.display = 'flex';
+        document.getElementById('kk-body').innerHTML = `
+            <h2 style="margin:0 0 16px;font-size:18px">Pilih Mata Pelajaran</h2>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              ${mySubjects.map(s => `
+                <button class="btn btn-secondary kk-subj-btn" data-subj-id="${esc(s.subject_id)}" style="text-align:left">${esc(s.name)}</button>
+              `).join('')}
+            </div>
+            <div style="margin-top:16px;text-align:right">
+              <button class="btn btn-secondary" id="kk-pick-batal">Batal</button>
+            </div>`;
+        document.getElementById('kk-pick-batal').addEventListener('click', () => { overlay.style.display = 'none'; });
+        document.getElementById('kk-body').querySelectorAll('.kk-subj-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const subj = mySubjects.find(s => s.subject_id === btn.dataset.subjId);
+                if (subj) await openForSubject(subj);
+            });
+        });
+    }
+}
+
+// ─── Modal: Konfirmasi Generate ───────────────────────────────
+const PROFIL_LABEL = {
+    instructional_intent: { label: 'Tujuan', map: { PKL:'Persiapan PKL', DUNIA_KERJA:'Persiapan Dunia Kerja', SERTIFIKASI:'Persiapan Sertifikasi', LKS:'Persiapan LKS', KONSEP_DASAR:'Penguatan Konsep Dasar', KEWIRAUSAHAAN:'Projek Kewirausahaan', UMKM:'UMKM Lokal', LAINNYA:'Lainnya' } },
+    assessment_philosophy: { label: 'Cara penilaian', map: { PRAKTIK:'Praktik', PORTOFOLIO:'Portofolio', PRESENTASI:'Presentasi', OBSERVASI:'Observasi', TES_TERTULIS:'Tes Tertulis', KOMBINASI:'Kombinasi' } },
+    teaching_style: { label: 'Gaya mengajar', map: { GURU_DOMINAN:'Guru dominan', SISWA_DOMINAN:'Siswa dominan', SEIMBANG:'Seimbang' } },
+    learning_model: { label: 'Model', map: { PBL_PROJECT:'Project-Based Learning', PBL_PROBLEM:'Problem-Based Learning', DISCOVERY:'Discovery Learning', CERAMAH_LATIHAN:'Ceramah + Latihan' } },
+};
+const KONTEKS_LABEL = {
+    student_autonomy: { label: 'Kemandirian siswa', map: { SANGAT_MANDIRI:'Sangat mandiri', PERLU_ARAHAN:'Perlu arahan', SANGAT_BERGANTUNG:'Sangat bergantung' } },
+    expected_output: { label: 'Output nyata', map: { LAPORAN:'Laporan tertulis', PRESENTASI:'Presentasi', PRODUK_FISIK:'Produk fisik', WEB_APLIKASI:'Website/Aplikasi', VIDEO:'Video', KONFIGURASI:'Konfigurasi', PROTOTYPE:'Prototype', POSTER:'Poster', SIMULASI:'Simulasi', LAINNYA:'Lainnya' } },
+};
+const MEDIA_LABEL = { PROYEKTOR:'Proyektor/TV', SPEAKER:'Speaker', LAPTOP_SISWA:'Laptop siswa', TABLET:'Tablet', KARTU:'Kartu', INTERNET_STABIL:'Internet stabil', PAPAN_TULIS:'Papan tulis', LAINNYA:'Lainnya' };
+
+async function openConfirmGenerateModal(subjectId, subjName, ay) {
+    let overlay = document.getElementById('confirm-generate-modal');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'confirm-generate-modal';
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `<div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:520px;margin:auto;position:relative"><div id="cg-body"></div></div>`;
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+        document.body.appendChild(overlay);
+    }
+    overlay.style.display = 'flex';
+    document.getElementById('cg-body').innerHTML = '<p class="hint">Memuat…</p>';
+
+    let profil = null, ctx = null;
+    try { [profil, ctx] = await Promise.all([
+        getTeacherProfile(currentUser.school_id),
+        getTeachingContext(currentUser.school_id, subjectId, ay),
+    ]); } catch (e) { /* */ }
+
+    const row = (label, val) => val
+        ? `<div style="display:flex;gap:8px;font-size:13px;padding:3px 0"><span style="color:var(--color-success,#16a34a);flex-shrink:0">✓</span><span style="color:var(--color-text-muted);min-width:130px">${label}</span><span>${esc(val)}</span></div>`
+        : '';
+
+    let profilSection = '';
+    if (profil) {
+        const localCtx = [profil.local_city, profil.local_industry].filter(Boolean).join(' — ') || null;
+        profilSection = `
+        <div style="background:var(--color-bg-alt);border-radius:var(--radius);padding:12px;margin-bottom:12px">
+          <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase">Profil Mengajar</p>
+          ${Object.entries(PROFIL_LABEL).map(([k, {label, map}]) => row(label, map[profil[k]] ?? null)).join('')}
+          ${localCtx ? row('Konteks lokal', localCtx) : ''}
+          <button class="btn btn-secondary btn-sm" style="margin-top:10px;font-size:12px" id="cg-ubah-profil">⚙ Ubah Profil</button>
+        </div>`;
+    } else {
+        profilSection = `
+        <div style="background:var(--color-bg-alt);border-radius:var(--radius);padding:12px;margin-bottom:12px">
+          <p style="margin:0 0 6px;font-size:13px">⚠️ Profil Mengajar belum diisi. AI akan menggunakan nilai default.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" id="cg-isi-profil">Isi Sekarang</button>
+            <button class="btn btn-secondary btn-sm" id="cg-lanjut-tanpa-profil">Lanjutkan Tanpa Profil</button>
+          </div>
+        </div>`;
+    }
+
+    let ctxSection = '';
+    if (ctx) {
+        const mediaList = (ctx.media_available ?? []).map(m => MEDIA_LABEL[m] ?? m).join(', ') || null;
+        ctxSection = `
+        <div style="background:var(--color-bg-alt);border-radius:var(--radius);padding:12px;margin-bottom:12px">
+          <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase">Konteks Kelas</p>
+          ${Object.entries(KONTEKS_LABEL).map(([k, {label, map}]) => row(label, map[ctx[k]] ?? null)).join('')}
+          ${mediaList ? row('Media tersedia', mediaList) : ''}
+          <button class="btn btn-secondary btn-sm" style="margin-top:10px;font-size:12px" id="cg-ubah-konteks">⚙ Ubah Konteks</button>
+        </div>`;
+    }
+
+    document.getElementById('cg-body').innerHTML = `
+        <h2 style="margin:0 0 16px;font-size:18px">Konfirmasi Generate</h2>
+        <p style="margin:0 0 12px;font-size:13px;color:var(--color-text-muted)">Mapel: <strong>${esc(subjName)}</strong> · ${esc(ay)}</p>
+        ${profilSection}
+        ${ctxSection}
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:16px;border-top:1px solid var(--color-border)">
+          <button class="btn btn-secondary" id="cg-batal-btn">Batal</button>
+          <button class="btn btn-primary" id="cg-generate-btn" disabled title="Tersedia di Sprint 5">✨ Generate</button>
+        </div>`;
+
+    const body = document.getElementById('cg-body');
+    body.querySelector('#cg-batal-btn').addEventListener('click', () => { overlay.style.display = 'none'; });
+    body.querySelector('#cg-ubah-profil')?.addEventListener('click', () => { overlay.style.display = 'none'; openProfilMengajarModal(); });
+    body.querySelector('#cg-ubah-konteks')?.addEventListener('click', () => { overlay.style.display = 'none'; openKonteksKelasModal(); });
+    body.querySelector('#cg-isi-profil')?.addEventListener('click', () => { overlay.style.display = 'none'; openProfilMengajarModal(); });
+    body.querySelector('#cg-lanjut-tanpa-profil')?.addEventListener('click', () => { /* placeholder Sprint 5 */ });
 }
 
 // ─── Start ───────────────────────────────────────────────────

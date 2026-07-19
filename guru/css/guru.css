@@ -503,3 +503,8 @@ body.has-login-banner .app-header { margin-top: 94px; }
 /* Kaprodi rekap kelas — rata kiri */
 #kp-cls-recap .stat-card { text-align: left; }
 #kp-cls-recap .stat-value { font-size: 1.1rem; }
+/* Sprint 3 — Profil Mengajar & Konteks Kelas modal */
+.pm-q { margin-bottom: 20px; }
+.pm-label { margin: 0 0 8px; font-weight: 600; font-size: 14px; }
+.pm-radio-row { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; font-size: 14px; cursor: pointer; }
+.pm-radio-row input { margin-top: 3px; flex-shrink: 0; }

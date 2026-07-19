@@ -1544,3 +1544,57 @@ export async function getDisahkanWakaDocs(schoolId) {
 
     return data.map(d => ({ ...d, teacher_name: nameMap.get(d.teacher_user_id) ?? null }));
 }
+
+export async function getTeacherProfile(schoolId) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+        .from('teacher_profiles')
+        .select('*')
+        .eq('school_id', schoolId)
+        .eq('teacher_user_id', user.id)
+        .single();
+    if (error && error.code !== 'PGRST116') throw error;
+    return data ?? null;
+}
+
+export async function saveTeacherProfile(schoolId, profile) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase
+        .from('teacher_profiles')
+        .upsert({
+            school_id: schoolId,
+            teacher_user_id: user.id,
+            ...profile,
+            updated_at: new Date().toISOString(),
+        }, { onConflict: 'school_id,teacher_user_id' });
+    if (error) throw error;
+}
+
+export async function getTeachingContext(schoolId, subjectId, academicYear) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+        .from('teaching_contexts')
+        .select('*')
+        .eq('school_id', schoolId)
+        .eq('teacher_user_id', user.id)
+        .eq('academic_year', academicYear)
+        .eq('subject_id', subjectId)
+        .maybeSingle();
+    if (error) throw error;
+    return data ?? null;
+}
+
+export async function saveTeachingContext(schoolId, context) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase
+        .from('teaching_contexts')
+        .upsert({
+            school_id: schoolId,
+            teacher_user_id: user.id,
+            ...context,
+            updated_at: new Date().toISOString(),
+        }, {
+            onConflict: 'school_id,teacher_user_id,academic_year,subject_id,class_id',
+        });
+    if (error) throw error;
+}
