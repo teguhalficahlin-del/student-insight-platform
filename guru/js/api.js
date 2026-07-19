@@ -1464,6 +1464,54 @@ export async function getKepsekApprovalHistory(schoolId) {
     });
 }
 
+export async function getWakaApprovalHistory(schoolId) {
+    const { data, error } = await supabase
+        .from('teacher_document_approvals')
+        .select('approval_id, doc_id, status, approved_at, catatan')
+        .eq('school_id', schoolId)
+        .order('approved_at', { ascending: false })
+        .limit(20);
+    if (error) throw error;
+    if (!data?.length) return [];
+
+    const docIds = [...new Set(data.map(r => r.doc_id).filter(Boolean))];
+    const { data: docs } = await supabase
+        .from('teacher_documents')
+        .select('doc_id, document_type, academic_year, semester, core_subject_id, phase_id, teacher_user_id')
+        .in('doc_id', docIds);
+    const docMap = new Map((docs ?? []).map(d => [d.doc_id, d]));
+
+    const subjectIds = [...new Set((docs ?? []).map(d => d.core_subject_id).filter(Boolean))];
+    let subjectMap = new Map();
+    if (subjectIds.length) {
+        const { data: subjects } = await supabase
+            .from('v_core_subjects')
+            .select('subject_id, name')
+            .in('subject_id', subjectIds);
+        subjectMap = new Map((subjects ?? []).map(s => [s.subject_id, s.name]));
+    }
+
+    const authIds = [...new Set((docs ?? []).map(d => d.teacher_user_id).filter(Boolean))];
+    let nameMap = new Map();
+    if (authIds.length) {
+        const { data: users } = await supabase
+            .from('users')
+            .select('auth_user_id, full_name')
+            .in('auth_user_id', authIds);
+        nameMap = new Map((users ?? []).map(u => [u.auth_user_id, u.full_name]));
+    }
+
+    return data.map(r => {
+        const td = docMap.get(r.doc_id) ?? null;
+        return {
+            ...r,
+            teacher_documents: td,
+            teacher_name:  td ? (nameMap.get(td.teacher_user_id) ?? null) : null,
+            subject_name:  td ? (subjectMap.get(td.core_subject_id) ?? null) : null,
+        };
+    });
+}
+
 export async function wakaApproveDoc(docId, action, catatan = null) {
     const { error } = await supabase.rpc('fn_waka_approve_doc', {
         p_doc_id:  docId,

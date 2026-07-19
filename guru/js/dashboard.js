@@ -39,7 +39,7 @@ import {
     getCorePhases, getCoreSubjectsDirect,
     getMyTeacherDocuments, createTeacherDocument,
     updateDocumentStatus, getPendingDocApprovals, wakaApproveDoc,
-    getKepsekApprovalHistory, getDisahkanWakaDocs,
+    getKepsekApprovalHistory, getWakaApprovalHistory, getDisahkanWakaDocs,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 
@@ -4875,7 +4875,7 @@ async function loadWakaDocApprovals() {
     try {
         const [docs, history, phases] = await Promise.all([
             getPendingDocApprovals(currentUser.school_id),
-            getKepsekApprovalHistory(currentUser.school_id),
+            getWakaApprovalHistory(currentUser.school_id),
             getCorePhases(),
         ]);
         const phaseMap = new Map(phases.map(p => [p.phase_id, p]));
@@ -4968,6 +4968,7 @@ async function loadWakaDocApprovals() {
                 approveBtn.textContent = '…';
                 const msgEl = document.getElementById(`wk-approve-msg-${docId}`);
                 try {
+                    await supabase.auth.refreshSession();
                     await wakaApproveDoc(docId, 'APPROVE', null);
                     msgEl.style.color   = 'var(--color-success,#16a34a)';
                     msgEl.textContent   = '✓ Dokumen berhasil disahkan.';
@@ -4996,6 +4997,7 @@ async function loadWakaDocApprovals() {
                 confirmBtn.textContent = '…';
                 const msgEl = document.getElementById(`wk-approve-msg-${docId}`);
                 try {
+                    await supabase.auth.refreshSession();
                     await wakaApproveDoc(docId, 'REJECT', catatan);
                     msgEl.style.color   = 'var(--color-primary)';
                     msgEl.textContent   = '↩ Dokumen dikembalikan ke guru.';
