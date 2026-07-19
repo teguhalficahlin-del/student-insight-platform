@@ -4575,18 +4575,9 @@ async function loadPerangkatAjarDashboard() {
 
             return `
             <div class="section-card" style="margin-bottom:12px">
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-                    <div>
-                        <h4 style="margin:0 0 4px">${esc(subjName)}</h4>
-                        <span style="font-size:12px;padding:2px 8px;border-radius:12px;background:var(--color-bg-alt);color:var(--color-text-muted)">${esc(phaseName)}</span>
-                    </div>
-                    <button class="btn btn-primary btn-sm pa-buat-btn"
-                        data-subject-id="${esc(group.core_subject_id)}"
-                        data-phase-id="${esc(group.phase_id)}"
-                        data-subject-name="${esc(subjName)}"
-                        data-phase-name="${esc(phaseName)}">
-                        + Buat Dokumen
-                    </button>
+                <div style="margin-bottom:12px">
+                    <h4 style="margin:0 0 4px">${esc(subjName)}</h4>
+                    <span style="font-size:12px;padding:2px 8px;border-radius:12px;background:var(--color-bg-alt);color:var(--color-text-muted)">${esc(phaseName)}</span>
                 </div>
                 <div style="margin-bottom:10px">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -4617,18 +4608,9 @@ async function loadPerangkatAjarDashboard() {
             </div>`;
         }).join('');
 
-        // Wire event delegation untuk tombol Buat dan Detail
+        // Wire event delegation untuk tombol Detail
         document.getElementById('pa-mapel-list').addEventListener('click', e => {
-            const buatBtn   = e.target.closest('.pa-buat-btn');
             const detailBtn = e.target.closest('.pa-detail-btn');
-            if (buatBtn) {
-                openBuatDokumenModal({
-                    coreSubjectId: buatBtn.dataset.subjectId,
-                    phaseId:       buatBtn.dataset.phaseId,
-                    subjectName:   buatBtn.dataset.subjectName,
-                    phaseName:     buatBtn.dataset.phaseName,
-                });
-            }
             if (detailBtn) {
                 openDetailDokumenModal(detailBtn.dataset.docId, detailBtn.dataset.subjectId, detailBtn.dataset.phaseId);
             }
