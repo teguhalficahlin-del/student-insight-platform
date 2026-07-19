@@ -4515,7 +4515,7 @@ async function loadPerangkatAjarDashboard() {
 
     try {
         const [docs, coreSubjects, phases] = await Promise.all([
-            getMyTeacherDocuments(currentUser.school_id, currentUser.user_id, ay),
+            getMyTeacherDocuments(currentUser.school_id, ay),
             ensureCoreSubjects(),
             getCorePhases(),
         ]);
@@ -4656,7 +4656,7 @@ async function openBuatDokumenModal(preselect) {
     let existingDocs = [];
     if (preselect?.coreSubjectId) {
         try {
-            const allDocs = await getMyTeacherDocuments(currentUser.school_id, currentUser.user_id, ay);
+            const allDocs = await getMyTeacherDocuments(currentUser.school_id, ay);
             existingDocs = allDocs.filter(d => d.core_subject_id === preselect.coreSubjectId && d.phase_id === preselect.phaseId);
         } catch { /* ignore */ }
     }
@@ -4805,7 +4805,7 @@ async function openDetailDokumenModal(docId, coreSubjectId, phaseId) {
 
     const ay = config?.current_academic_year ?? getCurrentAcademicYear();
     try {
-        const allDocs = await getMyTeacherDocuments(currentUser.school_id, currentUser.user_id, ay);
+        const allDocs = await getMyTeacherDocuments(currentUser.school_id, ay);
         const doc = allDocs.find(d => d.doc_id === docId);
         if (!doc) { body.innerHTML = '<p style="color:var(--color-danger)">Dokumen tidak ditemukan.</p>'; return; }
 
