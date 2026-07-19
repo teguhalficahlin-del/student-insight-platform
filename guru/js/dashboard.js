@@ -39,6 +39,7 @@ import {
     getCorePhases, getCoreSubjectsDirect,
     getMyTeacherDocuments, createTeacherDocument,
     updateDocumentStatus, getPendingDocApprovals, kepsekApproveDoc,
+    getKepsekApprovalHistory,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 
@@ -4871,40 +4872,79 @@ async function loadKepsekDocApprovals() {
     listEl.innerHTML = '<p class="hint">Memuat...</p>';
 
     try {
-        const docs = await getPendingDocApprovals(currentUser.school_id);
-        if (!docs.length) {
-            listEl.innerHTML = '<p class="hint">Tidak ada dokumen yang menunggu persetujuan.</p>';
-            return;
-        }
-
-        const phases = await getCorePhases();
+        const [docs, history, phases] = await Promise.all([
+            getPendingDocApprovals(currentUser.school_id),
+            getKepsekApprovalHistory(currentUser.school_id),
+            getCorePhases(),
+        ]);
         const phaseMap = new Map(phases.map(p => [p.phase_id, p]));
 
-        listEl.innerHTML = docs.map(doc => {
-            const dtype  = DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type;
-            const phase  = phaseMap.get(doc.phase_id);
-            const semLabel = doc.semester ? ` · Semester ${doc.semester}` : '';
-            const judul  = doc.content_json?.judul ?? '—';
-            return `
-            <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:12px;margin-bottom:10px">
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px">
-                    <div>
-                        <p style="margin:0 0 4px;font-weight:600">${esc(dtype)}${esc(semLabel)}</p>
-                        <p style="margin:0 0 4px;font-size:13px">${esc(judul)}</p>
-                        <p style="margin:0;font-size:12px;color:var(--color-text-muted)">${phase ? `Fase ${phase.code}` : ''} · ${doc.academic_year} · ${fmt(doc.created_at)}</p>
+        let html = '';
+
+        // ── Bagian 1: Menunggu Persetujuan ──────────────────────
+        html += `<h4 style="margin:0 0 10px;font-size:14px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Menunggu Persetujuan</h4>`;
+        if (!docs.length) {
+            html += '<p class="hint" style="margin-bottom:16px">Tidak ada dokumen yang menunggu persetujuan.</p>';
+        } else {
+            html += docs.map(doc => {
+                const dtype    = DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type;
+                const phase    = phaseMap.get(doc.phase_id);
+                const semLabel = doc.semester ? ` · Semester ${doc.semester}` : '';
+                const judul    = doc.content_json?.judul ?? '—';
+                return `
+                <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:12px;margin-bottom:10px">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px">
+                        <div>
+                            <p style="margin:0 0 4px;font-weight:600">${esc(dtype)}${esc(semLabel)}</p>
+                            <p style="margin:0 0 4px;font-size:13px">${esc(judul)}</p>
+                            <p style="margin:0;font-size:12px;color:var(--color-text-muted)">${phase ? `Fase ${phase.code}` : ''} · ${doc.academic_year} · ${fmt(doc.created_at)}</p>
+                        </div>
+                        <div style="display:flex;gap:6px;align-items:center">
+                            <button class="btn btn-sm btn-secondary ks-reject-btn" data-doc-id="${esc(doc.doc_id)}" style="color:var(--color-danger)">✕ Kembalikan</button>
+                            <button class="btn btn-sm btn-primary ks-approve-btn" data-doc-id="${esc(doc.doc_id)}">✓ Setujui</button>
+                        </div>
                     </div>
-                    <div style="display:flex;gap:6px;align-items:center">
-                        <button class="btn btn-sm btn-secondary ks-reject-btn" data-doc-id="${esc(doc.doc_id)}" style="color:var(--color-danger)">✕ Kembalikan</button>
-                        <button class="btn btn-sm btn-primary ks-approve-btn" data-doc-id="${esc(doc.doc_id)}">✓ Setujui</button>
+                    <div id="ks-approve-msg-${esc(doc.doc_id)}" style="display:none;font-size:13px;margin-top:8px"></div>
+                    <div id="ks-catatan-row-${esc(doc.doc_id)}" style="display:none;margin-top:8px">
+                        <input type="text" class="input" placeholder="Catatan pengembalian (opsional)..." style="width:100%;margin-bottom:6px">
+                        <button class="btn btn-sm btn-danger ks-reject-confirm-btn" data-doc-id="${esc(doc.doc_id)}">Konfirmasi Kembalikan</button>
                     </div>
-                </div>
-                <div id="ks-approve-msg-${esc(doc.doc_id)}" style="display:none;font-size:13px;margin-top:8px"></div>
-                <div id="ks-catatan-row-${esc(doc.doc_id)}" style="display:none;margin-top:8px">
-                    <input type="text" class="input" placeholder="Catatan pengembalian (opsional)..." style="width:100%;margin-bottom:6px">
-                    <button class="btn btn-sm btn-danger ks-reject-confirm-btn" data-doc-id="${esc(doc.doc_id)}">Konfirmasi Kembalikan</button>
-                </div>
-            </div>`;
-        }).join('');
+                </div>`;
+            }).join('');
+        }
+
+        // ── Bagian 2: Riwayat ───────────────────────────────────
+        html += `<h4 style="margin:16px 0 10px;font-size:14px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Riwayat</h4>`;
+        if (!history.length) {
+            html += '<p class="hint">Belum ada riwayat persetujuan.</p>';
+        } else {
+            html += history.map(row => {
+                const td       = row.teacher_documents;
+                const dtype    = DOC_TYPE_LABEL[td?.document_type] ?? td?.document_type ?? '—';
+                const phase    = phaseMap.get(td?.phase_id);
+                const semLabel = td?.semester ? ` · Semester ${td.semester}` : '';
+                const isOk     = row.status === 'APPROVED';
+                const badge    = isOk
+                    ? `<span style="color:var(--color-success,#16a34a);font-weight:600">✅ Disahkan</span>`
+                    : `<span style="color:var(--color-primary);font-weight:600">↩ Dikembalikan</span>`;
+                const catatanHtml = row.catatan
+                    ? `<p style="margin:4px 0 0;font-size:12px;color:var(--color-text-muted);font-style:italic">"${esc(row.catatan)}"</p>`
+                    : '';
+                return `
+                <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;opacity:.9">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">
+                        <div>
+                            <p style="margin:0 0 2px;font-weight:600;font-size:13px">${esc(dtype)}${esc(semLabel)}</p>
+                            <p style="margin:0;font-size:12px;color:var(--color-text-muted)">${phase ? `Fase ${phase.code}` : ''} · ${td?.academic_year ?? ''} · ${fmt(row.approved_at)}</p>
+                            ${catatanHtml}
+                        </div>
+                        <div>${badge}</div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        listEl.innerHTML = html;
 
         listEl.addEventListener('click', async e => {
             const approveBtn = e.target.closest('.ks-approve-btn');
@@ -4932,14 +4972,14 @@ async function loadKepsekDocApprovals() {
             }
 
             if (rejectBtn) {
-                const docId   = rejectBtn.dataset.docId;
-                const row = document.getElementById(`ks-catatan-row-${docId}`);
+                const docId = rejectBtn.dataset.docId;
+                const row   = document.getElementById(`ks-catatan-row-${docId}`);
                 row.style.display = row.style.display === 'none' ? '' : 'none';
             }
 
             if (confirmBtn) {
-                const docId  = confirmBtn.dataset.docId;
-                const row    = document.getElementById(`ks-catatan-row-${docId}`);
+                const docId   = confirmBtn.dataset.docId;
+                const row     = document.getElementById(`ks-catatan-row-${docId}`);
                 const catatan = row.querySelector('input')?.value.trim() ?? null;
                 confirmBtn.disabled    = true;
                 confirmBtn.textContent = '…';

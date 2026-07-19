@@ -1412,6 +1412,23 @@ export async function getPendingDocApprovals(schoolId) {
     return data ?? [];
 }
 
+export async function getKepsekApprovalHistory(schoolId) {
+    const { data, error } = await supabase
+        .from('teacher_document_approvals')
+        .select(`
+            approval_id, status, approved_at, catatan,
+            teacher_documents (
+                doc_id, document_type, academic_year, semester,
+                content_json, core_subject_id, phase_id
+            )
+        `)
+        .eq('school_id', schoolId)
+        .order('approved_at', { ascending: false })
+        .limit(20);
+    if (error) throw error;
+    return data ?? [];
+}
+
 export async function kepsekApproveDoc(docId, action, catatan = null) {
     const { error } = await supabase.rpc('fn_kepsek_approve_doc', {
         p_doc_id:  docId,
