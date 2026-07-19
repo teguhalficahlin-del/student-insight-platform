@@ -1512,6 +1512,25 @@ export async function getWakaApprovalHistory(schoolId) {
     });
 }
 
+export async function deleteTeacherDocument(docId) {
+    await supabase
+        .from('teacher_document_approvals')
+        .delete()
+        .eq('doc_id', docId);
+
+    await supabase
+        .from('teacher_document_classes')
+        .delete()
+        .eq('doc_id', docId);
+
+    const { error } = await supabase
+        .from('teacher_documents')
+        .delete()
+        .eq('doc_id', docId);
+
+    if (error) throw error;
+}
+
 export async function wakaApproveDoc(docId, action, catatan = null) {
     const { error } = await supabase.rpc('fn_waka_approve_doc', {
         p_doc_id:  docId,

@@ -38,7 +38,7 @@ import {
     withdrawForumPost, updateForumPost, withdrawForumComment, getForumMemberDetails,
     getCorePhases, getCoreSubjectsDirect,
     getMyTeacherDocuments, createTeacherDocument,
-    updateDocumentStatus, getPendingDocApprovals, wakaApproveDoc,
+    updateDocumentStatus, deleteTeacherDocument, getPendingDocApprovals, wakaApproveDoc,
     getKepsekApprovalHistory, getWakaApprovalHistory, getDisahkanWakaDocs,
     getTeacherProfile, saveTeacherProfile,
     getTeachingContext, saveTeachingContext,
@@ -4913,7 +4913,13 @@ async function openDetailDokumenModal(docId, coreSubjectId, phaseId) {
                     ${doc.status === 'MENUNGGU_WAKA'  ? `<span style="font-size:13px;color:var(--color-warning,#f59e0b)">⏳ Menunggu persetujuan Waka Kurikulum...</span>` : ''}
                 </div>
                 <div id="doc-status-msg" style="display:none;margin-top:8px;font-size:13px"></div>
-            </div>`;
+            </div>
+            ${doc.status !== 'DISAHKAN_WAKA' ? `
+            <div style="border-top:1px solid var(--color-border);padding-top:12px;margin-top:12px">
+                <button id="btn-hapus-dokumen" class="btn btn-danger-outline btn-sm" data-doc-id="${doc.doc_id}">
+                    🗑 Hapus Dokumen
+                </button>
+            </div>` : ''}`;
 
         const showMsg = (text, isErr = false) => {
             const el = document.getElementById('doc-status-msg');
@@ -4950,6 +4956,23 @@ async function openDetailDokumenModal(docId, coreSubjectId, phaseId) {
         document.getElementById('doc-to-waka')?.addEventListener('click', e => {
             e.target.dataset.label = e.target.textContent;
             doStatusChange('MENUNGGU_WAKA', e.target);
+        });
+
+        document.getElementById('btn-hapus-dokumen')?.addEventListener('click', async e => {
+            if (!confirm('Hapus dokumen ini? Tindakan tidak bisa dibatalkan.')) return;
+            const btn = e.target;
+            btn.disabled    = true;
+            btn.textContent = '…';
+            try {
+                await deleteTeacherDocument(docId);
+                modal.style.display = 'none';
+                await loadPerangkatAjarDashboard();
+                showMsg('Dokumen berhasil dihapus');
+            } catch (err) {
+                showMsg(`✗ ${fe(err, 's')}`, true);
+                btn.disabled    = false;
+                btn.textContent = '🗑 Hapus Dokumen';
+            }
         });
 
     } catch (err) {
