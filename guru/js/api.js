@@ -1316,100 +1316,103 @@ export async function withdrawForumComment(commentId) {
     if (error) throw error;
 }
 
-// ─── KURIKULUM MERDEKA ───────────────────────────────────────
+// ─── PERANGKAT AJAR (Sprint 2) ───────────────────────────────
 
-export async function getMyTeachingSubjects(userId, academicYear, semester) {
+export async function getCoreSubjects() {
     const { data, error } = await supabase
-        .from('teaching_assignments')
-        .select(`
-            subject_id,
-            subjects ( subject_id, name, kelompok_mapel, fase_default ),
-            classes ( grade_level, programs ( program_id, name ) )
-        `)
-        .eq('user_id', userId)
-        .eq('academic_year', academicYear)
-        .eq('semester', semester)
-        .eq('is_active', true);
-    if (error) throw error;
-    const seen = new Set();
-    const result = [];
-    for (const ta of data ?? []) {
-        const s = ta.subjects;
-        if (!s || seen.has(s.subject_id)) continue;
-        seen.add(s.subject_id);
-        result.push({
-            ...s,
-            grade_level:  ta.classes?.grade_level ?? null,
-            program_name: ta.classes?.programs?.name ?? null,
-            program_id:   ta.classes?.programs?.program_id ?? null,
-        });
+        .from('core_subjects_view')
+        .select('subject_id, code, name, subject_type, program_id')
+        .eq('is_active', true)
+        .order('name');
+    if (error) {
+        // Fallback: query langsung ke skema core via rpc jika view belum ada
+        const { data: d2, error: e2 } = await supabase.rpc('fn_get_core_subjects');
+        if (e2) throw e2;
+        return d2 ?? [];
     }
-    return result.sort((a, b) => a.name.localeCompare(b.name, 'id'));
+    return data ?? [];
 }
 
-export async function getCpBySubject(subjectId, fase) {
+export async function getCoreSubjectsDirect() {
     const { data, error } = await supabase
-        .from('capaian_pembelajaran')
-        .select('*')
-        .eq('subject_id', subjectId)
-        .eq('fase', fase)
-        .order('elemen');
+        .from('v_core_subjects')
+        .select('subject_id, code, name, subject_type');
     if (error) throw error;
     return data ?? [];
 }
 
-export async function getTpBySubject(subjectId, fase, semester) {
-    let q = supabase
-        .from('tujuan_pembelajaran')
-        .select('*')
-        .eq('subject_id', subjectId)
-        .eq('fase', fase)
-        .order('semester')
-        .order('urutan');
-    if (semester !== null && semester !== undefined) q = q.eq('semester', semester);
-    const { data, error } = await q;
+export async function getCorePhases() {
+    // Phase IDs sudah diketahui dari seed Sprint 1 (fixed UUIDs)
+    return [
+        { phase_id: '00000000-0000-0000-0002-000000000001', code: 'E', name: 'Fase E (Kelas X SMK)' },
+        { phase_id: '00000000-0000-0000-0002-000000000002', code: 'F', name: 'Fase F (Kelas XI–XII SMK)' },
+    ];
+}
+
+export async function getMyTeacherDocuments(schoolId, userId, academicYear) {
+    const { data, error } = await supabase
+        .from('teacher_documents')
+        .select('doc_id, document_type, status, semester, academic_year, core_subject_id, phase_id, content_json, created_at, updated_at')
+        .eq('school_id', schoolId)
+        .eq('teacher_user_id', userId)
+        .eq('academic_year', academicYear)
+        .order('created_at', { ascending: false });
     if (error) throw error;
     return data ?? [];
 }
 
-export async function saveCp(cpData) {
+export async function createTeacherDocument({ schoolId, teacherUserId, academicYear, documentType, coreSubjectId, phaseId, programId, scopeType, semester, tpUrutan, contentJson }) {
     const { data, error } = await supabase
-        .from('capaian_pembelajaran')
-        .upsert(cpData, { onConflict: 'school_id,subject_id,program_id,fase,elemen', ignoreDuplicates: false })
-        .select('cp_id')
+        .from('teacher_documents')
+        .insert({
+            school_id:       schoolId,
+            teacher_user_id: teacherUserId,
+            academic_year:   academicYear,
+            document_type:   documentType,
+            core_subject_id: coreSubjectId,
+            phase_id:        phaseId,
+            program_id:      programId ?? null,
+            scope_type:      scopeType ?? 'SEMUA_KELAS',
+            semester:        semester ?? null,
+            tp_urutan:       tpUrutan ?? null,
+            status:          'AI_DRAFT',
+            content_json:    contentJson ?? {},
+        })
+        .select('doc_id')
         .single();
     if (error) throw error;
     return data;
 }
 
-export async function saveTp(tpData) {
-    const { data, error } = await supabase
-        .from('tujuan_pembelajaran')
-        .upsert(tpData, { onConflict: 'school_id,subject_id,program_id,fase,semester,urutan', ignoreDuplicates: false })
-        .select('tp_id')
-        .single();
-    if (error) throw error;
-    return data;
-}
-
-export async function updateTp(tpId, patch) {
+export async function updateDocumentStatus(docId, newStatus) {
     const { error } = await supabase
-        .from('tujuan_pembelajaran')
-        .update({ ...patch, updated_at: new Date().toISOString() })
-        .eq('tp_id', tpId);
+        .from('teacher_documents')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('doc_id', docId);
     if (error) throw error;
 }
 
-export async function generateAtp(payload) {
-    const { data: authData } = await supabase.auth.getSession();
-    const token = authData?.session?.access_token;
-    if (!token) throw new Error('Sesi tidak valid. Silakan login ulang.');
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-atp`, {
-        method:  'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body:    JSON.stringify(payload),
+export async function getPendingDocApprovals(schoolId) {
+    const { data, error } = await supabase
+        .from('teacher_documents')
+        .select(`
+            doc_id, document_type, academic_year, status, created_at,
+            content_json,
+            core_subject_id,
+            phase_id
+        `)
+        .eq('school_id', schoolId)
+        .eq('status', 'MENUNGGU_KEPSEK')
+        .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function kepsekApproveDoc(docId, action, catatan = null) {
+    const { error } = await supabase.rpc('fn_kepsek_approve_doc', {
+        p_doc_id:  docId,
+        p_action:  action,
+        p_catatan: catatan,
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
-    return json;
+    if (error) throw error;
 }
