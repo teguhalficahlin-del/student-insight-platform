@@ -1350,13 +1350,13 @@ export async function getCorePhases() {
 }
 
 export async function getMyTeacherDocuments(schoolId, academicYear) {
-    // Tidak perlu filter teacher_user_id di client — RLS td_select sudah enforce
-    // teacher_user_id = auth.uid() di server side.
+    const { data: { user } } = await supabase.auth.getUser();
     const { data, error } = await supabase
         .from('teacher_documents')
         .select('doc_id, document_type, status, semester, academic_year, core_subject_id, phase_id, content_json, created_at, updated_at')
         .eq('school_id', schoolId)
         .eq('academic_year', academicYear)
+        .eq('teacher_user_id', user.id)
         .order('created_at', { ascending: false });
     if (error) throw error;
     return data ?? [];
