@@ -4967,7 +4967,7 @@ async function openDetailDokumenModal(docId, coreSubjectId, phaseId) {
                 await deleteTeacherDocument(docId);
                 modal.style.display = 'none';
                 await loadPerangkatAjarDashboard();
-                showMsg('Dokumen berhasil dihapus');
+                alert('Dokumen berhasil dihapus.');
             } catch (err) {
                 showMsg(`✗ ${fe(err, 's')}`, true);
                 btn.disabled    = false;
