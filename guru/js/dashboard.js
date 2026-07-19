@@ -38,8 +38,8 @@ import {
     withdrawForumPost, updateForumPost, withdrawForumComment, getForumMemberDetails,
     getCorePhases, getCoreSubjectsDirect,
     getMyTeacherDocuments, createTeacherDocument,
-    updateDocumentStatus, getPendingDocApprovals, kepsekApproveDoc,
-    getKepsekApprovalHistory,
+    updateDocumentStatus, getPendingDocApprovals, wakaApproveDoc,
+    getKepsekApprovalHistory, getDisahkanWakaDocs,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 
@@ -2204,6 +2204,7 @@ async function initWakaKurTab() {
     }
     // Selalu reload Panel 1 + stats saat tab dibuka agar data terbaru tampil
     await Promise.all([loadWkKurStats(localDateStr(), localDateStr()), loadWkKur1(localDateStr())]);
+    await loadWakaDocApprovals();
 }
 
 async function loadWkKurStats(dateStart, dateEnd, prefix = 'wk-kur', emptyMsg = 'Tidak ada sesi hari ini') {
@@ -2597,7 +2598,7 @@ async function initKepsekTab() {
         document.getElementById('ks-range-end').value   = localDateStr();
     }
     await loadKepsekMonitoring('7_hari');
-    await loadKepsekDocApprovals();
+    await loadKepsekDisahkanDocs();
 }
 
 let _ksAdminTabInit = false;
@@ -4455,15 +4456,15 @@ const DOC_TYPE_LABEL = {
 const DOC_STATUS_LABEL = {
     AI_DRAFT:          'Draft',
     DIREVIEW_GURU:     'Sudah Direview',
-    MENUNGGU_KEPSEK:   'Menunggu Kepsek',
-    DISAHKAN_KEPSEK:   'Disahkan Kepsek',
+    MENUNGGU_WAKA:     'Menunggu Waka Kurikulum',
+    DISAHKAN_WAKA:     'Disahkan Waka Kurikulum',
 };
 
 const DOC_STATUS_COLOR = {
     AI_DRAFT:          'var(--color-text-muted)',
     DIREVIEW_GURU:     'var(--color-primary)',
-    MENUNGGU_KEPSEK:   'var(--color-warning,#f59e0b)',
-    DISAHKAN_KEPSEK:   'var(--color-success,#16a34a)',
+    MENUNGGU_WAKA:     'var(--color-warning,#f59e0b)',
+    DISAHKAN_WAKA:     'var(--color-success,#16a34a)',
 };
 
 function getCurrentAcademicYear() {
@@ -4549,7 +4550,7 @@ async function loadPerangkatAjarDashboard() {
             const phaseName = phase?.code ? `Fase ${phase.code}` : '—';
 
             // Hitung progress
-            const doneStatuses = ['DIREVIEW_GURU', 'DISAHKAN_KEPSEK'];
+            const doneStatuses = ['DIREVIEW_GURU', 'DISAHKAN_WAKA'];
             const hasPT  = group.docs.some(d => d.document_type === 'PROGRAM_TAHUNAN'  && doneStatuses.includes(d.status));
             const hasPS1 = group.docs.some(d => d.document_type === 'PROGRAM_SEMESTER' && d.semester === 1 && doneStatuses.includes(d.status));
             const hasPS2 = group.docs.some(d => d.document_type === 'PROGRAM_SEMESTER' && d.semester === 2 && doneStatuses.includes(d.status));
@@ -4794,9 +4795,9 @@ async function openDetailDokumenModal(docId, coreSubjectId, phaseId) {
 
         // Status transitions untuk tombol
         const isOwn = true; // RLS sudah jamin hanya dokumen milik sendiri
-        const canMarkReview = isOwn && doc.status === 'AI_DRAFT';
-        const canSubmitKepsek = isOwn && doc.status === 'DIREVIEW_GURU';
-        const canDraftBack    = isOwn && doc.status === 'DIREVIEW_GURU';
+        const canMarkReview  = isOwn && doc.status === 'AI_DRAFT';
+        const canSubmitWaka  = isOwn && doc.status === 'DIREVIEW_GURU';
+        const canDraftBack   = isOwn && doc.status === 'DIREVIEW_GURU';
 
         body.innerHTML = `
             <div style="margin-bottom:16px">
@@ -4812,11 +4813,11 @@ async function openDetailDokumenModal(docId, coreSubjectId, phaseId) {
             <div style="border-top:1px solid var(--color-border);padding-top:12px">
                 <p style="font-size:12px;color:var(--color-text-muted);margin:0 0 10px">Ubah status dokumen:</p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
-                    ${canDraftBack    ? `<button class="btn btn-secondary btn-sm" id="doc-to-draft">Simpan sebagai Draft</button>` : ''}
-                    ${canMarkReview   ? `<button class="btn btn-secondary btn-sm" id="doc-to-review">Tandai Sudah Direview</button>` : ''}
-                    ${canSubmitKepsek ? `<button class="btn btn-primary btn-sm" id="doc-to-kepsek">Ajukan ke Kepsek</button>` : ''}
-                    ${doc.status === 'DISAHKAN_KEPSEK' ? `<span style="font-size:13px;color:var(--color-success,#16a34a)">✓ Sudah disahkan kepsek</span>` : ''}
-                    ${doc.status === 'MENUNGGU_KEPSEK' ? `<span style="font-size:13px;color:var(--color-warning,#f59e0b)">⏳ Menunggu persetujuan kepsek...</span>` : ''}
+                    ${canDraftBack  ? `<button class="btn btn-secondary btn-sm" id="doc-to-draft">Simpan sebagai Draft</button>` : ''}
+                    ${canMarkReview ? `<button class="btn btn-secondary btn-sm" id="doc-to-review">Tandai Sudah Direview</button>` : ''}
+                    ${canSubmitWaka ? `<button class="btn btn-primary btn-sm" id="doc-to-waka">Ajukan ke Waka Kurikulum</button>` : ''}
+                    ${doc.status === 'DISAHKAN_WAKA' ? `<span style="font-size:13px;color:var(--color-success,#16a34a)">✓ Sudah disahkan Waka Kurikulum</span>` : ''}
+                    ${doc.status === 'MENUNGGU_WAKA'  ? `<span style="font-size:13px;color:var(--color-warning,#f59e0b)">⏳ Menunggu persetujuan Waka Kurikulum...</span>` : ''}
                 </div>
                 <div id="doc-status-msg" style="display:none;margin-top:8px;font-size:13px"></div>
             </div>`;
@@ -4853,9 +4854,9 @@ async function openDetailDokumenModal(docId, coreSubjectId, phaseId) {
             e.target.dataset.label = e.target.textContent;
             doStatusChange('DIREVIEW_GURU', e.target);
         });
-        document.getElementById('doc-to-kepsek')?.addEventListener('click', e => {
+        document.getElementById('doc-to-waka')?.addEventListener('click', e => {
             e.target.dataset.label = e.target.textContent;
-            doStatusChange('MENUNGGU_KEPSEK', e.target);
+            doStatusChange('MENUNGGU_WAKA', e.target);
         });
 
     } catch (err) {
@@ -4863,8 +4864,8 @@ async function openDetailDokumenModal(docId, coreSubjectId, phaseId) {
     }
 }
 
-// Dipanggil dari initKepsekTab — load pending approvals
-async function loadKepsekDocApprovals() {
+// Dipanggil dari initWakaKurTab — approval & riwayat untuk Waka Kurikulum
+async function loadWakaDocApprovals() {
     const section = document.getElementById('kepsek-approval-section');
     if (!section) return;
 
@@ -4900,14 +4901,14 @@ async function loadKepsekDocApprovals() {
                             <p style="margin:0;font-size:12px;color:var(--color-text-muted)">${phase ? `Fase ${phase.code}` : ''} · ${doc.academic_year} · ${fmt(doc.created_at)}</p>
                         </div>
                         <div style="display:flex;gap:6px;align-items:center">
-                            <button class="btn btn-sm btn-secondary ks-reject-btn" data-doc-id="${esc(doc.doc_id)}" style="color:var(--color-danger)">✕ Kembalikan</button>
-                            <button class="btn btn-sm btn-primary ks-approve-btn" data-doc-id="${esc(doc.doc_id)}">✓ Setujui</button>
+                            <button class="btn btn-sm btn-secondary wk-reject-btn" data-doc-id="${esc(doc.doc_id)}" style="color:var(--color-danger)">✕ Kembalikan</button>
+                            <button class="btn btn-sm btn-primary wk-approve-btn" data-doc-id="${esc(doc.doc_id)}">✓ Setujui</button>
                         </div>
                     </div>
-                    <div id="ks-approve-msg-${esc(doc.doc_id)}" style="display:none;font-size:13px;margin-top:8px"></div>
-                    <div id="ks-catatan-row-${esc(doc.doc_id)}" style="display:none;margin-top:8px">
+                    <div id="wk-approve-msg-${esc(doc.doc_id)}" style="display:none;font-size:13px;margin-top:8px"></div>
+                    <div id="wk-catatan-row-${esc(doc.doc_id)}" style="display:none;margin-top:8px">
                         <input type="text" class="input" placeholder="Catatan pengembalian (opsional)..." style="width:100%;margin-bottom:6px">
-                        <button class="btn btn-sm btn-danger ks-reject-confirm-btn" data-doc-id="${esc(doc.doc_id)}">Konfirmasi Kembalikan</button>
+                        <button class="btn btn-sm btn-danger wk-reject-confirm-btn" data-doc-id="${esc(doc.doc_id)}">Konfirmasi Kembalikan</button>
                     </div>
                 </div>`;
             }).join('');
@@ -4927,11 +4928,11 @@ async function loadKepsekDocApprovals() {
                 const badge    = isOk
                     ? `<span style="color:var(--color-success,#16a34a);font-weight:600">✅ Disahkan</span>`
                     : `<span style="color:var(--color-primary);font-weight:600">↩ Dikembalikan</span>`;
-                const catatanHtml = row.catatan
-                    ? `<p style="margin:4px 0 0;font-size:12px;color:var(--color-text-muted);font-style:italic">"${esc(row.catatan)}"</p>`
-                    : '';
                 const guruHtml = row.teacher_name
                     ? `<p style="margin:2px 0 0;font-size:12px;color:var(--color-text-muted)">Guru: ${esc(row.teacher_name)}</p>`
+                    : '';
+                const catatanHtml = row.catatan
+                    ? `<p style="margin:4px 0 0;font-size:12px;color:var(--color-text-muted);font-style:italic">"${esc(row.catatan)}"</p>`
                     : '';
                 return `
                 <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;opacity:.9">
@@ -4951,24 +4952,24 @@ async function loadKepsekDocApprovals() {
         listEl.innerHTML = html;
 
         listEl.addEventListener('click', async e => {
-            const approveBtn = e.target.closest('.ks-approve-btn');
-            const rejectBtn  = e.target.closest('.ks-reject-btn');
-            const confirmBtn = e.target.closest('.ks-reject-confirm-btn');
+            const approveBtn = e.target.closest('.wk-approve-btn');
+            const rejectBtn  = e.target.closest('.wk-reject-btn');
+            const confirmBtn = e.target.closest('.wk-reject-confirm-btn');
 
             if (approveBtn) {
                 const docId = approveBtn.dataset.docId;
                 approveBtn.disabled    = true;
                 approveBtn.textContent = '…';
-                const msgEl = document.getElementById(`ks-approve-msg-${docId}`);
+                const msgEl = document.getElementById(`wk-approve-msg-${docId}`);
                 try {
-                    await kepsekApproveDoc(docId, 'APPROVE', null);
+                    await wakaApproveDoc(docId, 'APPROVE', null);
                     msgEl.style.color   = 'var(--color-success,#16a34a)';
                     msgEl.textContent   = '✓ Dokumen berhasil disahkan.';
                     msgEl.style.display = '';
-                    setTimeout(() => loadKepsekDocApprovals(), 1200);
+                    setTimeout(() => loadWakaDocApprovals(), 1200);
                 } catch (err) {
                     msgEl.style.color   = 'var(--color-danger)';
-                    msgEl.textContent   = `✗ ${fe(err, 's')} (Pastikan migration fn_kepsek_approve_doc sudah diapply.)`;
+                    msgEl.textContent   = `✗ ${fe(err, 's')}`;
                     msgEl.style.display = '';
                     approveBtn.disabled    = false;
                     approveBtn.textContent = '✓ Setujui';
@@ -4977,32 +4978,81 @@ async function loadKepsekDocApprovals() {
 
             if (rejectBtn) {
                 const docId = rejectBtn.dataset.docId;
-                const row   = document.getElementById(`ks-catatan-row-${docId}`);
+                const row   = document.getElementById(`wk-catatan-row-${docId}`);
                 row.style.display = row.style.display === 'none' ? '' : 'none';
             }
 
             if (confirmBtn) {
                 const docId   = confirmBtn.dataset.docId;
-                const row     = document.getElementById(`ks-catatan-row-${docId}`);
+                const row     = document.getElementById(`wk-catatan-row-${docId}`);
                 const catatan = row.querySelector('input')?.value.trim() ?? null;
                 confirmBtn.disabled    = true;
                 confirmBtn.textContent = '…';
-                const msgEl = document.getElementById(`ks-approve-msg-${docId}`);
+                const msgEl = document.getElementById(`wk-approve-msg-${docId}`);
                 try {
-                    await kepsekApproveDoc(docId, 'REJECT', catatan);
+                    await wakaApproveDoc(docId, 'REJECT', catatan);
                     msgEl.style.color   = 'var(--color-primary)';
                     msgEl.textContent   = '↩ Dokumen dikembalikan ke guru.';
                     msgEl.style.display = '';
-                    setTimeout(() => loadKepsekDocApprovals(), 1200);
+                    setTimeout(() => loadWakaDocApprovals(), 1200);
                 } catch (err) {
                     msgEl.style.color   = 'var(--color-danger)';
-                    msgEl.textContent   = `✗ ${fe(err, 's')} (Pastikan migration fn_kepsek_approve_doc sudah diapply.)`;
+                    msgEl.textContent   = `✗ ${fe(err, 's')}`;
                     msgEl.style.display = '';
                     confirmBtn.disabled    = false;
                     confirmBtn.textContent = 'Konfirmasi Kembalikan';
                 }
             }
         });
+
+    } catch (err) {
+        listEl.innerHTML = `<div class="status-err">Gagal memuat. ${esc(fe(err))}</div>`;
+    }
+}
+
+// Dipanggil dari initKepsekTab — daftar dokumen DISAHKAN_WAKA (read-only)
+async function loadKepsekDisahkanDocs() {
+    const section = document.getElementById('ks-disahkan-section');
+    if (!section) return;
+
+    const listEl = document.getElementById('ks-disahkan-list');
+    listEl.innerHTML = '<p class="hint">Memuat...</p>';
+
+    try {
+        const [docs, phases] = await Promise.all([
+            getDisahkanWakaDocs(currentUser.school_id),
+            getCorePhases(),
+        ]);
+        const phaseMap = new Map(phases.map(p => [p.phase_id, p]));
+
+        if (!docs.length) {
+            listEl.innerHTML = '<p class="hint">Belum ada dokumen yang disahkan Waka Kurikulum.</p>';
+            return;
+        }
+
+        listEl.innerHTML = docs.map(doc => {
+            const dtype    = DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type;
+            const phase    = phaseMap.get(doc.phase_id);
+            const semLabel = doc.semester ? ` · Semester ${doc.semester}` : '';
+            const guruHtml = doc.teacher_name
+                ? `<p style="margin:2px 0 0;font-size:12px;color:var(--color-text-muted)">Guru: ${esc(doc.teacher_name)}</p>`
+                : '';
+            return `
+            <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">
+                    <div>
+                        <p style="margin:0 0 2px;font-weight:600;font-size:13px">
+                            <span style="color:var(--color-success,#16a34a)">✅</span>
+                            ${esc(dtype)}${esc(semLabel)}
+                        </p>
+                        ${guruHtml}
+                        <p style="margin:2px 0 0;font-size:12px;color:var(--color-text-muted)">
+                            Disahkan: ${fmt(doc.updated_at)} · ${phase ? `Fase ${phase.code}` : ''} · ${doc.academic_year}
+                        </p>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
 
     } catch (err) {
         listEl.innerHTML = `<div class="status-err">Gagal memuat. ${esc(fe(err))}</div>`;

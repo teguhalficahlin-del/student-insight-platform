@@ -1406,7 +1406,7 @@ export async function getPendingDocApprovals(schoolId) {
             phase_id
         `)
         .eq('school_id', schoolId)
-        .eq('status', 'MENUNGGU_KEPSEK')
+        .eq('status', 'MENUNGGU_WAKA')
         .order('created_at', { ascending: false });
     if (error) throw error;
     return data ?? [];
@@ -1443,11 +1443,35 @@ export async function getKepsekApprovalHistory(schoolId) {
     }));
 }
 
-export async function kepsekApproveDoc(docId, action, catatan = null) {
-    const { error } = await supabase.rpc('fn_kepsek_approve_doc', {
+export async function wakaApproveDoc(docId, action, catatan = null) {
+    const { error } = await supabase.rpc('fn_waka_approve_doc', {
         p_doc_id:  docId,
         p_action:  action,
-        p_catatan: catatan,
+        p_catatan: catatan ?? null,
     });
     if (error) throw error;
+}
+
+export async function getDisahkanWakaDocs(schoolId) {
+    const { data, error } = await supabase
+        .from('teacher_documents')
+        .select(`
+            doc_id, document_type, academic_year, semester,
+            updated_at, core_subject_id, phase_id, teacher_user_id
+        `)
+        .eq('school_id', schoolId)
+        .eq('status', 'DISAHKAN_WAKA')
+        .order('updated_at', { ascending: false })
+        .limit(50);
+    if (error) throw error;
+    if (!data?.length) return [];
+
+    const authIds = [...new Set(data.map(d => d.teacher_user_id).filter(Boolean))];
+    const { data: users } = await supabase
+        .from('users')
+        .select('auth_user_id, full_name')
+        .in('auth_user_id', authIds);
+    const nameMap = new Map((users ?? []).map(u => [u.auth_user_id, u.full_name]));
+
+    return data.map(d => ({ ...d, teacher_name: nameMap.get(d.teacher_user_id) ?? null }));
 }
