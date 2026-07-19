@@ -1361,12 +1361,15 @@ export async function getMyTeacherDocuments(schoolId, userId, academicYear) {
     return data ?? [];
 }
 
-export async function createTeacherDocument({ schoolId, teacherUserId, academicYear, documentType, coreSubjectId, phaseId, programId, scopeType, semester, tpUrutan, contentJson }) {
+export async function createTeacherDocument({ schoolId, academicYear, documentType, coreSubjectId, phaseId, programId, scopeType, semester, tpUrutan, contentJson }) {
+    // teacher_user_id harus = auth.uid() (FK ke auth.users), bukan user_id dari public.users
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Sesi tidak ditemukan. Silakan login ulang.');
     const { data, error } = await supabase
         .from('teacher_documents')
         .insert({
             school_id:       schoolId,
-            teacher_user_id: teacherUserId,
+            teacher_user_id: user.id,
             academic_year:   academicYear,
             document_type:   documentType,
             core_subject_id: coreSubjectId,

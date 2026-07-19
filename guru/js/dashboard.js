@@ -4765,7 +4765,6 @@ async function openBuatDokumenModal(preselect) {
         try {
             await createTeacherDocument({
                 schoolId:       currentUser.school_id,
-                teacherUserId:  currentUser.user_id,
                 academicYear:   ay,
                 documentType:   dtype,
                 coreSubjectId:  subjId,
