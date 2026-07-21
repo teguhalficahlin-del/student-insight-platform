@@ -7,7 +7,7 @@
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { supabase, getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getForumGuruWaliCandidates, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent,
-    getDutyStaffCandidates, getDutySchedules, revokeDutySchedule, getLateArrivals } from './api.js';
+    getDutyStaffCandidates, getDutySchedules, revokeDutySchedule } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
 function esc(s) {
@@ -1646,7 +1646,7 @@ async function renderAlumniPanel() {
                 });
 
                 // Hapus semua sekaligus
-                resultDiv.getElementById?.('purge-all-btn') ?? resultDiv.querySelector('#purge-all-btn')?.addEventListener('click', async () => {
+                resultDiv.querySelector('#purge-all-btn')?.addEventListener('click', async () => {
                     const n = candidates.length;
                     const confirmText = `HAPUS PERMANEN ${n} SISWA\n\nSeluruh data (absensi, observasi, kasus, akun) akan dihapus.\nTindakan ini TIDAK DAPAT dibatalkan.\n\nKetik "HAPUS" untuk konfirmasi:`;
                     const input = prompt(confirmText);

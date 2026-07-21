@@ -450,7 +450,6 @@ async function renderStakeholderStep() {
                 errDiv.textContent = err.message ?? 'Gagal menambah stakeholder.';
                 listEl.prepend(errDiv);
             }
-            showError(err.message ?? 'Gagal menambah stakeholder.');
         } finally {
             addBtn.disabled = false;
             addBtn.textContent = 'Tambah';
@@ -514,9 +513,6 @@ async function importForumBk(csvText) {
     );
     const classByNameProgram = new Map(
         classes.map(c => [`${c.name.toLowerCase()}::${c.program_id}`, c])
-    );
-    const bkByNip = new Map(
-        bkStaff.map(s => [s.login_identifier ?? '', s])
     );
 
     // Fetch login_identifier untuk BK (tidak ada di v_users_staff_directory)
@@ -1667,13 +1663,14 @@ async function renderScheduleStep() {
                         const row  = aoa[r];
                         const hari = String(row[0] ?? '').trim().toUpperCase();
                         if (!VALID_DAYS.includes(hari)) continue;
+                        const hariNorm = hari.replace(/JUM[’']AT/, 'JUMAT');
                         const start = String(row[1] ?? '').trim();
                         const end   = String(row[2] ?? '').trim();
                         for (let ki = 0; ki < kelasNames.length; ki++) {
                             const kg    = String(row[3 + ki * 2] ?? '').trim();
                             const mapel = String(row[4 + ki * 2] ?? '').trim();
                             if (!kg || !mapel) continue;
-                            flatRows.push(`${csvEsc(kg)},${csvEsc(mapel)},${csvEsc(kelasNames[ki])},${hari},${start},${end}`);
+                            flatRows.push(`${csvEsc(kg)},${csvEsc(mapel)},${csvEsc(kelasNames[ki])},${hariNorm},${start},${end}`);
                         }
                     }
                     if (flatRows.length <= 1) {
@@ -1871,7 +1868,8 @@ async function saveStep2() {
         await supabase
             .from('classes')
             .update({ academic_year: academicYear })
-            .eq('academic_year', prevYear);
+            .eq('academic_year', prevYear)
+            .eq('school_id', state.schoolId);
     }
 
     state.data.academicYear = academicYear;
@@ -2682,21 +2680,6 @@ const STEP_LIST = {
     },
 };
 
-/** Ambil users untuk satu role lalu petakan tiap baris ke sel tabel.
- *  Mem-paginasi (fetchAllRows) agar daftar ribuan (mis. ORTU) tidak terpotong
- *  di 1000 dan jumlah yang tampil akurat. */
-async function fetchUsersByRole(roleType, toCells, toEditData) {
-    const data = await fetchAllRows('users',
-        q => q.select('user_id, full_name, login_identifier, teacher_code, wali_kelas_class_id')
-              .eq('role_type', roleType)
-              .is('deleted_at', null)
-              .order('full_name'));
-    return data.map(u => {
-        const row = { id: u.user_id, cells: toCells(u) };
-        if (toEditData) row.editData = toEditData(u);
-        return row;
-    });
-}
 
 // ── Kelas Kosong Notice (kelas tahun ajaran aktif tanpa siswa) ─
 
@@ -2711,7 +2694,7 @@ async function renderEmptyClassesNotice(parentEl) {
                   .eq('academic_year', ay)
                   .order('name')),
         fetchAllRows('class_enrollments',
-            q => q.select('class_id').is('withdrawn_at', null)),
+            q => q.select('class_id').eq('academic_year', ay).is('withdrawn_at', null)),
     ]);
 
     const enrolledClassIds = new Set(enrollments.map(e => e.class_id));
