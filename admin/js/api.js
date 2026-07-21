@@ -1211,7 +1211,7 @@ export async function getDutySchedules(academicYear, semester) {
  * Tetapkan guru piket ke hari tertentu. Idempoten — skip jika sudah ada.
  */
 export async function assignDutySchedule(
-    userId, dayOfWeek, academicYear, semester, assignedByUserId
+    userId, dayOfWeek, academicYear, semester, assignedByUserId, schoolId
 ) {
     const { data: existing } = await supabase
         .from('duty_schedules')
@@ -1227,6 +1227,7 @@ export async function assignDutySchedule(
     const { data, error } = await supabase
         .from('duty_schedules')
         .insert({
+            school_id:           schoolId,
             user_id:             userId,
             day_of_week:         dayOfWeek,
             academic_year:       academicYear,

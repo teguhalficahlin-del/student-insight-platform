@@ -728,7 +728,8 @@ async function importDutySchedule(csvText) {
         try {
             const result = await assignDutySchedule(
                 userId, hari, academicYear, semester,
-                currentUserRow?.user_id ?? null
+                currentUserRow?.user_id ?? null,
+                config?.school_id ?? null
             );
             if (result === 'exists') skipped++;
             else success++;
