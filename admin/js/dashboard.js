@@ -6,7 +6,8 @@
  */
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
-import { supabase, getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getForumGuruWaliCandidates, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent } from './api.js';
+import { supabase, getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getForumGuruWaliCandidates, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent,
+    getDutyStaffCandidates, getDutySchedules, revokeDutySchedule, getLateArrivals } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
 function esc(s) {
@@ -69,6 +70,7 @@ const PANEL_RENDERERS = {
     export:             renderExportPanel,
     'activity-log':     renderActivityLogPanel,
     'forum-kelas':      renderForumKelasPanel,
+    'guru-piket':       renderGuruPiketPanel,
 };
 
 function navigateToPanel(panelId) {
@@ -313,6 +315,150 @@ async function renderForumKelasPanel() {
     } catch (err) {
         panelContent.innerHTML =
             `<div class="alert alert-danger">${fe(err)}</div>`;
+    }
+}
+
+async function renderGuruPiketPanel() {
+    panelContent.innerHTML = '<p class="hint">Memuat data guru piket…</p>';
+    try {
+        const config = await getSchoolConfig();
+        const academicYear = config?.current_academic_year ?? '—';
+        const semester     = config?.current_semester     ?? 1;
+        const today = new Date().toISOString().split('T')[0];
+
+        const [staff, schedules, lateToday] = await Promise.all([
+            getDutyStaffCandidates(),
+            getDutySchedules(academicYear, semester),
+            getLateArrivals(today),
+        ]);
+
+        const staffById = new Map(staff.map(s => [s.user_id, s]));
+
+        // ── Section 1: Jadwal Piket ──
+        const DAY_ORDER = ['SENIN','SELASA','RABU','KAMIS','JUMAT','SABTU'];
+        const byDay = new Map(DAY_ORDER.map(d => [d, []]));
+        schedules.forEach(s => {
+            if (byDay.has(s.day_of_week)) byDay.get(s.day_of_week).push(s);
+        });
+
+        const scheduleRows = DAY_ORDER.map(day => {
+            const entries = byDay.get(day) ?? [];
+            const chips = entries.map(s => {
+                const staf = staffById.get(s.user_id);
+                if (!staf) return '';
+                return `<span class="gp-chip" data-duty-id="${s.duty_id}"
+                    style="display:inline-flex;align-items:center;gap:4px;
+                    background:var(--color-bg-secondary);border:1px solid var(--color-border);
+                    border-radius:4px;padding:2px 8px;font-size:0.85em;margin:2px">
+                    ${esc(staf.full_name)}
+                    <button type="button" class="gp-del-btn" data-duty-id="${s.duty_id}"
+                        style="background:none;border:none;cursor:pointer;
+                        color:var(--color-danger);font-size:1em;padding:0;line-height:1"
+                        title="Hapus">×</button>
+                </span>`;
+            }).filter(Boolean).join('');
+            return `<tr>
+                <td style="font-weight:600;width:90px;vertical-align:top;padding-top:8px">${day}</td>
+                <td style="word-break:break-word">${chips || '<span style="color:var(--color-text-muted)">—</span>'}</td>
+            </tr>`;
+        }).join('');
+
+        // ── Section 2: Rekap Keterlambatan ──
+        function lateRow(r) {
+            const nama  = esc(r.student?.full_name ?? '—');
+            const kelas = esc(r.student?.class_enrollment?.[0]?.class?.name ?? '—');
+            const jam   = esc(r.arrival_time ?? '—');
+            const alasan = esc(r.reason ?? '—');
+            const pencatat = esc(r.recorder?.full_name ?? '—');
+            return `<tr>
+                <td>${nama}</td>
+                <td>${kelas}</td>
+                <td>${jam}</td>
+                <td>${alasan}</td>
+                <td>${pencatat}</td>
+            </tr>`;
+        }
+
+        const lateTableBody = lateToday.length > 0
+            ? lateToday.map(lateRow).join('')
+            : `<tr><td colspan="5" style="text-align:center;color:var(--color-text-muted)">
+                Belum ada keterlambatan hari ini.</td></tr>`;
+
+        panelContent.innerHTML = `
+            <h3>Guru Piket</h3>
+            <p class="hint">Tahun Ajaran: <strong>${esc(String(academicYear))}</strong>
+                &nbsp;·&nbsp; Semester: <strong>${semester}</strong></p>
+
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+                <h4 style="margin:0">Jadwal Piket Aktif (${schedules.length} penugasan)</h4>
+                <a href="../admin/wizard.html#11" class="btn btn-sm btn-secondary"
+                    style="text-decoration:none">↗ Buka Wizard Penugasan</a>
+            </div>
+            <table class="table" style="width:100%;margin-bottom:20px">
+                <thead><tr>
+                    <th style="width:90px">Hari</th>
+                    <th>Guru yang Ditugaskan</th>
+                </tr></thead>
+                <tbody id="gp-schedule-tbody">${scheduleRows}</tbody>
+            </table>
+            <p id="gp-sched-status" class="hint" style="margin-top:4px"></p>
+
+            <hr style="margin:20px 0;border:none;border-top:1px solid var(--color-border)">
+
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+                <h4 style="margin:0">Rekap Keterlambatan</h4>
+                <input type="date" id="gp-date-filter" value="${today}"
+                    class="input" style="padding:4px 8px;width:auto">
+            </div>
+            <table class="table" style="width:100%">
+                <thead><tr>
+                    <th>Nama Siswa</th>
+                    <th>Kelas</th>
+                    <th>Jam Datang</th>
+                    <th>Alasan</th>
+                    <th>Dicatat Oleh</th>
+                </tr></thead>
+                <tbody id="gp-late-tbody">${lateTableBody}</tbody>
+            </table>
+        `;
+
+        // ── Wire: hapus penugasan ──
+        panelContent.querySelectorAll('.gp-del-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const dutyId = btn.dataset.dutyId;
+                if (!confirm('Hapus penugasan piket ini?')) return;
+                btn.disabled = true;
+                const stEl = document.getElementById('gp-sched-status');
+                try {
+                    await revokeDutySchedule(dutyId);
+                    await renderGuruPiketPanel();
+                } catch (err) {
+                    if (stEl) stEl.textContent = 'Gagal menghapus: ' + (err?.message ?? String(err));
+                    btn.disabled = false;
+                }
+            });
+        });
+
+        // ── Wire: filter tanggal ──
+        document.getElementById('gp-date-filter')?.addEventListener('change', async (e) => {
+            const date = e.target.value;
+            if (!date) return;
+            const tbody = document.getElementById('gp-late-tbody');
+            tbody.innerHTML = '<tr><td colspan="5" class="hint">Memuat…</td></tr>';
+            try {
+                const rows = await getLateArrivals(date);
+                tbody.innerHTML = rows.length > 0
+                    ? rows.map(lateRow).join('')
+                    : `<tr><td colspan="5" style="text-align:center;color:var(--color-text-muted)">
+                        Belum ada keterlambatan pada tanggal ini.</td></tr>`;
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5"><div class="alert alert-danger">${esc(err?.message ?? String(err))}</div></td></tr>`;
+            }
+        });
+
+    } catch (err) {
+        panelContent.innerHTML =
+            `<div class="alert alert-danger">${esc(err?.message ?? String(err))}</div>`;
     }
 }
 
