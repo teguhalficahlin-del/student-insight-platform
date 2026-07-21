@@ -324,12 +324,10 @@ async function renderGuruPiketPanel() {
         const config = await getSchoolConfig();
         const academicYear = config?.current_academic_year ?? '—';
         const semester     = config?.current_semester     ?? 1;
-        const today = new Date().toISOString().split('T')[0];
 
-        const [staff, schedules, lateToday] = await Promise.all([
+        const [staff, schedules] = await Promise.all([
             getDutyStaffCandidates(),
             getDutySchedules(academicYear, semester),
-            getLateArrivals(today),
         ]);
 
         const staffById = new Map(staff.map(s => [s.user_id, s]));
@@ -363,27 +361,6 @@ async function renderGuruPiketPanel() {
             </tr>`;
         }).join('');
 
-        // ── Section 2: Rekap Keterlambatan ──
-        function lateRow(r) {
-            const nama  = esc(r.student?.full_name ?? '—');
-            const kelas = esc(r.student?.class_enrollment?.[0]?.class?.name ?? '—');
-            const jam   = esc(r.arrival_time ?? '—');
-            const alasan = esc(r.reason ?? '—');
-            const pencatat = esc(r.recorder?.full_name ?? '—');
-            return `<tr>
-                <td>${nama}</td>
-                <td>${kelas}</td>
-                <td>${jam}</td>
-                <td>${alasan}</td>
-                <td>${pencatat}</td>
-            </tr>`;
-        }
-
-        const lateTableBody = lateToday.length > 0
-            ? lateToday.map(lateRow).join('')
-            : `<tr><td colspan="5" style="text-align:center;color:var(--color-text-muted)">
-                Belum ada keterlambatan hari ini.</td></tr>`;
-
         panelContent.innerHTML = `
             <h3>Guru Piket</h3>
             <p class="hint">Tahun Ajaran: <strong>${esc(String(academicYear))}</strong>
@@ -402,24 +379,6 @@ async function renderGuruPiketPanel() {
                 <tbody id="gp-schedule-tbody">${scheduleRows}</tbody>
             </table>
             <p id="gp-sched-status" class="hint" style="margin-top:4px"></p>
-
-            <hr style="margin:20px 0;border:none;border-top:1px solid var(--color-border)">
-
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
-                <h4 style="margin:0">Rekap Keterlambatan</h4>
-                <input type="date" id="gp-date-filter" value="${today}"
-                    class="input" style="padding:4px 8px;width:auto">
-            </div>
-            <table class="table" style="width:100%">
-                <thead><tr>
-                    <th>Nama Siswa</th>
-                    <th>Kelas</th>
-                    <th>Jam Datang</th>
-                    <th>Alasan</th>
-                    <th>Dicatat Oleh</th>
-                </tr></thead>
-                <tbody id="gp-late-tbody">${lateTableBody}</tbody>
-            </table>
         `;
 
         // ── Wire: hapus penugasan ──
@@ -437,23 +396,6 @@ async function renderGuruPiketPanel() {
                     btn.disabled = false;
                 }
             });
-        });
-
-        // ── Wire: filter tanggal ──
-        document.getElementById('gp-date-filter')?.addEventListener('change', async (e) => {
-            const date = e.target.value;
-            if (!date) return;
-            const tbody = document.getElementById('gp-late-tbody');
-            tbody.innerHTML = '<tr><td colspan="5" class="hint">Memuat…</td></tr>';
-            try {
-                const rows = await getLateArrivals(date);
-                tbody.innerHTML = rows.length > 0
-                    ? rows.map(lateRow).join('')
-                    : `<tr><td colspan="5" style="text-align:center;color:var(--color-text-muted)">
-                        Belum ada keterlambatan pada tanggal ini.</td></tr>`;
-            } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="5"><div class="alert alert-danger">${esc(err?.message ?? String(err))}</div></td></tr>`;
-            }
         });
 
     } catch (err) {
