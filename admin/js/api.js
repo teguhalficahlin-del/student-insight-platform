@@ -1170,13 +1170,29 @@ export async function revokeBkFromClass(assignmentId) {
 export async function getDutyStaffCandidates() {
     const { data, error } = await supabase
         .from('v_users_staff_directory')
-        .select('user_id, full_name, login_identifier, role_type')
+        .select('user_id, full_name, role_type')
         .in('role_type', ['GURU','BK','WALI_KELAS','KEPSEK',
             'WAKA_KURIKULUM','WAKA_KESISWAAN','WAKA_HUMAS'])
         .eq('is_active', true)
         .order('full_name');
     if (error) throw error;
-    return data ?? [];
+
+    // login_identifier (NIP) tidak ada di v_users_staff_directory (sengaja dikecualikan
+    // karena data sensitif). Fetch terpisah dari users — hanya kolom yang diperlukan.
+    const ids = (data ?? []).map(u => u.user_id);
+    let loginMap = new Map();
+    if (ids.length > 0) {
+        const { data: loginRows } = await supabase
+            .from('users')
+            .select('user_id, login_identifier')
+            .in('user_id', ids);
+        loginMap = new Map((loginRows ?? []).map(u => [u.user_id, u.login_identifier]));
+    }
+
+    return (data ?? []).map(u => ({
+        ...u,
+        login_identifier: loginMap.get(u.user_id) ?? null,
+    }));
 }
 
 /** Ambil jadwal piket aktif untuk tahun ajaran dan semester ini. */
