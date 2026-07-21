@@ -388,3 +388,24 @@ export async function addForumAck(postId, userId, schoolId) {
         );
     if (error) throw error;
 }
+
+export async function getMyLateArrivals(studentId) {
+    try {
+        const { data, error } = await supabase
+            .from('late_arrivals')
+            .select('late_id, late_date, arrival_time, reason')
+            .eq('student_id', studentId)
+            .order('late_date', { ascending: false })
+            .order('arrival_time', { ascending: false });
+        if (error) { console.warn('[late] getMyLateArrivals error:', error.message); return []; }
+        return (data ?? []).map(r => ({
+            late_id:      r.late_id,
+            date:         r.late_date,
+            arrival_time: r.arrival_time,
+            reason:       r.reason ?? '',
+        }));
+    } catch (e) {
+        console.warn('[late] getMyLateArrivals exception:', e);
+        return [];
+    }
+}

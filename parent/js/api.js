@@ -396,3 +396,24 @@ export async function addForumComment(postId, userId, schoolId, body) {
     if (error) throw error;
     return data;
 }
+
+export async function getChildLateArrivals(studentId) {
+    try {
+        const { data, error } = await supabase
+            .from('late_arrivals')
+            .select('late_id, late_date, arrival_time, reason')
+            .eq('student_id', studentId)
+            .order('late_date', { ascending: false })
+            .order('arrival_time', { ascending: false });
+        if (error) { console.warn('[late] getChildLateArrivals error:', error.message); return []; }
+        return (data ?? []).map(r => ({
+            late_id:      r.late_id,
+            date:         r.late_date,
+            arrival_time: r.arrival_time,
+            reason:       r.reason ?? '',
+        }));
+    } catch (e) {
+        console.warn('[late] getChildLateArrivals exception:', e);
+        return [];
+    }
+}

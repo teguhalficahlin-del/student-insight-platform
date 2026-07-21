@@ -15,6 +15,7 @@ import {
     getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
     getMyForumClass, getForumPosts, addForumAck,
     getMyAchievements,
+    getMyLateArrivals,
 } from './api.js';
 
 // ─── State ───────────────────────────────────────────────────
@@ -503,10 +504,11 @@ async function loadObservations() {
     casesHintEl.style.display = 'block';
     document.getElementById('cases-list').innerHTML = '';
 
-    const [obsResult, casesResult, achResult] = await Promise.allSettled([
+    const [obsResult, casesResult, achResult, lateResult] = await Promise.allSettled([
         getMyObservations(student.student_id, dateStart, dateEnd),
         getMyCases(student.student_id),
         getMyAchievements(student.student_id),
+        getMyLateArrivals(student.student_id),
     ]);
 
     if (obsResult.status === 'fulfilled') {
@@ -524,6 +526,7 @@ async function loadObservations() {
     }
 
     renderAchievements(achResult.status === 'fulfilled' ? achResult.value : []);
+    renderLateArrivals(lateResult.status === 'fulfilled' ? lateResult.value : []);
 }
 
 const ACH_CATEGORY_LABEL = { AKADEMIK: 'Akademik', NON_AKADEMIK: 'Non-Akademik', SERTIFIKASI: 'Sertifikasi', PENGHARGAAN: 'Penghargaan' };
@@ -551,6 +554,39 @@ function renderAchievements(rows) {
             </div>
             ${r.description ? `<p class="obs-content" style="margin-top:4px">${esc(r.description)}</p>` : ''}
         </div>`).join('');
+}
+
+function renderLateArrivals(rows) {
+    const hintEl = document.getElementById('late-hint');
+    const bodyEl = document.getElementById('late-body');
+    if (!hintEl || !bodyEl) return;
+    if (!rows.length) {
+        hintEl.style.display = 'block';
+        hintEl.textContent   = 'Belum ada riwayat keterlambatan.';
+        bodyEl.innerHTML     = '';
+        return;
+    }
+    hintEl.style.display = 'none';
+    bodyEl.innerHTML = `
+        <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead>
+                    <tr style="border-bottom:2px solid var(--color-border);text-align:left">
+                        <th style="padding:8px 10px;white-space:nowrap">Tanggal</th>
+                        <th style="padding:8px 10px;white-space:nowrap">Jam Datang</th>
+                        <th style="padding:8px 10px">Alasan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(r => `
+                        <tr style="border-bottom:1px solid var(--color-border)">
+                            <td style="padding:8px 10px;white-space:nowrap">${fmt(r.date)}</td>
+                            <td style="padding:8px 10px;white-space:nowrap">${r.arrival_time ? r.arrival_time.slice(0,5) : '—'}</td>
+                            <td style="padding:8px 10px">${r.reason ? esc(r.reason) : '<span style="color:var(--color-text-muted)">—</span>'}</td>
+                        </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>`;
 }
 
 async function loadObsOnly() {

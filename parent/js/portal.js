@@ -27,6 +27,7 @@ import {
     getForumPosts,
     addForumAck,
     addForumComment,
+    getChildLateArrivals,
 } from './api.js';
 
 const portalTitle    = document.getElementById('portal-title');
@@ -216,7 +217,10 @@ async function showTab(sectionId) {
         await loadSchedule(child.class_id);
     }
     if (key === 'attendance')   await loadAttendance(child.student_id);
-    if (key === 'observations') await loadObservations(child.student_id);
+    if (key === 'observations') {
+        await loadObservations(child.student_id);
+        await loadLateArrivals(child.student_id);
+    }
     if (key === 'cases')        await loadCases(child.student_id);
     if (key === 'forum')         await initForumSection();
 }
@@ -515,6 +519,38 @@ async function loadObservations(studentId) {
         renderObsRows(rows);
     } catch (err) {
         if (!cached) obsListEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
+    }
+}
+
+async function loadLateArrivals(studentId) {
+    const hintEl = document.getElementById('late-hint');
+    const bodyEl = document.getElementById('late-body');
+    if (!hintEl || !bodyEl) return;
+    hintEl.style.display = 'block';
+    hintEl.textContent = 'Memuat…';
+    bodyEl.innerHTML = '';
+    try {
+        const rows = await getChildLateArrivals(studentId);
+        if (!rows.length) {
+            hintEl.textContent = 'Belum ada riwayat keterlambatan.';
+            return;
+        }
+        hintEl.style.display = 'none';
+        bodyEl.innerHTML = `
+            <div style="overflow-x:auto">
+                <table class="data-table">
+                    <thead><tr><th>Tanggal</th><th>Jam Datang</th><th>Alasan</th></tr></thead>
+                    <tbody>${rows.map(r => `
+                        <tr>
+                            <td>${formatDate(r.date)}</td>
+                            <td>${r.arrival_time.slice(0, 5)}</td>
+                            <td>${esc(r.reason || '—')}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>`;
+    } catch (err) {
+        hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
     }
 }
 
