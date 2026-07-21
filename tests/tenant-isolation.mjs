@@ -170,6 +170,7 @@ async function main() {
     for (const t of CORE_TABLES) {
         const { status, body } = await anonGet(anon, `${t}?select=*&limit=1`);
         if (Array.isArray(body) && body.length === 0) log.pass(`${t}: anon dapat [] (RLS menutup)`);
+        else if (!Array.isArray(body) && (status === 401 || status === 403)) log.pass(`${t}: anon ditolak dengan status ${status} (RLS/auth menutup)`);
         else log.fail(`${t}: anon TIDAK kosong (status ${status}, rows ${Array.isArray(body) ? body.length : '?'})`);
     }
 
