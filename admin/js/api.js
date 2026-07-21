@@ -1166,6 +1166,111 @@ export async function revokeBkFromClass(assignmentId) {
     if (error) throw error;
 }
 
+/** Ambil semua staf yang bisa ditugaskan sebagai guru piket. */
+export async function getDutyStaffCandidates() {
+    const { data, error } = await supabase
+        .from('v_users_staff_directory')
+        .select('user_id, full_name, login_identifier, role_type')
+        .in('role_type', ['GURU','BK','WALI_KELAS','KEPSEK',
+            'WAKA_KURIKULUM','WAKA_KESISWAAN','WAKA_HUMAS'])
+        .eq('is_active', true)
+        .order('full_name');
+    if (error) throw error;
+    return data ?? [];
+}
+
+/** Ambil jadwal piket aktif untuk tahun ajaran dan semester ini. */
+export async function getDutySchedules(academicYear, semester) {
+    const { data, error } = await supabase
+        .from('duty_schedules')
+        .select('duty_id, user_id, day_of_week, academic_year, semester, is_active')
+        .eq('academic_year', academicYear)
+        .eq('semester', semester)
+        .eq('is_active', true);
+    if (error) throw error;
+    return data ?? [];
+}
+
+/**
+ * Tetapkan guru piket ke hari tertentu. Idempoten — skip jika sudah ada.
+ */
+export async function assignDutySchedule(
+    userId, dayOfWeek, academicYear, semester, assignedByUserId
+) {
+    const { data: existing } = await supabase
+        .from('duty_schedules')
+        .select('duty_id')
+        .eq('user_id',      userId)
+        .eq('day_of_week',  dayOfWeek)
+        .eq('academic_year', academicYear)
+        .eq('semester',     semester)
+        .eq('is_active',    true)
+        .maybeSingle();
+    if (existing) return 'exists';
+
+    const { data, error } = await supabase
+        .from('duty_schedules')
+        .insert({
+            user_id:             userId,
+            day_of_week:         dayOfWeek,
+            academic_year:       academicYear,
+            semester:            semester,
+            is_active:           true,
+            assigned_by_user_id: assignedByUserId,
+        })
+        .select('duty_id')
+        .single();
+    if (error) throw error;
+    return data.duty_id;
+}
+
+/** Cabut penugasan piket (soft-delete via is_active=false). */
+export async function revokeDutySchedule(dutyId) {
+    const { error } = await supabase
+        .from('duty_schedules')
+        .update({ is_active: false })
+        .eq('duty_id', dutyId);
+    if (error) throw error;
+}
+
+/** Catat siswa terlambat. */
+export async function recordLateArrival(
+    studentId, arrivalTime, lateDate, reason, recordedBy
+) {
+    const { data, error } = await supabase
+        .from('late_arrivals')
+        .insert({
+            student_id:   studentId,
+            recorded_by:  recordedBy,
+            late_date:    lateDate,
+            arrival_time: arrivalTime,
+            reason:       reason ?? null,
+        })
+        .select('late_id')
+        .single();
+    if (error) throw error;
+    return data.late_id;
+}
+
+/** Ambil daftar keterlambatan untuk tanggal tertentu. */
+export async function getLateArrivals(lateDate) {
+    const { data, error } = await supabase
+        .from('late_arrivals')
+        .select(`
+            late_id, arrival_time, reason, late_date,
+            student:students(student_id, full_name, nis,
+                class_enrollment:class_enrollments(
+                    class:classes(name)
+                )
+            ),
+            recorder:users!late_arrivals_recorded_by_fkey(full_name)
+        `)
+        .eq('late_date', lateDate)
+        .order('arrival_time');
+    if (error) throw error;
+    return data ?? [];
+}
+
 /**
  * Tetapkan Guru Wali ke siswa. Idempoten — skip jika sudah ada.
  */
