@@ -708,7 +708,8 @@ async function importDutySchedule(csvText) {
         if (!line) continue;
         const cols = line.split(',').map(c => c.trim());
         const nipGuru = cols[idxNip]  ?? '';
-        const hari    = (cols[idxHari] ?? '').toUpperCase();
+        // Normalisasi: "JUM'AT" (dengan apostrof straight/curly dari Excel) → "JUMAT" (nilai enum DB)
+        const hari    = (cols[idxHari] ?? '').toUpperCase().replace(/JUM[’']AT/, 'JUMAT');
 
         if (!nipGuru || !hari) {
             errors.push({ row: i + 1, reason: 'Baris tidak lengkap' });
