@@ -718,9 +718,13 @@ function initNotifBell() {
                     <div class="notif-item-body">${esc(n.body)}</div>
                     <div style="font-size:11px;color:var(--color-text-muted);margin-top:4px">${fmt(n.created_at)}</div>
                 </div>`).join('');
-            const ids = items.map(n => n.notification_id);
-            await markNotificationsRead(ids);
-            bellBtn.querySelector('.notif-badge')?.remove();
+            dropdown.querySelectorAll('.notif-item').forEach(el => {
+                el.addEventListener('click', async () => {
+                    dropdown.style.display = 'none';
+                    await markNotificationsRead([el.dataset.id]).catch(() => {});
+                    await refresh();
+                });
+            });
         } catch (err) {
             dropdown.innerHTML = `<div class="notif-empty">Gagal memuat notifikasi.</div>`;
         }

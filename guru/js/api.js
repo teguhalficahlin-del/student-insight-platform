@@ -834,7 +834,7 @@ export async function getUnreadNotifCount() {
 export async function getRecentNotifications(limit = 20) {
     const { data, error } = await supabase
         .from('notifications')
-        .select('notification_id, type, title, body, is_read, case_id, created_at')
+        .select('notification_id, type, title, body, is_read, case_id, forum_post_id, late_arrival_id, created_at')
         .eq('is_read', false)
         .order('created_at', { ascending: false })
         .limit(limit);
