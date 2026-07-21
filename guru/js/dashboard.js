@@ -42,6 +42,7 @@ import {
     getKepsekApprovalHistory, getWakaApprovalHistory, getDisahkanWakaDocs,
     getTeacherProfile, saveTeacherProfile,
     getTeachingContext, saveTeachingContext,
+    isOnDutyToday, getTodayLateArrivals, recordLateArrival, deleteLateArrival,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 
@@ -225,7 +226,7 @@ async function init() {
         : 'Guru';
     document.getElementById('hdr-role').textContent = roleLabel;
 
-    buildTabs();
+    await buildTabs();
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display     = 'block';
 
@@ -324,17 +325,17 @@ const TAB_SHORT = {
     waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', waka_humas: 'Humas',
     kepsek: 'Kepsek', ks_admin: 'Admin',
     kasus: 'Pembinaan', jurnal: 'Jurnal', observasi: 'Catatan', forum: 'Forum',
-    perangkat_ajar: 'Perangkat',
+    perangkat_ajar: 'Perangkat', piket: 'Piket',
 };
 const TAB_ICON = {
     guru: 'ti-home', wali_kelas: 'ti-users', bk: 'ti-heart-handshake', kaprodi: 'ti-building',
     waka_kesiswaan: 'ti-school', waka_kurikulum: 'ti-book', waka_humas: 'ti-briefcase',
     kepsek: 'ti-chart-line', ks_admin: 'ti-shield-check',
     kasus: 'ti-alert-triangle', jurnal: 'ti-notebook', observasi: 'ti-notes', forum: 'ti-messages',
-    perangkat_ajar: 'ti-book-2',
+    perangkat_ajar: 'ti-book-2', piket: 'ti-clipboard-list',
 };
 
-function buildTabs() {
+async function buildTabs() {
     const nav    = document.getElementById('tab-nav');
     const botNav = document.getElementById('bottom-nav');
     const tabs = [];
@@ -342,6 +343,8 @@ function buildTabs() {
     jabatan.forEach(j => tabs.push({ key: j, label: jabatanLabel(j) }));
     tabs.push({ key: 'kasus', label: 'Pembinaan Siswa' });
     if (jabatan.includes('kepsek')) tabs.push({ key: 'ks_admin', label: 'Kelola Admin' });
+    const onDuty = await isOnDutyToday();
+    if (onDuty) tabs.push({ key: 'piket', label: 'Piket' });
     if (isTeacher) tabs.push({ key: 'observasi', label: 'Catatan Siswa' });
     if (isTeacher) tabs.push({ key: 'jurnal', label: 'Jurnal Mengajar' });
     if (isTeacher) tabs.push({ key: 'perangkat_ajar', label: 'Perangkat Ajar' });
@@ -388,6 +391,7 @@ async function loadTabContent(key) {
             case 'kepsek':      await initKepsekTab(); break;
             case 'ks_admin':    await initKsAdminTab(); break;
             case 'kasus':       await initKasusTab(); break;
+            case 'piket':       await initPiketTab(); break;
             case 'jurnal':      await initJurnalTab(); break;
             case 'observasi':   await initObsTab(); break;
             case 'perangkat_ajar': await initPerangkatAjarTab(); break;
@@ -3602,6 +3606,243 @@ async function refreshKasusDetail() {
     } catch (err) {
         console.error('[kasus] refresh error', err);
     }
+}
+
+// ─── TAB PIKET ───────────────────────────────────────────────
+
+const PIKET_OPEN_HOUR  = 7;
+const PIKET_OPEN_MIN   = 0;
+const PIKET_CLOSE_HOUR = 16;
+const PIKET_CLOSE_MIN  = 0;
+const PIKET_LATE_LIMIT = '07:15';
+
+function _piketFormActive() {
+    const now = new Date();
+    const mins = now.getHours() * 60 + now.getMinutes();
+    const open  = PIKET_OPEN_HOUR  * 60 + PIKET_OPEN_MIN;
+    const close = PIKET_CLOSE_HOUR * 60 + PIKET_CLOSE_MIN;
+    return mins >= open && mins < close;
+}
+
+let _piketTabInit = false;
+let _piketDebounceTimer = null;
+let _piketSelectedStudent = null;
+
+async function initPiketTab() {
+    const panel = document.querySelector('#tab-piket .page-body');
+    if (!panel) return;
+
+    panel.innerHTML = `
+        <div class="section-card" id="piket-ringkasan-card">
+            <h3>Ringkasan Hari Ini</h3>
+            <div id="piket-ringkasan-content"><p style="color:var(--color-text-muted);font-size:13px">Memuat…</p></div>
+        </div>
+        <div class="section-card" id="piket-form-card">
+            <h3>Catat Keterlambatan</h3>
+            <div id="piket-form-wrap"></div>
+        </div>
+        <div class="section-card" id="piket-rekap-card">
+            <h3>Rekap Hari Ini</h3>
+            <div id="piket-rekap-content"><p style="color:var(--color-text-muted);font-size:13px">Memuat…</p></div>
+        </div>`;
+
+    _piketTabInit = true;
+    await _piketRenderAll();
+}
+
+async function _piketRenderAll() {
+    await Promise.all([_piketRenderRingkasan(), _piketRenderForm(), _piketRenderRekap()]);
+}
+
+async function _piketRenderRingkasan() {
+    const el = document.getElementById('piket-ringkasan-content');
+    if (!el) return;
+    const arrivals = await getTodayLateArrivals();
+    const active   = _piketFormActive();
+    el.innerHTML = `
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:flex-start;font-size:14px">
+            <div style="background:var(--color-bg);border-radius:8px;padding:12px 20px;text-align:center;min-width:100px">
+                <div style="font-size:2rem;font-weight:700;color:var(--color-primary)">${arrivals.length}</div>
+                <div style="color:var(--color-text-muted);font-size:12px">Siswa terlambat</div>
+            </div>
+            <div style="padding-top:4px">
+                <p style="margin:0 0 4px"><strong>Batas masuk:</strong> ${PIKET_LATE_LIMIT}</p>
+                <p style="margin:0"><strong>Form pencatatan:</strong>
+                    <span style="color:${active ? 'var(--color-success,#16a34a)' : 'var(--color-danger,#dc2626)'}">
+                        ${active ? '✓ Aktif (07:00–16:00)' : '✗ Di luar jam operasional'}
+                    </span>
+                </p>
+            </div>
+        </div>`;
+}
+
+async function _piketRenderForm() {
+    const wrap = document.getElementById('piket-form-wrap');
+    if (!wrap) return;
+    const active = _piketFormActive();
+    const nowTime = new Date().toTimeString().slice(0, 5);
+
+    wrap.innerHTML = `
+        ${!active ? `<p style="color:var(--color-text-muted);font-size:13px;font-style:italic">Form tidak tersedia di luar jam 07:00–16:00.</p>` : ''}
+        <div style="${active ? '' : 'opacity:0.5;pointer-events:none'}">
+            <div class="field" style="position:relative;margin-bottom:12px">
+                <label style="font-size:13px;font-weight:500;display:block;margin-bottom:4px">Cari Siswa</label>
+                <input type="text" id="piket-search-input" placeholder="Ketik nama atau NIS…"
+                       class="form-control" autocomplete="off" ${active ? '' : 'disabled'}>
+                <div id="piket-search-results" style="position:absolute;top:100%;left:0;right:0;
+                     background:var(--color-surface);border:1px solid var(--color-border);
+                     border-radius:6px;z-index:100;display:none;max-height:200px;overflow-y:auto"></div>
+            </div>
+            <div id="piket-selected-student" style="display:none;margin-bottom:12px;padding:8px 12px;
+                 background:var(--color-bg);border-radius:6px;font-size:13px"></div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+                <div class="field" style="flex:1;min-width:120px">
+                    <label style="font-size:13px;font-weight:500;display:block;margin-bottom:4px">Jam Datang</label>
+                    <input type="time" id="piket-arrival-time" class="form-control"
+                           value="${nowTime}" min="07:00" max="16:00" ${active ? '' : 'disabled'}>
+                </div>
+            </div>
+            <div class="field" style="margin-bottom:12px">
+                <label style="font-size:13px;font-weight:500;display:block;margin-bottom:4px">Alasan <span style="color:var(--color-text-muted)">(opsional)</span></label>
+                <textarea id="piket-reason" class="form-control" rows="2"
+                          placeholder="Misal: macet, bangun kesiangan…" ${active ? '' : 'disabled'}></textarea>
+            </div>
+            <button id="piket-submit-btn" class="btn btn-primary" ${active ? '' : 'disabled'}>Catat Keterlambatan</button>
+            <div id="piket-form-msg" style="margin-top:8px;font-size:13px"></div>
+        </div>`;
+
+    if (!active) return;
+
+    const searchInput = document.getElementById('piket-search-input');
+    const resultsEl   = document.getElementById('piket-search-results');
+    const selectedEl  = document.getElementById('piket-selected-student');
+    const submitBtn   = document.getElementById('piket-submit-btn');
+    const msgEl       = document.getElementById('piket-form-msg');
+    _piketSelectedStudent = null;
+
+    searchInput.addEventListener('input', () => {
+        clearTimeout(_piketDebounceTimer);
+        _piketDebounceTimer = setTimeout(async () => {
+            const q = searchInput.value.trim();
+            if (q.length < 2) { resultsEl.style.display = 'none'; return; }
+            try {
+                const results = await searchStudents(q, currentUser.school_id);
+                if (!results.length) {
+                    resultsEl.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--color-text-muted)">Siswa tidak ditemukan.</div>';
+                } else {
+                    resultsEl.innerHTML = results.map(s => `
+                        <div data-id="${esc(s.student_id)}" data-name="${esc(s.full_name)}" data-class="${esc(s.class_name)}"
+                             style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--color-border)"
+                             class="piket-result-item">
+                            <strong>${esc(s.full_name)}</strong>
+                            <span style="color:var(--color-text-muted)"> — ${esc(s.class_name || '—')} · ${esc(s.nis || '')}</span>
+                        </div>`).join('');
+                    resultsEl.querySelectorAll('.piket-result-item').forEach(item => {
+                        item.addEventListener('mouseenter', () => { item.style.background = 'var(--color-bg)'; });
+                        item.addEventListener('mouseleave', () => { item.style.background = ''; });
+                        item.addEventListener('click', () => {
+                            _piketSelectedStudent = { student_id: item.dataset.id, full_name: item.dataset.name, class_name: item.dataset.class };
+                            searchInput.value = item.dataset.name;
+                            resultsEl.style.display = 'none';
+                            selectedEl.style.display = 'block';
+                            selectedEl.innerHTML = `<i class="ti ti-user-check" style="color:var(--color-success,#16a34a)"></i>
+                                <strong>${esc(item.dataset.name)}</strong> — ${esc(item.dataset.class)}`;
+                        });
+                    });
+                }
+                resultsEl.style.display = 'block';
+            } catch { resultsEl.style.display = 'none'; }
+        }, 300);
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !resultsEl.contains(e.target)) {
+            resultsEl.style.display = 'none';
+        }
+    }, { once: false });
+
+    submitBtn.addEventListener('click', async () => {
+        msgEl.textContent = '';
+        if (!_piketSelectedStudent) { msgEl.style.color = 'var(--color-danger,#dc2626)'; msgEl.textContent = 'Pilih siswa dulu dari hasil pencarian.'; return; }
+        const arrivalTime = document.getElementById('piket-arrival-time').value;
+        if (!arrivalTime) { msgEl.style.color = 'var(--color-danger,#dc2626)'; msgEl.textContent = 'Isi jam datang.'; return; }
+        const reason = document.getElementById('piket-reason').value.trim();
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Menyimpan…';
+        try {
+            await recordLateArrival(_piketSelectedStudent.student_id, arrivalTime, reason || null, currentUser.school_id);
+            msgEl.style.color = 'var(--color-success,#16a34a)';
+            msgEl.textContent = `✓ Keterlambatan ${_piketSelectedStudent.full_name} berhasil dicatat.`;
+            _piketSelectedStudent = null;
+            searchInput.value = '';
+            selectedEl.style.display = 'none';
+            selectedEl.innerHTML = '';
+            document.getElementById('piket-reason').value = '';
+            await Promise.all([_piketRenderRingkasan(), _piketRenderRekap()]);
+        } catch (err) {
+            msgEl.style.color = 'var(--color-danger,#dc2626)';
+            msgEl.textContent = fe(err, 's');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Catat Keterlambatan';
+        }
+    });
+}
+
+async function _piketRenderRekap() {
+    const el = document.getElementById('piket-rekap-content');
+    if (!el) return;
+    el.innerHTML = '<p style="color:var(--color-text-muted);font-size:13px">Memuat…</p>';
+    const arrivals = await getTodayLateArrivals();
+    if (!arrivals.length) {
+        el.innerHTML = '<p style="color:var(--color-text-muted);font-size:13px;font-style:italic">Belum ada keterlambatan hari ini.</p>';
+        return;
+    }
+    el.innerHTML = `
+        <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead>
+                    <tr style="border-bottom:2px solid var(--color-border);text-align:left">
+                        <th style="padding:8px 10px;white-space:nowrap">Nama Siswa</th>
+                        <th style="padding:8px 10px;white-space:nowrap">Kelas</th>
+                        <th style="padding:8px 10px;white-space:nowrap">Jam Datang</th>
+                        <th style="padding:8px 10px">Alasan</th>
+                        <th style="padding:8px 10px;white-space:nowrap">Dicatat Oleh</th>
+                        <th style="padding:8px 10px">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${arrivals.map(r => `
+                        <tr style="border-bottom:1px solid var(--color-border)" data-late-id="${esc(r.late_id)}">
+                            <td style="padding:8px 10px">${esc(r.student_name)}</td>
+                            <td style="padding:8px 10px;white-space:nowrap">${esc(r.class_name)}</td>
+                            <td style="padding:8px 10px;white-space:nowrap">${fmtTime(r.arrival_time)}</td>
+                            <td style="padding:8px 10px">${r.reason ? esc(r.reason) : '<span style="color:var(--color-text-muted)">—</span>'}</td>
+                            <td style="padding:8px 10px;white-space:nowrap">${esc(r.recorder_name)}</td>
+                            <td style="padding:8px 10px">
+                                ${r.recorded_by === currentUser.user_id
+                                    ? `<button class="btn btn-sm btn-danger piket-delete-btn" data-id="${esc(r.late_id)}">Hapus</button>`
+                                    : ''}
+                            </td>
+                        </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>`;
+
+    el.querySelectorAll('.piket-delete-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm('Hapus catatan keterlambatan ini?')) return;
+            btn.disabled = true;
+            try {
+                await deleteLateArrival(btn.dataset.id);
+                await Promise.all([_piketRenderRingkasan(), _piketRenderRekap()]);
+            } catch (err) {
+                alert(fe(err, 'h'));
+                btn.disabled = false;
+            }
+        });
+    });
 }
 
 // ─── TAB JURNAL MENGAJAR ─────────────────────────────────────

@@ -1617,3 +1617,72 @@ export async function saveTeachingContext(schoolId, context) {
         });
     if (error) throw error;
 }
+
+// ─── GURU PIKET ──────────────────────────────────────────────
+
+export async function isOnDutyToday() {
+    try {
+        const { data, error } = await supabase.rpc('fn_is_on_duty_today');
+        if (error) { console.warn('[piket] isOnDutyToday error:', error.message); return false; }
+        return !!data;
+    } catch (e) {
+        console.warn('[piket] isOnDutyToday exception:', e);
+        return false;
+    }
+}
+
+export async function getTodayLateArrivals() {
+    try {
+        const today = new Date().toISOString().slice(0, 10);
+        const { data, error } = await supabase
+            .from('late_arrivals')
+            .select(`
+                late_id, arrival_time, reason, late_date, recorded_by,
+                student:students ( student_id, full_name,
+                    class_enrollments ( classes ( name ) )
+                ),
+                recorder:users!late_arrivals_recorded_by_fkey ( full_name )
+            `)
+            .eq('late_date', today)
+            .order('arrival_time', { ascending: true });
+        if (error) { console.warn('[piket] getTodayLateArrivals error:', error.message); return []; }
+        return (data ?? []).map(r => ({
+            late_id:      r.late_id,
+            arrival_time: r.arrival_time,
+            reason:       r.reason ?? '',
+            late_date:    r.late_date,
+            recorded_by:  r.recorded_by,
+            student_name: r.student?.full_name ?? '—',
+            class_name:   r.student?.class_enrollments?.[0]?.classes?.name ?? '—',
+            recorder_name: r.recorder?.full_name ?? '—',
+        }));
+    } catch (e) {
+        console.warn('[piket] getTodayLateArrivals exception:', e);
+        return [];
+    }
+}
+
+export async function recordLateArrival(studentId, arrivalTime, reason, schoolId) {
+    const today = new Date().toISOString().slice(0, 10);
+    const userRow = await getCurrentUserRow();
+    if (!userRow) throw new Error('Sesi tidak valid. Silakan login ulang.');
+    const payload = {
+        student_id:  studentId,
+        arrival_time: arrivalTime,
+        reason:      reason ?? null,
+        late_date:   today,
+        recorded_by: userRow.user_id,
+        school_id:   schoolId,
+    };
+    const { error } = await supabase.from('late_arrivals').insert(payload);
+    if (error) throw error;
+    return { success: true };
+}
+
+export async function deleteLateArrival(lateId) {
+    const { error } = await supabase
+        .from('late_arrivals')
+        .delete()
+        .eq('late_id', lateId);
+    if (error) throw error;
+}
