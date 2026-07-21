@@ -7,8 +7,7 @@
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { supabase, getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getForumGuruWaliCandidates, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent,
-    getDutyStaffCandidates, getDutySchedules, revokeDutySchedule,
-    getLateArrivalsByRange, getLateArrivalsAggregate } from './api.js';
+    getDutyStaffCandidates, getDutySchedules, revokeDutySchedule } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
 function esc(s) {
@@ -53,7 +52,6 @@ function showPwModal(nama, pw) {
 
 const panelContent = document.getElementById('panel-content');
 let schoolSlug = null; // diisi saat init, dipakai panel renderers
-let adminUser  = null; // diisi saat init, dipakai panel keterlambatan
 
 const PANEL_RENDERERS = {
     setup:              renderSetupPanel,
@@ -73,7 +71,6 @@ const PANEL_RENDERERS = {
     'activity-log':     renderActivityLogPanel,
     'forum-kelas':      renderForumKelasPanel,
     'guru-piket':       renderGuruPiketPanel,
-    'keterlambatan':    renderKeterlambatanPanel,
 };
 
 function navigateToPanel(panelId) {
@@ -405,111 +402,6 @@ async function renderGuruPiketPanel() {
         panelContent.innerHTML =
             `<div class="alert alert-danger">${esc(err?.message ?? String(err))}</div>`;
     }
-}
-
-async function renderKeterlambatanPanel() {
-    const isWaka   = adminUser?.role_type === 'WAKA_KESISWAAN' || adminUser?.is_waka_kesiswaan;
-    const isKepsek = adminUser?.role_type === 'KEPSEK'         || adminUser?.is_kepsek;
-    const isAdmin  = adminUser?.role_type === 'ADMINISTRATIVE';
-
-    if (!isWaka && !isKepsek && !isAdmin) {
-        panelContent.innerHTML = '<p class="hint">Anda tidak memiliki akses ke panel ini.</p>';
-        return;
-    }
-
-    const today    = new Date();
-    const monthAgo = new Date(today);
-    monthAgo.setDate(monthAgo.getDate() - 30);
-    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const fmtDisp = d => new Date(d + 'T00:00:00').toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
-
-    const defaultStart = fmt(monthAgo);
-    const defaultEnd   = fmt(today);
-
-    panelContent.innerHTML = `
-        <h3>Rekap Keterlambatan</h3>
-        <p class="hint" style="margin-bottom:12px">
-            ${isWaka || isAdmin ? 'Rekap lengkap per siswa (Waka Kesiswaan).' : 'Rekap agregat per hari (Kepsek).'}
-        </p>
-        <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:16px">
-            <div>
-                <label style="font-size:13px;display:block;margin-bottom:4px" for="late-date-start">Dari</label>
-                <input type="date" id="late-date-start" class="input" value="${defaultStart}" style="width:150px">
-            </div>
-            <div>
-                <label style="font-size:13px;display:block;margin-bottom:4px" for="late-date-end">Sampai</label>
-                <input type="date" id="late-date-end" class="input" value="${defaultEnd}" style="width:150px">
-            </div>
-            <button id="late-filter-btn" class="btn btn-primary">Tampilkan</button>
-        </div>
-        <div id="late-result"><p class="hint">Memuat…</p></div>
-    `;
-
-    async function loadLate() {
-        const start  = document.getElementById('late-date-start').value;
-        const end    = document.getElementById('late-date-end').value;
-        const result = document.getElementById('late-result');
-        if (!start || !end || start > end) {
-            result.innerHTML = '<p class="hint" style="color:var(--color-danger)">Rentang tanggal tidak valid.</p>';
-            return;
-        }
-        result.innerHTML = '<p class="hint">Memuat…</p>';
-        try {
-            if (isWaka || isAdmin) {
-                const rows = await getLateArrivalsByRange(start, end);
-                if (!rows.length) {
-                    result.innerHTML = '<p class="hint">Tidak ada catatan keterlambatan pada rentang ini.</p>';
-                    return;
-                }
-                result.innerHTML = `
-                    <p class="hint" style="margin-bottom:8px">${rows.length} catatan ditemukan</p>
-                    <div style="overflow-x:auto">
-                    <table class="table" style="width:100%">
-                        <thead><tr>
-                            <th>Tanggal</th><th>Nama Siswa</th><th>NIS</th>
-                            <th>Kelas</th><th>Jam Datang</th><th>Alasan</th><th>Dicatat Oleh</th>
-                        </tr></thead>
-                        <tbody>${rows.map(r => `
-                            <tr>
-                                <td style="white-space:nowrap">${fmtDisp(r.date)}</td>
-                                <td>${esc(r.student_name)}</td>
-                                <td>${esc(r.nis)}</td>
-                                <td>${esc(r.class_name)}</td>
-                                <td style="white-space:nowrap">${r.arrival_time.slice(0,5)}</td>
-                                <td>${esc(r.reason || '—')}</td>
-                                <td>${esc(r.recorder)}</td>
-                            </tr>`).join('')}
-                        </tbody>
-                    </table>
-                    </div>`;
-            } else {
-                const rows = await getLateArrivalsAggregate(start, end);
-                if (!rows.length) {
-                    result.innerHTML = '<p class="hint">Tidak ada catatan keterlambatan pada rentang ini.</p>';
-                    return;
-                }
-                const total = rows.reduce((s, r) => s + r.total, 0);
-                result.innerHTML = `
-                    <p class="hint" style="margin-bottom:8px">Total: <strong>${total}</strong> kejadian dalam ${rows.length} hari</p>
-                    <div style="overflow-x:auto">
-                    <table class="table" style="width:100%;max-width:400px">
-                        <thead><tr><th>Tanggal</th><th style="text-align:right">Jumlah Siswa Terlambat</th></tr></thead>
-                        <tbody>${rows.map(r => `
-                            <tr>
-                                <td>${fmtDisp(r.date)}</td>
-                                <td style="text-align:right;font-weight:600">${r.total}</td>
-                            </tr>`).join('')}
-                        </tbody>
-                    </table>
-                    </div>`;
-            }
-        } catch (err) {
-            result.innerHTML = `<div class="alert alert-danger">${esc(err?.message ?? String(err))}</div>`;
-        }
-    }
-
-    document.getElementById('late-filter-btn').addEventListener('click', loadLate);
-    await loadLate();
 }
 
 function renderComingSoon(panel) {
@@ -2383,7 +2275,6 @@ async function renderExportPanel() {
     ]);
 
     if (!requireAdministrativeOrRedirect(userRow)) return;
-    adminUser = userRow;
 
     applyBrandingById(userRow.school_id, supabase);
 

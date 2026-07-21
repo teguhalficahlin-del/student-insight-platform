@@ -43,6 +43,7 @@ import {
     getTeacherProfile, saveTeacherProfile,
     getTeachingContext, saveTeachingContext,
     isOnDutyToday, getTodayLateArrivals, recordLateArrival, deleteLateArrival,
+    getLateArrivalsByRange, getLateArrivalsAggregate,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 
@@ -1583,7 +1584,12 @@ async function initWakaKesiswaanTab() {
     document.getElementById('wk-att-end').value   = today;
     document.getElementById('wk-att-filter-btn').onclick = loadWkAttendanceRecap;
 
+    document.getElementById('wk-late-start').value = firstOfMonth;
+    document.getElementById('wk-late-end').value   = today;
+    document.getElementById('wk-late-filter-btn').onclick = loadWkLateRecap;
+
     await loadWkAttendanceRecap();
+    await loadWkLateRecap();
 }
 
 function buildAttStatCards(rows) {
@@ -1812,6 +1818,47 @@ async function loadWkAttendanceRecap() {
     }
 }
 
+async function loadWkLateRecap() {
+    const start     = document.getElementById('wk-late-start').value;
+    const end       = document.getElementById('wk-late-end').value;
+    const container = document.getElementById('wk-late-recap');
+    if (!start || !end || start > end) {
+        container.innerHTML = '<p class="hint" style="color:var(--color-danger)">Rentang tanggal tidak valid.</p>';
+        return;
+    }
+    container.innerHTML = '<p class="hint">Memuat…</p>';
+    try {
+        const rows = await getLateArrivalsByRange(start, end);
+        if (!rows.length) {
+            container.innerHTML = '<p class="hint">Tidak ada catatan keterlambatan pada rentang ini.</p>';
+            return;
+        }
+        const fmtDisp = d => new Date(d + 'T00:00:00').toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
+        container.innerHTML = `
+            <p class="hint" style="margin-bottom:8px">${rows.length} catatan ditemukan</p>
+            <div style="overflow-x:auto">
+            <table class="table" style="width:100%">
+                <thead><tr>
+                    <th>Tanggal</th><th>Nama Siswa</th><th>NIS</th>
+                    <th>Kelas</th><th>Jam Datang</th><th>Alasan</th><th>Dicatat Oleh</th>
+                </tr></thead>
+                <tbody>${rows.map(r => `
+                    <tr>
+                        <td style="white-space:nowrap">${fmtDisp(r.date)}</td>
+                        <td>${esc(r.student_name)}</td>
+                        <td>${esc(r.nis)}</td>
+                        <td>${esc(r.class_name)}</td>
+                        <td style="white-space:nowrap">${r.arrival_time.slice(0,5)}</td>
+                        <td>${esc(r.reason || '—')}</td>
+                        <td>${esc(r.recorder)}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+            </div>`;
+    } catch (err) {
+        container.innerHTML = `<div class="alert alert-danger">${esc(fe(err))}</div>`;
+    }
+}
 
 const HANDLER_ROLE_LABELS = {
     GURU: 'Guru', WALI_KELAS: 'Wali Kelas', BK: 'BK', KAPRODI: 'Kaprodi',
@@ -2671,9 +2718,15 @@ async function initKepsekTab() {
         // Default date range: 7 hari terakhir
         document.getElementById('ks-range-start').value = localDateStr(new Date(Date.now() - 6 * 86400000));
         document.getElementById('ks-range-end').value   = localDateStr();
+
+        // Wire keterlambatan filter
+        document.getElementById('ks-late-start').value = localDateStr(new Date(Date.now() - 29 * 86400000));
+        document.getElementById('ks-late-end').value   = localDateStr();
+        document.getElementById('ks-late-filter-btn').addEventListener('click', loadKsLateRecap);
     }
     await loadKepsekMonitoring('7_hari');
     await loadKepsekDisahkanDocs();
+    await loadKsLateRecap();
 }
 
 let _ksAdminTabInit = false;
@@ -2867,6 +2920,44 @@ window.confirmRemoveAdmin = async function(btn) {
         btn.disabled = false;
     }
 };
+
+async function loadKsLateRecap() {
+    const start     = document.getElementById('ks-late-start').value;
+    const end       = document.getElementById('ks-late-end').value;
+    const container = document.getElementById('ks-late-recap');
+    if (!start || !end || start > end) {
+        container.innerHTML = '<p class="hint" style="color:var(--color-danger)">Rentang tanggal tidak valid.</p>';
+        return;
+    }
+    container.innerHTML = '<p class="hint">Memuat…</p>';
+    try {
+        const rows = await getLateArrivalsAggregate(start, end);
+        if (!rows.length) {
+            container.innerHTML = '<p class="hint">Tidak ada catatan keterlambatan pada rentang ini.</p>';
+            return;
+        }
+        const total = rows.reduce((s, r) => s + r.total, 0);
+        const fmtDisp = d => new Date(d + 'T00:00:00').toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
+        container.innerHTML = `
+            <p class="hint" style="margin-bottom:8px">Total: <strong>${total}</strong> kejadian dalam ${rows.length} hari</p>
+            <div style="overflow-x:auto">
+            <table class="table" style="width:100%;max-width:420px">
+                <thead><tr>
+                    <th>Tanggal</th>
+                    <th style="text-align:right">Jumlah Siswa Terlambat</th>
+                </tr></thead>
+                <tbody>${rows.map(r => `
+                    <tr>
+                        <td>${fmtDisp(r.date)}</td>
+                        <td style="text-align:right;font-weight:600">${r.total}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+            </div>`;
+    } catch (err) {
+        container.innerHTML = `<div class="alert alert-danger">${esc(fe(err))}</div>`;
+    }
+}
 
 // ─── TAB KASUS ───────────────────────────────────────────────
 

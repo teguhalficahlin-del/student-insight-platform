@@ -579,6 +579,22 @@
                 <div id="wk-att-recap"><p class="hint">Pilih rentang tanggal lalu klik Filter.</p></div>
             </div>
 
+            <div class="section-card">
+                <h3>Rekap Keterlambatan</h3>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="wk-late-start" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">Dari:</label>
+                        <input type="date" id="wk-late-start" class="input" style="flex:1;min-width:0">
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="wk-late-end" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">s/d:</label>
+                        <input type="date" id="wk-late-end" class="input" style="flex:1;min-width:0">
+                        <button class="btn btn-secondary btn-sm" id="wk-late-filter-btn">Filter</button>
+                    </div>
+                </div>
+                <div id="wk-late-recap"><p class="hint">Memuat…</p></div>
+            </div>
+
         </div>
     </div>
 
@@ -757,6 +773,22 @@
             <div class="section-card" id="ks-disahkan-section">
                 <h3 style="margin:0 0 12px">Perangkat Ajar Disahkan Waka Kurikulum</h3>
                 <div id="ks-disahkan-list"><p class="hint">Memuat…</p></div>
+            </div>
+
+            <div class="section-card">
+                <h3>Rekap Keterlambatan</h3>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="ks-late-start" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">Dari:</label>
+                        <input type="date" id="ks-late-start" class="input" style="flex:1;min-width:0">
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label for="ks-late-end" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">s/d:</label>
+                        <input type="date" id="ks-late-end" class="input" style="flex:1;min-width:0">
+                        <button class="btn btn-secondary btn-sm" id="ks-late-filter-btn">Filter</button>
+                    </div>
+                </div>
+                <div id="ks-late-recap"><p class="hint">Memuat…</p></div>
             </div>
 
         </div>

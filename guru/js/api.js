@@ -1686,3 +1686,53 @@ export async function deleteLateArrival(lateId) {
         .eq('late_id', lateId);
     if (error) throw error;
 }
+
+export async function getLateArrivalsByRange(dateStart, dateEnd) {
+    const { data, error } = await supabase
+        .from('late_arrivals')
+        .select(`
+            late_id, late_date, arrival_time, reason,
+            student:students(
+                student_id, full_name, nis,
+                class_enrollment:class_enrollments(
+                    class:classes(name)
+                )
+            ),
+            recorder:users!late_arrivals_recorded_by_fkey(full_name)
+        `)
+        .gte('late_date', dateStart)
+        .lte('late_date', dateEnd)
+        .order('late_date', { ascending: false })
+        .order('arrival_time', { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map(r => {
+        const enrollment = r.student?.class_enrollment ?? [];
+        const latest = enrollment[enrollment.length - 1];
+        return {
+            late_id:      r.late_id,
+            date:         r.late_date,
+            arrival_time: r.arrival_time,
+            reason:       r.reason ?? '',
+            student_name: r.student?.full_name ?? '—',
+            nis:          r.student?.nis ?? '—',
+            class_name:   latest?.class?.name ?? '—',
+            recorder:     r.recorder?.full_name ?? '—',
+        };
+    });
+}
+
+export async function getLateArrivalsAggregate(dateStart, dateEnd) {
+    const { data, error } = await supabase
+        .from('late_arrivals')
+        .select('late_date')
+        .gte('late_date', dateStart)
+        .lte('late_date', dateEnd);
+    if (error) throw error;
+    const countMap = new Map();
+    for (const r of (data ?? [])) {
+        countMap.set(r.late_date, (countMap.get(r.late_date) ?? 0) + 1);
+    }
+    return Array.from(countMap.entries())
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([date, total]) => ({ date, total }));
+}
