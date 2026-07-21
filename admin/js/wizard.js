@@ -29,6 +29,8 @@ import {
     getBkAssignments, getGuruWaliAssignments,
     assignBkToClass, revokeBkFromClass,
     assignGuruWaliToStudent, revokeGuruWaliFromStudent,
+    getDutyStaffCandidates, getDutySchedules,
+    assignDutySchedule, revokeDutySchedule,
     wizardResetStudents, wizardResetSchedules,
     deleteUserWithAuth,
     logout,
@@ -470,6 +472,12 @@ let _wzFkGwAssignments  = [];
 let _wzFkAcademicYear   = null;
 let _wzFkCurrentUserId  = null;
 
+let _wzGpTab         = null;
+let _wzGpStaff       = [];
+let _wzGpSchedules   = [];
+let _wzGpAcademicYear = null;
+let _wzGpSemester    = null;
+
 // ── Import BK & Guru Wali ─────────────────────────────────
 
 /**
@@ -658,6 +666,80 @@ async function importForumGuruWali(csvText) {
     return { success, skipped, errors };
 }
 
+const VALID_DAYS = new Set(['SENIN','SELASA','RABU','KAMIS','JUMAT','SABTU']);
+
+/**
+ * Import jadwal piket dari CSV.
+ * Format kolom: nip_guru, hari
+ * Return: { success, skipped, errors: [{row, reason}] }
+ */
+async function importDutySchedule(csvText) {
+    const lines = csvText.trim().split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const idxNip = headers.indexOf('nip_guru');
+    const idxHari = headers.indexOf('hari');
+
+    if (idxNip < 0 || idxHari < 0) {
+        throw new Error(
+            'Header CSV tidak sesuai. Kolom wajib: nip_guru, hari'
+        );
+    }
+
+    const config = await getSchoolConfig();
+    const academicYear = _wzGpAcademicYear ?? config.current_academic_year;
+    const semester     = _wzGpSemester    ?? config.current_semester ?? 1;
+    const currentUserRow = await getCurrentUserRow();
+
+    const { data: staffRows } = await supabase
+        .from('users')
+        .select('user_id, login_identifier')
+        .in('role_type', ['GURU','BK','WALI_KELAS','KEPSEK',
+            'WAKA_KURIKULUM','WAKA_KESISWAAN','WAKA_HUMAS'])
+        .eq('is_active', true);
+    const staffByNip = new Map(
+        (staffRows ?? []).map(u => [u.login_identifier, u.user_id])
+    );
+
+    let success = 0, skipped = 0;
+    const errors = [];
+
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const cols = line.split(',').map(c => c.trim());
+        const nipGuru = cols[idxNip]  ?? '';
+        const hari    = (cols[idxHari] ?? '').toUpperCase();
+
+        if (!nipGuru || !hari) {
+            errors.push({ row: i + 1, reason: 'Baris tidak lengkap' });
+            continue;
+        }
+        if (!VALID_DAYS.has(hari)) {
+            errors.push({ row: i + 1, reason: `Nilai hari "${hari}" tidak valid. Gunakan: SENIN, SELASA, RABU, KAMIS, JUMAT, SABTU` });
+            continue;
+        }
+
+        const userId = staffByNip.get(nipGuru);
+        if (!userId) {
+            errors.push({ row: i + 1, reason: `Guru dengan NIP "${nipGuru}" tidak ditemukan` });
+            continue;
+        }
+
+        try {
+            const result = await assignDutySchedule(
+                userId, hari, academicYear, semester,
+                currentUserRow?.user_id ?? null
+            );
+            if (result === 'exists') skipped++;
+            else success++;
+        } catch (err) {
+            errors.push({ row: i + 1, reason: err.message ?? 'Gagal menyimpan' });
+        }
+    }
+
+    return { success, skipped, errors };
+}
+
 async function renderForumAssignmentStep() {
     contentEl.innerHTML = '<p class="hint">Memuat data penugasan…</p>';
     try {
@@ -667,13 +749,18 @@ async function renderForumAssignmentStep() {
         const userRow = await getCurrentUserRow();
         _wzFkCurrentUserId = userRow?.user_id ?? null;
 
-        const [classes, bkStaff, gwCands, bkAsgn, gwAsgn] =
+        _wzGpAcademicYear = config?.current_academic_year ?? null;
+        _wzGpSemester     = config?.current_semester     ?? 1;
+
+        const [classes, bkStaff, gwCands, bkAsgn, gwAsgn, gpStaff, gpSched] =
             await Promise.all([
                 getClasses(_wzFkAcademicYear),
                 getForumBkStaff(),
                 getForumGuruWaliCandidates(),
                 getBkAssignments(_wzFkAcademicYear),
                 getGuruWaliAssignments(_wzFkAcademicYear),
+                getDutyStaffCandidates(),
+                getDutySchedules(_wzGpAcademicYear, _wzGpSemester),
             ]);
 
         _wzFkClasses       = classes;
@@ -681,20 +768,25 @@ async function renderForumAssignmentStep() {
         _wzFkGuruWaliCands = gwCands;
         _wzFkBkAssignments = bkAsgn;
         _wzFkGwAssignments = gwAsgn;
+        _wzGpStaff         = gpStaff;
+        _wzGpSchedules     = gpSched;
 
         _wzFkTab = _wzFkTab ?? 'bk';
         contentEl.innerHTML = `
             <div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
             <h3>Penugasan Forum Kelas</h3>
-            <p class="hint">Tugaskan BK ke kelas dan Guru Wali ke siswa via
+            <p class="hint">Tugaskan BK ke kelas, Guru Wali ke siswa, dan Guru Piket ke hari via
                 file Excel/CSV, atau isi manual di tab di bawah.</p>
-            <div style="display:flex;gap:8px;margin-bottom:16px">
+            <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
                 <button id="wz-fk-tab-bk"
                     class="btn ${_wzFkTab === 'bk' ? 'btn-primary' : 'btn-secondary'}"
                     style="min-width:130px">BK per Kelas</button>
                 <button id="wz-fk-tab-gw"
                     class="btn ${_wzFkTab === 'guru-wali' ? 'btn-primary' : 'btn-secondary'}"
                     style="min-width:130px">Guru Wali per Siswa</button>
+                <button id="wz-fk-tab-gp"
+                    class="btn ${_wzFkTab === 'guru-piket' ? 'btn-primary' : 'btn-secondary'}"
+                    style="min-width:130px">Guru Piket</button>
             </div>
             <div id="wz-forum-tab-content"></div>
         `;
@@ -703,16 +795,26 @@ async function renderForumAssignmentStep() {
             _wzFkTab = 'bk';
             document.getElementById('wz-fk-tab-bk').classList.replace('btn-secondary', 'btn-primary');
             document.getElementById('wz-fk-tab-gw').classList.replace('btn-primary', 'btn-secondary');
+            document.getElementById('wz-fk-tab-gp').classList.replace('btn-primary', 'btn-secondary');
             await renderWzFkBkTab();
         });
         document.getElementById('wz-fk-tab-gw').addEventListener('click', async () => {
             _wzFkTab = 'guru-wali';
             document.getElementById('wz-fk-tab-gw').classList.replace('btn-secondary', 'btn-primary');
             document.getElementById('wz-fk-tab-bk').classList.replace('btn-primary', 'btn-secondary');
+            document.getElementById('wz-fk-tab-gp').classList.replace('btn-primary', 'btn-secondary');
             await renderWzFkGuruWaliTab();
         });
+        document.getElementById('wz-fk-tab-gp').addEventListener('click', async () => {
+            _wzFkTab = 'guru-piket';
+            document.getElementById('wz-fk-tab-gp').classList.replace('btn-secondary', 'btn-primary');
+            document.getElementById('wz-fk-tab-bk').classList.replace('btn-primary', 'btn-secondary');
+            document.getElementById('wz-fk-tab-gw').classList.replace('btn-primary', 'btn-secondary');
+            await renderWzGpTab();
+        });
         if (_wzFkTab === 'bk') await renderWzFkBkTab();
-        else await renderWzFkGuruWaliTab();
+        else if (_wzFkTab === 'guru-wali') await renderWzFkGuruWaliTab();
+        else await renderWzGpTab();
 
     } catch (err) {
         contentEl.innerHTML =
@@ -1240,6 +1342,137 @@ async function renderWzFkGuruWaliTab() {
             gwResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Impor gagal.')}</div>`;
             gwImportBtn.textContent = 'Impor Guru Wali';
             gwImportBtn.disabled = false;
+        }
+    });
+}
+
+async function renderWzGpTab() {
+    const tabEl = document.getElementById('wz-forum-tab-content');
+    if (!_wzGpStaff.length) {
+        tabEl.innerHTML = '<p class="hint">Belum ada staf yang bisa ditugaskan sebagai guru piket.</p>';
+        return;
+    }
+
+    const staffById = new Map(_wzGpStaff.map(s => [s.user_id, s]));
+    const total = _wzGpSchedules.length;
+
+    const DAY_ORDER = ['SENIN','SELASA','RABU','KAMIS','JUMAT','SABTU'];
+    const byDay = new Map(DAY_ORDER.map(d => [d, []]));
+    _wzGpSchedules.forEach(s => {
+        if (byDay.has(s.day_of_week)) byDay.get(s.day_of_week).push(s);
+    });
+
+    const rows = DAY_ORDER.map(day => {
+        const entries = byDay.get(day) ?? [];
+        const chips = entries.map(s => {
+            const staf = staffById.get(s.user_id);
+            if (!staf) return '';
+            return `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--color-bg-secondary);
+                border:1px solid var(--color-border);border-radius:4px;padding:2px 8px;font-size:0.85em">
+                ${esc(staf.full_name)}
+                <button type="button" class="wzgp-del-one" data-duty-id="${s.duty_id}"
+                    style="background:none;border:none;cursor:pointer;color:var(--color-danger);
+                    font-size:1em;padding:0;line-height:1" title="Hapus">×</button>
+            </span>`;
+        }).filter(Boolean).join(' ');
+
+        return `<tr>
+            <td style="font-weight:600;width:90px">${day}</td>
+            <td style="word-break:break-word">${chips || '<span style="color:var(--color-text-muted)">—</span>'}</td>
+        </tr>`;
+    }).join('');
+
+    tabEl.innerHTML = `
+        <button type="button" class="btn btn-secondary wz-template-btn" id="wz-gp-tpl-btn"
+            style="margin-bottom:16px">↓ Unduh Template Guru Piket</button>
+
+        <h4 style="margin:0 0 8px">Jadwal piket aktif (${total})</h4>
+        <table class="table" style="width:100%;margin-bottom:12px">
+            <thead><tr>
+                <th style="width:90px">Hari</th>
+                <th>Guru yang Ditugaskan</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+        <p id="wz-gp-status" class="hint" style="margin-top:8px"></p>
+
+        <hr style="margin:16px 0;border:none;border-top:1px solid var(--color-border)">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+            <input type="file" class="input" id="wz-gp-file"
+                accept=".xlsx,.xls,.csv" style="padding:6px" />
+            <button type="button" class="btn btn-primary wz-import-btn" id="wz-gp-import-btn"
+                disabled>Impor Guru Piket</button>
+        </div>
+        <div id="wz-gp-result"></div>
+    `;
+
+    // ── Unduh template ──
+    tabEl.querySelector('#wz-gp-tpl-btn').addEventListener('click', () => {
+        const sheet = EXCEL_TEMPLATES[11]?.sheets?.gp;
+        if (!sheet) return;
+        generateExcelTemplate(
+            'template_guru_piket.xlsx',
+            sheet.headers, sheet.exampleRows, sheet.guide
+        );
+    });
+
+    // ── Hapus satu penugasan ──
+    tabEl.querySelectorAll('.wzgp-del-one').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const dutyId = btn.dataset.dutyId;
+            if (!confirm('Hapus penugasan piket ini?')) return;
+            btn.disabled = true;
+            const stEl = document.getElementById('wz-gp-status');
+            try {
+                await revokeDutySchedule(dutyId);
+                _wzGpSchedules = await getDutySchedules(_wzGpAcademicYear, _wzGpSemester);
+                await renderWzGpTab();
+            } catch (err) {
+                if (stEl) stEl.textContent = 'Gagal menghapus: ' + (err?.message ?? String(err));
+                btn.disabled = false;
+            }
+        });
+    });
+
+    // ── Import ──
+    const gpFileInput = tabEl.querySelector('#wz-gp-file');
+    const gpImportBtn = tabEl.querySelector('#wz-gp-import-btn');
+    const gpResultEl  = tabEl.querySelector('#wz-gp-result');
+    let gpCsvText = null;
+
+    gpFileInput.addEventListener('change', async () => {
+        gpResultEl.innerHTML = '';
+        const file = gpFileInput.files?.[0];
+        if (!file) { gpCsvText = null; gpImportBtn.disabled = true; return; }
+        try {
+            gpCsvText = stripEmptyCsvLines(await fileToCsv(file));
+            gpImportBtn.disabled = !gpCsvText.trim();
+        } catch (err) {
+            gpCsvText = null;
+            gpImportBtn.disabled = true;
+            gpResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Gagal membaca file.')}</div>`;
+        }
+    });
+
+    gpImportBtn.addEventListener('click', async () => {
+        if (!gpCsvText) return;
+        gpImportBtn.disabled = true;
+        gpImportBtn.textContent = 'Mengimpor…';
+        gpResultEl.innerHTML = '';
+        try {
+            const res = await importDutySchedule(gpCsvText);
+            gpResultEl.innerHTML = renderForumImportResult(res);
+            if (res.success > 0) {
+                _wzGpSchedules = await getDutySchedules(_wzGpAcademicYear, _wzGpSemester);
+                await renderWzGpTab();
+            } else {
+                gpImportBtn.textContent = 'Impor Guru Piket';
+                gpImportBtn.disabled = false;
+            }
+        } catch (err) {
+            gpResultEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message ?? 'Impor gagal.')}</div>`;
+            gpImportBtn.textContent = 'Impor Guru Piket';
+            gpImportBtn.disabled = false;
         }
     });
 }
@@ -1898,6 +2131,28 @@ const EXCEL_TEMPLATES = {
                     ['PENTING', '', ''],
                     ['•', '', 'Satu siswa hanya boleh punya satu Guru Wali aktif per tahun ajaran.'],
                     ['•', '', 'Upload ulang baris yang sama akan dilewati (tidak diduplikasi).'],
+                ],
+            },
+            gp: {
+                name: 'Template Guru Piket',
+                headers: ['nip_guru', 'hari'],
+                exampleRows: [
+                    ['202620270010', 'SENIN'],
+                    ['202620270011', 'SENIN'],
+                    ['202620270012', 'SELASA'],
+                ],
+                guide: [
+                    ['PETUNJUK PENGISIAN — PENUGASAN GURU PIKET', '', ''],
+                    ['', '', ''],
+                    ['Kolom', 'Wajib?', 'Penjelasan'],
+                    ['nip_guru', 'Wajib', 'NIP guru yang ditugaskan piket. Guru harus sudah ada di langkah Staf.'],
+                    ['hari', 'Wajib', 'Hari piket. Isi dengan: SENIN, SELASA, RABU, KAMIS, JUMAT, atau SABTU (huruf kapital).'],
+                    ['', '', ''],
+                    ['PENTING', '', ''],
+                    ['•', '', 'Satu guru boleh piket di lebih dari satu hari (tambah baris terpisah).'],
+                    ['•', '', 'Satu hari boleh dijaga oleh lebih dari satu guru (tambah baris terpisah). Direkomendasikan 5 guru per hari.'],
+                    ['•', '', 'Upload ulang baris yang sama akan dilewati (tidak diduplikasi).'],
+                    ['•', '', 'Jadwal piket berlaku per semester. Sistem menggunakan semester aktif dari Profil Sekolah.'],
                 ],
             },
         },
