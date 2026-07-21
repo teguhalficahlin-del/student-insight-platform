@@ -186,7 +186,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     .from('users')
                     .select('user_id, login_identifier')
                     .in('login_identifier', [...existingNikSet])
-                    .eq('school_id', user.school_id);
+                    .eq('school_id', user.school_id)
+                    .is('deleted_at', null);
 
                 if (userErr) {
                     console.error('[bulk-import-parents] existing user lookup failed:', userErr);
@@ -226,8 +227,49 @@ Deno.serve(async (req: Request): Promise<Response> => {
             });
 
             if (authErr || !authUser?.user) {
-                failedNiks.add(nik);
-                continue; // error recorded per-row below
+                // Kemungkinan: email sudah ada di Auth (akun soft-deleted).
+                // Coba restore: temukan user deleted dengan NIK ini.
+                const { data: deletedUser } = await admin
+                    .from('users')
+                    .select('user_id, auth_user_id')
+                    .eq('login_identifier', nik)
+                    .eq('school_id', user.school_id)
+                    .not('deleted_at', 'is', null)
+                    .maybeSingle();
+
+                if (!deletedUser) {
+                    console.error('[bulk-import-parents] createUser failed for NIK', nik, authErr);
+                    failedNiks.add(nik);
+                    continue;
+                }
+
+                // Unban Auth account
+                if (deletedUser.auth_user_id) {
+                    await admin.auth.admin.updateUserById(deletedUser.auth_user_id, {
+                        ban_duration: 'none',
+                    });
+                }
+
+                // Restore users row
+                const { error: restoreErr } = await admin
+                    .from('users')
+                    .update({
+                        deleted_at:           null,
+                        is_active:            true,
+                        full_name:            namaOrtu,
+                        must_change_password: true,
+                    })
+                    .eq('user_id', deletedUser.user_id);
+
+                if (restoreErr) {
+                    console.error('[bulk-import-parents] restore failed for NIK', nik, restoreErr);
+                    failedNiks.add(nik);
+                    continue;
+                }
+
+                nikToUserId.set(nik, deletedUser.user_id);
+                existingNikSet.add(nik); // agar step 10 assign 'updated' bukan 'success'
+                continue;
             }
 
             const { data: insertedUser, error: insertErr } = await admin

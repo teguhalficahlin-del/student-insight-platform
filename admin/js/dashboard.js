@@ -1324,7 +1324,7 @@ async function runProvisionStudents() {
 
 async function renderParentsPanel() {
     const [parents, links, config] = await Promise.all([
-        fetchAllRows('users', q => q.select('user_id, full_name, login_identifier, must_change_password').eq('role_type', 'ORTU').order('full_name')),
+        fetchAllRows('users', q => q.select('user_id, full_name, login_identifier, must_change_password').eq('role_type', 'ORTU').is('deleted_at', null).order('full_name')),
         fetchAllRows('student_parents', q => q.select('parent_user_id, students ( student_id, student_status, full_name )')),
         getSchoolConfig(),
     ]);
@@ -1481,7 +1481,7 @@ async function renderAlumniPanel() {
 
     // ── Orang tua alumni (semua anak sudah lulus) ──
     const parents = await fetchAllRows('users',
-        q => q.select('user_id, full_name, login_identifier').eq('role_type', 'ORTU').order('full_name'));
+        q => q.select('user_id, full_name, login_identifier').eq('role_type', 'ORTU').is('deleted_at', null).order('full_name'));
     const links = await fetchAllRows('student_parents',
         q => q.select(`parent_user_id, students ( student_status, graduated_academic_year,
             program:programs ( name ),
@@ -2243,7 +2243,7 @@ const EXPORT_DEFS = [
         filename: 'export_ortu.xlsx',
         async fetch() {
             return fetchAllRows('users',
-                q => q.select('full_name, login_identifier').eq('role_type', 'ORTU').order('full_name'));
+                q => q.select('full_name, login_identifier').eq('role_type', 'ORTU').is('deleted_at', null).order('full_name'));
         },
         headers: ['NIK', 'Nama'],
         rowOf: u => [u.login_identifier, u.full_name],

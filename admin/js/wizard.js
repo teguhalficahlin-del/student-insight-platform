@@ -2589,7 +2589,7 @@ const STEP_LIST = {
             return parents
                 .map(u => {
                     const children = parentChildMap.get(u.user_id) ?? [];
-                    const aktifChildren = children.filter(c => c.status === 'AKTIF');
+                    const aktifChildren = children.filter(c => c.status === 'AKTIF' || c.status === 'PKL');
                     if (aktifChildren.length === 0) return null; // semua anak lulus — masuk section Alumni
                     const childNames = aktifChildren.map(c => c.name).join(', ') || '—';
                     return {
@@ -2739,6 +2739,9 @@ async function renderEmptyClassesNotice(parentEl) {
 // ── Alumni Parents Section (ortu yang SEMUA anaknya LULUS) ───
 
 async function renderAlumniParentsSection(parentEl) {
+    const existing = parentEl.querySelector('.wz-alumni-parents-section');
+    if (existing) existing.remove();
+
     const parents = await fetchAllRows('users',
         q => q.select('user_id, full_name, login_identifier')
               .eq('role_type', 'ORTU')
@@ -2798,10 +2801,12 @@ async function renderAlumniParentsSection(parentEl) {
     }).join('');
 
     parentEl.insertAdjacentHTML('beforeend', `
+        <div class="wz-alumni-parents-section">
         <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
         <h4 style="margin:0 0 8px">Orang Tua Alumni (${alumniParents.length})</h4>
         <p class="hint" style="margin-bottom:12px">Orang tua yang semua anaknya sudah lulus, dikelompokkan per tahun kelulusan terakhir.</p>
         ${accordions}
+        </div>
     `);
 }
 
