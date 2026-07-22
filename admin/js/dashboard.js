@@ -7,7 +7,7 @@
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { supabase, getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getForumGuruWaliCandidates, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent,
-    getDutyStaffCandidates, getDutySchedules, revokeDutySchedule } from './api.js';
+    getDutyStaffCandidates, getDutySchedules, revokeDutySchedule, addTuAccount } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 
 function esc(s) {
@@ -64,6 +64,7 @@ const PANEL_RENDERERS = {
     parents:            renderParentsPanel,
     dudi:               renderDudiPanel,
     stakeholders:       renderStakeholdersPanel,
+    'tata-usaha':       renderTuPanel,
     jadwal:             renderJadwalPanel,
     tutupsemester:      () => mountSemesterPanel(panelContent),
     'academic-year':    renderAcademicYearPanel,
@@ -1771,6 +1772,108 @@ async function renderStakeholdersPanel() {
             : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}">Reset PW</button>`}</td></tr>`).join('')}</tbody>
         </table>
     `;
+}
+
+async function renderTuPanel() {
+    const { data: users } = await supabase
+        .from('users')
+        .select('user_id, full_name, login_identifier, must_change_password')
+        .eq('role_type', 'TU')
+        .is('deleted_at', null)
+        .order('full_name');
+
+    panelContent.innerHTML = `
+        <h3>Tata Usaha (${(users ?? []).length})</h3>
+        <div style="border:1px solid var(--color-border);border-radius:8px;padding:16px;margin-bottom:16px;max-width:420px">
+            <h4 style="margin:0 0 12px;font-size:14px">Buat Akun TU Baru</h4>
+            <div style="display:flex;flex-direction:column;gap:10px">
+                <div>
+                    <label style="font-size:12px;display:block;margin-bottom:4px">Nama Lengkap</label>
+                    <input id="tu-nama" type="text" class="input" placeholder="Nama TU" style="width:100%;box-sizing:border-box" />
+                </div>
+                <div>
+                    <label style="font-size:12px;display:block;margin-bottom:4px">NIP / NIK</label>
+                    <input id="tu-nip" type="text" class="input" placeholder="NIP atau NIK" style="width:100%;box-sizing:border-box" />
+                </div>
+                <div id="tu-form-msg"></div>
+                <button id="tu-buat-btn" class="btn btn-primary btn-sm">Buat Akun</button>
+            </div>
+        </div>
+        <table class="table">
+            <thead><tr><th>Nama</th><th>NIP / NIK</th><th>Aksi</th></tr></thead>
+            <tbody>${(users ?? []).map(u => `<tr>
+                <td>${esc(u.full_name)}</td>
+                <td>${esc(u.login_identifier)}</td>
+                <td>${u.must_change_password
+                    ? `<span class="badge badge-muted" title="Menunggu pengguna ganti password">Menunggu ganti PW</span>`
+                    : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}">Reset PW</button>`
+                }</td></tr>`).join('')}</tbody>
+        </table>
+    `;
+
+    document.getElementById('tu-buat-btn').addEventListener('click', async () => {
+        const nama = document.getElementById('tu-nama').value.trim();
+        const nip  = document.getElementById('tu-nip').value.trim();
+        const msg  = document.getElementById('tu-form-msg');
+        const btn  = document.getElementById('tu-buat-btn');
+        if (!nama || !nip) {
+            msg.innerHTML = '<span style="color:var(--color-danger,#ef4444);font-size:12px">Nama dan NIP/NIK wajib diisi.</span>';
+            return;
+        }
+        btn.disabled = true; btn.textContent = 'Memproses…';
+        msg.innerHTML = '';
+        try {
+            const result = await addTuAccount(nama, nip);
+            const acc = result.imported?.[0];
+            if (!acc) {
+                if ((result.updated ?? 0) > 0) {
+                    msg.innerHTML = '<span style="color:var(--color-warning,#f59e0b);font-size:12px">NIP/NIK sudah ada — nama diperbarui. Akun dan password tidak berubah.</span>';
+                    await renderTuPanel();
+                } else {
+                    throw new Error(result.errors?.[0]?.message ?? 'Gagal membuat akun TU');
+                }
+                return;
+            }
+            showNewTuAccountModal(acc.full_name, acc.login_identifier, acc.temp_password);
+            await renderTuPanel();
+        } catch (err) {
+            msg.innerHTML = `<span style="color:var(--color-danger,#ef4444);font-size:12px">Gagal: ${esc(err.message)}</span>`;
+            btn.disabled = false; btn.textContent = 'Buat Akun';
+        }
+    });
+}
+
+function showNewTuAccountModal(nama, identifier, pw) {
+    const id = 'tu-new-account-modal';
+    document.getElementById(id)?.remove();
+    const el = document.createElement('div');
+    el.id = id;
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
+    el.innerHTML = `
+      <div style="background:var(--color-surface,#1e293b);border:1px solid var(--color-border,#334155);border-radius:10px;padding:28px 32px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.4)">
+        <h3 style="margin:0 0 8px;font-size:16px">Akun TU berhasil dibuat</h3>
+        <p style="margin:0 0 16px;font-size:13px;color:var(--color-text-muted,#94a3b8)">Akun untuk <strong>${esc(nama)}</strong> sudah aktif. Bagikan kredensial berikut ke pengguna:</p>
+        <div style="margin-bottom:10px;font-size:13px">
+          <span style="color:var(--color-text-muted,#94a3b8)">NIP / NIK login:</span>
+          <strong style="margin-left:6px;font-family:monospace">${esc(identifier)}</strong>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+          <input id="tu-pw-input" type="text" value="${esc(pw)}" readonly
+            style="flex:1;font-family:monospace;font-size:18px;font-weight:700;letter-spacing:2px;padding:10px 12px;border-radius:6px;border:1px solid var(--color-border,#334155);background:var(--color-bg,#0f172a);color:var(--color-text,#f1f5f9);cursor:text" />
+          <button id="tu-pw-copy-btn" class="btn btn-primary" style="white-space:nowrap">Salin PW</button>
+        </div>
+        <p style="margin:0 0 20px;font-size:12px;color:var(--color-text-muted,#94a3b8)">Catat dan bagikan ke TU. Password ini tidak akan ditampilkan lagi. TU wajib ganti password saat login pertama.</p>
+        <button id="tu-pw-close-btn" class="btn btn-secondary" style="width:100%">Tutup</button>
+      </div>`;
+    document.body.appendChild(el);
+    const input = el.querySelector('#tu-pw-input');
+    input.select();
+    el.querySelector('#tu-pw-copy-btn').addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(pw); } catch { input.select(); document.execCommand('copy'); }
+        el.querySelector('#tu-pw-copy-btn').textContent = 'Tersalin ✓';
+    });
+    el.querySelector('#tu-pw-close-btn').addEventListener('click', () => el.remove());
+    el.addEventListener('click', e => { if (e.target === el) el.remove(); });
 }
 
 // ─── Jadwal panel helpers ────────────────────────────────────

@@ -627,6 +627,15 @@ export function importSchedules(csvText) { return callBulkImport('bulk-import-sc
 export function importParents(csvText)   { return callBulkImport('bulk-import-parents', csvText); }
 export function importDudi(csvText)      { return callBulkImport('bulk-import-dudi', csvText); }
 
+function csvField(s) {
+    const str = String(s ?? '');
+    return /[,"\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+export function addTuAccount(nama, identifier) {
+    return importUsers(`nama,nip_atau_nik,role_type\n${csvField(nama)},${csvField(identifier)},TU`);
+}
+
 /**
  * Jumlah siswa yang belum punya akun login (students.user_id IS NULL).
  */
