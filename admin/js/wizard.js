@@ -24,7 +24,7 @@ import {
     fetchAllRows,
     updateProgram, updateClass, updateStudent, updateUserIdentifier,
     importPrograms, importClasses, importUsers, importStudents, importSchedules,
-    importParents, importDudi,
+    importParents, importDudi, addTuAccount,
     getForumBkStaff, getForumGuruWaliCandidates,
     getBkAssignments, getGuruWaliAssignments,
     assignBkToClass, revokeBkFromClass,
@@ -47,7 +47,7 @@ function esc(s) {
         .replace(/"/g, '&quot;');
 }
 
-const TOTAL_STEPS = 12;
+const TOTAL_STEPS = 13;
 
 const STEP_NAMES = {
     1: 'Profil Sekolah',
@@ -59,9 +59,10 @@ const STEP_NAMES = {
     7: 'Orang Tua',
     8: 'DUDI',
     9: 'Stakeholder',
-    10: 'Jadwal',
-    11: 'Penugasan Forum',
-    12: 'Selesai',
+    10: 'Tata Usaha',
+    11: 'Jadwal',
+    12: 'Penugasan Forum',
+    13: 'Selesai',
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -460,7 +461,67 @@ async function renderStakeholderStep() {
     nextBtn.disabled = false;
 }
 
-// ── Langkah 11: Penugasan Forum ───────────────────────────────
+async function renderTuStep() {
+    contentEl.innerHTML = `
+        <div class="step-label">Langkah 10 dari ${TOTAL_STEPS}</div>
+        <h3>Tata Usaha</h3>
+        <p class="hint">Tambahkan akun Tata Usaha (TU). TU dapat melihat rekap piket dan kehadiran siswa. Login menggunakan NIP/NIK.</p>
+
+        <div id="wz-data-list"><p class="hint">Memuat data…</p></div>
+
+        <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
+        <h4 style="margin:0 0 12px">Tambah Akun TU</h4>
+        <div class="field">
+            <label for="wz-tu-name">Nama Lengkap</label>
+            <input type="text" id="wz-tu-name" class="input" placeholder="contoh: Sri Wahyuni" />
+        </div>
+        <div class="field">
+            <label for="wz-tu-nip">NIP / NIK</label>
+            <input type="text" id="wz-tu-nip" class="input" placeholder="contoh: 198501012010012001" />
+        </div>
+        <button type="button" class="btn btn-primary" id="wz-tu-add">Tambah</button>
+    `;
+
+    document.getElementById('wz-tu-add').addEventListener('click', async () => {
+        clearError();
+        const nameEl = document.getElementById('wz-tu-name');
+        const nipEl  = document.getElementById('wz-tu-nip');
+        const name   = nameEl.value.trim();
+        const nip    = nipEl.value.trim();
+
+        if (!name) { showError('Nama TU wajib diisi.'); return; }
+        if (!nip)  { showError('NIP/NIK wajib diisi.'); return; }
+
+        const addBtn = document.getElementById('wz-tu-add');
+        addBtn.disabled = true;
+        addBtn.textContent = 'Menyimpan…';
+        try {
+            const result = await addTuAccount(name, nip);
+            const tempPassword = result?.imported?.[0]?.temp_password ?? '(lihat di konsol admin)';
+            nameEl.value = '';
+            nipEl.value  = '';
+            await refreshDataList(10);
+            showSuccess(`TU "${name}" berhasil ditambahkan.\nNIP/NIK: ${nip}\nPassword awal: ${tempPassword}\n\nCatat dan bagikan keduanya kepada TU. Password tidak bisa ditampilkan ulang.`);
+        } catch (err) {
+            console.error('[wizard] tambah TU error:', err);
+            const listEl = document.getElementById('wz-data-list');
+            if (listEl) {
+                const errDiv = document.createElement('div');
+                errDiv.className = 'alert alert-danger';
+                errDiv.textContent = err.message ?? 'Gagal menambah akun TU.';
+                listEl.prepend(errDiv);
+            }
+        } finally {
+            addBtn.disabled = false;
+            addBtn.textContent = 'Tambah';
+        }
+    });
+
+    await refreshDataList(10);
+    nextBtn.disabled = false;
+}
+
+// ── Langkah 12: Penugasan Forum ───────────────────────────────
 
 let _wzFkTab            = 'bk';
 let _wzFkClasses        = [];
@@ -771,7 +832,7 @@ async function renderForumAssignmentStep() {
 
         _wzFkTab = _wzFkTab ?? 'bk';
         contentEl.innerHTML = `
-            <div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
+            <div class="step-label">Langkah 12 dari ${TOTAL_STEPS}</div>
             <h3>Penugasan Forum Kelas</h3>
             <p class="hint">Tugaskan BK ke kelas, Guru Wali ke siswa, dan Guru Piket ke hari via
                 file Excel/CSV, atau isi manual di tab di bawah.</p>
@@ -816,7 +877,7 @@ async function renderForumAssignmentStep() {
 
     } catch (err) {
         contentEl.innerHTML =
-            `<div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
+            `<div class="step-label">Langkah 12 dari ${TOTAL_STEPS}</div>
              <h3>Penugasan Forum Kelas</h3>
              <div class="alert alert-danger">${esc(err?.message ?? String(err))}</div>`;
     }
@@ -938,7 +999,7 @@ async function renderWzFkBkTab() {
 
     // ── Unduh template BK ──
     tabEl.querySelector('#wz-fk-bk-tpl-btn').addEventListener('click', () => {
-        const sheet = EXCEL_TEMPLATES[11]?.sheets?.bk;
+        const sheet = EXCEL_TEMPLATES[12]?.sheets?.bk;
         if (!sheet) return;
         generateExcelTemplate(
             'template_penugasan_bk.xlsx',
@@ -1406,7 +1467,7 @@ async function renderWzGpTab() {
 
     // ── Unduh template ──
     tabEl.querySelector('#wz-gp-tpl-btn').addEventListener('click', () => {
-        const sheet = EXCEL_TEMPLATES[11]?.sheets?.gp;
+        const sheet = EXCEL_TEMPLATES[12]?.sheets?.gp;
         if (!sheet) return;
         generateExcelTemplate(
             'template_guru_piket.xlsx',
@@ -1477,7 +1538,7 @@ async function renderWzGpTab() {
 
 async function renderScheduleStep() {
     contentEl.innerHTML = `
-        <div class="step-label">Langkah 10 dari ${TOTAL_STEPS}</div>
+        <div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
         <h3>Jadwal</h3>
         <p class="hint">Susun jadwal mengajar secara visual, atau impor dari file CSV. Staf (langkah 5) dan kelas (langkah 4) harus sudah ada.</p>
         <p class="hint-success">✓ Langkah ini opsional — bisa dilewati dan disusun nanti setelah wizard selesai.</p>
@@ -1756,7 +1817,7 @@ async function renderScheduleStep() {
             } else {
                 statusEl.innerHTML = `<div class="alert alert-success">✓ Berhasil: ${total_templates} template jadwal, ${schedules_generated} sesi dibuat.</div>`;
             }
-            await refreshDataList(10);
+            await refreshDataList(11);
         } catch (err) {
             statusEl.innerHTML = `<div class="alert alert-danger">Gagal: ${err.message}</div>`;
         } finally {
@@ -1765,7 +1826,7 @@ async function renderScheduleStep() {
         }
     });
 
-    await refreshDataList(10);
+    await refreshDataList(11);
     nextBtn.disabled = false;
 }
 
@@ -1779,9 +1840,10 @@ const STEP_RENDERERS = {
     7: renderImportStep,
     8: renderImportStep,
     9: renderStakeholderStep,
-    10: renderScheduleStep,
-    11: renderForumAssignmentStep,
-    12: renderSummaryStep,
+    10: renderTuStep,
+    11: renderScheduleStep,
+    12: renderForumAssignmentStep,
+    13: renderSummaryStep,
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -1799,7 +1861,7 @@ async function saveCurrentStep() {
         case 3: return saveStep3();
         // Langkah 4–9 berbasis impor: data tersimpan langsung saat unggah,
         // dan langkah-langkah ini opsional (boleh dilewati / dilanjutkan dari dashboard).
-        case 4: case 5: case 6: case 7: case 8: case 9: case 10: case 11: return;
+        case 4: case 5: case 6: case 7: case 8: case 9: case 10: case 11: case 12: return;
         default: throw new Error('Langkah ini belum tersedia. Gunakan tombol Sebelumnya untuk kembali.');
     }
 }
@@ -2093,7 +2155,7 @@ const EXCEL_TEMPLATES = {
              ['•', '', 'kode_program harus sudah ada di langkah Program Keahlian. Bila diisi tapi kode tidak dikenal, baris tersebut ditolak.'],
              ['•', '', 'Upload ulang file yang sama akan memperbarui nama usaha, penanggung jawab, dan program.'],
          ] },
-    11: {
+    12: {
         filename: 'template_penugasan_forum.xlsx',
         sheets: {
             bk: {
@@ -2224,7 +2286,7 @@ const IMPORT_STEP_INFO = {
          desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
     8: { title: 'DUDI',
          desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
-    11: {
+    12: {
         title: 'Penugasan Forum Kelas',
         desc: 'Impor penugasan BK per kelas dan Guru Wali per siswa. Gunakan dua template terpisah.',
     },
@@ -2240,7 +2302,7 @@ function importFnForStep(step) {
         case 6: return importStudents;
         case 7: return importParents;
         case 8: return importDudi;
-        case 11: // ditangani manual di renderForumAssignmentStep
+        case 12: // ditangani manual di renderForumAssignmentStep
             return null;
         default: throw new Error(`Tidak ada importer untuk langkah ${step}`);
     }
@@ -2656,6 +2718,29 @@ const STEP_LIST = {
         },
     },
     10: {
+        title: 'Tata Usaha terdaftar',
+        emptyHint: 'Gunakan form di bawah untuk menambahkan.',
+        headers: ['Nama', 'NIP / NIK'],
+        deleteTable: 'users',
+        editFields: [
+            { key: 'full_name', label: 'Nama' },
+            { key: 'login_identifier', label: 'NIP / NIK' },
+        ],
+        save: (id, vals) => updateUserIdentifier(id, vals),
+        fetch: async () => {
+            const data = await fetchAllRows('users',
+                q => q.select('user_id, full_name, login_identifier')
+                      .eq('role_type', 'TU')
+                      .is('deleted_at', null)
+                      .order('full_name'));
+            return data.map(u => ({
+                id: u.user_id,
+                cells: [u.full_name, u.login_identifier],
+                editData: { full_name: u.full_name, login_identifier: u.login_identifier },
+            }));
+        },
+    },
+    11: {
         title: 'Jadwal terdaftar',
         headers: ['Tanggal', 'Waktu', 'Kelas', 'Guru'],
         deleteTable: 'teaching_schedules',
@@ -3172,7 +3257,7 @@ const DELETE_ORDER_CHECKS = {
     8: [ // DUDI: PKL harus kosong
         { label: 'PKL',         table: 'pkl_placements', query: q => q.select('placement_id', { count: 'exact', head: true }) },
     ],
-    10: [ // Jadwal: data transaksional harus kosong
+    11: [ // Jadwal: data transaksional harus kosong
         { label: 'Kehadiran',       table: 'attendance',           query: q => q.select('attendance_id', { count: 'exact', head: true }) },
         { label: 'Observasi',       table: 'observations',         query: q => q.select('observation_id', { count: 'exact', head: true }).not('schedule_id', 'is', null) },
         { label: 'Guru pengganti',  table: 'substitute_schedules', query: q => q.select('substitute_id', { count: 'exact', head: true }) },
@@ -3223,7 +3308,7 @@ async function runBulkDelete(step, cfg, ids, btn) {
 // karena attendance tidak punya policy DELETE untuk ADMINISTRATIVE (ABS-3) dan
 // guru_wali_assignments hanya bisa dihapus oleh KEPSEK/WAKA.
 // Keduanya diarahkan ke SECURITY DEFINER function di server.
-const SERVER_RESET_STEPS = new Set([6, 10]);
+const SERVER_RESET_STEPS = new Set([6, 11]);
 
 async function runServerReset(step, ids, btn) {
     clearError();
@@ -3244,7 +3329,7 @@ async function runServerReset(step, ids, btn) {
                 btn.textContent = `Menghapus ${authIds.length} akun…`;
                 await Promise.allSettled(authIds.map(aid => deleteUserWithAuth(aid)));
             }
-        } else if (step === 10) {
+        } else if (step === 11) {
             btn.textContent = 'Menghapus jadwal & data terkait…';
             await wizardResetSchedules(schoolId);
         }
