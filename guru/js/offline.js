@@ -118,7 +118,9 @@ async function postEdgeFn(path, payload) {
     }
     const json = await res.json().catch(() => ({}));
     if (res.ok) return { ok: true, wasDuplicate: json?.data?.was_duplicate ?? false };
-    return { ok: false, networkError: false, status: res.status, error: json?.error?.message ?? `HTTP ${res.status}` };
+    const details   = json?.error?.details;
+    const detailStr = Array.isArray(details) && details.length ? ` — ${details.join('; ')}` : '';
+    return { ok: false, networkError: false, status: res.status, error: (json?.error?.message ?? `HTTP ${res.status}`) + detailStr };
 }
 
 // ── Kirim satu batch absensi ke server ───────────────────────
