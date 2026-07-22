@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Portal Tata Usaha — SIP</title>
+    <meta property="og:title" content="SIP" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SIP" />
+    <link rel="icon" href="data:,">
+    <script src="js/sw-guard.js"></script>
+    <script>(function(){var last=location.pathname.split("/").filter(Boolean).pop();if(["admin","guru","student","parent","dudi","stakeholder","superadmin","tu"].indexOf(last)>-1){var b=document.createElement("base");b.href=location.pathname.endsWith("/")?location.pathname:location.pathname+"/";document.head.appendChild(b);}})();</script>
+    <link rel="stylesheet" href="css/tu.css" />
+    <link rel="manifest" href="manifest.json">
+</head>
+<body>
+    <div class="portal-shell">
+        <header class="topbar">
+            <div>
+                <h2 id="portal-title">Portal Tata Usaha</h2>
+                <p id="portal-user-name"><span data-brand="school-name"></span></p>
+            </div>
+            <button id="logout-btn" type="button" class="btn btn-secondary">Keluar</button>
+        </header>
+
+        <div id="loading" class="loading">Memuat data...</div>
+
+        <nav id="tab-nav" class="tab-nav" style="display:none">
+            <button class="tab-btn active" data-tab="section-piket">Jadwal Piket</button>
+            <button class="tab-btn" data-tab="section-late">Keterlambatan</button>
+            <button class="tab-btn" data-tab="section-attendance">Rekap Kehadiran</button>
+        </nav>
+
+        <!-- Tab 1: Jadwal Piket -->
+        <section id="section-piket" class="section" style="display:none">
+            <div class="section-header">
+                <h3 style="margin:0">Jadwal Guru Piket</h3>
+                <button id="btn-export-piket" class="btn btn-sm btn-secondary">&#11015; Export CSV</button>
+            </div>
+            <div class="filter-row" style="margin-bottom:12px">
+                <div class="field" style="margin-bottom:0">
+                    <label for="piket-year">Tahun Ajaran</label>
+                    <select id="piket-year" class="input" style="min-width:130px"></select>
+                </div>
+                <div class="field" style="margin-bottom:0">
+                    <label for="piket-semester">Semester</label>
+                    <select id="piket-semester" class="input">
+                        <option value="1">Semester 1</option>
+                        <option value="2">Semester 2</option>
+                    </select>
+                </div>
+                <button id="btn-piket-filter" class="btn btn-primary">Tampilkan</button>
+            </div>
+            <div id="piket-content">
+                <p class="hint">Pilih tahun ajaran dan klik Tampilkan.</p>
+            </div>
+        </section>
+
+        <!-- Tab 2: Keterlambatan -->
+        <section id="section-late" class="section" style="display:none">
+            <div class="section-header">
+                <h3 style="margin:0">Rekap Keterlambatan</h3>
+                <button id="btn-export-late" class="btn btn-sm btn-secondary">&#11015; Export CSV</button>
+            </div>
+            <div class="filter-row">
+                <div class="field" style="margin-bottom:0">
+                    <label for="late-date-start">Dari</label>
+                    <input id="late-date-start" class="input" type="date" />
+                </div>
+                <div class="field" style="margin-bottom:0">
+                    <label for="late-date-end">Sampai</label>
+                    <input id="late-date-end" class="input" type="date" />
+                </div>
+                <button id="btn-late-filter" class="btn btn-primary">Tampilkan</button>
+            </div>
+            <div class="summary-cards" id="late-summary" style="display:none"></div>
+            <div style="overflow-x:auto">
+                <table class="data-table" id="late-table" style="display:none">
+                    <thead>
+                        <tr>
+                            <th>Tanggal</th>
+                            <th>Jam Datang</th>
+                            <th>Nama Siswa</th>
+                            <th>NIS</th>
+                            <th>Alasan</th>
+                        </tr>
+                    </thead>
+                    <tbody id="late-tbody"></tbody>
+                </table>
+            </div>
+            <p id="late-empty" class="hint" style="display:none">Tidak ada data keterlambatan untuk periode ini.</p>
+            <p id="late-hint" class="hint">Pilih rentang tanggal dan klik Tampilkan.</p>
+        </section>
+
+        <!-- Tab 3: Rekap Kehadiran -->
+        <section id="section-attendance" class="section" style="display:none">
+            <div class="section-header">
+                <h3 style="margin:0">Rekap Kehadiran (ALPA / IZIN / SAKIT)</h3>
+                <button id="btn-export-att" class="btn btn-sm btn-secondary">&#11015; Export CSV</button>
+            </div>
+            <div class="filter-row">
+                <div class="field" style="margin-bottom:0">
+                    <label for="att-date-start">Dari</label>
+                    <input id="att-date-start" class="input" type="date" />
+                </div>
+                <div class="field" style="margin-bottom:0">
+                    <label for="att-date-end">Sampai</label>
+                    <input id="att-date-end" class="input" type="date" />
+                </div>
+                <div class="field" style="margin-bottom:0">
+                    <label for="att-status">Status</label>
+                    <select id="att-status" class="input">
+                        <option value="">Semua (ALPA+IZIN+SAKIT)</option>
+                        <option value="ALPA">Alpa saja</option>
+                        <option value="IZIN">Izin saja</option>
+                        <option value="SAKIT">Sakit saja</option>
+                    </select>
+                </div>
+                <button id="btn-att-filter" class="btn btn-primary">Tampilkan</button>
+            </div>
+            <div class="summary-cards" id="att-summary" style="display:none"></div>
+            <div style="overflow-x:auto">
+                <table class="data-table" id="att-table" style="display:none">
+                    <thead>
+                        <tr>
+                            <th>Tanggal</th>
+                            <th>Nama Siswa</th>
+                            <th>NIS</th>
+                            <th>Kelas</th>
+                            <th>Status</th>
+                            <th>Catatan</th>
+                        </tr>
+                    </thead>
+                    <tbody id="att-tbody"></tbody>
+                </table>
+            </div>
+            <p id="att-empty" class="hint" style="display:none">Tidak ada data untuk periode dan filter ini.</p>
+            <p id="att-hint" class="hint">Pilih rentang tanggal dan klik Tampilkan.</p>
+        </section>
+    </div>
+
+    <!-- Bottom nav (mobile) -->
+    <nav id="tu-bottom-nav" class="bottom-nav" aria-label="Navigasi" style="display:none">
+        <div class="bottom-nav-inner">
+            <button class="tab-btn" data-tab="section-piket">
+                <span class="nav-icon">&#128203;</span>
+                <span>Piket</span>
+            </button>
+            <button class="tab-btn" data-tab="section-late">
+                <span class="nav-icon">&#9200;</span>
+                <span>Terlambat</span>
+            </button>
+            <button class="tab-btn" data-tab="section-attendance">
+                <span class="nav-icon">&#128202;</span>
+                <span>Kehadiran</span>
+            </button>
+        </div>
+    </nav>
+
+    <script type="module" src="js/portal.js"></script>
+</body>
+</html>
