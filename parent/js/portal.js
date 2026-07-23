@@ -27,6 +27,7 @@ import {
     getForumPosts,
     addForumAck,
     addForumComment,
+    createParentForumPost,
     getChildLateArrivals,
 } from './api.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
@@ -757,6 +758,7 @@ const FORUM_LIMIT = 20;
 
 async function initForumSection() {
     if (forumInitDone) {
+        updateForumPostPlaceholder();
         await loadForumPosts();
         return;
     }
@@ -789,18 +791,92 @@ async function initForumSection() {
 
     forumSelectedChild = forumChildren[0];
 
+    // ── Render form buat post ──────────────────────────────────
+    const formWrap = document.getElementById('forum-post-form-wrap');
+    if (formWrap) {
+        formWrap.innerHTML = `
+            <div style="margin-bottom:16px;padding:14px;border:1px solid var(--color-border);border-radius:var(--radius,8px)">
+                <p style="margin:0 0 8px;font-size:0.85rem;font-weight:600;color:var(--color-text)">Kirim pemberitahuan ke guru</p>
+                <textarea id="forum-new-post-content" class="input" rows="3"
+                    style="width:100%;resize:vertical;font-size:0.9rem;margin-bottom:8px"
+                    maxlength="2000"
+                    placeholder=""></textarea>
+                <div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">
+                    <span id="forum-post-err" style="display:none;color:var(--color-danger);font-size:0.82rem"></span>
+                    <button id="btn-forum-post-submit" class="btn btn-primary" style="font-size:0.85rem;padding:6px 16px">Kirim</button>
+                </div>
+            </div>`;
+        document.getElementById('btn-forum-post-submit').addEventListener('click', submitParentForumPost);
+        updateForumPostPlaceholder();
+    }
+
     if (!forumListenerSetup) {
         forumListenerSetup = true;
         selectEl.addEventListener('change', async () => {
             const idx = Number(selectEl.value);
             forumSelectedChild = forumChildren[idx] ?? null;
             forumOffset = 0;
+            updateForumPostPlaceholder();
             await loadForumPosts();
         });
         document.getElementById('btn-load-more-forum')?.addEventListener('click', () => loadForumPosts(true));
     }
 
     await loadForumPosts();
+}
+
+function updateForumPostPlaceholder() {
+    const ta = document.getElementById('forum-new-post-content');
+    const formWrap = document.getElementById('forum-post-form-wrap');
+    if (!formWrap) return;
+    if (!forumSelectedChild?.class_id) {
+        formWrap.style.display = 'none';
+        return;
+    }
+    formWrap.style.display = 'block';
+    if (ta) {
+        const nama = forumSelectedChild.full_name ?? 'anak saya';
+        ta.placeholder = `Contoh: "Anak saya, ${nama}, tidak dapat hadir ke sekolah hari ini karena sakit. Mohon informasi tugas yang perlu dikerjakan. Terima kasih."`;
+    }
+}
+
+async function submitParentForumPost() {
+    const ta      = document.getElementById('forum-new-post-content');
+    const btn     = document.getElementById('btn-forum-post-submit');
+    const errEl   = document.getElementById('forum-post-err');
+    const content = ta?.value?.trim();
+
+    errEl.style.display = 'none';
+
+    if (!content || content.length < 3) {
+        errEl.textContent = 'Pesan tidak boleh kosong.';
+        errEl.style.display = 'inline';
+        return;
+    }
+    if (!forumSelectedChild?.class_id) {
+        errEl.textContent = 'Anak belum terdaftar di kelas.';
+        errEl.style.display = 'inline';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Mengirim…';
+    try {
+        await createParentForumPost(
+            forumSelectedChild.class_id,
+            forumSelectedChild.academic_year,
+            content
+        );
+        ta.value = '';
+        forumOffset = 0;
+        await loadForumPosts();
+    } catch (err) {
+        errEl.textContent = `Gagal mengirim: ${fe(err)}`;
+        errEl.style.display = 'inline';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Kirim';
+    }
 }
 
 async function loadForumPosts(loadMore = false) {

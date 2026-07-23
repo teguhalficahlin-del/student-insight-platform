@@ -397,6 +397,20 @@ export async function addForumComment(postId, userId, schoolId, body) {
     return data;
 }
 
+export async function createParentForumPost(classId, academicYear, content) {
+    const { data, error } = await supabase.rpc('fn_create_forum_post', {
+        p_class_id:            classId,
+        p_academic_year:       academicYear,
+        p_content:             content,
+        p_category_code:       null,
+        p_subject_student_ids: [],
+        p_audience_type:       'STAF_SAJA',
+        p_specific_user_ids:   [],
+    });
+    if (error) throw error;
+    return data;
+}
+
 export async function getChildLateArrivals(studentId) {
     try {
         const { data, error } = await supabase
