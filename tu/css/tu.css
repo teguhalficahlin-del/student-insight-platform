@@ -200,7 +200,13 @@ table th, table td { text-align:left; padding:8px 12px; }
 
 @media (max-width: 640px) {
     .bottom-nav { display:block; }
-    .filter-row { flex-direction:column; }
-    .filter-row .field { min-width:unset; }
+    .filter-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    .filter-row .field { min-width: 0; }
+    .filter-row .filter-field-full { grid-column: 1 / -1; }
+    .filter-row .filter-btn { grid-column: 1 / -1; width: 100%; }
     .portal-shell { padding-bottom:70px; }
 }
