@@ -836,7 +836,7 @@ function updateForumPostPlaceholder() {
     formWrap.style.display = 'block';
     if (ta) {
         const nama = forumSelectedChild.full_name ?? 'anak saya';
-        ta.placeholder = `Contoh: "Anak saya, ${nama}, tidak dapat hadir ke sekolah hari ini karena sakit. Mohon informasi tugas yang perlu dikerjakan. Terima kasih."`;
+        ta.placeholder = `Contoh: "Anak saya, ${nama}, tidak dapat hadir ke sekolah selama 2 hari mulai hari ini karena sakit. Mohon informasi tugas yang perlu dikerjakan. Terima kasih."`;
     }
 }
 
