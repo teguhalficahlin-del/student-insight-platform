@@ -5,7 +5,7 @@
 -- school_id/class_id/academic_year sudah diverifikasi match
 INSERT INTO class_enrollments (student_id, class_id, school_id, academic_year, semester)
 VALUES
-    ('31b2ce8d-38e9-422a-b526-e595855e3006', 'efe243d6-0300-4522-b6bb-65b8d00c2a98', '244e389c-de7d-4d70-ac95-346d33a5d02c', '2026/2027', 1),
-    ('f9193f38-b870-4ce9-a806-b1bdf333cd27', 'efe243d6-0300-4522-b6bb-65b8d00c2a98', '244e389c-de7d-4d70-ac95-346d33a5d02c', '2026/2027', 1),
-    ('9d7348bc-ecdc-49e3-a035-5f08908f233c', 'efe243d6-0300-4522-b6bb-65b8d00c2a98', '244e389c-de7d-4d70-ac95-346d33a5d02c', '2026/2027', 1)
+    ('31b2ce8d-38e9-422a-b526-e595855e3006', 'efe243d6-0300-4522-b6bb-65b8d00c2a98', '244e389c-de7d-4d70-ac95-346d33a5d02c', '2026/2027', '1'::semester),
+    ('f9193f38-b870-4ce9-a806-b1bdf333cd27', 'efe243d6-0300-4522-b6bb-65b8d00c2a98', '244e389c-de7d-4d70-ac95-346d33a5d02c', '2026/2027', '1'::semester),
+    ('9d7348bc-ecdc-49e3-a035-5f08908f233c', 'efe243d6-0300-4522-b6bb-65b8d00c2a98', '244e389c-de7d-4d70-ac95-346d33a5d02c', '2026/2027', '1'::semester)
 ON CONFLICT DO NOTHING;
