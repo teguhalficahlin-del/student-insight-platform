@@ -3792,7 +3792,7 @@ async function _piketRenderForm() {
             <div class="field" style="position:relative;margin-bottom:12px">
                 <label style="font-size:13px;font-weight:500;display:block;margin-bottom:4px">Cari Siswa</label>
                 <input type="text" id="piket-search-input" placeholder="Ketik nama atau NIS…"
-                       class="form-control" autocomplete="off" ${active ? '' : 'disabled'}>
+                       class="input" autocomplete="off" ${active ? '' : 'disabled'}>
                 <div id="piket-search-results" style="position:absolute;top:100%;left:0;right:0;
                      background:var(--color-surface);border:1px solid var(--color-border);
                      border-radius:6px;z-index:100;display:none;max-height:200px;overflow-y:auto"></div>
@@ -3802,13 +3802,13 @@ async function _piketRenderForm() {
             <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
                 <div class="field" style="flex:1;min-width:120px">
                     <label style="font-size:13px;font-weight:500;display:block;margin-bottom:4px">Jam Datang</label>
-                    <input type="time" id="piket-arrival-time" class="form-control"
+                    <input type="time" id="piket-arrival-time" class="input"
                            value="${nowTime}" min="07:00" max="16:00" ${active ? '' : 'disabled'}>
                 </div>
             </div>
             <div class="field" style="margin-bottom:12px">
                 <label style="font-size:13px;font-weight:500;display:block;margin-bottom:4px">Alasan <span style="color:var(--color-text-muted)">(opsional)</span></label>
-                <textarea id="piket-reason" class="form-control" rows="2"
+                <textarea id="piket-reason" class="input" rows="2"
                           placeholder="Misal: macet, bangun kesiangan…" ${active ? '' : 'disabled'}></textarea>
             </div>
             <button id="piket-submit-btn" class="btn btn-primary" ${active ? '' : 'disabled'}>Catat Keterlambatan</button>
@@ -3961,7 +3961,7 @@ async function _piketRenderExitForm() {
         <div class="field">
             <label>Cari Siswa</label>
             <input type="text" id="piket-exit-search" class="input" placeholder="Ketik nama atau NIS…" autocomplete="off" />
-            <div id="piket-exit-dropdown" style="display:none;position:relative;z-index:10"></div>
+            <div id="piket-exit-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:20;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius);max-height:200px;overflow-y:auto"></div>
         </div>
         <div id="piket-exit-selected" style="display:none;margin-bottom:8px"></div>
         <div class="field">

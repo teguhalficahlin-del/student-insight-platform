@@ -99,16 +99,16 @@
                 <h2>Rekap Izin Keluar</h2>
                 <button class="btn btn-sm btn-secondary" id="btn-export-exits">&#11015; Export CSV</button>
             </div>
-            <div class="filter-row">
-                <div style="display:flex;align-items:center;gap:8px">
-                    <label for="exits-date-start" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">Dari</label>
+            <div class="filter-row" style="margin-bottom:12px">
+                <div class="field" style="flex:1;min-width:120px">
+                    <label for="exits-date-start">Dari</label>
                     <input id="exits-date-start" class="input" type="date" />
                 </div>
-                <div style="display:flex;align-items:center;gap:8px">
-                    <label for="exits-date-end" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">s/d</label>
+                <div class="field" style="flex:1;min-width:120px">
+                    <label for="exits-date-end">Sampai</label>
                     <input id="exits-date-end" class="input" type="date" />
-                    <button id="btn-exits-filter" class="btn btn-primary">Tampilkan</button>
                 </div>
+                <button id="btn-exits-filter" class="btn btn-primary" style="align-self:flex-end">Tampilkan</button>
             </div>
             <div class="summary-cards" id="exits-summary" style="display:none"></div>
             <div style="overflow-x:auto">

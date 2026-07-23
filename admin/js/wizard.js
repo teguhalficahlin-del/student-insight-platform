@@ -2993,7 +2993,7 @@ function renderDataTable(cfg, rows) {
         : '';
 
     return heading + toolbar +
-        `<table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` + truncNote + allIdsJson;
+        `<div style="overflow-x:auto"><table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>` + truncNote + allIdsJson;
 }
 
 function renderRow(r, canDelete, hasEdit) {

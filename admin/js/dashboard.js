@@ -1793,7 +1793,7 @@ async function renderTuPanel() {
         <h3>Tata Usaha (${(users ?? []).length})</h3>
         <p class="hint" style="margin-bottom:12px">Untuk tambah atau hapus akun TU, buka
             <a href="${wizardLink}" style="color:var(--color-accent)">Wizard Admin (Langkah 10)</a>.</p>
-        <table class="table">
+        <div style="overflow-x:auto"><table class="table">
             <thead><tr><th>Nama</th><th>NIP / NIK</th><th>Aksi</th></tr></thead>
             <tbody>${(users ?? []).map(u => `<tr>
                 <td>${esc(u.full_name)}</td>
@@ -1802,7 +1802,7 @@ async function renderTuPanel() {
                     ? '<span class="badge badge-muted" title="Menunggu pengguna ganti password">Menunggu ganti PW</span>'
                     : '<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="' + u.user_id + '" data-nama="' + esc(u.full_name) + '">Reset PW</button>'
                 }</td></tr>`).join('')}</tbody>
-        </table>
+        </table></div>
     `;
 }
 

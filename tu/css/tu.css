@@ -196,7 +196,7 @@ select.input option { background:var(--color-surface); }
 .nav-icon { font-size:20px; line-height:1; }
 
 /* Base alignment — covers any table not using .data-table */
-th, td { text-align:left; padding:8px 12px; }
+table th, table td { text-align:left; padding:8px 12px; }
 
 @media (max-width: 640px) {
     .bottom-nav { display:block; }
