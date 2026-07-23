@@ -239,6 +239,14 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 }
 details[open] .att-accordion-summary::before { transform: rotate(90deg); }
 .att-acc-names { font-weight: 400; color: var(--color-text-muted); font-size: 12px; }
+/* Pastikan span pertama accordion (nama) selalu mengisi sisa ruang — rata kiri */
+.att-accordion-summary > span:first-child {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .att-accordion .att-row { padding: 8px 12px; }
 .att-accordion .att-row:last-child { border-bottom: none; }
 

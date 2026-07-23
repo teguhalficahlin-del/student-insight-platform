@@ -1470,7 +1470,7 @@ async function loadBkAttendanceRecap() {
             return `
             <details class="att-accordion" style="margin-bottom:8px">
                 <summary class="att-accordion-summary">
-                    <span>${esc(prog.name)}</span>
+                    <span class="att-acc-name">${esc(prog.name)}</span>
                     <span class="att-acc-names">${prog.classes.length} kelas</span>
                 </summary>
                 <div style="padding:4px 0">${classAccordions}</div>
@@ -1707,7 +1707,7 @@ async function loadWkAttendanceRecap() {
             return `
             <details class="att-accordion" style="margin-bottom:8px">
                 <summary class="att-accordion-summary">
-                    <span>${esc(prog.name)}</span>
+                    <span class="att-acc-name">${esc(prog.name)}</span>
                     <span class="att-acc-names">${prog.classes.length} kelas</span>
                 </summary>
                 <div style="padding:4px 0">${classAccordions}</div>

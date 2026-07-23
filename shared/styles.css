@@ -1,0 +1,21 @@
+/* ============================================================
+   shared/styles.css
+   Base table styles — konsisten di semua portal.
+   Perlu di-<link> dari HTML masing-masing portal.
+   Portal-specific class (.table, .data-table) override via specificity.
+   ============================================================ */
+
+/* Base tabel — konsisten di semua portal */
+table { width: 100%; border-collapse: collapse; }
+th, td {
+    text-align: left;
+    padding: 8px 12px;
+    vertical-align: top;
+    border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+th {
+    font-weight: 600;
+    color: var(--color-text-muted, #6b7280);
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
