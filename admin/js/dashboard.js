@@ -483,6 +483,7 @@ async function renderSetupPanel() {
         { count: alumniCount },
         { count: dudiCount },
         { count: stakeholderCount },
+        { count: tuCount },
         { count: jadwalCount },
         linksRaw,
     ] = await Promise.all([
@@ -493,6 +494,7 @@ async function renderSetupPanel() {
         supabase.from('students').select('*', { count: 'exact', head: true }).eq('student_status', 'LULUS'),
         supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'DUDI').is('deleted_at', null),
         supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'STAKEHOLDER').is('deleted_at', null),
+        supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'TU').is('deleted_at', null),
         supabase.from('schedule_templates').select('*', { count: 'exact', head: true }),
         fetchAllRows('student_parents', q => q.select('parent_user_id, students(student_status)')),
     ]);
@@ -522,8 +524,9 @@ async function renderSetupPanel() {
         { label: 'Orang Tua Siswa',   count: ortuSiswaCount,   panel: 'parents',     portal: portalUrl('parent/index.html') },
         { label: 'Orang Tua Alumni',  count: ortuAlumniCount,  panel: 'alumni',      portal: null },
         { label: 'DUDI',              count: dudiCount,        panel: 'dudi',        portal: portalUrl('dudi/index.html') },
-        { label: 'Stakeholder',       count: stakeholderCount, panel: 'stakeholders',portal: portalUrl('stakeholder/index.html') },
-        { label: 'Jadwal',            count: jadwalCount,      panel: 'jadwal',      portal: null },
+        { label: 'Stakeholder',       count: stakeholderCount, panel: 'stakeholders',  portal: portalUrl('stakeholder/index.html') },
+        { label: 'Tata Usaha',        count: tuCount,          panel: 'tata-usaha',    portal: portalUrl('tu/index.html') },
+        { label: 'Jadwal',            count: jadwalCount,      panel: 'jadwal',        portal: null },
     ];
 
     panelContent.innerHTML = `
