@@ -275,7 +275,7 @@ async function init() {
     }
 
     // Inisialisasi section kasus PKL
-    await initKasusSection(user, students);
+    await initKasusSection(userRow, students);
     showPwaBanner({ hasBottomNav: false });
 }
 
