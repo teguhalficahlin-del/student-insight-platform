@@ -46,6 +46,7 @@ import {
     getLateArrivalsByRange, getLateArrivalsAggregate,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
+import { showPwaBanner } from '../../shared/pwa-banner.js';
 
 // ─── Notifikasi lonceng ───────────────────────────────────────
 // Menggantikan badge localStorage. Sumber kebenaran = tabel notifications.
@@ -251,6 +252,7 @@ async function init() {
     startNotifPolling();
 
     initPWAInstallBanner();
+    showPwaBanner({ hasBottomNav: true });
 }
 
 function initPWAInstallBanner() {

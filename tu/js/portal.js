@@ -16,6 +16,7 @@ import {
     fetchLateArrivals,
     fetchAttendanceSummary,
 } from './api.js';
+import { showPwaBanner } from '../../shared/pwa-banner.js';
 
 // ── DOM refs ───────────────────────────────────────────────────
 const portalTitle    = document.getElementById('portal-title');
@@ -379,6 +380,7 @@ async function init() {
 
     showTab('section-piket');
     await loadPiket();
+    showPwaBanner({ hasBottomNav: true });
 }
 
 init().catch(err => {

@@ -32,6 +32,7 @@ import {
     pendingCount,
     clearOfflineQueue,
 } from './offline.js';
+import { showPwaBanner } from '../../shared/pwa-banner.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
 const offlineBannerEl   = document.getElementById('offline-banner');
@@ -275,6 +276,7 @@ async function init() {
 
     // Inisialisasi section kasus PKL
     await initKasusSection(user, students);
+    showPwaBanner({ hasBottomNav: false });
 }
 
 // ── Attendance ────────────────────────────────────────────────

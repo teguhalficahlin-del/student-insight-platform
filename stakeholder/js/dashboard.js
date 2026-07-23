@@ -10,6 +10,7 @@ import {
     supabase, logout, getCurrentUserRow, STAKEHOLDER_ROLES,
     getStakeholderSummary,
 } from './api.js';
+import { showPwaBanner } from '../../shared/pwa-banner.js';
 
 function fmtNum(n)  { return (n ?? 0).toLocaleString('id-ID'); }
 function fmtPct(n)  { return (n === null || n === undefined) ? '—' : n + '%'; }
@@ -39,6 +40,7 @@ async function init() {
         loadSummary(),
     ]);
     document.getElementById('refresh-btn').onclick = loadSummary;
+    showPwaBanner({ hasBottomNav: false });
 }
 
 async function loadSummary() {

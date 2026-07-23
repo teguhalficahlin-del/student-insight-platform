@@ -29,6 +29,7 @@ import {
     addForumComment,
     getChildLateArrivals,
 } from './api.js';
+import { showPwaBanner } from '../../shared/pwa-banner.js';
 
 const portalTitle    = document.getElementById('portal-title');
 const portalUserName = document.getElementById('portal-user-name');
@@ -176,6 +177,7 @@ async function init() {
 
     initNotifBell();
     await loadChildData(0);
+    showPwaBanner({ hasBottomNav: true });
 }
 
 function getTabKey(sectionId) {

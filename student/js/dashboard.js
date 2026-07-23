@@ -16,6 +16,7 @@ import {
     getMyForumClass, getForumPosts, addForumAck,
     getMyLateArrivals,
 } from './api.js';
+import { showPwaBanner } from '../../shared/pwa-banner.js';
 
 // ─── State ───────────────────────────────────────────────────
 let currentUser = null;
@@ -122,6 +123,7 @@ async function init() {
     const firstTab = tabs[0]?.key ?? 'kehadiran';
     activateTab(firstTab);
     await initTab(firstTab);
+    showPwaBanner({ hasBottomNav: true });
 }
 
 // ─── Tab navigation ──────────────────────────────────────────
