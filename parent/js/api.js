@@ -398,17 +398,64 @@ export async function addForumComment(postId, userId, schoolId, body) {
 }
 
 export async function createParentForumPost(classId, academicYear, content) {
+    // Ambil wali kelas + guru yang mengajar hari ini di kelas anak
+    const [waliId, teacherIds] = await Promise.all([
+        getWaliKelas(classId),
+        getClassTeachersToday(classId),
+    ]);
+
+    const specificIds = [...new Set([
+        ...(waliId ? [waliId] : []),
+        ...teacherIds,
+    ])];
+
+    // Fallback ke STAF_SAJA jika tidak ada penerima spesifik
+    const audienceType    = specificIds.length > 0 ? 'ORANG_TERTENTU' : 'STAF_SAJA';
+    const specificUserIds = specificIds.length > 0 ? specificIds : [];
+
     const { data, error } = await supabase.rpc('fn_create_forum_post', {
         p_class_id:            classId,
         p_academic_year:       academicYear,
         p_content:             content,
         p_category_code:       null,
         p_subject_student_ids: [],
-        p_audience_type:       'STAF_SAJA',
-        p_specific_user_ids:   [],
+        p_audience_type:       audienceType,
+        p_specific_user_ids:   specificUserIds,
     });
     if (error) throw error;
     return data;
+}
+
+export async function getClassTeachersToday(classId) {
+    try {
+        const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+        const { data, error } = await supabase
+            .from('teaching_schedules')
+            .select('scheduled_teacher_id')
+            .eq('class_id', classId)
+            .eq('session_date', today);
+        if (error) { console.warn('[forum] getClassTeachersToday error:', error.message); return []; }
+        const ids = [...new Set((data ?? []).map(r => r.scheduled_teacher_id).filter(Boolean))];
+        return ids;
+    } catch (e) {
+        console.warn('[forum] getClassTeachersToday exception:', e);
+        return [];
+    }
+}
+
+export async function getWaliKelas(classId) {
+    try {
+        const { data, error } = await supabase
+            .from('classes')
+            .select('wali_kelas_user_id')
+            .eq('class_id', classId)
+            .maybeSingle();
+        if (error) { console.warn('[forum] getWaliKelas error:', error.message); return null; }
+        return data?.wali_kelas_user_id ?? null;
+    } catch (e) {
+        console.warn('[forum] getWaliKelas exception:', e);
+        return null;
+    }
 }
 
 export async function getChildLateArrivals(studentId) {
