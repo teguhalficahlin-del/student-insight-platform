@@ -15,6 +15,7 @@ import {
     fetchDutySchedules,
     fetchLateArrivals,
     fetchAttendanceSummary,
+    getExitsByRange,
 } from './api.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
 
@@ -25,7 +26,7 @@ const logoutBtn      = document.getElementById('logout-btn');
 const loadingEl      = document.getElementById('loading');
 const tabNav         = document.getElementById('tab-nav');
 const bottomNav      = document.getElementById('tu-bottom-nav');
-const ALL_SECTIONS   = ['section-piket', 'section-late', 'section-attendance'];
+const ALL_SECTIONS   = ['section-piket', 'section-late', 'section-exits', 'section-attendance'];
 const tabBtns        = document.querySelectorAll('.tab-btn');
 
 let currentUser  = null;
@@ -229,7 +230,80 @@ document.getElementById('btn-export-late').addEventListener('click', () => {
     downloadCSV([...header, ...rows], `keterlambatan-${Date.now()}.csv`);
 });
 
-// ── Tab 3: Rekap Kehadiran ─────────────────────────────────────
+// ── Tab 3: Izin Keluar ────────────────────────────────────────
+const exitsHintEl  = document.getElementById('exits-hint');
+const exitsSummary = document.getElementById('exits-summary');
+const exitsTable   = document.getElementById('exits-table');
+const exitsTbody   = document.getElementById('exits-tbody');
+const exitsEmpty   = document.getElementById('exits-empty');
+let _cachedExits   = [];
+
+async function loadExitsRecap() {
+    const dateStart = document.getElementById('exits-date-start').value;
+    const dateEnd   = document.getElementById('exits-date-end').value;
+    const btn       = document.getElementById('btn-exits-filter');
+
+    btn.disabled               = true;
+    btn.textContent            = 'Memuat…';
+    if (exitsHintEl)  exitsHintEl.style.display  = 'none';
+    if (exitsSummary) exitsSummary.style.display  = 'none';
+    if (exitsTable)   exitsTable.style.display    = 'none';
+    if (exitsEmpty)   exitsEmpty.style.display    = 'none';
+    if (exitsTbody)   exitsTbody.innerHTML        = '';
+
+    try {
+        const rows = await getExitsByRange(dateStart || null, dateEnd || null);
+        _cachedExits = rows;
+
+        if (!rows.length) { if (exitsEmpty) exitsEmpty.style.display = 'block'; return; }
+
+        if (exitsSummary) {
+            exitsSummary.innerHTML = `
+                <div class="summary-card card-late">
+                    <span class="count">${rows.length}</span>
+                    <span class="label">Total Izin Keluar</span>
+                </div>`;
+            exitsSummary.style.display = 'flex';
+        }
+
+        if (exitsTbody) {
+            exitsTbody.innerHTML = rows.map(r => `
+                <tr>
+                    <td>${esc(formatDate(r.date))}</td>
+                    <td>${esc(r.exit_time ? r.exit_time.slice(0,5) : '—')}</td>
+                    <td>${esc(r.return_time ? r.return_time.slice(0,5) : '—')}</td>
+                    <td>${esc(r.student_name)}</td>
+                    <td>${esc(r.nis)}</td>
+                    <td>${esc(r.reason || '—')}</td>
+                </tr>`).join('');
+            if (exitsTable) exitsTable.style.display = 'table';
+        }
+    } catch (err) {
+        if (exitsHintEl) {
+            exitsHintEl.textContent   = `Gagal memuat data. ${esc(fe(err))}`;
+            exitsHintEl.style.display = 'block';
+        }
+    } finally {
+        btn.disabled    = false;
+        btn.textContent = 'Tampilkan';
+    }
+}
+
+document.getElementById('btn-exits-filter')?.addEventListener('click', loadExitsRecap);
+
+document.getElementById('btn-export-exits')?.addEventListener('click', () => {
+    if (!_cachedExits.length) { alert('Tampilkan data dulu sebelum export.'); return; }
+    const header = [['Tanggal', 'Jam Keluar', 'Jam Kembali', 'Nama Siswa', 'NIS', 'Alasan']];
+    const rows   = _cachedExits.map(r => [
+        formatDate(r.date),
+        r.exit_time ? r.exit_time.slice(0,5) : '—',
+        r.return_time ? r.return_time.slice(0,5) : '—',
+        r.student_name, r.nis, r.reason || '',
+    ]);
+    downloadCSV([...header, ...rows], `izin-keluar-${Date.now()}.csv`);
+});
+
+// ── Tab 4: Rekap Kehadiran ─────────────────────────────────────
 const attHintEl  = document.getElementById('att-hint');
 const attSummary = document.getElementById('att-summary');
 const attTable   = document.getElementById('att-table');

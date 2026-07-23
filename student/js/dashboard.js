@@ -15,6 +15,7 @@ import {
     getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
     getMyForumClass, getForumPosts, addForumAck,
     getMyLateArrivals,
+    getMyExits,
 } from './api.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
 
@@ -505,10 +506,11 @@ async function loadObservations() {
     casesHintEl.style.display = 'block';
     document.getElementById('cases-list').innerHTML = '';
 
-    const [obsResult, casesResult, lateResult] = await Promise.allSettled([
+    const [obsResult, casesResult, lateResult, exitResult] = await Promise.allSettled([
         getMyObservations(student.student_id, dateStart, dateEnd),
         getMyCases(student.student_id),
         getMyLateArrivals(student.student_id),
+        getMyExits(student.student_id),
     ]);
 
     if (obsResult.status === 'fulfilled') {
@@ -526,6 +528,7 @@ async function loadObservations() {
     }
 
     renderLateArrivals(lateResult.status === 'fulfilled' ? lateResult.value : []);
+    renderExits(exitResult.status === 'fulfilled' ? exitResult.value : []);
 }
 
 function renderLateArrivals(rows) {
@@ -554,6 +557,41 @@ function renderLateArrivals(rows) {
                         <tr style="border-bottom:1px solid var(--color-border)">
                             <td style="padding:8px 10px;white-space:nowrap">${fmt(r.date)}</td>
                             <td style="padding:8px 10px;white-space:nowrap">${r.arrival_time ? r.arrival_time.slice(0,5) : '—'}</td>
+                            <td style="padding:8px 10px">${r.reason ? esc(r.reason) : '<span style="color:var(--color-text-muted)">—</span>'}</td>
+                        </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>`;
+}
+
+function renderExits(rows) {
+    const hintEl = document.getElementById('exits-hint');
+    const bodyEl = document.getElementById('exits-body');
+    if (!hintEl || !bodyEl) return;
+    if (!rows.length) {
+        hintEl.style.display = 'block';
+        hintEl.textContent   = 'Belum ada riwayat izin keluar.';
+        bodyEl.innerHTML     = '';
+        return;
+    }
+    hintEl.style.display = 'none';
+    bodyEl.innerHTML = `
+        <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead>
+                    <tr style="border-bottom:2px solid var(--color-border);text-align:left">
+                        <th style="padding:8px 10px;white-space:nowrap">Tanggal</th>
+                        <th style="padding:8px 10px;white-space:nowrap">Jam Keluar</th>
+                        <th style="padding:8px 10px;white-space:nowrap">Jam Kembali</th>
+                        <th style="padding:8px 10px">Alasan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(r => `
+                        <tr style="border-bottom:1px solid var(--color-border)">
+                            <td style="padding:8px 10px;white-space:nowrap">${fmt(r.exit_date)}</td>
+                            <td style="padding:8px 10px;white-space:nowrap">${r.exit_time ? r.exit_time.slice(0,5) : '—'}</td>
+                            <td style="padding:8px 10px;white-space:nowrap">${r.return_time ? r.return_time.slice(0,5) : '—'}</td>
                             <td style="padding:8px 10px">${r.reason ? esc(r.reason) : '<span style="color:var(--color-text-muted)">—</span>'}</td>
                         </tr>`).join('')}
                 </tbody>

@@ -478,3 +478,15 @@ export async function getChildLateArrivals(studentId) {
         return [];
     }
 }
+
+export async function getChildExits(studentId) {
+    try {
+        const { data, error } = await supabase
+            .from('student_exits')
+            .select('exit_id, exit_date, exit_time, return_time, reason')
+            .eq('student_id', studentId)
+            .order('exit_date', { ascending: false });
+        if (error) { console.warn('[exits] getChildExits error:', error.message); return []; }
+        return data ?? [];
+    } catch (e) { console.warn('[exits] getChildExits exception:', e); return []; }
+}

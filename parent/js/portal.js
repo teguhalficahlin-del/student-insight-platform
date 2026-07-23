@@ -29,6 +29,7 @@ import {
     addForumComment,
     createParentForumPost,
     getChildLateArrivals,
+    getChildExits,
 } from './api.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
 
@@ -223,6 +224,7 @@ async function showTab(sectionId) {
     if (key === 'observations') {
         await loadObservations(child.student_id);
         await loadLateArrivals(child.student_id);
+        await loadExits(child.student_id);
     }
     if (key === 'cases')        await loadCases(child.student_id);
     if (key === 'forum')         await initForumSection();
@@ -547,6 +549,39 @@ async function loadLateArrivals(studentId) {
                         <tr>
                             <td>${formatDate(r.date)}</td>
                             <td>${r.arrival_time.slice(0, 5)}</td>
+                            <td>${esc(r.reason || '—')}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>`;
+    } catch (err) {
+        hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
+    }
+}
+
+async function loadExits(studentId) {
+    const hintEl = document.getElementById('exits-hint');
+    const bodyEl = document.getElementById('exits-body');
+    if (!hintEl || !bodyEl) return;
+    hintEl.style.display = 'block';
+    hintEl.textContent = 'Memuat…';
+    bodyEl.innerHTML = '';
+    try {
+        const rows = await getChildExits(studentId);
+        if (!rows.length) {
+            hintEl.textContent = 'Belum ada riwayat izin keluar.';
+            return;
+        }
+        hintEl.style.display = 'none';
+        bodyEl.innerHTML = `
+            <div style="overflow-x:auto">
+                <table class="data-table">
+                    <thead><tr><th>Tanggal</th><th>Jam Keluar</th><th>Jam Kembali</th><th>Alasan</th></tr></thead>
+                    <tbody>${rows.map(r => `
+                        <tr>
+                            <td>${formatDate(r.exit_date)}</td>
+                            <td>${r.exit_time ? r.exit_time.slice(0, 5) : '—'}</td>
+                            <td>${r.return_time ? r.return_time.slice(0, 5) : '—'}</td>
                             <td>${esc(r.reason || '—')}</td>
                         </tr>`).join('')}
                     </tbody>

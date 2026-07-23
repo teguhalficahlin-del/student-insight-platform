@@ -398,3 +398,16 @@ export async function getMyLateArrivals(studentId) {
         return [];
     }
 }
+
+export async function getMyExits(studentId) {
+    try {
+        const { data, error } = await supabase
+            .from('student_exits')
+            .select('exit_id, exit_date, exit_time, return_time, reason')
+            .eq('student_id', studentId)
+            .order('exit_date', { ascending: false })
+            .order('exit_time', { ascending: false });
+        if (error) { console.warn('[exits] getMyExits error:', error.message); return []; }
+        return data ?? [];
+    } catch (e) { console.warn('[exits] getMyExits exception:', e); return []; }
+}

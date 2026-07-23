@@ -44,6 +44,7 @@ import {
     getTeachingContext, saveTeachingContext,
     isOnDutyToday, getTodayLateArrivals, recordLateArrival, deleteLateArrival,
     getLateArrivalsByRange, getLateArrivalsAggregate,
+    getTodayExits, recordExit, updateReturnTime, deleteExit,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
@@ -3737,6 +3738,16 @@ async function initPiketTab() {
         <div class="section-card" id="piket-rekap-card">
             <h3>Rekap Hari Ini</h3>
             <div id="piket-rekap-content"><p style="color:var(--color-text-muted);font-size:13px">Memuat…</p></div>
+        </div>
+        <div class="section-card" id="piket-exit-form-card">
+            <h3>Catat Izin Keluar</h3>
+            <div id="piket-exit-form-wrap">
+                <p class="hint">Form tidak tersedia di luar jam 07:00–16:00.</p>
+            </div>
+        </div>
+        <div class="section-card" id="piket-exits-card">
+            <h3>Izin Keluar Hari Ini</h3>
+            <div id="piket-exits-content"><p class="hint">Memuat…</p></div>
         </div>`;
 
     _piketTabInit = true;
@@ -3744,7 +3755,7 @@ async function initPiketTab() {
 }
 
 async function _piketRenderAll() {
-    await Promise.all([_piketRenderRingkasan(), _piketRenderForm(), _piketRenderRekap()]);
+    await Promise.all([_piketRenderRingkasan(), _piketRenderForm(), _piketRenderRekap(), _piketRenderExitForm(), _piketRenderExits()]);
 }
 
 async function _piketRenderRingkasan() {
@@ -3934,6 +3945,164 @@ async function _piketRenderRekap() {
                 alert(fe(err, 'h'));
                 btn.disabled = false;
             }
+        });
+    });
+}
+
+async function _piketRenderExitForm() {
+    const wrap = document.getElementById('piket-exit-form-wrap');
+    if (!wrap) return;
+    if (!_piketFormActive()) {
+        wrap.innerHTML = '<p class="hint">Form tidak tersedia di luar jam 07:00–16:00.</p>';
+        return;
+    }
+    const now = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+    wrap.innerHTML = `
+        <div class="field">
+            <label>Cari Siswa</label>
+            <input type="text" id="piket-exit-search" class="input" placeholder="Ketik nama atau NIS…" autocomplete="off" />
+            <div id="piket-exit-dropdown" style="display:none;position:relative;z-index:10"></div>
+        </div>
+        <div id="piket-exit-selected" style="display:none;margin-bottom:8px"></div>
+        <div class="field">
+            <label>Jam Keluar</label>
+            <input type="time" id="piket-exit-time" class="input" value="${now}" min="07:00" max="16:00" />
+        </div>
+        <div class="field">
+            <label>Alasan <span style="color:var(--color-text-muted)">(opsional)</span></label>
+            <textarea id="piket-exit-reason" class="input" rows="2" placeholder="Keperluan keluar…"></textarea>
+        </div>
+        <button class="btn btn-primary" id="piket-exit-submit" disabled>Catat Izin Keluar</button>
+    `;
+
+    let _exitSelectedStudent = null;
+    let _exitDebounceTimer   = null;
+
+    const searchEl  = document.getElementById('piket-exit-search');
+    const dropEl    = document.getElementById('piket-exit-dropdown');
+    const selectedEl= document.getElementById('piket-exit-selected');
+    const submitBtn = document.getElementById('piket-exit-submit');
+
+    searchEl.addEventListener('input', () => {
+        clearTimeout(_exitDebounceTimer);
+        _exitDebounceTimer = setTimeout(async () => {
+            const q = searchEl.value.trim();
+            if (q.length < 2) { dropEl.style.display = 'none'; return; }
+            const results = await searchStudents(q, currentUser.school_id);
+            if (!results.length) { dropEl.style.display = 'none'; return; }
+            dropEl.innerHTML = results.slice(0, 8).map(s =>
+                `<div class="search-result-item" data-id="${esc(s.student_id)}"
+                      style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--color-border)">
+                    ${esc(s.full_name)} <span style="color:var(--color-text-muted);font-size:12px">${esc(s.nis)} — ${esc(s.class_name ?? '')}</span>
+                 </div>`).join('');
+            dropEl.style.display = 'block';
+            dropEl.querySelectorAll('.search-result-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    _exitSelectedStudent = results.find(s => s.student_id === el.dataset.id);
+                    searchEl.value = '';
+                    dropEl.style.display = 'none';
+                    selectedEl.innerHTML = `<span class="badge badge-info">✓ ${esc(_exitSelectedStudent.full_name)} — ${esc(_exitSelectedStudent.class_name ?? '')}</span>
+                        <button type="button" style="margin-left:8px;background:none;border:none;cursor:pointer;color:var(--color-text-muted)" id="piket-exit-clear">×</button>`;
+                    selectedEl.style.display = 'block';
+                    submitBtn.disabled = false;
+                    document.getElementById('piket-exit-clear')?.addEventListener('click', () => {
+                        _exitSelectedStudent = null;
+                        selectedEl.style.display = 'none';
+                        submitBtn.disabled = true;
+                    });
+                });
+            });
+        }, 300);
+    });
+
+    submitBtn.addEventListener('click', async () => {
+        if (!_exitSelectedStudent) return;
+        const exitTime = document.getElementById('piket-exit-time').value;
+        const reason   = document.getElementById('piket-exit-reason').value.trim();
+        if (!exitTime) { alert('Jam keluar wajib diisi.'); return; }
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Menyimpan…';
+        try {
+            await recordExit(_exitSelectedStudent.student_id, exitTime, reason || null, currentUser.school_id);
+            _exitSelectedStudent = null;
+            selectedEl.style.display = 'none';
+            submitBtn.disabled = true;
+            document.getElementById('piket-exit-reason').value = '';
+            await _piketRenderAll();
+        } catch (e) {
+            alert('Gagal mencatat: ' + (e.message ?? e));
+            submitBtn.disabled = false;
+        } finally {
+            submitBtn.textContent = 'Catat Izin Keluar';
+        }
+    });
+}
+
+async function _piketRenderExits() {
+    const content = document.getElementById('piket-exits-content');
+    if (!content) return;
+    const exits = await getTodayExits();
+    const currentUserId = currentUser?.user_id ?? null;
+    if (!exits.length) {
+        content.innerHTML = '<p class="hint">Belum ada siswa izin keluar hari ini.</p>';
+        return;
+    }
+    content.innerHTML = `
+        <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead>
+                    <tr style="border-bottom:2px solid var(--color-border);text-align:left">
+                        <th style="padding:8px 10px">Nama Siswa</th>
+                        <th style="padding:8px 10px">Kelas</th>
+                        <th style="padding:8px 10px">Jam Keluar</th>
+                        <th style="padding:8px 10px">Jam Kembali</th>
+                        <th style="padding:8px 10px">Alasan</th>
+                        <th style="padding:8px 10px">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${exits.map(r => `
+                        <tr style="border-bottom:1px solid var(--color-border)" data-exit-id="${esc(r.exit_id)}">
+                            <td style="padding:8px 10px">${esc(r.student_name)}</td>
+                            <td style="padding:8px 10px">${esc(r.class_name)}</td>
+                            <td style="padding:8px 10px">${r.exit_time ? r.exit_time.slice(0,5) : '—'}</td>
+                            <td style="padding:8px 10px">
+                                ${r.return_time
+                                    ? r.return_time.slice(0,5)
+                                    : (r.recorder_id === currentUserId
+                                        ? `<button class="btn btn-sm btn-secondary piket-return-btn" data-exit-id="${esc(r.exit_id)}">Catat Kembali</button>`
+                                        : '—')}
+                            </td>
+                            <td style="padding:8px 10px">${r.reason ? esc(r.reason) : '<span style="color:var(--color-text-muted)">—</span>'}</td>
+                            <td style="padding:8px 10px">
+                                ${r.recorder_id === currentUserId
+                                    ? `<button class="btn btn-sm btn-danger piket-exit-delete-btn" data-exit-id="${esc(r.exit_id)}">Hapus</button>`
+                                    : ''}
+                            </td>
+                        </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>`;
+
+    content.querySelectorAll('.piket-return-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const now = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+            const returnTime = prompt('Jam kembali (HH:MM):', now);
+            if (!returnTime) return;
+            try {
+                await updateReturnTime(btn.dataset.exitId, returnTime);
+                await _piketRenderExits();
+            } catch (e) { alert('Gagal mencatat jam kembali: ' + (e.message ?? e)); }
+        });
+    });
+
+    content.querySelectorAll('.piket-exit-delete-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm('Hapus catatan izin keluar ini?')) return;
+            try {
+                await deleteExit(btn.dataset.exitId);
+                await _piketRenderAll();
+            } catch (e) { alert('Gagal menghapus: ' + (e.message ?? e)); }
         });
     });
 }

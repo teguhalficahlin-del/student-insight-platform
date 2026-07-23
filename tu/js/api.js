@@ -126,6 +126,37 @@ export async function fetchLateArrivals(dateStart, dateEnd) {
     }));
 }
 
+export async function getExitsByRange(dateStart, dateEnd) {
+    const { data, error } = await supabase
+        .from('student_exits')
+        .select(`
+            exit_id, exit_date, exit_time, return_time, reason,
+            student:students(full_name, nis,
+                class_enrollment:class_enrollments(class:classes(name))),
+            recorder:users!student_exits_recorded_by_fkey(full_name)
+        `)
+        .gte('exit_date', dateStart)
+        .lte('exit_date', dateEnd)
+        .order('exit_date', { ascending: false })
+        .order('exit_time', { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map(r => {
+        const enrollment = r.student?.class_enrollment ?? [];
+        const latest = enrollment[enrollment.length - 1];
+        return {
+            exit_id:      r.exit_id,
+            date:         r.exit_date,
+            exit_time:    r.exit_time,
+            return_time:  r.return_time,
+            reason:       r.reason ?? '',
+            student_name: r.student?.full_name ?? '—',
+            nis:          r.student?.nis ?? '—',
+            class_name:   latest?.class?.name ?? '—',
+            recorder:     r.recorder?.full_name ?? '—',
+        };
+    });
+}
+
 /**
  * Ambil rekap kehadiran tidak hadir (ALPA, IZIN, SAKIT) dalam rentang tanggal.
  * Query via teaching_schedules agar bisa filter by session_date.

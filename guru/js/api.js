@@ -1687,6 +1687,65 @@ export async function deleteLateArrival(lateId) {
     if (error) throw error;
 }
 
+export async function getTodayExits() {
+    try {
+        const today = new Date().toLocaleDateString('en-CA');
+        const { data, error } = await supabase
+            .from('student_exits')
+            .select(`
+                exit_id, exit_time, return_time, reason, exit_date,
+                student:students(student_id, full_name, nis,
+                    class_enrollment:class_enrollments(class:classes(name))),
+                recorder:users!student_exits_recorded_by_fkey(full_name, user_id)
+            `)
+            .eq('exit_date', today)
+            .order('exit_time', { ascending: true });
+        if (error) { console.warn('[piket] getTodayExits error:', error.message); return []; }
+        return (data ?? []).map(r => {
+            const enrollment = r.student?.class_enrollment ?? [];
+            const latest = enrollment[enrollment.length - 1];
+            return {
+                exit_id:      r.exit_id,
+                exit_time:    r.exit_time,
+                return_time:  r.return_time,
+                reason:       r.reason ?? '',
+                student_name: r.student?.full_name ?? '—',
+                nis:          r.student?.nis ?? '—',
+                class_name:   latest?.class?.name ?? '—',
+                recorder:     r.recorder?.full_name ?? '—',
+                recorder_id:  r.recorder?.user_id ?? null,
+            };
+        });
+    } catch (e) { console.warn('[piket] getTodayExits exception:', e); return []; }
+}
+
+export async function recordExit(studentId, exitTime, reason, schoolId) {
+    const today = new Date().toLocaleDateString('en-CA');
+    const { data, error } = await supabase
+        .from('student_exits')
+        .insert({ student_id: studentId, exit_time: exitTime,
+                  reason: reason || null, school_id: schoolId, exit_date: today })
+        .select('exit_id').single();
+    if (error) throw error;
+    return data;
+}
+
+export async function updateReturnTime(exitId, returnTime) {
+    const { error } = await supabase
+        .from('student_exits')
+        .update({ return_time: returnTime })
+        .eq('exit_id', exitId);
+    if (error) throw error;
+}
+
+export async function deleteExit(exitId) {
+    const { error } = await supabase
+        .from('student_exits')
+        .delete()
+        .eq('exit_id', exitId);
+    if (error) throw error;
+}
+
 export async function getLateArrivalsByRange(dateStart, dateEnd) {
     const { data, error } = await supabase
         .from('late_arrivals')

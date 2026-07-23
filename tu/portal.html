@@ -28,6 +28,7 @@
         <nav id="tab-nav" class="tab-nav" style="display:none">
             <button class="tab-btn active" data-tab="section-piket">Jadwal Piket</button>
             <button class="tab-btn" data-tab="section-late">Keterlambatan</button>
+            <button class="tab-btn" data-tab="section-exits">Izin Keluar</button>
             <button class="tab-btn" data-tab="section-attendance">Rekap Kehadiran</button>
         </nav>
 
@@ -92,7 +93,44 @@
             <p id="late-hint" class="hint">Pilih rentang tanggal dan klik Tampilkan.</p>
         </section>
 
-        <!-- Tab 3: Rekap Kehadiran -->
+        <!-- Tab 3: Izin Keluar -->
+        <section id="section-exits" class="section" style="display:none">
+            <div class="section-header">
+                <h2>Rekap Izin Keluar</h2>
+                <button class="btn btn-sm btn-secondary" id="btn-export-exits">&#11015; Export CSV</button>
+            </div>
+            <div class="filter-row">
+                <div style="display:flex;align-items:center;gap:8px">
+                    <label for="exits-date-start" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">Dari</label>
+                    <input id="exits-date-start" class="input" type="date" />
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <label for="exits-date-end" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">s/d</label>
+                    <input id="exits-date-end" class="input" type="date" />
+                    <button id="btn-exits-filter" class="btn btn-primary">Tampilkan</button>
+                </div>
+            </div>
+            <div class="summary-cards" id="exits-summary" style="display:none"></div>
+            <div style="overflow-x:auto">
+                <table class="data-table" id="exits-table" style="display:none">
+                    <thead>
+                        <tr>
+                            <th>Tanggal</th>
+                            <th>Jam Keluar</th>
+                            <th>Jam Kembali</th>
+                            <th>Nama Siswa</th>
+                            <th>NIS</th>
+                            <th>Alasan</th>
+                        </tr>
+                    </thead>
+                    <tbody id="exits-tbody"></tbody>
+                </table>
+            </div>
+            <p id="exits-empty" class="hint" style="display:none">Tidak ada data izin keluar untuk periode ini.</p>
+            <p id="exits-hint" class="hint">Pilih rentang tanggal dan klik Tampilkan.</p>
+        </section>
+
+        <!-- Tab 4: Rekap Kehadiran -->
         <section id="section-attendance" class="section" style="display:none">
             <div class="section-header">
                 <h3 style="margin:0">Rekap Kehadiran (ALPA / IZIN / SAKIT)</h3>
@@ -149,6 +187,10 @@
             <button class="tab-btn" data-tab="section-late">
                 <span class="nav-icon">&#9200;</span>
                 <span>Terlambat</span>
+            </button>
+            <button class="tab-btn" data-tab="section-exits">
+                <span class="nav-icon">&#128682;</span>
+                <span>Izin Keluar</span>
             </button>
             <button class="tab-btn" data-tab="section-attendance">
                 <span class="nav-icon">&#128202;</span>
