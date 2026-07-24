@@ -4023,7 +4023,7 @@ async function _piketRenderExitForm() {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Menyimpan…';
         try {
-            await recordExit(_exitSelectedStudent.student_id, exitTime, reason || null, currentUser.school_id);
+            await recordExit(_exitSelectedStudent.student_id, exitTime, reason || null, currentUser.school_id, currentUser.user_id);
             _exitSelectedStudent = null;
             selectedEl.style.display = 'none';
             submitBtn.disabled = true;

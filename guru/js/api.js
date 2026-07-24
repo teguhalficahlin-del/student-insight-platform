@@ -1719,12 +1719,13 @@ export async function getTodayExits() {
     } catch (e) { console.warn('[piket] getTodayExits exception:', e); return []; }
 }
 
-export async function recordExit(studentId, exitTime, reason, schoolId) {
+export async function recordExit(studentId, exitTime, reason, schoolId, recordedBy) {
     const today = new Date().toLocaleDateString('en-CA');
     const { data, error } = await supabase
         .from('student_exits')
         .insert({ student_id: studentId, exit_time: exitTime,
-                  reason: reason || null, school_id: schoolId, exit_date: today })
+                  reason: reason || null, school_id: schoolId,
+                  exit_date: today, recorded_by: recordedBy })
         .select('exit_id').single();
     if (error) throw error;
     return data;
