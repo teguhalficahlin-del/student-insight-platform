@@ -366,11 +366,10 @@ async function loadAttendance(studentId) {
     try {
         const rows = await fetchAttendance(studentId, filterStart.value, filterEnd.value);
 
+        // Card: hitung per blok (satu pertemuan = satu kejadian)
         const counts = { HADIR: 0, ALPA: 0, IZIN: 0, SAKIT: 0 };
         for (const block of rows) {
-            for (const s of (block.slots ?? [])) {
-                if (s.status in counts) counts[s.status]++;
-            }
+            if (block.summary_status in counts) counts[block.summary_status]++;
         }
 
         attSummary.innerHTML = `
@@ -409,25 +408,18 @@ async function loadAttendance(studentId) {
         attTbody.innerHTML = rows.map(block => {
             const multiSlot = block.slots.length > 1;
             const detailRows = multiSlot ? block.slots.map(s => `
-                <tr class="att-slot-detail" style="display:none">
+                <tr class="att-slot-detail">
                     <td></td>
-                    <td style="color:var(--color-text-muted);font-size:.85em">
-                        ${s.start} – ${s.end}
-                    </td>
-                    <td></td>
+                    <td>${esc(s.start)} – ${esc(s.end)}</td>
+                    <td colspan="2" style="color:var(--color-text-muted)">${esc(s.notes || '—')}</td>
                     <td><span class="badge ${STATUS_BADGE_MAP[s.status] ?? ''}">
                         ${STATUS_LABEL_MAP[s.status] ?? s.status}
                     </span></td>
-                    <td>${esc(s.notes || '—')}</td>
+                    <td></td>
                 </tr>`).join('') : '';
 
             return `
-                <tr class="att-block-row ${multiSlot ? 'att-block-expandable' : ''}"
-                    ${multiSlot ? `onclick="this.classList.toggle('att-block-open');
-                        let n=this.nextElementSibling;
-                        while(n&&n.classList.contains('att-slot-detail')){
-                            n.style.display=n.style.display===''?'none':'';n=n.nextElementSibling;
-                        }"` : ''}>
+                <tr class="att-block-row ${multiSlot ? 'att-block-expandable' : ''}">
                     <td>${formatDate(block.date)}</td>
                     <td>${esc(block.time_range)}</td>
                     <td>${esc(block.subject)}</td>
@@ -436,10 +428,11 @@ async function loadAttendance(studentId) {
                         ${STATUS_LABEL_MAP[block.summary_status] ?? block.summary_status}
                         ${multiSlot ? `<span class="att-slot-count">${block.slots.length} sesi</span>` : ''}
                     </span></td>
-                    <td>${esc(block.slots[0]?.notes || '—')}</td>
+                    <td>${multiSlot ? '' : esc(block.slots[0]?.notes || '—')}</td>
                 </tr>
                 ${detailRows}`;
         }).join('');
+
 
     } catch (err) {
         attTbody.innerHTML = `<tr><td colspan="6" class="hint">Gagal memuat data. ${esc(fe(err))}</td></tr>`;
@@ -742,6 +735,17 @@ btnObsFilter.addEventListener('click', async () => {
     } finally {
         btnObsFilter.disabled = false;
         btnObsFilter.textContent = prev;
+    }
+});
+
+attTbody.addEventListener('click', e => {
+    const row = e.target.closest('.att-block-expandable');
+    if (!row) return;
+    const isOpen = row.classList.toggle('att-block-open');
+    let n = row.nextElementSibling;
+    while (n && n.classList.contains('att-slot-detail')) {
+        n.classList.toggle('att-slot-visible', isOpen);
+        n = n.nextElementSibling;
     }
 });
 
