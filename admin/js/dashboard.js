@@ -1283,8 +1283,7 @@ async function renderParentsPanel() {
         supabase.from('class_enrollments')
             .select('student_id, class_id')
             .eq('academic_year', config?.current_academic_year ?? '')
-            .is('withdrawn_at', null)
-            .limit(2000),
+            .is('withdrawn_at', null),
         getPrograms(),
     ]);
     const programNameById = new Map(
