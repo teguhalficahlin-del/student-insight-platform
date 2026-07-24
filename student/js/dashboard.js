@@ -400,19 +400,22 @@ async function loadAttendance() {
 
     try {
         const rows = await getMyAttendance(student.student_id, start, end);
-        const agg = { HADIR:0, IZIN:0, SAKIT:0, ALPA:0, total:0 };
+        // Kartu: hitung per blok (satu pertemuan = satu kejadian)
+        const card = { HADIR:0, IZIN:0, SAKIT:0, ALPA:0 };
+        let totalSlots = 0, hadirSlots = 0;
         for (const block of rows) {
+            if (card[block.summary_status] !== undefined) card[block.summary_status]++;
             for (const s of (block.slots ?? [])) {
-                if (agg[s.status] !== undefined) agg[s.status]++;
-                agg.total++;
+                if (s.status === 'HADIR') hadirSlots++;
+                totalSlots++;
             }
         }
-        const pct = agg.total > 0 ? Math.round(agg.HADIR / agg.total * 100) : 0;
-        document.getElementById('att-hadir').textContent = agg.HADIR;
-        document.getElementById('att-izin').textContent  = agg.IZIN;
-        document.getElementById('att-sakit').textContent = agg.SAKIT;
-        document.getElementById('att-alpha').textContent = agg.ALPA;
-        document.getElementById('att-pct').textContent   = agg.total > 0 ? pct + '%' : '—';
+        const pct = totalSlots > 0 ? Math.round(hadirSlots / totalSlots * 100) : 0;
+        document.getElementById('att-hadir').textContent = card.HADIR;
+        document.getElementById('att-izin').textContent  = card.IZIN;
+        document.getElementById('att-sakit').textContent = card.SAKIT;
+        document.getElementById('att-alpha').textContent = card.ALPA;
+        document.getElementById('att-pct').textContent   = totalSlots > 0 ? pct + '%' : '—';
 
         if (rows.length === 0) {
             tbody.innerHTML = '';
