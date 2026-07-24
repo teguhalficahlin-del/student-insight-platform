@@ -1,837 +1,860 @@
 -- ============================================================
 -- FILE: 06_rls_policies.sql
--- LAYER: RLS — Row Level Security
--- APPLY ORDER: After 05_triggers_functions.sql
---
--- STRATEGY:
---   1. Enable RLS on all tables
---   2. Default: deny all (no permissive policy = no access)
---   3. Policies map directly from the permission matrix
---   4. Helper function fn_current_user_role() used throughout
---   5. Service-role bypass handled by Supabase service key
---      (service key bypasses RLS — used only by Edge Functions)
---
--- NAMING CONVENTION:
---   rls_{table}_{action}_{role_or_scope}
+-- LAYER: RLS -- Row Level Security
+-- LAST SYNCED: 2026-07-24 (sync dari live DB xovvuuwexoweoqyltepq)
+-- TOTAL POLICY: 185
+-- CATATAN: File ini adalah referensi dokumentasi saja.
+--          Sumber kebenaran: supabase/migrations/
 -- ============================================================
+-- TABLE: academic_periods
+CREATE POLICY rls_academic_periods_insert_administrative ON public.academic_periods AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: academic_periods
+CREATE POLICY rls_academic_periods_read_all ON public.academic_periods AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (auth.uid() IS NOT NULL)));
+
+-- TABLE: academic_periods
+CREATE POLICY rls_academic_periods_update_administrative ON public.academic_periods AS PERMISSIVE FOR UPDATE TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: attendance
+CREATE POLICY rls_attendance_rw_guru ON public.attendance AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (EXISTS ( SELECT 1
+   FROM teaching_schedules ts
+  WHERE ((ts.schedule_id = attendance.schedule_id) AND ((ts.scheduled_teacher_id = fn_current_user_id()) OR (EXISTS ( SELECT 1
+           FROM teaching_assignments ta
+          WHERE ((ta.assignment_id = ts.assignment_id) AND (ta.user_id = fn_current_user_id()) AND (ta.is_active = true))))))))))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (EXISTS ( SELECT 1
+   FROM teaching_schedules ts
+  WHERE ((ts.schedule_id = attendance.schedule_id) AND ((ts.scheduled_teacher_id = fn_current_user_id()) OR (EXISTS ( SELECT 1
+           FROM teaching_assignments ta
+          WHERE ((ta.assignment_id = ts.assignment_id) AND (ta.user_id = fn_current_user_id()) AND (ta.is_active = true))))))))));
+
+-- TABLE: attendance
+CREATE POLICY rls_attendance_rw_substitute ON public.attendance AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (EXISTS ( SELECT 1
+   FROM substitute_schedules ss
+  WHERE ((ss.schedule_id = attendance.schedule_id) AND (ss.substitute_user_id = fn_current_user_id()) AND (ss.sync_token_expires_at > now()))))))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (EXISTS ( SELECT 1
+   FROM substitute_schedules ss
+  WHERE ((ss.schedule_id = attendance.schedule_id) AND (ss.substitute_user_id = fn_current_user_id()) AND (ss.sync_token_expires_at > now()))))));
+
+-- TABLE: attendance
+CREATE POLICY rls_attendance_read_parent ON public.attendance AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ORTU'::role_type) AND (is_void = false) AND (EXISTS ( SELECT 1
+   FROM student_parents sp
+  WHERE ((sp.student_id = attendance.student_id) AND (sp.parent_user_id = fn_current_user_id()))))));
+
+-- TABLE: attendance
+CREATE POLICY rls_attendance_read_staff ON public.attendance AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (is_void = false) AND fn_can_see_student(student_id)));
+
+-- TABLE: attendance
+CREATE POLICY rls_attendance_read_student ON public.attendance AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'SISWA'::role_type) AND (student_id = ( SELECT s.student_id
+   FROM students s
+  WHERE (s.user_id = fn_current_user_id()))) AND (is_void = false)));
+
+-- TABLE: attendance
+CREATE POLICY rls_attendance_read_tu ON public.attendance AS PERMISSIVE FOR SELECT TO public
+  USING (((fn_current_user_role() = 'TU'::role_type) AND (is_void = false) AND (EXISTS ( SELECT 1
+   FROM teaching_schedules ts
+  WHERE ((ts.schedule_id = attendance.schedule_id) AND (ts.school_id = fn_current_school_id()))))));
+
+-- TABLE: audit_log
+CREATE POLICY rls_audit_log_read ON public.audit_log AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KEPSEK'::role_type, 'WAKA_KESISWAAN'::role_type, 'WAKA_HUMAS'::role_type, 'KAPRODI'::role_type, 'ADMINISTRATIVE'::role_type]))));
+
+-- TABLE: bk_class_assignments
+CREATE POLICY rls_bk_class_write ON public.bk_class_assignments AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KEPSEK'::role_type, 'WAKA_KESISWAAN'::role_type, 'ADMINISTRATIVE'::role_type]))))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KEPSEK'::role_type, 'WAKA_KESISWAAN'::role_type, 'ADMINISTRATIVE'::role_type]))));
+
+-- TABLE: bk_class_assignments
+CREATE POLICY rls_bk_class_read ON public.bk_class_assignments AS PERMISSIVE FOR SELECT TO public
+  USING ((school_id = fn_current_school_id()));
+
+-- TABLE: capaian_pembelajaran
+CREATE POLICY rls_cp_write ON public.capaian_pembelajaran AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['ADMINISTRATIVE'::role_type, 'GURU'::role_type, 'WALI_KELAS'::role_type, 'BK'::role_type, 'KAPRODI'::role_type, 'WAKA_KURIKULUM'::role_type, 'WAKA_KESISWAAN'::role_type, 'WAKA_HUMAS'::role_type, 'KEPSEK'::role_type]))));
+
+-- TABLE: capaian_pembelajaran
+CREATE POLICY rls_cp_read ON public.capaian_pembelajaran AS PERMISSIVE FOR SELECT TO public
+  USING ((school_id = fn_current_school_id()));
+
+-- TABLE: case_audience_members
+CREATE POLICY rls_cam_delete ON public.case_audience_members AS PERMISSIVE FOR DELETE TO public
+  USING (((school_id = fn_current_school_id()) AND fn_is_internal_case_actor() AND fn_can_see_case(case_id)));
+
+-- TABLE: case_audience_members
+CREATE POLICY rls_cam_insert ON public.case_audience_members AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND (added_by_user_id = fn_current_user_id()) AND fn_is_internal_case_actor() AND fn_can_see_case(case_id) AND ((EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.user_id = case_audience_members.user_id) AND (u.school_id = fn_current_school_id()) AND ((u.role_type = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'WAKA_KESISWAAN'::role_type, 'KEPSEK'::role_type])) OR u.is_bk OR u.is_kepsek OR u.is_waka_kesiswaan)))) OR fn_is_case_subject_or_parent(case_id, user_id))));
+
+-- TABLE: case_audience_members
+CREATE POLICY rls_cam_read ON public.case_audience_members AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND fn_can_see_case(case_id)));
+
+-- TABLE: case_events
+CREATE POLICY rls_case_events_delete_administrative ON public.case_events AS PERMISSIVE FOR DELETE TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: case_events
+CREATE POLICY rls_case_events_insert_handler ON public.case_events AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND (author_user_id = fn_current_user_id()) AND (author_role_at_time = fn_current_user_role()) AND (EXISTS ( SELECT 1
+   FROM cases c
+  WHERE ((c.case_id = case_events.case_id) AND fn_matches_case_handler(c.current_handler_role, c.student_id) AND (c.status <> 'CLOSED'::case_status))))));
+
+-- TABLE: case_events
+CREATE POLICY rls_case_events_insert_kepsek ON public.case_events AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND fn_is_kepsek() AND (author_user_id = fn_current_user_id()) AND (author_role_at_time = fn_current_user_role())));
+
+-- TABLE: case_events
+CREATE POLICY rls_case_events_read_parent ON public.case_events AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ORTU'::role_type) AND (privacy_level = 'STUDENT_VISIBLE'::visibility_level) AND fn_can_see_case(case_id)));
+
+-- TABLE: case_events
+CREATE POLICY rls_case_events_read_staff ON public.case_events AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() <> ALL (ARRAY['SISWA'::role_type, 'ORTU'::role_type])) AND fn_can_see_case(case_id)));
+
+-- TABLE: case_events
+CREATE POLICY rls_case_events_read_student ON public.case_events AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'SISWA'::role_type) AND (privacy_level = 'STUDENT_VISIBLE'::visibility_level) AND fn_can_see_case(case_id)));
+
+-- TABLE: cases
+CREATE POLICY rls_cases_delete_administrative ON public.cases AS PERMISSIVE FOR DELETE TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: cases
+CREATE POLICY rls_cases_insert ON public.cases AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND fn_student_in_current_school(student_id) AND ((fn_current_user_role() = 'DUDI'::role_type) OR ((fn_current_user_role() = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'KEPSEK'::role_type, 'WAKA_KESISWAAN'::role_type, 'WAKA_HUMAS'::role_type])) AND (NOT fn_student_is_on_pkl(student_id))) OR (fn_is_bk() AND (NOT fn_student_is_on_pkl(student_id))) OR (fn_is_kepsek() AND (NOT fn_student_is_on_pkl(student_id))) OR (fn_is_waka_kesiswaan() AND (NOT fn_student_is_on_pkl(student_id))))));
+
+-- TABLE: cases
+CREATE POLICY rls_cases_read_dudi ON public.cases AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'DUDI'::role_type) AND fn_dudi_supervises_student(student_id)));
+
+-- TABLE: cases
+CREATE POLICY rls_cases_read_staff ON public.cases AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND fn_can_see_case(case_id)));
+
+-- TABLE: cases
+CREATE POLICY rls_cases_update_audience ON public.cases AS PERMISSIVE FOR UPDATE TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_matches_case_handler(current_handler_role, student_id) OR fn_is_kepsek() OR (created_by_user_id = fn_current_user_id()))))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_matches_case_handler(current_handler_role, student_id) OR fn_is_kepsek() OR (created_by_user_id = fn_current_user_id()))));
+
+-- TABLE: cases
+CREATE POLICY rls_cases_update_sync ON public.cases AS PERMISSIVE FOR UPDATE TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_matches_case_handler(current_handler_role, student_id) OR (fn_is_kepsek() AND (status <> 'CLOSED'::case_status)) OR (current_setting('app.case_sync_active'::text, true) = 'true'::text))));
+
+-- TABLE: class_enrollments
+CREATE POLICY rls_enrollments_write_admin ON public.class_enrollments AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_is_kepsek() OR fn_kaprodi_of_student(student_id))))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_is_kepsek() OR fn_kaprodi_of_student(student_id))));
+
+-- TABLE: class_enrollments
+CREATE POLICY rls_enrollments_write_administrative ON public.class_enrollments AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: class_enrollments
+CREATE POLICY rls_enrollments_read_administrative ON public.class_enrollments AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: class_enrollments
+CREATE POLICY rls_enrollments_read_parent ON public.class_enrollments AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ORTU'::role_type) AND (EXISTS ( SELECT 1
+   FROM student_parents sp
+  WHERE ((sp.student_id = class_enrollments.student_id) AND (sp.parent_user_id = fn_current_user_id()))))));
+
+-- TABLE: class_enrollments
+CREATE POLICY rls_enrollments_read_staff ON public.class_enrollments AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND fn_can_see_student(student_id)));
+
+-- TABLE: class_enrollments
+CREATE POLICY rls_enrollments_read_student ON public.class_enrollments AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'SISWA'::role_type) AND (student_id = fn_current_student_id())));
+
+-- TABLE: classes
+CREATE POLICY rls_classes_write_admin ON public.classes AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: classes
+CREATE POLICY rls_classes_read_all ON public.classes AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (auth.uid() IS NOT NULL)));
+
+-- TABLE: communication_categories
+CREATE POLICY rls_comm_cat_read ON public.communication_categories AS PERMISSIVE FOR SELECT TO authenticated
+  USING ((is_active = true));
+
+-- TABLE: duty_schedules
+CREATE POLICY rls_duty_schedules_write ON public.duty_schedules AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND ((fn_current_user_role() = 'ADMINISTRATIVE'::role_type) OR fn_is_kepsek())));
+
+-- TABLE: duty_schedules
+CREATE POLICY rls_duty_schedules_read ON public.duty_schedules AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KEPSEK'::role_type, 'WAKA_KURIKULUM'::role_type, 'WAKA_KESISWAAN'::role_type, 'WAKA_HUMAS'::role_type, 'ADMINISTRATIVE'::role_type]))));
+
+-- TABLE: duty_schedules
+CREATE POLICY rls_duty_schedules_read_tu ON public.duty_schedules AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'TU'::role_type)));
+
+-- TABLE: evaluation_logs
+CREATE POLICY el_insert ON public.evaluation_logs AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK ((school_id = fn_current_school_id()));
+
+-- TABLE: evaluation_logs
+CREATE POLICY el_select ON public.evaluation_logs AS PERMISSIVE FOR SELECT TO public
+  USING ((school_id = fn_current_school_id()));
+
+-- TABLE: forum_post_acknowledgements
+CREATE POLICY rls_forum_ack_delete ON public.forum_post_acknowledgements AS PERMISSIVE FOR DELETE TO public
+  USING (((school_id = fn_current_school_id()) AND (user_id = fn_current_user_id())));
+
+-- TABLE: forum_post_acknowledgements
+CREATE POLICY rls_forum_ack_insert ON public.forum_post_acknowledgements AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND (user_id = fn_current_user_id()) AND fn_can_read_forum_post(post_id)));
+
+-- TABLE: forum_post_acknowledgements
+CREATE POLICY rls_forum_ack_read ON public.forum_post_acknowledgements AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND fn_can_read_forum_post(post_id)));
+
+-- TABLE: forum_post_audience
+CREATE POLICY rls_forum_aud_read ON public.forum_post_audience AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND fn_can_read_forum_post(post_id)));
+
+-- TABLE: forum_post_audience
+CREATE POLICY rls_forum_post_audience_read_tu ON public.forum_post_audience AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'TU'::role_type)));
+
+-- TABLE: forum_post_comments
+CREATE POLICY rls_forum_comments_delete ON public.forum_post_comments AS PERMISSIVE FOR DELETE TO public
+  USING (((school_id = fn_current_school_id()) AND ((author_user_id = fn_current_user_id()) OR (fn_current_user_role() = ANY (ARRAY['KEPSEK'::role_type, 'WAKA_KESISWAAN'::role_type])))));
+
+-- TABLE: forum_post_comments
+CREATE POLICY rls_forum_comments_insert ON public.forum_post_comments AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND (author_user_id = fn_current_user_id()) AND fn_can_read_forum_post(post_id) AND (fn_current_user_role() = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'KEPSEK'::role_type, 'ADMINISTRATIVE'::role_type, 'WAKA_KURIKULUM'::role_type, 'WAKA_KESISWAAN'::role_type, 'WAKA_HUMAS'::role_type, 'ORTU'::role_type]))));
+
+-- TABLE: forum_post_comments
+CREATE POLICY rls_forum_comments_read ON public.forum_post_comments AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND fn_can_read_forum_post(post_id)));
+
+-- TABLE: forum_post_comments
+CREATE POLICY rls_forum_post_comments_read_tu ON public.forum_post_comments AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'TU'::role_type)));
+
+-- TABLE: forum_post_comments
+CREATE POLICY rls_forum_comments_update ON public.forum_post_comments AS PERMISSIVE FOR UPDATE TO public
+  USING (((school_id = fn_current_school_id()) AND (author_user_id = fn_current_user_id())))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (author_user_id = fn_current_user_id())));
+
+-- TABLE: forum_post_subjects
+CREATE POLICY rls_forum_subj_write ON public.forum_post_subjects AS PERMISSIVE FOR ALL TO public
+  USING ((school_id = fn_current_school_id()))
+  WITH CHECK ((school_id = fn_current_school_id()));
+
+-- TABLE: forum_post_subjects
+CREATE POLICY rls_forum_subj_read ON public.forum_post_subjects AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND fn_can_read_forum_post(post_id)));
+
+-- TABLE: forum_posts
+CREATE POLICY rls_forum_posts_delete ON public.forum_posts AS PERMISSIVE FOR DELETE TO public
+  USING (((school_id = fn_current_school_id()) AND ((author_user_id = fn_current_user_id()) OR (fn_current_user_role() = ANY (ARRAY['KEPSEK'::role_type, 'WAKA_KESISWAAN'::role_type])))));
+
+-- TABLE: forum_posts
+CREATE POLICY rls_forum_posts_read ON public.forum_posts AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND fn_can_read_forum_post(post_id)));
+
+-- TABLE: forum_posts
+CREATE POLICY rls_forum_posts_read_tu ON public.forum_posts AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'TU'::role_type)));
+
+-- TABLE: forum_posts
+CREATE POLICY rls_forum_posts_update ON public.forum_posts AS PERMISSIVE FOR UPDATE TO public
+  USING (((school_id = fn_current_school_id()) AND (author_user_id = fn_current_user_id())))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (author_user_id = fn_current_user_id()) AND (class_id = ( SELECT fp2.class_id
+   FROM forum_posts fp2
+  WHERE (fp2.post_id = forum_posts.post_id))) AND (visibility = ( SELECT fp2.visibility
+   FROM forum_posts fp2
+  WHERE (fp2.post_id = forum_posts.post_id))) AND (academic_year = ( SELECT fp2.academic_year
+   FROM forum_posts fp2
+  WHERE (fp2.post_id = forum_posts.post_id))) AND (NOT (audience_type IS DISTINCT FROM ( SELECT fp2.audience_type
+   FROM forum_posts fp2
+  WHERE (fp2.post_id = forum_posts.post_id)))) AND (NOT (audience_type_2 IS DISTINCT FROM ( SELECT fp2.audience_type_2
+   FROM forum_posts fp2
+  WHERE (fp2.post_id = forum_posts.post_id))))));
+
+-- TABLE: generation_jobs
+CREATE POLICY gj_insert ON public.generation_jobs AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND (teacher_user_id = auth.uid())));
+
+-- TABLE: generation_jobs
+CREATE POLICY gj_select ON public.generation_jobs AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (teacher_user_id = auth.uid())));
+
+-- TABLE: generation_jobs
+CREATE POLICY gj_update ON public.generation_jobs AS PERMISSIVE FOR UPDATE TO public
+  USING (((school_id = fn_current_school_id()) AND (teacher_user_id = auth.uid())));
+
+-- TABLE: guru_wali_assignments
+CREATE POLICY rls_guru_wali_write ON public.guru_wali_assignments AS PERMISSIVE FOR ALL TO authenticated
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: guru_wali_assignments
+CREATE POLICY rls_guru_wali_read ON public.guru_wali_assignments AS PERMISSIVE FOR SELECT TO public
+  USING ((school_id = fn_current_school_id()));
+
+-- TABLE: late_arrivals
+CREATE POLICY rls_late_arrivals_delete_own ON public.late_arrivals AS PERMISSIVE FOR DELETE TO public
+  USING (((school_id = fn_current_school_id()) AND (recorded_by = fn_current_user_id()) AND fn_is_on_duty_today()));
+
+-- TABLE: late_arrivals
+CREATE POLICY rls_late_arrivals_insert ON public.late_arrivals AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND fn_is_on_duty_today() AND (recorded_by = fn_current_user_id())));
+
+-- TABLE: late_arrivals
+CREATE POLICY rls_late_arrivals_read_parent ON public.late_arrivals AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ORTU'::role_type) AND (EXISTS ( SELECT 1
+   FROM student_parents sp
+  WHERE ((sp.student_id = late_arrivals.student_id) AND (sp.parent_user_id = fn_current_user_id()))))));
+
+-- TABLE: late_arrivals
+CREATE POLICY rls_late_arrivals_read_staff ON public.late_arrivals AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_is_on_duty_today() OR fn_is_kepsek() OR fn_is_waka_kesiswaan() OR (fn_current_user_role() = 'ADMINISTRATIVE'::role_type))));
+
+-- TABLE: late_arrivals
+CREATE POLICY rls_late_arrivals_read_student ON public.late_arrivals AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'SISWA'::role_type) AND (EXISTS ( SELECT 1
+   FROM students s
+  WHERE ((s.student_id = late_arrivals.student_id) AND (s.user_id = fn_current_user_id()) AND (s.school_id = fn_current_school_id()))))));
+
+-- TABLE: late_arrivals
+CREATE POLICY rls_late_arrivals_read_tu ON public.late_arrivals AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'TU'::role_type)));
+
+-- TABLE: ld_context_snapshots
+CREATE POLICY snapshot_owner_write ON public.ld_context_snapshots AS PERMISSIVE FOR ALL TO public
+  USING ((created_by = auth.uid()));
+
+-- TABLE: ld_context_snapshots
+CREATE POLICY snapshot_school_read ON public.ld_context_snapshots AS PERMISSIVE FOR SELECT TO public
+  USING ((school_id = ( SELECT users.school_id
+   FROM users
+  WHERE (users.user_id = auth.uid()))));
+
+-- TABLE: ld_document_nodes
+CREATE POLICY node_via_document ON public.ld_document_nodes AS PERMISSIVE FOR ALL TO public
+  USING ((document_id IN ( SELECT ld_documents.document_id
+   FROM ld_documents
+  WHERE (ld_documents.created_by = auth.uid()))));
+
+-- TABLE: ld_document_tp_links
+CREATE POLICY tp_link_via_document ON public.ld_document_tp_links AS PERMISSIVE FOR ALL TO public
+  USING ((document_id IN ( SELECT ld_documents.document_id
+   FROM ld_documents
+  WHERE (ld_documents.created_by = auth.uid()))));
+
+-- TABLE: ld_document_versions
+CREATE POLICY version_owner ON public.ld_document_versions AS PERMISSIVE FOR ALL TO public
+  USING ((published_by = auth.uid()));
+
+-- TABLE: ld_documents
+CREATE POLICY document_owner ON public.ld_documents AS PERMISSIVE FOR ALL TO public
+  USING ((created_by = auth.uid()));
+
+-- TABLE: ld_documents
+CREATE POLICY document_school_read ON public.ld_documents AS PERMISSIVE FOR SELECT TO public
+  USING ((school_id = ( SELECT users.school_id
+   FROM users
+  WHERE (users.user_id = auth.uid()))));
+
+-- TABLE: ld_program_knowledge_national
+CREATE POLICY national_knowledge_read_all ON public.ld_program_knowledge_national AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
+
+-- TABLE: ld_program_knowledge_school
+CREATE POLICY school_knowledge_tenant ON public.ld_program_knowledge_school AS PERMISSIVE FOR ALL TO public
+  USING ((school_id = ( SELECT users.school_id
+   FROM users
+  WHERE (users.user_id = auth.uid()))));
+
+-- TABLE: ld_prompt_templates
+CREATE POLICY prompt_templates_read_authenticated ON public.ld_prompt_templates AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
+
+-- TABLE: ld_teacher_knowledge
+CREATE POLICY teacher_knowledge_owner ON public.ld_teacher_knowledge AS PERMISSIVE FOR ALL TO public
+  USING ((teacher_id = auth.uid()));
+
+-- TABLE: login_devices
+CREATE POLICY rls_login_devices_read ON public.login_devices AS PERMISSIVE FOR SELECT TO public
+  USING (((user_id = fn_current_user_id()) AND (school_id = fn_current_school_id())));
+
+-- TABLE: notifications
+CREATE POLICY rls_notif_read ON public.notifications AS PERMISSIVE FOR SELECT TO public
+  USING (((recipient_user_id = fn_current_user_id()) AND (school_id = fn_current_school_id())));
+
+-- TABLE: notifications
+CREATE POLICY rls_notif_update_read ON public.notifications AS PERMISSIVE FOR UPDATE TO public
+  USING (((recipient_user_id = fn_current_user_id()) AND (school_id = fn_current_school_id())))
+  WITH CHECK ((recipient_user_id = fn_current_user_id()));
+
+-- TABLE: observations
+CREATE POLICY rls_observations_insert ON public.observations AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'GURU'::role_type) AND (author_user_id = fn_current_user_id()) AND (visibility = ANY (ARRAY['SISWA_SAJA'::visibility_level, 'ORTU_SAJA'::visibility_level, 'SISWA_DAN_ORTU'::visibility_level])) AND fn_guru_teaches_student(student_id)));
+
+-- TABLE: observations
+CREATE POLICY rls_observations_read_guru ON public.observations AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'GURU'::role_type) AND (author_user_id = fn_current_user_id())));
+
+-- TABLE: observations
+CREATE POLICY rls_observations_read_parent ON public.observations AS PERMISSIVE FOR SELECT TO public
+  USING (((fn_current_user_role() = 'ORTU'::role_type) AND (visibility = ANY (ARRAY['ORTU_SAJA'::visibility_level, 'SISWA_DAN_ORTU'::visibility_level])) AND (is_void = false) AND (EXISTS ( SELECT 1
+   FROM student_parents sp
+  WHERE ((sp.student_id = observations.student_id) AND (sp.parent_user_id = fn_current_user_id()))))));
+
+-- TABLE: observations
+CREATE POLICY rls_observations_read_student ON public.observations AS PERMISSIVE FOR SELECT TO public
+  USING (((fn_current_user_role() = 'SISWA'::role_type) AND (visibility = ANY (ARRAY['SISWA_SAJA'::visibility_level, 'SISWA_DAN_ORTU'::visibility_level])) AND (is_void = false) AND (EXISTS ( SELECT 1
+   FROM students s
+  WHERE ((s.student_id = observations.student_id) AND (s.user_id = fn_current_user_id()) AND (s.school_id = fn_current_school_id()))))));
+
+-- TABLE: observations
+CREATE POLICY rls_observations_update_author ON public.observations AS PERMISSIVE FOR UPDATE TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'GURU'::role_type) AND (author_user_id = fn_current_user_id())))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'GURU'::role_type) AND (author_user_id = fn_current_user_id()) AND (visibility = ANY (ARRAY['SISWA_SAJA'::visibility_level, 'ORTU_SAJA'::visibility_level, 'SISWA_DAN_ORTU'::visibility_level]))));
+
+-- TABLE: observations
+CREATE POLICY rls_observations_void_admin ON public.observations AS PERMISSIVE FOR UPDATE TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: pkl_attendance
+CREATE POLICY rls_pkl_attendance_rw_dudi ON public.pkl_attendance AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'DUDI'::role_type) AND fn_dudi_supervises_student(student_id)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'DUDI'::role_type) AND fn_dudi_supervises_student(student_id) AND (recorded_by_user_id = fn_current_user_id())));
+
+-- TABLE: pkl_attendance
+CREATE POLICY rls_pkl_attendance_delete_administrative ON public.pkl_attendance AS PERMISSIVE FOR DELETE TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: pkl_attendance
+CREATE POLICY rls_pkl_attendance_read_kaprodi ON public.pkl_attendance AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_kaprodi_program_id() IS NOT NULL) AND (EXISTS ( SELECT 1
+   FROM students s
+  WHERE ((s.student_id = pkl_attendance.student_id) AND (s.program_id = fn_kaprodi_program_id()))))));
+
+-- TABLE: pkl_attendance
+CREATE POLICY rls_pkl_attendance_read_ortu ON public.pkl_attendance AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ORTU'::role_type) AND (EXISTS ( SELECT 1
+   FROM student_parents sp
+  WHERE ((sp.student_id = pkl_attendance.student_id) AND (sp.parent_user_id = fn_current_user_id()))))));
+
+-- TABLE: pkl_attendance
+CREATE POLICY rls_pkl_attendance_read_staff ON public.pkl_attendance AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'KEPSEK'::role_type, 'WAKA_HUMAS'::role_type]))));
+
+-- TABLE: pkl_attendance
+CREATE POLICY rls_pkl_attendance_read_student ON public.pkl_attendance AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'SISWA'::role_type) AND (student_id = fn_current_student_id())));
+
+-- TABLE: pkl_placements
+CREATE POLICY rls_pkl_write_admin ON public.pkl_placements AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KAPRODI'::role_type, 'KEPSEK'::role_type, 'WAKA_HUMAS'::role_type]))))
+  WITH CHECK ((school_id = fn_current_school_id()));
+
+-- TABLE: pkl_placements
+CREATE POLICY rls_pkl_write_administrative ON public.pkl_placements AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: pkl_placements
+CREATE POLICY rls_pkl_read_dudi ON public.pkl_placements AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'DUDI'::role_type) AND (dudi_user_id = fn_current_user_id())));
+
+-- TABLE: pkl_placements
+CREATE POLICY rls_pkl_read_ortu ON public.pkl_placements AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ORTU'::role_type) AND (EXISTS ( SELECT 1
+   FROM student_parents sp
+  WHERE ((sp.student_id = pkl_placements.student_id) AND (sp.parent_user_id = fn_current_user_id()))))));
+
+-- TABLE: pkl_placements
+CREATE POLICY rls_pkl_read_staff ON public.pkl_placements AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'KEPSEK'::role_type, 'WAKA_HUMAS'::role_type]))));
+
+-- TABLE: pkl_placements
+CREATE POLICY rls_pkl_read_student ON public.pkl_placements AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'SISWA'::role_type) AND (student_id = fn_current_student_id())));
+
+-- TABLE: programs
+CREATE POLICY rls_programs_write_admin ON public.programs AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KEPSEK'::role_type, 'KAPRODI'::role_type, 'ADMINISTRATIVE'::role_type]))))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KEPSEK'::role_type, 'KAPRODI'::role_type, 'ADMINISTRATIVE'::role_type]))));
+
+-- TABLE: programs
+CREATE POLICY rls_programs_read_all ON public.programs AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (auth.uid() IS NOT NULL)));
+
+-- TABLE: prompt_templates
+CREATE POLICY pt_select ON public.prompt_templates AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
+
+-- TABLE: schedule_templates
+CREATE POLICY rls_schedule_templates_write_administrative ON public.schedule_templates AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: schedule_templates
+CREATE POLICY rls_schedule_templates_read_staff ON public.schedule_templates AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'KEPSEK'::role_type]))));
+
+-- TABLE: schedule_time_slots
+CREATE POLICY rls_time_slots_write ON public.schedule_time_slots AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: schedule_time_slots
+CREATE POLICY rls_time_slots_read ON public.schedule_time_slots AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: school_config
+CREATE POLICY rls_school_config_write_admin ON public.school_config AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['ADMINISTRATIVE'::role_type, 'KEPSEK'::role_type]))))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['ADMINISTRATIVE'::role_type, 'KEPSEK'::role_type]))));
+
+-- TABLE: school_config
+CREATE POLICY rls_school_config_read_all ON public.school_config AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (auth.uid() IS NOT NULL)));
+
+-- TABLE: schools
+CREATE POLICY rls_schools_read_own ON public.schools AS PERMISSIVE FOR SELECT TO authenticated
+  USING ((school_id = ( SELECT users.school_id
+   FROM users
+  WHERE (users.auth_user_id = auth.uid())
+ LIMIT 1)));
+
+-- TABLE: student_exits
+CREATE POLICY rls_exits_delete_own ON public.student_exits AS PERMISSIVE FOR DELETE TO public
+  USING (((school_id = fn_current_school_id()) AND (recorded_by = fn_current_user_id()) AND fn_is_on_duty_today()));
+
+-- TABLE: student_exits
+CREATE POLICY rls_exits_insert_piket ON public.student_exits AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND (recorded_by = fn_current_user_id()) AND fn_is_on_duty_today()));
+
+-- TABLE: student_exits
+CREATE POLICY rls_exits_read_parent ON public.student_exits AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (EXISTS ( SELECT 1
+   FROM student_parents sp
+  WHERE ((sp.student_id = student_exits.student_id) AND (sp.parent_user_id = fn_current_user_id()) AND (sp.school_id = fn_current_school_id()))))));
+
+-- TABLE: student_exits
+CREATE POLICY rls_exits_read_piket ON public.student_exits AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (exit_date = ((now() AT TIME ZONE 'Asia/Jakarta'::text))::date) AND fn_is_on_duty_today()));
+
+-- TABLE: student_exits
+CREATE POLICY rls_exits_read_student ON public.student_exits AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (student_id = ( SELECT s.student_id
+   FROM students s
+  WHERE (s.user_id = fn_current_user_id())
+ LIMIT 1))));
+
+-- TABLE: student_exits
+CREATE POLICY rls_exits_read_tu ON public.student_exits AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'TU'::role_type)));
+
+-- TABLE: student_exits
+CREATE POLICY rls_exits_read_waka ON public.student_exits AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['WAKA_KESISWAAN'::role_type, 'KEPSEK'::role_type]))));
+
+-- TABLE: student_exits
+CREATE POLICY rls_exits_update_own ON public.student_exits AS PERMISSIVE FOR UPDATE TO public
+  USING (((school_id = fn_current_school_id()) AND (recorded_by = fn_current_user_id()) AND fn_is_on_duty_today()))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (recorded_by = fn_current_user_id())));
+
+-- TABLE: student_parents
+CREATE POLICY rls_student_parents_write_administrative ON public.student_parents AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: student_parents
+CREATE POLICY rls_student_parents_read_administrative ON public.student_parents AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: student_parents
+CREATE POLICY rls_student_parents_read_own ON public.student_parents AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ORTU'::role_type) AND (parent_user_id = fn_current_user_id())));
+
+-- TABLE: student_parents
+CREATE POLICY rls_student_parents_read_staff ON public.student_parents AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'KEPSEK'::role_type]))));
+
+-- TABLE: student_updates
+CREATE POLICY rls_student_updates_insert ON public.student_updates AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND (author_user_id = fn_current_user_id()) AND (EXISTS ( SELECT 1
+   FROM cases c
+  WHERE ((c.case_id = student_updates.case_id) AND fn_matches_case_handler(c.current_handler_role, c.student_id) AND (c.status <> 'CLOSED'::case_status))))));
+
+-- TABLE: student_updates
+CREATE POLICY rls_student_updates_read_parent ON public.student_updates AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ORTU'::role_type) AND fn_can_see_case(case_id)));
+
+-- TABLE: student_updates
+CREATE POLICY rls_student_updates_read_staff ON public.student_updates AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'KEPSEK'::role_type, 'DUDI'::role_type]))));
+
+-- TABLE: student_updates
+CREATE POLICY rls_student_updates_read_student ON public.student_updates AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'SISWA'::role_type) AND fn_can_see_case(case_id)));
+
+-- TABLE: students
+CREATE POLICY rls_students_write_admin ON public.students AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_is_kepsek() OR (program_id = fn_kaprodi_program_id()))))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_is_kepsek() OR (program_id = fn_kaprodi_program_id()))));
+
+-- TABLE: students
+CREATE POLICY rls_students_write_administrative ON public.students AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: students
+CREATE POLICY rls_students_read_administrative ON public.students AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: students
+CREATE POLICY rls_students_read_dudi ON public.students AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'DUDI'::role_type) AND fn_dudi_supervises_student(student_id)));
+
+-- TABLE: students
+CREATE POLICY rls_students_read_own ON public.students AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'SISWA'::role_type) AND (user_id = fn_current_user_id())));
+
+-- TABLE: students
+CREATE POLICY rls_students_read_parent ON public.students AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ORTU'::role_type) AND (EXISTS ( SELECT 1
+   FROM student_parents sp
+  WHERE ((sp.student_id = students.student_id) AND (sp.parent_user_id = fn_current_user_id()))))));
+
+-- TABLE: students
+CREATE POLICY rls_students_read_staff ON public.students AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND fn_can_see_student(student_id)));
+
+-- TABLE: students
+CREATE POLICY rls_students_read_tu ON public.students AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'TU'::role_type)));
+
+-- TABLE: subject_cp_mapping
+CREATE POLICY scm_insert ON public.subject_cp_mapping AS PERMISSIVE FOR INSERT TO authenticated
+  WITH CHECK ((school_id = fn_current_school_id()));
+
+-- TABLE: subject_cp_mapping
+CREATE POLICY scm_select ON public.subject_cp_mapping AS PERMISSIVE FOR SELECT TO authenticated
+  USING ((school_id = fn_current_school_id()));
+
+-- TABLE: subject_cp_mapping
+CREATE POLICY scm_update ON public.subject_cp_mapping AS PERMISSIVE FOR UPDATE TO authenticated
+  USING ((school_id = fn_current_school_id()));
+
+-- TABLE: subjects
+CREATE POLICY rls_subjects_write_admin ON public.subjects AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KEPSEK'::role_type, 'KAPRODI'::role_type]))))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KEPSEK'::role_type, 'KAPRODI'::role_type]))));
+
+-- TABLE: subjects
+CREATE POLICY rls_subjects_read_all ON public.subjects AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (auth.uid() IS NOT NULL)));
+
+-- TABLE: substitute_schedules
+CREATE POLICY rls_substitute_write_admin ON public.substitute_schedules AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KAPRODI'::role_type, 'KEPSEK'::role_type]))))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KAPRODI'::role_type, 'KEPSEK'::role_type]))));
+
+-- TABLE: substitute_schedules
+CREATE POLICY rls_substitute_write_administrative ON public.substitute_schedules AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: substitute_schedules
+CREATE POLICY rls_substitute_read_own ON public.substitute_schedules AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (substitute_user_id = fn_current_user_id())));
+
+-- TABLE: teacher_attendance_log
+CREATE POLICY rls_teacher_att_log_read_own ON public.teacher_attendance_log AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND ((user_id = fn_current_user_id()) OR (fn_current_user_role() = 'KEPSEK'::role_type))));
+
+-- TABLE: teacher_document_approvals
+CREATE POLICY tda_delete ON public.teacher_document_approvals AS PERMISSIVE FOR DELETE TO authenticated
+  USING (((school_id = fn_current_school_id()) AND (doc_id IN ( SELECT teacher_documents.doc_id
+   FROM teacher_documents
+  WHERE ((teacher_documents.teacher_user_id = auth.uid()) AND ((teacher_documents.status)::text <> 'DISAHKAN_WAKA'::text))))));
+
+-- TABLE: teacher_document_approvals
+CREATE POLICY tda_insert ON public.teacher_document_approvals AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND fn_is_kepsek()));
+
+-- TABLE: teacher_document_approvals
+CREATE POLICY tda_select ON public.teacher_document_approvals AS PERMISSIVE FOR SELECT TO public
+  USING ((school_id = fn_current_school_id()));
+
+-- TABLE: teacher_document_classes
+CREATE POLICY tdc_delete ON public.teacher_document_classes AS PERMISSIVE FOR DELETE TO public
+  USING ((school_id = fn_current_school_id()));
+
+-- TABLE: teacher_document_classes
+CREATE POLICY tdc_insert ON public.teacher_document_classes AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK ((school_id = fn_current_school_id()));
+
+-- TABLE: teacher_document_classes
+CREATE POLICY tdc_select ON public.teacher_document_classes AS PERMISSIVE FOR SELECT TO public
+  USING ((school_id = fn_current_school_id()));
+
+-- TABLE: teacher_documents
+CREATE POLICY td_delete ON public.teacher_documents AS PERMISSIVE FOR DELETE TO authenticated
+  USING (((school_id = fn_current_school_id()) AND (teacher_user_id = auth.uid()) AND ((status)::text <> 'DISAHKAN_WAKA'::text)));
+
+-- TABLE: teacher_documents
+CREATE POLICY td_insert ON public.teacher_documents AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND (teacher_user_id = auth.uid())));
+
+-- TABLE: teacher_documents
+CREATE POLICY td_select ON public.teacher_documents AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND ((teacher_user_id = auth.uid()) OR fn_is_kepsek() OR fn_is_waka_kurikulum())));
+
+-- TABLE: teacher_documents
+CREATE POLICY td_update ON public.teacher_documents AS PERMISSIVE FOR UPDATE TO public
+  USING (((school_id = fn_current_school_id()) AND (teacher_user_id = auth.uid())));
+
+-- TABLE: teacher_journals
+CREATE POLICY rls_journals_owner ON public.teacher_journals AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (owner_user_id = fn_current_user_id())))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (owner_user_id = fn_current_user_id())));
+
+-- TABLE: teacher_profiles
+CREATE POLICY tp_insert ON public.teacher_profiles AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND (teacher_user_id = auth.uid())));
+
+-- TABLE: teacher_profiles
+CREATE POLICY tp_select ON public.teacher_profiles AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (teacher_user_id = auth.uid())));
+
+-- TABLE: teacher_profiles
+CREATE POLICY tp_update ON public.teacher_profiles AS PERMISSIVE FOR UPDATE TO public
+  USING (((school_id = fn_current_school_id()) AND (teacher_user_id = auth.uid())));
+
+-- TABLE: teaching_assignments
+CREATE POLICY rls_assignments_write_admin ON public.teaching_assignments AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KAPRODI'::role_type, 'KEPSEK'::role_type]))))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KAPRODI'::role_type, 'KEPSEK'::role_type]))));
+
+-- TABLE: teaching_assignments
+CREATE POLICY rls_assignments_write_administrative ON public.teaching_assignments AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: teaching_assignments
+CREATE POLICY rls_assignments_read_administrative ON public.teaching_assignments AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: teaching_assignments
+CREATE POLICY rls_assignments_read_all_staff ON public.teaching_assignments AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'KEPSEK'::role_type]))));
+
+-- TABLE: teaching_assignments
+CREATE POLICY rls_assignments_read_waka ON public.teaching_assignments AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['WAKA_KURIKULUM'::role_type, 'WAKA_KESISWAAN'::role_type]))));
+
+-- TABLE: teaching_contexts
+CREATE POLICY tc_insert ON public.teaching_contexts AS PERMISSIVE FOR INSERT TO public
+  WITH CHECK (((school_id = fn_current_school_id()) AND (teacher_user_id = auth.uid())));
+
+-- TABLE: teaching_contexts
+CREATE POLICY tc_select ON public.teaching_contexts AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (teacher_user_id = auth.uid())));
+
+-- TABLE: teaching_contexts
+CREATE POLICY tc_update ON public.teaching_contexts AS PERMISSIVE FOR UPDATE TO public
+  USING (((school_id = fn_current_school_id()) AND (teacher_user_id = auth.uid())));
+
+-- TABLE: teaching_schedules
+CREATE POLICY rls_schedules_write_admin ON public.teaching_schedules AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KAPRODI'::role_type, 'KEPSEK'::role_type]))))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['KAPRODI'::role_type, 'KEPSEK'::role_type]))));
+
+-- TABLE: teaching_schedules
+CREATE POLICY rls_schedules_write_administrative ON public.teaching_schedules AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: teaching_schedules
+CREATE POLICY rls_schedules_read_administrative ON public.teaching_schedules AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: teaching_schedules
+CREATE POLICY rls_schedules_read_parent ON public.teaching_schedules AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ORTU'::role_type) AND (EXISTS ( SELECT 1
+   FROM (class_enrollments ce
+     JOIN student_parents sp ON ((sp.student_id = ce.student_id)))
+  WHERE ((ce.class_id = teaching_schedules.class_id) AND (ce.school_id = fn_current_school_id()) AND (ce.withdrawn_at IS NULL) AND (sp.parent_user_id = fn_current_user_id()))))));
+
+-- TABLE: teaching_schedules
+CREATE POLICY rls_schedules_read_staff ON public.teaching_schedules AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'KEPSEK'::role_type]))));
+
+-- TABLE: teaching_schedules
+CREATE POLICY rls_schedules_read_student ON public.teaching_schedules AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'SISWA'::role_type) AND (EXISTS ( SELECT 1
+   FROM class_enrollments ce
+  WHERE ((ce.class_id = teaching_schedules.class_id) AND (ce.student_id = fn_current_student_id()) AND (ce.school_id = fn_current_school_id()) AND (ce.withdrawn_at IS NULL))))));
+
+-- TABLE: teaching_schedules
+CREATE POLICY rls_schedules_read_tu ON public.teaching_schedules AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'TU'::role_type)));
+
+-- TABLE: teaching_schedules
+CREATE POLICY rls_schedules_read_waka ON public.teaching_schedules AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['WAKA_KURIKULUM'::role_type, 'WAKA_KESISWAAN'::role_type]))));
+
+-- TABLE: tujuan_pembelajaran
+CREATE POLICY rls_tp_write ON public.tujuan_pembelajaran AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['ADMINISTRATIVE'::role_type, 'GURU'::role_type, 'WALI_KELAS'::role_type, 'BK'::role_type, 'KAPRODI'::role_type, 'WAKA_KURIKULUM'::role_type, 'WAKA_KESISWAAN'::role_type, 'WAKA_HUMAS'::role_type, 'KEPSEK'::role_type]))));
+
+-- TABLE: tujuan_pembelajaran
+CREATE POLICY rls_tp_read ON public.tujuan_pembelajaran AS PERMISSIVE FOR SELECT TO public
+  USING ((school_id = fn_current_school_id()));
+
+-- TABLE: users
+CREATE POLICY rls_users_write_administrative ON public.users AS PERMISSIVE FOR ALL TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)))
+  WITH CHECK (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: users
+CREATE POLICY rls_users_read_administrative ON public.users AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'ADMINISTRATIVE'::role_type)));
+
+-- TABLE: users
+CREATE POLICY rls_users_read_own ON public.users AS PERMISSIVE FOR SELECT TO public
+  USING ((auth_user_id = auth.uid()));
+
+-- TABLE: users
+CREATE POLICY rls_users_read_staff ON public.users AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (((fn_current_user_role() = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'KEPSEK'::role_type, 'WAKA_KURIKULUM'::role_type, 'WAKA_KESISWAAN'::role_type, 'WAKA_HUMAS'::role_type, 'ADMINISTRATIVE'::role_type])) AND (role_type = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'KEPSEK'::role_type, 'WAKA_KURIKULUM'::role_type, 'WAKA_KESISWAAN'::role_type, 'WAKA_HUMAS'::role_type, 'DUDI'::role_type, 'ADMINISTRATIVE'::role_type]))) OR (auth_user_id = auth.uid()) OR ((fn_current_user_role() = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'KEPSEK'::role_type, 'WAKA_KURIKULUM'::role_type, 'WAKA_KESISWAAN'::role_type, 'WAKA_HUMAS'::role_type, 'ADMINISTRATIVE'::role_type])) AND (role_type = ANY (ARRAY['SISWA'::role_type, 'ORTU'::role_type]))))));
+
+-- TABLE: users
+CREATE POLICY rls_users_read_staff_names ON public.users AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['SISWA'::role_type, 'ORTU'::role_type])) AND (role_type = ANY (ARRAY['GURU'::role_type, 'BK'::role_type, 'WALI_KELAS'::role_type, 'KAPRODI'::role_type, 'KEPSEK'::role_type, 'WAKA_KURIKULUM'::role_type, 'WAKA_KESISWAAN'::role_type, 'DUDI'::role_type]))));
+
+-- TABLE: users
+CREATE POLICY rls_users_read_tu ON public.users AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = 'TU'::role_type)));
+
+-- TABLE: users
+CREATE POLICY rls_users_read_waka ON public.users AS PERMISSIVE FOR SELECT TO public
+  USING (((school_id = fn_current_school_id()) AND (fn_current_user_role() = ANY (ARRAY['WAKA_KURIKULUM'::role_type, 'WAKA_KESISWAAN'::role_type]))));
+
+-- TABLE: users
+CREATE POLICY rls_users_update_own ON public.users AS PERMISSIVE FOR UPDATE TO public
+  USING ((auth_user_id = auth.uid()))
+  WITH CHECK (((auth_user_id = auth.uid()) AND (school_id = fn_current_school_id())));
 
-
--- ============================================================
--- HELPER FUNCTIONS
--- Called inside policy expressions. Must be SECURITY DEFINER
--- and STABLE to be usable in RLS.
--- ============================================================
-
--- Returns the role_type of the authenticated user
-CREATE OR REPLACE FUNCTION fn_current_user_role()
-RETURNS role_type
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-AS $$
-    SELECT role_type FROM users WHERE auth_user_id = auth.uid();
-$$;
-
--- Returns the user_id of the authenticated user
-CREATE OR REPLACE FUNCTION fn_current_user_id()
-RETURNS UUID
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-AS $$
-    SELECT user_id FROM users WHERE auth_user_id = auth.uid();
-$$;
-
--- Returns TRUE if the current user has an active teaching assignment
--- for the given class (used for GURU case visibility — † condition)
-CREATE OR REPLACE FUNCTION fn_has_assignment_for_class(p_class_id UUID)
-RETURNS BOOLEAN
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-AS $$
-    SELECT EXISTS (
-        SELECT 1 FROM teaching_assignments
-        WHERE user_id    = fn_current_user_id()
-          AND class_id   = p_class_id
-          AND is_active  = TRUE
-    );
-$$;
-
--- Returns TRUE if the current DUDI user supervises this student
-CREATE OR REPLACE FUNCTION fn_dudi_supervises_student(p_student_id UUID)
-RETURNS BOOLEAN
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-AS $$
-    SELECT EXISTS (
-        SELECT 1 FROM pkl_placements
-        WHERE student_id   = p_student_id
-          AND dudi_user_id = fn_current_user_id()
-          AND is_active    = TRUE
-    );
-$$;
-
--- Returns the class_id of the current WALI_KELAS user
-CREATE OR REPLACE FUNCTION fn_wali_kelas_class_id()
-RETURNS UUID
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-AS $$
-    SELECT wali_kelas_class_id FROM users WHERE auth_user_id = auth.uid();
-$$;
-
--- Returns TRUE if the current user has ever been involved in a case
--- (is current_handler_role OR created_by OR has authored a case_event)
-CREATE OR REPLACE FUNCTION fn_involved_in_case(p_case_id UUID)
-RETURNS BOOLEAN
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-AS $$
-    SELECT EXISTS (
-        SELECT 1 FROM cases
-        WHERE case_id          = p_case_id
-          AND created_by_user_id = fn_current_user_id()
-    )
-    OR EXISTS (
-        SELECT 1 FROM case_events
-        WHERE case_id        = p_case_id
-          AND author_user_id = fn_current_user_id()
-    );
-$$;
-
-
--- ============================================================
--- ENABLE RLS ON ALL TABLES
--- ============================================================
-
-ALTER TABLE programs                ENABLE ROW LEVEL SECURITY;
-ALTER TABLE subjects                ENABLE ROW LEVEL SECURITY;
-ALTER TABLE users                   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE students                ENABLE ROW LEVEL SECURITY;
-ALTER TABLE classes                 ENABLE ROW LEVEL SECURITY;
-ALTER TABLE class_enrollments       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pkl_placements          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE teaching_assignments    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE teaching_schedules      ENABLE ROW LEVEL SECURITY;
-ALTER TABLE substitute_schedules    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE attendance              ENABLE ROW LEVEL SECURITY;
-ALTER TABLE observations            ENABLE ROW LEVEL SECURITY;
-ALTER TABLE achievements            ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cases                   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE case_events             ENABLE ROW LEVEL SECURITY;
-ALTER TABLE parent_messages         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE teacher_journals        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE teacher_attendance_log  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE student_updates         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE student_parents         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE school_config           ENABLE ROW LEVEL SECURITY;
-ALTER TABLE academic_periods        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE schedule_templates      ENABLE ROW LEVEL SECURITY;
-
-
--- ============================================================
--- REFERENCE TABLES: programs, subjects, classes
--- All authenticated staff can read. Only KEPSEK/KAPRODI write.
--- ============================================================
-
-CREATE POLICY rls_programs_read_all ON programs
-    FOR SELECT USING (auth.uid() IS NOT NULL);
-
--- ADMINISTRATIVE ditambahkan via migration
--- 20260629130000_allow_administrative_write_programs.sql agar TU dapat
--- menambah/menghapus program keahlian langsung dari wizard onboarding.
-CREATE POLICY rls_programs_write_admin ON programs
-    FOR ALL
-    USING      (fn_current_user_role() IN ('KEPSEK', 'KAPRODI', 'ADMINISTRATIVE'))
-    WITH CHECK (fn_current_user_role() IN ('KEPSEK', 'KAPRODI', 'ADMINISTRATIVE'));
-
-CREATE POLICY rls_subjects_read_all ON subjects
-    FOR SELECT USING (auth.uid() IS NOT NULL);
-
-CREATE POLICY rls_subjects_write_admin ON subjects
-    FOR ALL USING (fn_current_user_role() IN ('KEPSEK', 'KAPRODI'));
-
-CREATE POLICY rls_classes_read_all ON classes
-    FOR SELECT USING (auth.uid() IS NOT NULL);
-
--- Write (INSERT/UPDATE/DELETE) restricted to ADMINISTRATIVE only.
--- KEPSEK/KAPRODI keep read access via rls_classes_read_all above.
-CREATE POLICY rls_classes_write_admin ON classes
-    FOR ALL USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-
--- ============================================================
--- USERS TABLE
--- Staff: can read all users (needed for case/assignment display).
--- SISWA: can only read their own user row.
--- ORTU: can only read their own row + teacher users (for messaging).
--- Write: only KEPSEK/KAPRODI (via service role for provisioning).
--- ============================================================
-
-CREATE POLICY rls_users_read_staff ON users
-    FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK', 'DUDI')
-    );
-
-CREATE POLICY rls_users_read_own ON users
-    FOR SELECT USING (auth_user_id = auth.uid());
-
-CREATE POLICY rls_users_update_own ON users
-    FOR UPDATE USING (auth_user_id = auth.uid())
-    WITH CHECK (
-        -- Users cannot change their own role_type
-        role_type = (SELECT role_type FROM users WHERE auth_user_id = auth.uid())
-    );
-
-
--- ============================================================
--- STUDENTS TABLE
--- Staff roles: read all active students.
--- DUDI: only students in their PKL batch.
--- SISWA: own record only.
--- ORTU: their linked student only.
--- ============================================================
-
-CREATE POLICY rls_students_read_staff ON students
-    FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK')
-    );
-
-CREATE POLICY rls_students_read_dudi ON students
-    FOR SELECT USING (
-        fn_current_user_role() = 'DUDI'
-        AND fn_dudi_supervises_student(student_id)
-    );
-
-CREATE POLICY rls_students_read_own ON students
-    FOR SELECT USING (
-        fn_current_user_role() = 'SISWA'
-        AND user_id = fn_current_user_id()
-    );
-
-CREATE POLICY rls_students_read_parent ON students
-    FOR SELECT USING (
-        fn_current_user_role() = 'ORTU'
-        AND EXISTS (
-            SELECT 1 FROM student_parents sp
-            WHERE sp.student_id     = students.student_id
-              AND sp.parent_user_id = fn_current_user_id()
-        )
-    );
-
-CREATE POLICY rls_students_write_admin ON students
-    FOR ALL USING (fn_current_user_role() IN ('KEPSEK', 'KAPRODI'));
-
-
--- ============================================================
--- ATTENDANCE
--- GURU: read/write for their assigned classes.
--- Substitute: read/write for their substitute_schedule sessions.
--- BK, WALI_KELAS, KAPRODI, KEPSEK: read all.
--- SISWA: read own records (non-void only).
--- ORTU: read records of their linked children (non-void only).
--- ============================================================
-
-CREATE POLICY rls_attendance_read_staff ON attendance
-    FOR SELECT USING (
-        fn_current_user_role() IN ('BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK')
-    );
-
-CREATE POLICY rls_attendance_rw_guru ON attendance
-    FOR ALL USING (
-        fn_current_user_role() IN ('GURU', 'WALI_KELAS')
-        AND EXISTS (
-            SELECT 1 FROM teaching_schedules ts
-            JOIN teaching_assignments ta ON ta.assignment_id = ts.assignment_id
-            WHERE ts.schedule_id = attendance.schedule_id
-              AND ta.user_id     = fn_current_user_id()
-              AND ta.is_active   = TRUE
-        )
-    );
-
-CREATE POLICY rls_attendance_rw_substitute ON attendance
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM substitute_schedules ss
-            WHERE ss.schedule_id       = attendance.schedule_id
-              AND ss.substitute_user_id = fn_current_user_id()
-              AND ss.sync_token_expires_at > NOW()
-        )
-    );
-
-CREATE POLICY rls_attendance_read_student ON attendance
-    FOR SELECT USING (
-        fn_current_user_role() = 'SISWA'
-        AND student_id = (
-            SELECT student_id FROM students WHERE user_id = fn_current_user_id()
-        )
-        AND is_void = FALSE
-    );
-
--- ORTU: kehadiran tiap anak yang tertaut lewat student_parents (non-void).
--- Satu login melihat semua anak — cakupan diresolusikan via student_parents,
--- pola yang sama dengan rls_students_read_parent.
-CREATE POLICY rls_attendance_read_parent ON attendance
-    FOR SELECT USING (
-        fn_current_user_role() = 'ORTU'
-        AND is_void = FALSE
-        AND EXISTS (
-            SELECT 1 FROM student_parents sp
-            WHERE sp.student_id     = attendance.student_id
-              AND sp.parent_user_id = fn_current_user_id()
-        )
-    );
-
-
--- ============================================================
--- OBSERVATIONS
--- Write: GURU (own assignments), WALI_KELAS (own class), BK, KAPRODI.
--- Read:
---   Staff: all (regardless of visibility).
---   SISWA: only STUDENT_VISIBLE records for their student_id.
---   ORTU: only STUDENT_VISIBLE records of their linked children.
---   DUDI: blocked entirely.
--- ============================================================
-
--- Pagar ketat PKL: guru tidak boleh observasi siswa yang sedang aktif PKL.
--- Siswa PKL aktif hanya bisa diobservasi via jalur DUDI → PKL track.
-CREATE POLICY rls_observations_write_guru ON observations
-    FOR INSERT WITH CHECK (
-        fn_current_user_role() IN ('GURU', 'WALI_KELAS', 'BK', 'KAPRODI')
-        AND author_user_id = fn_current_user_id()
-        AND NOT fn_student_is_on_pkl(student_id)
-    );
-
-CREATE POLICY rls_observations_read_staff ON observations
-    FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK')
-    );
-
-CREATE POLICY rls_observations_read_student ON observations
-    FOR SELECT USING (
-        fn_current_user_role() = 'SISWA'
-        AND visibility = 'STUDENT_VISIBLE'
-        AND student_id = (
-            SELECT student_id FROM students WHERE user_id = fn_current_user_id()
-        )
-    );
-
--- ORTU: hanya observasi STUDENT_VISIBLE milik anak yang tertaut. Catatan
--- internal guru (INTERNAL_SCHOOL/PRIVATE) tidak pernah terlihat orang tua.
-CREATE POLICY rls_observations_read_parent ON observations
-    FOR SELECT USING (
-        fn_current_user_role() = 'ORTU'
-        AND visibility = 'STUDENT_VISIBLE'
-        AND EXISTS (
-            SELECT 1 FROM student_parents sp
-            WHERE sp.student_id     = observations.student_id
-              AND sp.parent_user_id = fn_current_user_id()
-        )
-    );
-
-
--- ============================================================
--- ACHIEVEMENTS
--- Write: WALI_KELAS (for their class), KAPRODI, KEPSEK.
--- Read: all staff + SISWA (own, non-voided).
--- ============================================================
-
-CREATE POLICY rls_achievements_write ON achievements
-    FOR INSERT WITH CHECK (
-        fn_current_user_role() IN ('KAPRODI', 'KEPSEK')
-        OR (
-            fn_current_user_role() = 'WALI_KELAS'
-            AND EXISTS (
-                SELECT 1 FROM class_enrollments ce
-                WHERE ce.student_id = achievements.student_id
-                  AND ce.class_id   = fn_wali_kelas_class_id()
-                  AND ce.withdrawn_at IS NULL
-            )
-        )
-    );
-
-CREATE POLICY rls_achievements_read_staff ON achievements
-    FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK')
-    );
-
-CREATE POLICY rls_achievements_read_student ON achievements
-    FOR SELECT USING (
-        fn_current_user_role() = 'SISWA'
-        AND is_voided = FALSE
-        AND student_id = (
-            SELECT student_id FROM students WHERE user_id = fn_current_user_id()
-        )
-    );
-
--- Void (UPDATE is_voided): only KAPRODI, KEPSEK
-CREATE POLICY rls_achievements_void ON achievements
-    FOR UPDATE USING (
-        fn_current_user_role() IN ('KAPRODI', 'KEPSEK')
-    );
-
--- No DELETE on achievements (enforced via no DELETE policy + table comment)
-
-
--- ============================================================
--- CASES
--- ⚠️ MODEL AUDIENS (mig 20260703250000, Langkah A) — file ini kontrak LOGIS
---    era-lama; kebenaran = live + migrasi + memory project-case-escalation-design.
---    Sejak audiens per-kasus, baca kasus AUDIENS-AWARE via fn_can_see_case
---    (konsisten cases + case_events), MENGGANTIKAN matriks "BK/Waka lihat semua":
---
--- Read access (audiens-aware, fn_can_see_case):
---   terlibat/penangan → SELALU (fn_involved_in_case / fn_matches_case_handler)
---   audience=PUBLIC     → semua 6 aktor internal kasus (fn_is_internal_case_actor)
---   audience=RESTRICTED → hanya anggota case_audience_members ("orang tertentu")
---   audience=PRIVATE    → hanya terlibat/penangan (default; kasus lahir privat)
---   DUDI ‡: hanya siswa PKL binaannya
---   SISWA §: own cases, STUDENT_VISIBLE events only (case_events)
---   ORTU / WAKA_KURIKULUM / TU: bukan aktor kasus
---
--- Write (CREATE case):
---   6 aktor internal (GURU, BK, WALI_KELAS, KAPRODI, WAKA_KESISWAAN, KEPSEK)
---   + DUDI (siswa binaannya; audiens DUDI selalu PRIVATE).
---
--- Escalation: BEBAS antar-internal; kunci server (trg_case_validate_escalate):
---   target wajib peran internal; DUDI hanya -> KAPRODI.
--- Status/handler updates: via case_events INSERT only. Audiens: UPDATE via
---   rls_cases_update_audience (aktor internal yang bisa lihat kasus).
--- ============================================================
-
-CREATE POLICY rls_cases_read_admin ON cases
-    FOR SELECT USING (
-        fn_current_user_role() IN ('BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK')
-    );
-
-CREATE POLICY rls_cases_read_guru ON cases
-    FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'WALI_KELAS')
-        AND (
-            fn_involved_in_case(case_id)
-            OR EXISTS (
-                SELECT 1 FROM class_enrollments ce
-                JOIN teaching_assignments ta ON ta.class_id = ce.class_id
-                WHERE ce.student_id    = cases.student_id
-                  AND ta.user_id       = fn_current_user_id()
-                  AND ta.is_active     = TRUE
-                  AND ce.withdrawn_at  IS NULL
-            )
-        )
-    );
-
-CREATE POLICY rls_cases_read_dudi ON cases
-    FOR SELECT USING (
-        fn_current_user_role() = 'DUDI'
-        AND fn_dudi_supervises_student(student_id)
-    );
-
-CREATE POLICY rls_cases_read_student ON cases
-    FOR SELECT USING (
-        fn_current_user_role() = 'SISWA'
-        AND student_id = (
-            SELECT student_id FROM students WHERE user_id = fn_current_user_id()
-        )
-    );
-
--- Semua 7 aktor internal + DUDI boleh buat kasus.
--- DUDI: hanya siswa binaannya, audiens wajib PRIVATE.
--- Pagar ketat PKL: aktor sekolah tidak boleh buat kasus untuk siswa aktif PKL
--- (hanya DUDI yang boleh — kasus PKL masuk track PKL via DUDI).
-CREATE POLICY rls_cases_insert ON cases
-    FOR INSERT WITH CHECK (
-        (
-            fn_current_user_role() = 'DUDI'
-            OR (
-                fn_current_user_role() IN ('GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','WAKA_HUMAS','KEPSEK')
-                AND NOT fn_student_is_on_pkl(student_id)
-            )
-            OR (fn_is_bk()             AND NOT fn_student_is_on_pkl(student_id))
-            OR (fn_is_kepsek()         AND NOT fn_student_is_on_pkl(student_id))
-            OR (fn_is_waka_kesiswaan() AND NOT fn_student_is_on_pkl(student_id))
-        )
-        AND created_by_user_id = fn_current_user_id()
-        AND (fn_current_user_role() <> 'DUDI' OR audience = 'PRIVATE')
-    );
-
--- UPDATE on cases is restricted to the sync trigger path only
--- (fn_case_guard_denormalized enforces this at DB level)
-CREATE POLICY rls_cases_update_sync ON cases
-    FOR UPDATE USING (TRUE);   -- Guard is enforced by trigger, not RLS
-
-
--- ============================================================
--- CASE_EVENTS
--- INSERT: determined by role + handler + lock state
---   All roles in matrix can insert IF current_handler matches
---   (except FINAL_DECISION_MADE which only KEPSEK can insert).
---   Lock check (INV-4): COMMENT_ADDED blocked for non-handler
---   when locked — enforced here via RLS + trigger.
---
--- SELECT: staff reads all events; student reads STUDENT_VISIBLE only.
--- UPDATE/DELETE: blocked by trigger (append-only).
--- ============================================================
-
-CREATE POLICY rls_case_events_read_staff ON case_events
-    FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK', 'DUDI')
-        -- Access to the parent case is governed by cases RLS above;
-        -- this policy grants event-row access to any staff who can see the case
-        AND EXISTS (
-            SELECT 1 FROM cases c WHERE c.case_id = case_events.case_id
-        )
-    );
-
-CREATE POLICY rls_case_events_read_student ON case_events
-    FOR SELECT USING (
-        fn_current_user_role() = 'SISWA'
-        AND privacy_level = 'STUDENT_VISIBLE'
-        AND EXISTS (
-            SELECT 1 FROM cases c
-            WHERE c.case_id    = case_events.case_id
-              AND c.student_id = (
-                  SELECT student_id FROM students WHERE user_id = fn_current_user_id()
-              )
-        )
-    );
-
--- CATATAN: Disinkronkan ke kondisi LIVE (mig 330000/340000 + 20260703240000).
--- Perbedaan dari versi awal: (a) row di-scope school_id = fn_current_school_id();
--- (b) handler-match kini FLAG-AWARE via fn_matches_case_handler (GURU dgn is_bk,
--- wali/kaprodi student-spesifik, dst.); (c) authorship diverifikasi
--- (author_user_id & author_role_at_time = user login) di KEDUA policy (E3-2).
--- INV-1 (no event on CLOSED) dijaga trigger trg_case_events_no_closed.
-
--- INSERT: staf dapat insert bila mereka handler kasus saat ini (flag-aware)
-CREATE POLICY rls_case_events_insert_handler ON case_events
-    FOR INSERT WITH CHECK (
-        school_id = fn_current_school_id()
-        AND author_user_id      = fn_current_user_id()
-        AND author_role_at_time = fn_current_user_role()
-        AND EXISTS (
-            SELECT 1 FROM cases c
-            WHERE c.case_id = case_events.case_id
-              AND fn_matches_case_handler(c.current_handler_role, c.student_id)
-              AND c.status <> 'CLOSED'
-        )
-    );
-
--- INSERT: KEPSEK — semua event type (termasuk FINAL_DECISION_MADE)
-CREATE POLICY rls_case_events_insert_kepsek ON case_events
-    FOR INSERT WITH CHECK (
-        school_id = fn_current_school_id()
-        AND fn_is_kepsek()
-        AND author_user_id      = fn_current_user_id()
-        AND author_role_at_time = fn_current_user_role()
-    );
-
-
--- ============================================================
--- PARENT_MESSAGES
--- TN-08: visibility is per-row UUID array.
--- SELECT: auth.uid() must be in visible_to_user_ids.
--- INSERT: ORTU only (INBOUND). Replies (OUTBOUND) by staff handlers.
--- ============================================================
-
-CREATE POLICY rls_parent_msg_read ON parent_messages
-    FOR SELECT USING (
-        fn_current_user_id() = ANY(visible_to_user_ids)
-    );
-
-CREATE POLICY rls_parent_msg_insert_ortu ON parent_messages
-    FOR INSERT WITH CHECK (
-        fn_current_user_role() = 'ORTU'
-        AND direction = 'INBOUND'
-        AND sender_user_id = fn_current_user_id()
-    );
-
-CREATE POLICY rls_parent_msg_reply_staff ON parent_messages
-    FOR INSERT WITH CHECK (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK')
-        AND direction = 'OUTBOUND'
-        AND sender_user_id = fn_current_user_id()
-    );
-
-
--- ============================================================
--- TEACHER_JOURNALS
--- Strictly private. Only owner can read or write.
--- ============================================================
-
-CREATE POLICY rls_journals_owner ON teacher_journals
-    FOR ALL USING (
-        owner_user_id = fn_current_user_id()
-    );
-
-
--- ============================================================
--- TEACHING_ASSIGNMENTS + TEACHING_SCHEDULES
--- Read: all staff (needed for attendance, dashboard).
--- Write: KAPRODI, KEPSEK.
--- GURU: read their own assignments + all schedules for their classes.
--- ============================================================
-
-CREATE POLICY rls_assignments_read_all_staff ON teaching_assignments
-    FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK')
-    );
-
-CREATE POLICY rls_assignments_write_admin ON teaching_assignments
-    FOR ALL USING (fn_current_user_role() IN ('KAPRODI', 'KEPSEK'));
-
-CREATE POLICY rls_schedules_read_staff ON teaching_schedules
-    FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK')
-    );
-
-CREATE POLICY rls_schedules_write_admin ON teaching_schedules
-    FOR ALL USING (fn_current_user_role() IN ('KAPRODI', 'KEPSEK'));
-
--- Substitute: read their own substitute schedules
-CREATE POLICY rls_substitute_read_own ON substitute_schedules
-    FOR SELECT USING (
-        substitute_user_id = fn_current_user_id()
-    );
-
-CREATE POLICY rls_substitute_write_admin ON substitute_schedules
-    FOR ALL USING (fn_current_user_role() IN ('KAPRODI', 'KEPSEK'));
-
-
--- ============================================================
--- STUDENT_UPDATES
--- Read: staff (all), SISWA (own cases only).
--- Write: current_handler_role only (enforced via case FK check).
--- ============================================================
-
-CREATE POLICY rls_student_updates_read_staff ON student_updates
-    FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK', 'DUDI')
-    );
-
-CREATE POLICY rls_student_updates_read_student ON student_updates
-    FOR SELECT USING (
-        fn_current_user_role() = 'SISWA'
-        AND EXISTS (
-            SELECT 1 FROM cases c
-            WHERE c.case_id    = student_updates.case_id
-              AND c.student_id = (
-                  SELECT student_id FROM students WHERE user_id = fn_current_user_id()
-              )
-        )
-    );
-
-CREATE POLICY rls_student_updates_insert ON student_updates
-    FOR INSERT WITH CHECK (
-        author_user_id = fn_current_user_id()
-        AND EXISTS (
-            SELECT 1 FROM cases c
-            WHERE c.case_id              = student_updates.case_id
-              AND c.current_handler_role = fn_current_user_role()
-              AND c.status              != 'CLOSED'
-        )
-    );
-
-
--- ============================================================
--- TEACHER_ATTENDANCE_LOG
--- Read: owner only (their own signals). KEPSEK reads all.
--- Write: system only (via service role / Edge Function).
---   No client INSERT policy — service key bypasses RLS.
--- ============================================================
-
-CREATE POLICY rls_teacher_att_log_read_own ON teacher_attendance_log
-    FOR SELECT USING (
-        user_id = fn_current_user_id()
-        OR fn_current_user_role() = 'KEPSEK'
-    );
-
-
--- ============================================================
--- PKL_PLACEMENTS, CLASS_ENROLLMENTS
--- Read: staff + DUDI (own students).
--- Write: KAPRODI, KEPSEK.
--- ============================================================
-
--- WAKA_HUMAS: akses detail PKL/DUDI lintas program (setara Kepsek di domain PKL).
--- WAKA_KESISWAAN: tidak punya akses PKL (pagar ketat — PKL hanya domain DUDI/Kaprodi/Waka Humas/Kepsek).
-CREATE POLICY rls_pkl_read_staff ON pkl_placements
-    FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK', 'WAKA_HUMAS')
-    );
-
-CREATE POLICY rls_pkl_read_dudi ON pkl_placements
-    FOR SELECT USING (
-        fn_current_user_role() = 'DUDI'
-        AND dudi_user_id = fn_current_user_id()
-    );
-
-CREATE POLICY rls_pkl_write_admin ON pkl_placements
-    FOR ALL USING (fn_current_user_role() IN ('KAPRODI', 'KEPSEK', 'WAKA_HUMAS'));
-
-CREATE POLICY rls_enrollments_read_staff ON class_enrollments
-    FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK')
-    );
-
-CREATE POLICY rls_enrollments_write_admin ON class_enrollments
-    FOR ALL USING (fn_current_user_role() IN ('KAPRODI', 'KEPSEK'));
-
-
--- ============================================================
--- STUDENT_PARENTS
--- Read: staff (all), ORTU (own relations only).
--- Write: ADMINISTRATIVE only (provisioning during import/setup).
--- ============================================================
-
-CREATE POLICY rls_student_parents_read_staff ON student_parents
-    FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK')
-    );
-
-CREATE POLICY rls_student_parents_read_own ON student_parents
-    FOR SELECT USING (
-        fn_current_user_role() = 'ORTU'
-        AND parent_user_id = fn_current_user_id()
-    );
-
-CREATE POLICY rls_student_parents_write_administrative ON student_parents
-    FOR ALL USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-
--- ============================================================
--- SCHOOL_CONFIG
--- Read: any authenticated user (needed for login redirect logic).
--- Write: ADMINISTRATIVE and KEPSEK only.
--- ============================================================
-
-CREATE POLICY rls_school_config_read_all ON school_config
-    FOR SELECT USING (auth.uid() IS NOT NULL);
-
-CREATE POLICY rls_school_config_write_admin ON school_config
-    FOR ALL USING (fn_current_user_role() IN ('ADMINISTRATIVE', 'KEPSEK'));
-
-
--- ============================================================
--- ACADEMIC_PERIODS
--- Read: any authenticated user (needed to check lock status client-side).
--- Write: ADMINISTRATIVE only — INSERT/UPDATE, no DELETE
--- (period history must never be removed, only closed).
--- ============================================================
-
-CREATE POLICY rls_academic_periods_read_all ON academic_periods
-    FOR SELECT USING (auth.uid() IS NOT NULL);
-
-CREATE POLICY rls_academic_periods_insert_administrative ON academic_periods
-    FOR INSERT WITH CHECK (fn_current_user_role() = 'ADMINISTRATIVE');
-
-CREATE POLICY rls_academic_periods_update_administrative ON academic_periods
-    FOR UPDATE USING (fn_current_user_role() = 'ADMINISTRATIVE')
-    WITH CHECK (fn_current_user_role() = 'ADMINISTRATIVE');
-
-
--- ============================================================
--- SCHEDULE_TEMPLATES
--- Read: all teaching/academic staff.
--- Write: ADMINISTRATIVE only (INSERT/UPDATE/DELETE via FOR ALL,
--- which also grants ADMINISTRATIVE implicit SELECT).
--- ============================================================
-
-CREATE POLICY rls_schedule_templates_read_staff ON schedule_templates
-    FOR SELECT USING (
-        fn_current_user_role() IN ('GURU', 'BK', 'WALI_KELAS', 'KAPRODI', 'KEPSEK')
-    );
-
-CREATE POLICY rls_schedule_templates_write_administrative ON schedule_templates
-    FOR ALL USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-
--- ============================================================
--- ADMINISTRATIVE ROLE — cross-cutting master-data access
---
--- Scope (per onboarding/admin tooling spec):
---   READ:  users, students, classes, programs, subjects,
---          teaching_assignments, teaching_schedules
---          (classes/programs/subjects already covered by their
---          existing rls_*_read_all policies — auth.uid() IS NOT NULL)
---   WRITE: users, students, class_enrollments, teaching_assignments,
---          teaching_schedules, substitute_schedules, school_config,
---          student_parents
---          (school_config, student_parents handled above)
---   NO ACCESS: cases, case_events, observations, achievements,
---          teacher_journals, parent_messages — intentionally NOT
---          granted here. No permissive policy for ADMINISTRATIVE
---          exists on those tables, so RLS denies by default.
--- ============================================================
-
-CREATE POLICY rls_users_read_administrative ON users
-    FOR SELECT USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-CREATE POLICY rls_users_write_administrative ON users
-    FOR ALL USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-CREATE POLICY rls_students_read_administrative ON students
-    FOR SELECT USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-CREATE POLICY rls_students_write_administrative ON students
-    FOR ALL USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-CREATE POLICY rls_assignments_read_administrative ON teaching_assignments
-    FOR SELECT USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-CREATE POLICY rls_assignments_write_administrative ON teaching_assignments
-    FOR ALL USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-CREATE POLICY rls_schedules_read_administrative ON teaching_schedules
-    FOR SELECT USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-CREATE POLICY rls_schedules_write_administrative ON teaching_schedules
-    FOR ALL USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-CREATE POLICY rls_substitute_write_administrative ON substitute_schedules
-    FOR ALL USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-CREATE POLICY rls_enrollments_write_administrative ON class_enrollments
-    FOR ALL USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
--- DELETE on transactional tables — needed for cascade delete when
--- removing students via wizard (observations, etc. must be cleared
--- before the student row can be deleted).
--- NOTE: attendance DELETE policy removed (Item 8 / ABS-3) —
---   TU tidak boleh hapus absensi; hanya void via meeting_status.
-
-CREATE POLICY rls_observations_delete_administrative ON observations
-    FOR DELETE USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-CREATE POLICY rls_cases_delete_administrative ON cases
-    FOR DELETE USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-CREATE POLICY rls_case_events_delete_administrative ON case_events
-    FOR DELETE USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
-CREATE POLICY rls_parent_msg_delete_administrative ON parent_messages
-    FOR DELETE USING (fn_current_user_role() = 'ADMINISTRATIVE');
-
--- ============================================================
--- NOTIFICATIONS (tabel notifikasi kasus — mig 20260703280000)
--- ============================================================
-ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
-
--- Baca: hanya notif milik sendiri, di sekolah sendiri
-CREATE POLICY rls_notif_read ON notifications FOR SELECT
-    USING (
-        recipient_user_id = fn_current_user_id()
-        AND school_id     = fn_current_school_id()
-    );
-
--- Update: boleh mark is_read=true saja, notif milik sendiri
-CREATE POLICY rls_notif_update_read ON notifications FOR UPDATE
-    USING  (recipient_user_id = fn_current_user_id() AND school_id = fn_current_school_id())
-    WITH CHECK (recipient_user_id = fn_current_user_id());
-
-GRANT SELECT ON notifications TO authenticated;
-GRANT UPDATE(is_read) ON notifications TO authenticated;
-GRANT ALL ON notifications TO service_role;
