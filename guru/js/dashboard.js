@@ -3790,7 +3790,7 @@ async function _piketRenderForm() {
         ${!active ? `<p style="color:var(--color-text-muted);font-size:13px;font-style:italic">Form tidak tersedia di luar jam 07:00–16:00.</p>` : ''}
         <div style="${active ? '' : 'opacity:0.5;pointer-events:none'}">
             <div class="field" style="position:relative;margin-bottom:12px">
-                <label style="font-size:13px;font-weight:500;display:block;margin-bottom:4px">Cari Siswa</label>
+                <label for="piket-search-input" style="font-size:13px;font-weight:500;display:block;margin-bottom:4px">Cari Siswa</label>
                 <input type="text" id="piket-search-input" placeholder="Ketik nama atau NIS…"
                        class="input" autocomplete="off" ${active ? '' : 'disabled'}>
                 <div id="piket-search-results" style="position:absolute;top:100%;left:0;right:0;
@@ -3801,13 +3801,13 @@ async function _piketRenderForm() {
                  background:var(--color-bg);border-radius:6px;font-size:13px"></div>
             <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
                 <div class="field" style="flex:1;min-width:120px">
-                    <label style="font-size:13px;font-weight:500;display:block;margin-bottom:4px">Jam Datang</label>
+                    <label for="piket-arrival-time" style="font-size:13px;font-weight:500;display:block;margin-bottom:4px">Jam Datang</label>
                     <input type="time" id="piket-arrival-time" class="input"
                            value="${nowTime}" min="07:00" max="16:00" ${active ? '' : 'disabled'}>
                 </div>
             </div>
             <div class="field" style="margin-bottom:12px">
-                <label style="font-size:13px;font-weight:500;display:block;margin-bottom:4px">Alasan <span style="color:var(--color-text-muted)">(opsional)</span></label>
+                <label for="piket-reason" style="font-size:13px;font-weight:500;display:block;margin-bottom:4px">Alasan <span style="color:var(--color-text-muted)">(opsional)</span></label>
                 <textarea id="piket-reason" class="input" rows="2"
                           placeholder="Misal: macet, bangun kesiangan…" ${active ? '' : 'disabled'}></textarea>
             </div>
@@ -3959,17 +3959,17 @@ async function _piketRenderExitForm() {
     const now = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
     wrap.innerHTML = `
         <div class="field">
-            <label>Cari Siswa</label>
+            <label for="piket-exit-search">Cari Siswa</label>
             <input type="text" id="piket-exit-search" class="input" placeholder="Ketik nama atau NIS…" autocomplete="off" />
             <div id="piket-exit-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:20;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius);max-height:200px;overflow-y:auto"></div>
         </div>
         <div id="piket-exit-selected" style="display:none;margin-bottom:8px"></div>
         <div class="field">
-            <label>Jam Keluar</label>
+            <label for="piket-exit-time">Jam Keluar</label>
             <input type="time" id="piket-exit-time" class="input" value="${now}" min="07:00" max="16:00" />
         </div>
         <div class="field">
-            <label>Alasan <span style="color:var(--color-text-muted)">(opsional)</span></label>
+            <label for="piket-exit-reason">Alasan <span style="color:var(--color-text-muted)">(opsional)</span></label>
             <textarea id="piket-exit-reason" class="input" rows="2" placeholder="Keperluan keluar…"></textarea>
         </div>
         <button class="btn btn-primary" id="piket-exit-submit" disabled>Catat Izin Keluar</button>
