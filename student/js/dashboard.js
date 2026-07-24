@@ -419,42 +419,17 @@ async function loadAttendance() {
             HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', ALPA: 'Alfa', CAMPURAN: 'Campuran'
         };
 
-        tbody.innerHTML = rows.map(block => {
-            const multiSlot = block.slots.length > 1;
-            const detailRows = multiSlot ? block.slots.map(s => `
-                <tr class="att-slot-detail" style="display:none">
-                    <td></td>
-                    <td>${esc(s.start)} – ${esc(s.end)}</td>
-                    <td colspan="2" style="color:var(--color-text-muted)">${esc(s.notes || '—')}</td>
-                    <td><span class="badge ${STATUS_BADGE_MAP[s.status] ?? ''}">
-                        ${STATUS_LABEL_MAP[s.status] ?? s.status}
-                    </span></td>
-                </tr>`).join('') : '';
-
-            return `
-                <tr class="att-block-row ${multiSlot ? 'att-block-expandable' : ''}">
-                    <td>${fmt(block.date)}</td>
-                    <td>${esc(block.time_range)}</td>
-                    <td>${esc(block.subject)}</td>
-                    <td>${esc(block.teacher)}</td>
-                    <td><span class="badge ${STATUS_BADGE_MAP[block.summary_status] ?? ''}">
-                        ${STATUS_LABEL_MAP[block.summary_status] ?? block.summary_status}
-                        ${multiSlot ? `<span class="att-slot-count">${block.slots.length} sesi</span>` : ''}
-                    </span></td>
-                </tr>
-                ${detailRows}`;
-        }).join('');
-
-        tbody.querySelectorAll('.att-block-expandable').forEach(row => {
-            row.addEventListener('click', () => {
-                const isOpen = row.classList.toggle('att-block-open');
-                let n = row.nextElementSibling;
-                while (n && n.classList.contains('att-slot-detail')) {
-                    n.style.display = isOpen ? '' : 'none';
-                    n = n.nextElementSibling;
-                }
-            });
-        });
+        tbody.innerHTML = rows.map(block => `
+            <tr class="att-block-row">
+                <td>${fmt(block.date)}</td>
+                <td>${esc(block.time_range)}</td>
+                <td>${esc(block.subject)}</td>
+                <td>${esc(block.teacher)}</td>
+                <td><span class="badge ${STATUS_BADGE_MAP[block.summary_status] ?? ''}">
+                    ${STATUS_LABEL_MAP[block.summary_status] ?? block.summary_status}
+                    <span class="att-slot-count">${block.slots.length} sesi</span>
+                </span></td>
+            </tr>`).join('');
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="5" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     } finally {
