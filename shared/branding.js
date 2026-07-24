@@ -138,6 +138,15 @@ export function getSchoolSlug() {
     return getSlugFromURL();
 }
 
+export function requireSchoolSlug() {
+    const slug = getSlugFromURL();
+    if (!slug) throw new Error(
+        'Alamat portal tidak dikenal. Pastikan Anda membuka link resmi ' +
+        'dari admin sekolah Anda (contoh: .../index.html?school=smkn1ub).'
+    );
+    return slug;
+}
+
 /**
  * Apply branding menggunakan school_id (untuk halaman dashboard setelah login).
  * Memerlukan supabase client yang sudah ter-autentikasi.

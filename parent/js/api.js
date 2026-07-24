@@ -29,7 +29,10 @@ export async function loginWithIdentifier(identifier, password, schoolId = null)
         .rpc('fn_resolve_login_email', { p_identifier: identifier, p_school_id: schoolId });
 
     if (resolveErr) throw new Error('Gagal menghubungi server. Coba lagi.');
-    if (!email) throw new Error('NIK tidak ditemukan. Hubungi admin sekolah untuk memastikan akun sudah dibuat.');
+    if (!email) throw new Error(
+        'NIK tidak ditemukan. Pastikan Anda membuka portal via link resmi dari admin sekolah Anda. ' +
+        'Jika sudah menggunakan link yang benar, hubungi admin untuk memastikan akun sudah dibuat.'
+    );
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
         if (error.status === 429 || /rate limit|too many/i.test(error.message || ''))
