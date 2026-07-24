@@ -379,7 +379,7 @@ async function loadAttendance() {
             const isOpen = row.classList.toggle('att-block-open');
             let n = row.nextElementSibling;
             while (n && n.classList.contains('att-slot-detail')) {
-                n.classList.toggle('att-slot-visible', isOpen);
+                n.style.display = isOpen ? '' : 'none';
                 n = n.nextElementSibling;
             }
         });
@@ -433,7 +433,7 @@ async function loadAttendance() {
         tbody.innerHTML = rows.map(block => {
             const multiSlot = block.slots.length > 1;
             const detailRows = multiSlot ? block.slots.map(s => `
-                <tr class="att-slot-detail">
+                <tr class="att-slot-detail" style="display:none">
                     <td></td>
                     <td>${esc(s.start)} – ${esc(s.end)}</td>
                     <td colspan="2" style="color:var(--color-text-muted)">${esc(s.notes || '—')}</td>
