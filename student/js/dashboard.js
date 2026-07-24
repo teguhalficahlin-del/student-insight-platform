@@ -242,7 +242,7 @@ function renderScheduleRows(rows, contentEl, date) {
            </div>`;
 
     contentEl.innerHTML = `
-        <details class="att-accordion" ${isToday || sesiCount > 0 ? 'open' : ''}>
+        <details class="att-accordion">
             <summary class="att-accordion-summary">
                 <span class="att-acc-name">${esc(label)}</span>
                 <span class="att-acc-names">${sesiCount > 0 ? `${sesiCount} sesi` : 'tidak ada jadwal'}</span>
@@ -337,7 +337,7 @@ async function loadWeekSchedule() {
                    </div>`;
 
             return `
-                <details class="att-accordion" ${isToday || sesiCount > 0 ? 'open' : ''}>
+                <details class="att-accordion">
                     <summary class="att-accordion-summary">
                         <span class="att-acc-name">${esc(dayLabel)}</span>
                         <span class="att-acc-names">${sesiCount > 0 ? `${sesiCount} sesi` : 'tidak ada jadwal'}</span>
@@ -345,6 +345,17 @@ async function loadWeekSchedule() {
                     <div style="padding:0 12px 8px">${tableHtml}</div>
                 </details>`;
         }).join('');
+
+        // Single expand: tutup accordion lain saat satu dibuka
+        contentEl.querySelectorAll('details.att-accordion').forEach(el => {
+            el.addEventListener('toggle', () => {
+                if (el.open) {
+                    contentEl.querySelectorAll('details.att-accordion').forEach(other => {
+                        if (other !== el) other.removeAttribute('open');
+                    });
+                }
+            });
+        });
 
     } catch (err) {
         contentEl.innerHTML = `<div class="status-err">Gagal memuat. ${esc(fe(err))}</div>`;
