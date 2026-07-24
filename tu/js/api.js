@@ -165,12 +165,13 @@ export async function getExitsByRange(dateStart, dateEnd) {
  * @param {string|null} dateStart
  * @param {string|null} dateEnd
  * @param {string[]} statuses - subset dari ['ALPA','IZIN','SAKIT']
- * @returns {Array} flat array baris rekap, satu baris per (sesi, siswa)
+ * @returns {Array} satu baris per (blok pertemuan, siswa) — JP dalam blok yang sama digabung
  */
 export async function fetchAttendanceSummary(dateStart, dateEnd, statuses = ['ALPA', 'IZIN', 'SAKIT']) {
     let q = supabase
         .from('teaching_schedules')
         .select(`
+            block_group_id,
             session_date,
             class:classes!teaching_schedules_class_id_fkey ( name ),
             attendance!inner (
@@ -190,10 +191,16 @@ export async function fetchAttendanceSummary(dateStart, dateEnd, statuses = ['AL
     const { data, error } = await q;
     if (error) throw error;
 
+    // Deduplikasi per blok per siswa — beberapa JP dalam satu blok tidak boleh menghasilkan baris ganda
+    const seen = new Set();
     const rows = [];
     for (const sched of (data ?? [])) {
         const className = sched.class?.name ?? '—';
+        const blockKey  = sched.block_group_id ?? sched.session_date;
         for (const att of (sched.attendance ?? [])) {
+            const key = `${blockKey}|${att.student?.nis ?? att.attendance_id}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
             rows.push({
                 date:         sched.session_date,
                 student_name: att.student?.full_name ?? '—',
