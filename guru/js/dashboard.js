@@ -532,11 +532,17 @@ function renderGuruRekapPage() {
                     body.innerHTML = '<p class="acc-empty">Belum ada sesi tercatat.</p>';
                     return;
                 }
-                body.innerHTML = sessions.map(s => `
+                const grouped = [];
+                const seen = new Map();
+                for (const s of sessions) {
+                    const key = `${s.schedule.session_date}|${s.schedule.subject?.name ?? ''}`;
+                    if (!seen.has(key)) { seen.set(key, true); grouped.push(s); }
+                }
+                body.innerHTML = grouped.map(s => `
                     <div style="display:flex;align-items:center;gap:8px;
                         padding:7px 16px;border-top:0.5px solid var(--color-border)">
                         <span style="font-size:12px;color:var(--color-text-muted);min-width:90px">
-                            ${esc(s.schedule.session_date)} ${fmtTime(s.schedule.session_start)}
+                            ${esc(s.schedule.session_date)}
                         </span>
                         <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
                             ${esc(s.schedule.subject?.name ?? '—')}
@@ -1557,11 +1563,17 @@ async function loadBkAttendanceRecap() {
                                     ALPA: 'var(--color-danger)',
                                 };
                                 const STATUS_LABEL = { HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', ALPA: 'Alpa' };
-                                sBody.innerHTML = sessions.map(s => `
+                                const grouped = [];
+                                const seen = new Map();
+                                for (const s of sessions) {
+                                    const key = `${s.schedule.session_date}|${s.schedule.subject?.name ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
+                                    if (!seen.has(key)) { seen.set(key, true); grouped.push(s); }
+                                }
+                                sBody.innerHTML = grouped.map(s => `
                                     <div style="display:flex;align-items:center;gap:8px;
                                         padding:7px 24px;border-top:0.5px solid var(--color-border)">
                                         <span style="font-size:12px;color:var(--color-text-muted);min-width:90px">
-                                            ${esc(s.schedule.session_date)} ${fmtTime(s.schedule.session_start)}
+                                            ${esc(s.schedule.session_date)}
                                         </span>
                                         <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
                                             ${esc(s.schedule.subject?.name ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
@@ -1799,11 +1811,17 @@ async function loadWkAttendanceRecap() {
                                     ALPA: 'var(--color-danger)',
                                 };
                                 const STATUS_LABEL = { HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', ALPA: 'Alpa' };
-                                sBody.innerHTML = sessions.map(s => `
+                                const grouped = [];
+                                const seen = new Map();
+                                for (const s of sessions) {
+                                    const key = `${s.schedule.session_date}|${s.schedule.subject?.name ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
+                                    if (!seen.has(key)) { seen.set(key, true); grouped.push(s); }
+                                }
+                                sBody.innerHTML = grouped.map(s => `
                                     <div style="display:flex;align-items:center;gap:8px;
                                         padding:7px 24px;border-top:0.5px solid var(--color-border)">
                                         <span style="font-size:12px;color:var(--color-text-muted);min-width:90px">
-                                            ${esc(s.schedule.session_date)} ${fmtTime(s.schedule.session_start)}
+                                            ${esc(s.schedule.session_date)}
                                         </span>
                                         <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
                                             ${esc(s.schedule.subject?.name ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
@@ -2187,11 +2205,17 @@ async function loadKpClsRecap() {
                                     ALPA: 'var(--color-danger)',
                                 };
                                 const STATUS_LABEL = { HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', ALPA: 'Alpa' };
-                                sBody.innerHTML = sessions.map(s => `
+                                const grouped = [];
+                                const seen = new Map();
+                                for (const s of sessions) {
+                                    const key = `${s.schedule.session_date}|${s.schedule.subject?.name ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
+                                    if (!seen.has(key)) { seen.set(key, true); grouped.push(s); }
+                                }
+                                sBody.innerHTML = grouped.map(s => `
                                     <div style="display:flex;align-items:center;gap:8px;
                                         padding:7px 24px;border-top:0.5px solid var(--color-border)">
                                         <span style="font-size:12px;color:var(--color-text-muted);min-width:90px">
-                                            ${esc(s.schedule.session_date)} ${fmtTime(s.schedule.session_start)}
+                                            ${esc(s.schedule.session_date)}
                                         </span>
                                         <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
                                             ${esc(s.schedule.subject?.name ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
