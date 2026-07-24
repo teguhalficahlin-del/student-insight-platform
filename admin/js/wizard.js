@@ -121,8 +121,11 @@ function showSuccess(msg) {
 // NAVIGATION / RENDER
 // ─────────────────────────────────────────────────────────────
 
+function lsKey() { return `wz_done_${state.schoolId || 'default'}`; }
+
 function markDone(n) {
     state.completedSteps.add(n);
+    try { localStorage.setItem(lsKey(), JSON.stringify([...state.completedSteps])); } catch (_) {}
     syncSidebar();
 }
 
@@ -3422,6 +3425,12 @@ window.addEventListener('beforeunload', (e) => {
     const userRow = await getCurrentUserRow();
     if (!requireAdministrativeOrRedirect(userRow)) return;
     state.schoolId = userRow.school_id;
+
+    // Restore langkah yang sudah selesai dari localStorage
+    try {
+        const saved = localStorage.getItem(lsKey());
+        if (saved) JSON.parse(saved).forEach(n => state.completedSteps.add(n));
+    } catch (_) {}
 
     // Paksa ganti password jika di-reset superadmin (must_change_password)
     // — dicek di sini juga agar berlaku saat wizard dibuka langsung (bookmark).
