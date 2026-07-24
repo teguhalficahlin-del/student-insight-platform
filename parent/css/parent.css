@@ -158,9 +158,10 @@ label {
     background: var(--color-surface);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
-    padding: 16px 20px;
+    padding: 12px 20px;
     margin-bottom: 20px;
 }
+.topbar h2 { font-size: 16px; margin-bottom: 2px; }
 
 .loading {
     text-align: center;
