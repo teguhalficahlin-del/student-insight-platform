@@ -1280,10 +1280,10 @@ async function renderParentsPanel() {
     const [{ data: allClasses }, { data: enrollments }, programs] = await Promise.all([
         supabase.from('classes').select('class_id, name, grade_level, program_id')
             .order('grade_level').order('name'),
-        fetchAllRows('class_enrollments', q => q
+        supabase.from('class_enrollments')
             .select('student_id, class_id')
             .eq('academic_year', config?.current_academic_year ?? '')
-            .is('withdrawn_at', null)),
+            .is('withdrawn_at', null),
         getPrograms(),
     ]);
     const programNameById = new Map(
