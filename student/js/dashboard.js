@@ -372,6 +372,18 @@ async function loadAttendance() {
         document.getElementById('att-date-start').value = monthAgo;
         document.getElementById('att-date-end').value   = today;
         document.getElementById('att-filter-btn').onclick = loadAttendance;
+
+        document.getElementById('att-body').addEventListener('click', e => {
+            const row = e.target.closest('.att-block-expandable');
+            if (!row) return;
+            const isOpen = row.classList.toggle('att-block-open');
+            let n = row.nextElementSibling;
+            while (n && n.classList.contains('att-slot-detail')) {
+                n.classList.toggle('att-slot-visible', isOpen);
+                n = n.nextElementSibling;
+            }
+        });
+
         attInit = true;
     }
 
@@ -418,25 +430,17 @@ async function loadAttendance() {
         tbody.innerHTML = rows.map(block => {
             const multiSlot = block.slots.length > 1;
             const detailRows = multiSlot ? block.slots.map(s => `
-                <tr class="att-slot-detail" style="display:none">
+                <tr class="att-slot-detail">
                     <td></td>
-                    <td style="color:var(--color-text-muted);font-size:.85em">
-                        ${s.start} – ${s.end}
-                    </td>
-                    <td></td>
+                    <td>${esc(s.start)} – ${esc(s.end)}</td>
+                    <td colspan="2" style="color:var(--color-text-muted)">${esc(s.notes || '—')}</td>
                     <td><span class="badge ${STATUS_BADGE_MAP[s.status] ?? ''}">
                         ${STATUS_LABEL_MAP[s.status] ?? s.status}
                     </span></td>
-                    <td>${esc(s.notes || '—')}</td>
                 </tr>`).join('') : '';
 
             return `
-                <tr class="att-block-row ${multiSlot ? 'att-block-expandable' : ''}"
-                    ${multiSlot ? `onclick="this.classList.toggle('att-block-open');
-                        let n=this.nextElementSibling;
-                        while(n&&n.classList.contains('att-slot-detail')){
-                            n.style.display=n.style.display==='none'?'':'none';n=n.nextElementSibling;
-                        }"` : ''}>
+                <tr class="att-block-row ${multiSlot ? 'att-block-expandable' : ''}">
                     <td>${fmt(block.date)}</td>
                     <td>${esc(block.time_range)}</td>
                     <td>${esc(block.subject)}</td>
