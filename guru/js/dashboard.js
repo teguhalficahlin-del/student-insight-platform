@@ -1358,6 +1358,15 @@ async function loadWaliSummary() {
                         body.innerHTML = '<p class="acc-empty">Belum ada sesi tercatat.</p>';
                         return;
                     }
+                    const grouped = [];
+                    const seen = new Map();
+                    for (const s of sessions) {
+                        const key = `${s.schedule.session_date}|${s.schedule.subject?.name ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
+                        if (!seen.has(key)) {
+                            seen.set(key, true);
+                            grouped.push(s);
+                        }
+                    }
                     const STATUS_COLOR = {
                         HADIR: 'var(--color-success)',
                         IZIN:  'var(--color-warning,#f59e0b)',
@@ -1365,11 +1374,11 @@ async function loadWaliSummary() {
                         ALPA: 'var(--color-danger)',
                     };
                     const STATUS_LABEL = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', ALPA:'Alpa' };
-                    body.innerHTML = sessions.map(s => `
+                    body.innerHTML = grouped.map(s => `
                         <div style="display:flex;align-items:center;gap:8px;
                             padding:7px 16px;border-top:0.5px solid var(--color-border)">
                             <span style="font-size:12px;color:var(--color-text-muted);min-width:90px">
-                                ${esc(s.schedule.session_date)} ${fmtTime(s.schedule.session_start)}
+                                ${esc(s.schedule.session_date)}
                             </span>
                             <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
                                 ${esc(s.schedule.subject?.name ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
