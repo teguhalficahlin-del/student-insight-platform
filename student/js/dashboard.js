@@ -373,17 +373,6 @@ async function loadAttendance() {
         document.getElementById('att-date-end').value   = today;
         document.getElementById('att-filter-btn').onclick = loadAttendance;
 
-        document.getElementById('att-body').addEventListener('click', e => {
-            const row = e.target.closest('.att-block-expandable');
-            if (!row) return;
-            const isOpen = row.classList.toggle('att-block-open');
-            let n = row.nextElementSibling;
-            while (n && n.classList.contains('att-slot-detail')) {
-                n.style.display = isOpen ? '' : 'none';
-                n = n.nextElementSibling;
-            }
-        });
-
         attInit = true;
     }
 
@@ -455,6 +444,17 @@ async function loadAttendance() {
                 </tr>
                 ${detailRows}`;
         }).join('');
+
+        tbody.querySelectorAll('.att-block-expandable').forEach(row => {
+            row.addEventListener('click', () => {
+                const isOpen = row.classList.toggle('att-block-open');
+                let n = row.nextElementSibling;
+                while (n && n.classList.contains('att-slot-detail')) {
+                    n.style.display = isOpen ? '' : 'none';
+                    n = n.nextElementSibling;
+                }
+            });
+        });
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="5" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     } finally {

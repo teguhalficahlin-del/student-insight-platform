@@ -433,7 +433,16 @@ async function loadAttendance(studentId) {
                 ${detailRows}`;
         }).join('');
 
-
+        attTbody.querySelectorAll('.att-block-expandable').forEach(row => {
+            row.addEventListener('click', () => {
+                const isOpen = row.classList.toggle('att-block-open');
+                let n = row.nextElementSibling;
+                while (n && n.classList.contains('att-slot-detail')) {
+                    n.style.display = isOpen ? '' : 'none';
+                    n = n.nextElementSibling;
+                }
+            });
+        });
     } catch (err) {
         attTbody.innerHTML = `<tr><td colspan="6" class="hint">Gagal memuat data. ${esc(fe(err))}</td></tr>`;
     }
@@ -735,17 +744,6 @@ btnObsFilter.addEventListener('click', async () => {
     } finally {
         btnObsFilter.disabled = false;
         btnObsFilter.textContent = prev;
-    }
-});
-
-attTbody.addEventListener('click', e => {
-    const row = e.target.closest('.att-block-expandable');
-    if (!row) return;
-    const isOpen = row.classList.toggle('att-block-open');
-    let n = row.nextElementSibling;
-    while (n && n.classList.contains('att-slot-detail')) {
-        n.style.display = isOpen ? '' : 'none';
-        n = n.nextElementSibling;
     }
 });
 

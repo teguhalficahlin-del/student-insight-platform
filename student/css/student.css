@@ -6,6 +6,7 @@
 :root {
     --color-bg:           #0b1120;
     --color-surface:      #1a2540;
+    --color-bg-subtle:    rgba(255,255,255,0.05);
     --color-border:       rgba(245, 158, 11, 0.40);
     --color-text:         rgba(255, 255, 255, 0.90);
     --color-text-muted:   rgba(255, 255, 255, 0.45);
