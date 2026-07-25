@@ -6520,7 +6520,7 @@ function openATPReviewModal(result, metadata, params) {
                         <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:140px">Elemen CP</th>
                         <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:50px">JP</th>
                         <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:160px">Materi Pokok</th>
-                        <th style="padding:8px;border-bottom:2px solid var(--color-border);width:36px"></th>
+                        <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:36px">Edit</th>
                     </tr>
                 </thead>
                 <tbody id="atp-tp-tbody">
