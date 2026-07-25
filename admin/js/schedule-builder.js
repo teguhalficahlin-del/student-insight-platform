@@ -657,7 +657,7 @@ async function renderKodeMapelPanel() {
             Isi tabel atau <strong>paste langsung dari Excel</strong> (pilih 2 kolom: Kode | Nama Mapel → Ctrl+V di tabel).
             Nama Mapel harus cocok dengan nama di kurikulum. Baris kosong diabaikan.
         </p>
-        <div id="sca-paste-target" style="overflow-x:auto">
+        <div id="sca-paste-target">
             <table class="table" style="min-width:460px;table-layout:fixed">
                 <colgroup>
                     <col style="width:130px">
