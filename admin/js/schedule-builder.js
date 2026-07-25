@@ -51,7 +51,12 @@ export async function openScheduleBuilder() {
     state.semester = config.current_semester;
     state.schoolId = config.school_id;
 
-    state.teachers = await getTeacherList();
+    // Ambil semua staf bertanda teacher_code tanpa filter role_type,
+    // karena WAKA/koordinator bisa punya kode guru dan masuk jadwal.
+    { const { data } = await supabase.from('v_users_staff_directory')
+        .select('user_id, full_name, teacher_code')
+        .not('teacher_code', 'is', null).neq('teacher_code', '').order('teacher_code');
+      state.teachers = data ?? []; }
     state.teacherMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.teacher_code.toUpperCase(), t.user_id]));
     state.teacherIdMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.user_id, t.teacher_code]));
     try { state.coreSubjects = await getCoreSubjectsForSchedule(); } catch (_) { state.coreSubjects = []; }
