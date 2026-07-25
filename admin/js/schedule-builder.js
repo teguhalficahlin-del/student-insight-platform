@@ -125,14 +125,22 @@ function createOverlay() {
 
     overlayEl.querySelector('.sched-close').addEventListener('click', closeOverlay);
 
-    overlayEl.querySelector('.sched-panel-tabs').addEventListener('click', e => {
+    overlayEl.querySelector('.sched-panel-tabs').addEventListener('click', async e => {
         const panel = e.target.dataset?.panel;
         if (!panel) return;
         overlayEl.querySelectorAll('.sched-ptab').forEach(t => t.classList.toggle('active', t.dataset.panel === panel));
         overlayEl.querySelectorAll('[id^="sched-panel-"]').forEach(p => { p.style.display = 'none'; });
         overlayEl.querySelector(`#sched-panel-${panel}`).style.display = '';
         if (panel === 'kode-mapel') renderKodeMapelPanel();
-        if (panel === 'kode-guru') renderKodeGuruPanel();
+        if (panel === 'kode-guru') {
+            const { data } = await supabase.from('v_users_staff_directory')
+                .select('user_id, full_name, teacher_code')
+                .not('teacher_code', 'is', null).neq('teacher_code', '').order('teacher_code');
+            state.teachers = data ?? [];
+            state.teacherMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.teacher_code.toUpperCase(), t.user_id]));
+            state.teacherIdMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.user_id, t.teacher_code]));
+            renderKodeGuruPanel();
+        }
     });
     overlayEl.querySelector('#sched-add-slot').addEventListener('click', () => addRow(false));
     overlayEl.querySelector('#sched-add-break').addEventListener('click', () => addRow(true));
