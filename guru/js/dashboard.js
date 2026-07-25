@@ -5171,7 +5171,7 @@ async function loadPerangkatAjarDashboard() {
             const pct    = (hasPT ? 10 : 0) + (hasPS1 ? 10 : 0) + (hasPS2 ? 10 : 0) + (hasATP ? 20 : 0)
                          + (group.docs.some(d => d.document_type === 'PPM' && doneStatuses.includes(d.status)) ? 50 : 0);
 
-            const dokRows = ['PROGRAM_TAHUNAN','PROGRAM_SEMESTER','ATP','PPM','LKPD','SOAL','RUBRIK'].map(dtype => {
+            const dokRows = ['ATP','PROGRAM_TAHUNAN','PROGRAM_SEMESTER','PPM','LKPD','SOAL','RUBRIK'].map(dtype => {
                 const typeDocs = group.docs.filter(d => d.document_type === dtype);
                 const badgeHtml = typeDocs.length
                     ? `<span style="font-size:11px;color:var(--color-success,#16a34a)">✓ Ada</span>`
