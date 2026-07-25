@@ -5149,32 +5149,29 @@ async function loadPerangkatAjarDashboard() {
         const listEl = document.getElementById('pa-mapel-list');
         if (grouped.size === 0) {
             listEl.innerHTML = `
-                <div class="section-card" style="background:var(--color-info-bg,#eff6ff);border:1px solid var(--color-info-border,#bfdbfe);padding:16px;margin-bottom:12px">
-                    <p style="margin:0 0 10px;font-weight:600;font-size:14px">ℹ Lengkapi profil untuk hasil AI yang lebih baik</p>
-                    <ul style="margin:0 0 8px;padding:0;list-style:none;font-size:13px;display:flex;flex-direction:column;gap:6px">
-                        <li><button id="empty-btn-profil" class="btn btn-secondary btn-sm" style="width:100%;text-align:left">☐ Isi profil mengajar</button></li>
-                        <li><button id="empty-btn-konteks" class="btn btn-secondary btn-sm" style="width:100%;text-align:left">☐ Isi konteks kelas</button></li>
-                    </ul>
-                    <p style="margin:0;font-size:12px;color:var(--color-text-muted)">Klik item di atas untuk mengisi sekarang.</p>
-                </div>
-                <div class="section-card" style="text-align:center;padding:28px 16px">
-                    <div style="font-size:40px;margin-bottom:10px">📚</div>
-                    <p style="margin:0 0 4px;font-weight:600;font-size:15px">Belum ada perangkat ajar</p>
-                    <p style="margin:0 0 18px;font-size:13px;color:var(--color-text-muted)">Mulai dengan membuat ATP untuk mata pelajaran Anda.</p>
-                    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:8px">
-                        <button id="empty-upload-atp-btn" class="btn btn-secondary">📤 Upload ATP</button>
-                        <button id="empty-generate-atp-btn" class="btn btn-primary">✨ Generate ATP</button>
+                <div style="text-align:center;padding:2.5rem 1rem;border:0.5px solid var(--color-border,#334);border-radius:12px">
+                    <div style="font-size:36px;margin-bottom:12px">📚</div>
+                    <p style="font-size:15px;font-weight:600;margin:0 0 6px;color:var(--color-text)">Belum ada perangkat ajar</p>
+                    <p style="font-size:13px;color:var(--color-text-muted,#888);margin:0 0 20px">
+                        Mulai dengan mengisi Profil Mengajar dan Konteks Kelas,<br>
+                        lalu buat ATP untuk mata pelajaran Anda.
+                    </p>
+                    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+                        <button class="btn btn-secondary btn-sm" id="pa-empty-upload-btn">📤 Upload ATP</button>
+                        <button class="btn btn-primary btn-sm" id="pa-empty-generate-btn">✨ Generate ATP</button>
                     </div>
-                    <p style="margin:0;font-size:11px;color:var(--color-text-muted)">Upload: PDF atau DOCX · Generate: AI menyusun dari CP</p>
+                    <p style="font-size:11px;color:var(--color-text-muted,#888);margin-top:10px">
+                        Upload: PDF atau DOCX &middot; Generate: AI menyusun dari CP
+                    </p>
                 </div>`;
 
-            document.getElementById('empty-btn-profil').onclick    = () => openProfilMengajarModal();
-            document.getElementById('empty-btn-konteks').onclick   = () => openKonteksKelasModal();
-            document.getElementById('empty-upload-atp-btn').onclick = () => uploadATPFlow(coreSubjects, phases, ay);
-            document.getElementById('empty-generate-atp-btn').onclick = () =>
-                openGenerateATPPicker(coreSubjects, phases, (subjId, phaseId, subjName, _semester) => {
-                    openConfirmGenerateModal(subjId, phaseId, subjName, ay);
-                });
+            document.getElementById('pa-empty-upload-btn')
+                ?.addEventListener('click', () => uploadATPFlow(coreSubjects, phases, ay));
+            document.getElementById('pa-empty-generate-btn')
+                ?.addEventListener('click', () => openGenerateATPPicker(coreSubjects, phases,
+                    (subjId, phaseId, subjName, _semester) =>
+                        openConfirmGenerateModal(subjId, phaseId, subjName, ay)
+                ));
             return;
         }
 
