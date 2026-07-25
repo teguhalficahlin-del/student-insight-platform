@@ -5239,6 +5239,19 @@ async function loadPerangkatAjarDashboard() {
                         style="font-size:12px;margin-left:auto">
                         ${group.docs.some(d => d.document_type === 'ATP') ? '🔄 Generate Ulang ATP' : '✨ Generate ATP'}
                     </button>
+                    ${(() => {
+                        const atpDoc = group.docs.find(d => d.document_type === 'ATP');
+                        const hasProtaAny = group.docs.some(d => d.document_type === 'PROGRAM_TAHUNAN');
+                        if (!atpDoc || hasProtaAny) return '';
+                        return `<button class="btn btn-secondary btn-sm pa-generate-prota-btn"
+                            data-core-subject-id="${esc(group.core_subject_id)}"
+                            data-phase-id="${esc(group.phase_id)}"
+                            data-subject-name="${esc(subjectMap.get(group.core_subject_id)?.name ?? '')}"
+                            data-atp-doc-id="${esc(atpDoc.doc_id)}"
+                            style="font-size:12px">
+                            📅 Generate Prota
+                        </button>`;
+                    })()}
                 </div>
             </div>`;
         }).join('');
@@ -5255,6 +5268,16 @@ async function loadPerangkatAjarDashboard() {
                     genBtn.dataset.coreSubjectId,
                     genBtn.dataset.phaseId,
                     genBtn.dataset.subjectName,
+                    ay,
+                );
+            }
+            const protaBtn = e.target.closest('.pa-generate-prota-btn');
+            if (protaBtn) {
+                openConfirmProtaModal(
+                    protaBtn.dataset.coreSubjectId,
+                    protaBtn.dataset.phaseId,
+                    protaBtn.dataset.subjectName,
+                    protaBtn.dataset.atpDocId,
                     ay,
                 );
             }
@@ -6614,6 +6637,223 @@ function openATPReviewModal(result, metadata, params) {
     });
 
     overlay.style.display = 'flex';
+}
+
+// ── Program Tahunan (Prota) ───────────────────────────────────
+
+function openConfirmProtaModal(coreSubjectId, phaseId, subjName, atpDocId, ay) {
+    document.getElementById('confirm-prota-modal')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'confirm-prota-modal';
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = 'align-items:center';
+    overlay.innerHTML = `
+        <div class="modal-box" style="max-width:460px;width:100%">
+            <h2 style="margin:0 0 4px;font-size:18px">Generate Program Tahunan</h2>
+            <p style="margin:0 0 20px;font-size:13px;color:var(--color-text-muted)">${esc(subjName)} · ${esc(ay)}</p>
+
+            <div style="display:grid;gap:14px">
+                <label style="font-size:13px">
+                    Minggu Efektif Semester 1
+                    <input type="number" id="prota-weeks-sem1" class="input" value="18" min="10" max="24"
+                        style="margin-top:4px;width:100%">
+                </label>
+                <label style="font-size:13px">
+                    Minggu Efektif Semester 2
+                    <input type="number" id="prota-weeks-sem2" class="input" value="16" min="10" max="24"
+                        style="margin-top:4px;width:100%">
+                </label>
+            </div>
+
+            <p id="prota-confirm-msg" style="display:none;font-size:13px;margin-top:12px"></p>
+
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+                <button class="btn btn-secondary" id="prota-cancel-btn">Batal</button>
+                <button class="btn btn-primary" id="prota-generate-btn">✨ Generate</button>
+            </div>
+        </div>`;
+
+    document.body.appendChild(overlay);
+    overlay.style.display = 'flex';
+
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('prota-cancel-btn').addEventListener('click', () => overlay.remove());
+
+    document.getElementById('prota-generate-btn').addEventListener('click', async () => {
+        const msgEl    = document.getElementById('prota-confirm-msg');
+        const btn      = document.getElementById('prota-generate-btn');
+        const weeksSem1 = parseInt(document.getElementById('prota-weeks-sem1').value, 10);
+        const weeksSem2 = parseInt(document.getElementById('prota-weeks-sem2').value, 10);
+
+        if (!weeksSem1 || !weeksSem2 || weeksSem1 < 10 || weeksSem2 < 10) {
+            msgEl.style.color   = 'var(--color-danger)';
+            msgEl.textContent   = 'Minggu efektif harus antara 10–24.';
+            msgEl.style.display = '';
+            return;
+        }
+
+        btn.disabled    = true;
+        btn.textContent = 'Menghubungi AI…';
+        msgEl.style.display = 'none';
+        overlay.remove();
+
+        await generateProta({
+            coreSubjectId, phaseId, subjectName: subjName,
+            academicYear: ay, atpDocId, weeksSem1, weeksSem2,
+        });
+    });
+}
+
+async function generateProta({ coreSubjectId, phaseId, subjectName, academicYear, atpDocId, weeksSem1, weeksSem2 }) {
+    const loadingOverlay = document.createElement('div');
+    loadingOverlay.className = 'modal-overlay';
+    loadingOverlay.style.cssText = 'align-items:center;justify-content:center';
+    loadingOverlay.innerHTML = `
+        <div style="background:var(--color-bg);border-radius:var(--radius);padding:32px 40px;text-align:center;max-width:320px">
+            <div class="spinner" style="margin:0 auto 16px"></div>
+            <p style="margin:0;font-size:14px;font-weight:600">Claude sedang menyusun Program Tahunan…</p>
+            <p style="margin:8px 0 0;font-size:12px;color:var(--color-text-muted)">Mungkin butuh 15–30 detik</p>
+        </div>`;
+    document.body.appendChild(loadingOverlay);
+    loadingOverlay.style.display = 'flex';
+
+    try {
+        const { data, error } = await supabase.functions.invoke('generate-prota', {
+            body: {
+                school_id:       currentUser.school_id,
+                academic_year:   academicYear,
+                core_subject_id: coreSubjectId,
+                phase_id:        phaseId,
+                atp_doc_id:      atpDocId,
+                weeks_sem1:      weeksSem1,
+                weeks_sem2:      weeksSem2,
+            },
+        });
+        loadingOverlay.remove();
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error ?? 'Gagal generate Prota');
+        openProtaReviewModal(data.data, data.metadata, { coreSubjectId, phaseId, subjectName, academicYear, atpDocId, weeksSem1, weeksSem2 });
+    } catch (err) {
+        loadingOverlay.remove();
+        alert(`Gagal generate Prota: ${err.message ?? err}`);
+    }
+}
+
+function openProtaReviewModal(result, metadata, params) {
+    document.getElementById('prota-review-modal')?.remove();
+
+    const renderDistribusi = (distribusi) => distribusi.map(row => {
+        const isPas = row.keterangan === 'PAS' || row.keterangan === 'PAT' || row.keterangan === 'CADANGAN';
+        return `<tr style="border-bottom:1px solid var(--color-border);${isPas ? 'background:var(--color-bg-alt);font-style:italic;color:var(--color-text-muted)' : ''}">
+            <td style="padding:7px 8px;text-align:center;white-space:nowrap">${row.minggu}</td>
+            <td style="padding:7px 8px">${esc(row.materi ?? '')}</td>
+            <td style="padding:7px 8px;text-align:center">${row.jp > 0 ? row.jp : '—'}</td>
+            <td style="padding:7px 8px;text-align:center;font-size:11px;color:var(--color-text-muted)">${esc(row.keterangan ?? '')}</td>
+        </tr>`;
+    }).join('');
+
+    const tableHeader = `<thead><tr style="background:var(--color-bg-alt)">
+        <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:60px">Minggu</th>
+        <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border)">Materi / TP</th>
+        <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:50px">JP</th>
+        <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:90px">Keterangan</th>
+    </tr></thead>`;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'prota-review-modal';
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = 'align-items:flex-start;padding:24px 16px;overflow-y:auto';
+    overlay.innerHTML = `
+        <div class="modal-box" style="max-width:700px;width:100%">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;gap:8px">
+                <div>
+                    <h2 style="margin:0 0 4px;font-size:18px">Hasil Generate Program Tahunan</h2>
+                    <p style="margin:0;font-size:13px;color:var(--color-text-muted)">${esc(params.subjectName)} · ${esc(params.academicYear)}</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="prota-close-btn" style="flex-shrink:0">✕</button>
+            </div>
+
+            ${result.judul ? `<p style="margin:0 0 16px;font-size:14px;font-weight:600">${esc(result.judul)}</p>` : ''}
+
+            <h3 style="font-size:14px;margin:0 0 8px">Semester 1 — ${result.semester_1?.minggu_efektif ?? params.weeksSem1} minggu efektif</h3>
+            <div style="overflow-x:auto;margin-bottom:20px">
+                <table style="width:100%;border-collapse:collapse;font-size:13px">
+                    ${tableHeader}
+                    <tbody>${renderDistribusi(result.semester_1?.distribusi ?? [])}</tbody>
+                </table>
+            </div>
+
+            <h3 style="font-size:14px;margin:0 0 8px">Semester 2 — ${result.semester_2?.minggu_efektif ?? params.weeksSem2} minggu efektif</h3>
+            <div style="overflow-x:auto;margin-bottom:20px">
+                <table style="width:100%;border-collapse:collapse;font-size:13px">
+                    ${tableHeader}
+                    <tbody>${renderDistribusi(result.semester_2?.distribusi ?? [])}</tbody>
+                </table>
+            </div>
+
+            ${result.catatan ? `<p style="margin:0 0 16px;font-size:12px;color:var(--color-text-muted);background:var(--color-bg-alt);padding:10px 12px;border-radius:6px">${esc(result.catatan)}</p>` : ''}
+
+            <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap" id="prota-review-actions">
+                <button class="btn btn-secondary" id="prota-regen-btn">🔄 Generate Ulang</button>
+                <button class="btn btn-primary" id="prota-save-btn">💾 Simpan sebagai Draft</button>
+            </div>
+            <p id="prota-save-msg" style="display:none;font-size:13px;margin-top:8px;text-align:right"></p>
+        </div>`;
+
+    document.body.appendChild(overlay);
+    overlay.style.display = 'flex';
+
+    document.getElementById('prota-close-btn').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+    document.getElementById('prota-regen-btn').addEventListener('click', () => {
+        overlay.remove();
+        openConfirmProtaModal(params.coreSubjectId, params.phaseId, params.subjectName, params.atpDocId, params.academicYear);
+    });
+
+    document.getElementById('prota-save-btn').addEventListener('click', async () => {
+        const saveBtn = document.getElementById('prota-save-btn');
+        const msgEl   = document.getElementById('prota-save-msg');
+        saveBtn.disabled    = true;
+        saveBtn.textContent = '💾 Menyimpan…';
+        try {
+            await createTeacherDocument({
+                schoolId:      currentUser.school_id,
+                academicYear:  params.academicYear,
+                documentType:  'PROGRAM_TAHUNAN',
+                coreSubjectId: params.coreSubjectId,
+                phaseId:       params.phaseId,
+                programId:     null,
+                scopeType:     'SEMUA_KELAS',
+                semester:      null,
+                tpUrutan:      null,
+                contentJson:   {
+                    judul:        result.judul,
+                    semester_1:   result.semester_1,
+                    semester_2:   result.semester_2,
+                    catatan:      result.catatan ?? '',
+                    model_version: metadata?.model ?? 'claude-haiku-4-5',
+                    generated_at:  metadata?.generated_at ?? new Date().toISOString(),
+                    atp_doc_id:    metadata?.atp_doc_id ?? params.atpDocId,
+                },
+            });
+            saveBtn.textContent     = '✓ Tersimpan!';
+            msgEl.style.color       = 'var(--color-success,#16a34a)';
+            msgEl.textContent       = '✓ Program Tahunan berhasil disimpan sebagai Draft.';
+            msgEl.style.display     = '';
+            setTimeout(async () => {
+                overlay.remove();
+                await loadPerangkatAjarDashboard();
+            }, 900);
+        } catch (err) {
+            saveBtn.disabled    = false;
+            saveBtn.textContent = '💾 Simpan sebagai Draft';
+            msgEl.style.color   = 'var(--color-danger)';
+            msgEl.textContent   = `✗ ${fe(err)}`;
+            msgEl.style.display = '';
+        }
+    });
 }
 
 // ── ATP Picker & Upload ──────────────────────────────────────
