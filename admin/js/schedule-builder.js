@@ -657,17 +657,19 @@ async function renderKodeMapelPanel() {
     panel.innerHTML = `
         <h4 style="margin:0 0 8px">Kode Mapel</h4>
         <p class="hint" style="margin:0 0 10px">
-            Isi tabel atau <strong>paste langsung dari Excel</strong> (pilih 2 kolom: Kode | Nama Mapel → Ctrl+V di tabel).
-            Nama Mapel harus cocok dengan nama di kurikulum. Baris kosong diabaikan.
+            Isi tabel atau <strong>paste langsung dari Excel</strong> (pilih 4 kolom: Kode | Nama Mapel Lengkap | Jurusan/Konteks | Berlaku di Kelas → Ctrl+V di tabel).
+            Nama Mapel harus cocok dengan nama di kurikulum. Kolom Jurusan dan Kelas hanya referensi, tidak disimpan. Baris kosong diabaikan.
         </p>
         <div id="sca-paste-target">
-            <table class="table" style="min-width:460px;table-layout:fixed">
+            <table class="table" style="min-width:760px;table-layout:fixed">
                 <colgroup>
-                    <col style="width:130px">
-                    <col style="width:280px">
+                    <col style="width:110px">
+                    <col style="width:260px">
+                    <col style="width:200px">
+                    <col style="width:160px">
                     <col style="width:1px">
                 </colgroup>
-                <thead><tr><th>Kode</th><th>Nama Mapel</th><th></th></tr></thead>
+                <thead><tr><th>Kode</th><th>Nama Mapel Lengkap</th><th>Jurusan / Konteks</th><th>Berlaku di Kelas</th><th></th></tr></thead>
                 <tbody id="sca-tbody"></tbody>
             </table>
         </div>
@@ -680,12 +682,16 @@ async function renderKodeMapelPanel() {
 
     const tbody = panel.querySelector('#sca-tbody');
 
-    function makeRow(kode = '', nama = '') {
+    function makeRow(kode = '', nama = '', jurusan = '', kelas = '') {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td style="padding:2px 4px"><input type="text" class="input sca-cell-kode" value="${esc(kode)}"
                 style="width:100%;text-transform:uppercase;font-size:13px;padding:4px 6px"></td>
             <td style="padding:2px 4px"><input type="text" class="input sca-cell-nama" value="${esc(nama)}"
+                style="width:100%;font-size:13px;padding:4px 6px"></td>
+            <td style="padding:2px 4px"><input type="text" class="input sca-cell-jurusan" value="${esc(jurusan)}"
+                style="width:100%;font-size:13px;padding:4px 6px"></td>
+            <td style="padding:2px 4px"><input type="text" class="input sca-cell-kelas" value="${esc(kelas)}"
                 style="width:100%;font-size:13px;padding:4px 6px"></td>
             <td class="sca-row-err" style="padding:2px 6px;font-size:12px;color:var(--color-danger);white-space:nowrap"></td>
         `;
@@ -724,14 +730,18 @@ async function renderKodeMapelPanel() {
         pasteLines.forEach((line, li) => {
             const ri = startRow + li;
             const cols = line.split('\t');
-            const kode = (cols[0] ?? '').trim().toUpperCase();
-            const nama = (cols[1] ?? '').trim();
+            const kode     = (cols[0] ?? '').trim().toUpperCase();
+            const nama     = (cols[1] ?? '').trim();
+            const jurusan  = (cols[2] ?? '').trim();
+            const kelas    = (cols[3] ?? '').trim();
             const trs = [...tbody.querySelectorAll('tr')];
             if (ri < trs.length) {
-                trs[ri].querySelector('.sca-cell-kode').value = kode;
-                trs[ri].querySelector('.sca-cell-nama').value = nama;
+                trs[ri].querySelector('.sca-cell-kode').value    = kode;
+                trs[ri].querySelector('.sca-cell-nama').value    = nama;
+                trs[ri].querySelector('.sca-cell-jurusan').value = jurusan;
+                trs[ri].querySelector('.sca-cell-kelas').value   = kelas;
             } else {
-                makeRow(kode, nama);
+                makeRow(kode, nama, jurusan, kelas);
             }
         });
     });
