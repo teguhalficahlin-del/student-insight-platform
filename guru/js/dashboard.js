@@ -5149,10 +5149,65 @@ async function loadPerangkatAjarDashboard() {
         const listEl = document.getElementById('pa-mapel-list');
         if (grouped.size === 0) {
             listEl.innerHTML = `
-                <div class="section-card" style="text-align:center;padding:32px 16px;color:var(--color-text-muted)">
+                <div class="section-card" style="text-align:center;padding:32px 16px">
                     <div style="font-size:32px;margin-bottom:8px">📚</div>
-                    <p style="margin:0">Belum ada perangkat ajar yang dibuat.</p>
+                    <p style="margin:0 0 4px;font-weight:600">Belum ada perangkat ajar</p>
+                    <p style="margin:0 0 16px;font-size:13px;color:var(--color-text-muted)">Mulai dengan membuat ATP untuk mata pelajaran Anda</p>
+                    <button id="empty-generate-atp-btn" class="btn btn-primary">✨ Generate ATP</button>
                 </div>`;
+
+            document.getElementById('empty-generate-atp-btn').onclick = () => {
+                document.getElementById('generate-atp-picker-modal')?.remove();
+
+                const subjectOptions = coreSubjects.map(s =>
+                    `<option value="${esc(s.subject_id)}">${esc(s.name)}</option>`
+                ).join('');
+                const phaseOptions = phases.map(p =>
+                    `<option value="${esc(p.phase_id)}">${esc(p.name)}</option>`
+                ).join('');
+
+                const picker = document.createElement('div');
+                picker.id = 'generate-atp-picker-modal';
+                picker.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000';
+                picker.innerHTML = `
+                    <div style="background:var(--color-bg);border-radius:12px;padding:24px;width:min(400px,90vw);max-height:90vh;overflow-y:auto">
+                        <h3 style="margin:0 0 16px">Generate ATP</h3>
+                        ${coreSubjects.length === 0 ? '<p style="color:var(--color-danger)">Tidak ada mata pelajaran tersedia.</p>' : ''}
+                        <div class="field" style="margin-bottom:12px">
+                            <label for="atp-picker-subject">Mata Pelajaran</label>
+                            <select id="atp-picker-subject" class="input">${subjectOptions}</select>
+                        </div>
+                        <div class="field" style="margin-bottom:12px">
+                            <label for="atp-picker-phase">Fase</label>
+                            <select id="atp-picker-phase" class="input">${phaseOptions}</select>
+                        </div>
+                        <div class="field" style="margin-bottom:16px">
+                            <label for="atp-picker-semester">Semester</label>
+                            <select id="atp-picker-semester" class="input">
+                                <option value="1">Semester 1</option>
+                                <option value="2">Semester 2</option>
+                            </select>
+                        </div>
+                        <div style="display:flex;gap:8px;justify-content:flex-end">
+                            <button id="atp-picker-cancel" class="btn btn-secondary">Batal</button>
+                            <button id="atp-picker-submit" class="btn btn-primary" ${coreSubjects.length === 0 ? 'disabled' : ''}>✨ Generate</button>
+                        </div>
+                    </div>`;
+
+                document.body.appendChild(picker);
+
+                const close = () => picker.remove();
+                document.getElementById('atp-picker-cancel').onclick = close;
+                picker.addEventListener('click', e => { if (e.target === picker) close(); });
+
+                document.getElementById('atp-picker-submit').onclick = () => {
+                    const subjId   = document.getElementById('atp-picker-subject').value;
+                    const phaseId  = document.getElementById('atp-picker-phase').value;
+                    const subjName = coreSubjects.find(s => s.subject_id === subjId)?.name ?? '';
+                    close();
+                    openConfirmGenerateModal(subjId, phaseId, subjName, ay);
+                };
+            };
             return;
         }
 
