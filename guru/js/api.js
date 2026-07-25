@@ -1356,6 +1356,7 @@ export async function getMyTeachingCoreSubjects(userId, schoolId, academicYear) 
         .eq('academic_year', academicYear)
         .eq('is_active', true);
 
+    console.log('[DEBUG-PA] assignments:', assignments, 'userId:', userId, 'schoolId:', schoolId, 'ay:', academicYear);
     if (!assignments?.length) return [];
     const subjectIds = [...new Set(assignments.map(a => a.subject_id).filter(Boolean))];
 
@@ -1365,6 +1366,7 @@ export async function getMyTeachingCoreSubjects(userId, schoolId, academicYear) 
         .select('name')
         .in('subject_id', subjectIds);
 
+    console.log('[DEBUG-PA] subjects:', subjects, 'subjectIds:', subjectIds);
     if (!subjects?.length) return [];
     const names = subjects.map(s => s.name).filter(Boolean);
     if (names.length === 0) return [];
@@ -1376,6 +1378,7 @@ export async function getMyTeachingCoreSubjects(userId, schoolId, academicYear) 
         .in('name', names)
         .order('name');
 
+    console.log('[DEBUG-PA] coreSubjects:', coreSubjects, 'names:', names);
     return coreSubjects ?? [];
 }
 
