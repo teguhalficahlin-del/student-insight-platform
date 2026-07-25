@@ -6343,7 +6343,7 @@ async function generateATP({ coreSubjectId, phaseId, subjectName, academicYear, 
         loadingEl.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
         loadingEl.innerHTML = `<div style="background:var(--color-surface);border-radius:12px;padding:32px 40px;text-align:center;max-width:320px">
             <div style="font-size:32px;margin-bottom:12px">✨</div>
-            <p style="margin:0 0 6px;font-weight:600">Gemini sedang menyusun ATP…</p>
+            <p style="margin:0 0 6px;font-weight:600">Claude sedang menyusun ATP…</p>
             <p style="margin:0;font-size:13px;color:var(--color-text-muted)">Mohon tunggu, proses ini memerlukan 10–30 detik</p>
         </div>`;
         document.body.appendChild(loadingEl);
@@ -6463,7 +6463,7 @@ function openATPReviewModal(result, metadata, params) {
                     tujuan_pembelajaran: result.tujuan_pembelajaran,
                     total_jp:            result.total_jp,
                     catatan:             result.catatan ?? '',
-                    model_version:       metadata.model ?? 'gemini-2.0-flash',
+                    model_version:       metadata.model ?? 'claude-haiku-4-5',
                     generated_at:        metadata.generated_at ?? new Date().toISOString(),
                 },
             });
