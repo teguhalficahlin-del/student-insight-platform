@@ -5501,6 +5501,43 @@ async function openDetailDokumenModal(docId, coreSubjectId, phaseId) {
                 <p style="margin:8px 0 0;font-size:12px;color:var(--color-text-muted)">Dibuat: ${fmt(doc.created_at)}</p>
             </div>
 
+            ${(() => {
+                const tps   = doc.document_type === 'ATP' ? (doc.content_json?.tujuan_pembelajaran ?? []) : [];
+                const total = doc.content_json?.total_jp ?? 0;
+                if (!tps.length) return '';
+                return `<div style="border-top:1px solid var(--color-border);padding-top:12px;margin-bottom:12px">
+                    <p style="font-size:12px;font-weight:600;margin:0 0 8px">Tujuan Pembelajaran (${tps.length} TP · ${total} JP)</p>
+                    <div style="overflow-x:auto">
+                        <table style="width:100%;border-collapse:collapse;font-size:13px">
+                            <thead>
+                                <tr style="background:var(--color-bg-alt)">
+                                    <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:40px">No</th>
+                                    <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border)">Deskripsi TP</th>
+                                    <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:140px">Elemen CP</th>
+                                    <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:50px">JP</th>
+                                    <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:160px">Materi Pokok</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${tps.map(tp => `
+                                    <tr style="border-bottom:1px solid var(--color-border)">
+                                        <td style="padding:8px;vertical-align:top;color:var(--color-text-muted)">${esc(String(tp.nomor ?? ''))}</td>
+                                        <td style="padding:8px;vertical-align:top">${esc(tp.deskripsi ?? '')}</td>
+                                        <td style="padding:8px;vertical-align:top;color:var(--color-text-muted);font-size:12px">${esc(tp.elemen_cp ?? '')}</td>
+                                        <td style="padding:8px;vertical-align:top;text-align:center;font-weight:600">${esc(String(tp.jp ?? ''))}</td>
+                                        <td style="padding:8px;vertical-align:top;font-size:12px">${esc(tp.materi_pokok ?? '')}</td>
+                                    </tr>`).join('')}
+                                <tr style="background:var(--color-bg-alt);font-weight:600">
+                                    <td colspan="3" style="padding:8px;text-align:right">Total JP</td>
+                                    <td style="padding:8px;text-align:center">${esc(String(total))}</td>
+                                    <td></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+            })()}
+
             <div style="border-top:1px solid var(--color-border);padding-top:12px">
                 <p style="font-size:12px;color:var(--color-text-muted);margin:0 0 10px">Ubah status dokumen:</p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
