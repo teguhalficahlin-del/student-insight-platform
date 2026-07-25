@@ -654,6 +654,13 @@ async function renderKodeMapelPanel() {
     let aliases = [];
     try { aliases = await getSubjectCodeAliases(); } catch (_) { /* kosong */ }
 
+    // Fetch semua mapel tanpa filter is_generatable untuk lookup nama saat simpan
+    const { data: allSubjects } = await supabase
+        .from('v_core_subjects').select('subject_id, name');
+    const nameMap = new Map(
+        (allSubjects ?? []).map(cs => [cs.name.toLowerCase(), cs.subject_id])
+    );
+
     panel.innerHTML = `
         <h4 style="margin:0 0 8px">Kode Mapel</h4>
         <p class="hint" style="margin:0 0 10px">
@@ -745,11 +752,6 @@ async function renderKodeMapelPanel() {
             }
         });
     });
-
-    // Build name→subject_id lookup (case-insensitive)
-    const nameMap = new Map(
-        state.coreSubjects.map(cs => [cs.name.toLowerCase(), cs.subject_id])
-    );
 
     panel.querySelector('#sca-save').addEventListener('click', async () => {
         const statusEl = panel.querySelector('#sca-status');
