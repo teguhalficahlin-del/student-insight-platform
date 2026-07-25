@@ -1360,26 +1360,37 @@ export async function getMyTeachingCoreSubjects(userId, schoolId, academicYear) 
     if (!assignments?.length) return [];
     const subjectIds = [...new Set(assignments.map(a => a.subject_id).filter(Boolean))];
 
-    // Query 2: ambil names dari public.subjects
+    // Query 2: ambil name + code dari public.subjects
     const { data: subjects } = await supabase
         .from('subjects')
-        .select('name')
+        .select('name, code')
         .in('subject_id', subjectIds);
 
     console.log('[DEBUG-PA] subjects:', subjects, 'subjectIds:', subjectIds);
     if (!subjects?.length) return [];
-    const names = subjects.map(s => s.name).filter(Boolean);
-    if (names.length === 0) return [];
 
-    // Query 3: match ke v_core_subjects via name
-    const { data: coreSubjects } = await supabase
+    // Query 3: fetch semua core subjects yang bisa di-generate, match di JS
+    const { data: allCore } = await supabase
         .from('v_core_subjects')
         .select('subject_id, name, code, subject_type')
-        .in('name', names)
-        .order('name');
+        .eq('is_generatable', true);
 
-    console.log('[DEBUG-PA] coreSubjects:', coreSubjects, 'names:', names);
-    return coreSubjects ?? [];
+    console.log('[DEBUG-PA] allCore:', allCore, 'subjects:', subjects);
+    if (!allCore?.length) return [];
+
+    const norm = (s) => (s ?? '').toLowerCase().replace(/[._\s-]/g, '');
+
+    const matched = allCore.filter(cs =>
+        subjects.some(s =>
+            cs.name.toLowerCase() === s.name.toLowerCase() ||
+            cs.code.toLowerCase() === (s.code ?? '').toLowerCase() ||
+            norm(cs.code) === norm(s.code) ||
+            cs.name.toLowerCase().includes(s.name.toLowerCase().split('.').pop().trim()) ||
+            s.name.toLowerCase().includes(cs.name.toLowerCase())
+        )
+    );
+
+    return matched.sort((a, b) => a.name.localeCompare(b.name, 'id'));
 }
 
 export async function getCorePhases() {
