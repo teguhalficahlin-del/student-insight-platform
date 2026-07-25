@@ -13,6 +13,7 @@ import {
     getTimeSlots, saveTimeSlots,
     getScheduleTemplates, saveScheduleTemplates,
     applyScheduleTemplates, reapplyScheduleTemplates,
+    getCoreSubjectsForSchedule,
 } from './api.js';
 
 const DAYS = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
@@ -33,6 +34,7 @@ let state = {
     teacherMap: new Map(), // teacher_code → user_id
     teacherIdMap: new Map(), // user_id → teacher_code
     cells: new Map(),  // `${slotIdx}_${classId}` → { mapel, teacher_code }
+    coreSubjects: [], // { name, code } dari v_core_subjects untuk datalist
     dirty: false,
 };
 
@@ -49,6 +51,7 @@ export async function openScheduleBuilder() {
     state.teachers = await getTeacherList();
     state.teacherMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.teacher_code.toUpperCase(), t.user_id]));
     state.teacherIdMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.user_id, t.teacher_code]));
+    try { state.coreSubjects = await getCoreSubjectsForSchedule(); } catch (_) { state.coreSubjects = []; }
 
     createOverlay();
     await loadDay();
@@ -292,7 +295,7 @@ function renderGrid() {
             state.classes.forEach(c => {
                 const key = `${idx}_${c.class_id}`;
                 const cell = state.cells.get(key) ?? { mapel: '', teacher_code: '' };
-                html += `<td class="sched-cell-mapel"><input type="text" class="sched-input sched-mapel" data-key="${key}" value="${esc(cell.mapel)}" placeholder="—" /></td>`;
+                html += `<td class="sched-cell-mapel"><input type="text" class="sched-input sched-mapel" data-key="${key}" value="${esc(cell.mapel)}" placeholder="—" list="sched-subjects" /></td>`;
                 html += `<td class="sched-cell-kg"><input type="text" class="sched-input sched-kg" data-key="${key}" value="${esc(cell.teacher_code)}" placeholder="—" list="sched-teachers" /></td>`;
             });
 
@@ -307,6 +310,13 @@ function renderGrid() {
     html += '<datalist id="sched-teachers">';
     state.teachers.forEach(t => {
         if (t.teacher_code) html += `<option value="${esc(t.teacher_code)}" label="${esc(t.full_name)}">`;
+    });
+    html += '</datalist>';
+
+    // Datalist for mapel autocomplete (nama dari core.subjects)
+    html += '<datalist id="sched-subjects">';
+    state.coreSubjects.forEach(cs => {
+        html += `<option value="${esc(cs.name)}">`;
     });
     html += '</datalist>';
 

@@ -77,6 +77,64 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return badRequest('Belum ada template jadwal untuk periode ini. Susun jadwal terlebih dahulu.');
         }
 
+        // ── Auto-mapping subject_cp_mapping (non-fatal) ──────────────────
+        // Setelah RPC berhasil, coba link public.subjects → core.subjects
+        // untuk setiap mapel yang dipakai di teaching_assignments periode ini.
+        try {
+            // Ambil semua subject_id unik dari teaching_assignments periode ini
+            const { data: assignments } = await admin
+                .from('teaching_assignments')
+                .select('subject_id')
+                .eq('school_id', user.school_id)
+                .eq('academic_year', academicYear)
+                .eq('semester', semester);
+
+            const subjectIds = [...new Set((assignments ?? []).map((a: { subject_id: string }) => a.subject_id).filter(Boolean))];
+
+            if (subjectIds.length > 0) {
+                // Ambil nama mapel dari public.subjects
+                const { data: pubSubjects } = await admin
+                    .from('subjects')
+                    .select('subject_id, name')
+                    .in('subject_id', subjectIds);
+
+                for (const ps of pubSubjects ?? []) {
+                    if (!ps.name) continue;
+
+                    // Cari 1:1 match di core.subjects (exact, case-insensitive)
+                    const { data: coreMatches } = await admin
+                        .schema('core')
+                        .from('subjects')
+                        .select('subject_id')
+                        .ilike('name', ps.name);
+
+                    if (!coreMatches || coreMatches.length !== 1) continue;
+                    const coreSubjectId = coreMatches[0].subject_id;
+
+                    // Cek apakah mapping sudah ada
+                    const { data: existing } = await admin
+                        .from('subject_cp_mapping')
+                        .select('mapping_id')
+                        .eq('school_id', user.school_id)
+                        .eq('subject_id', ps.subject_id)
+                        .eq('core_subject_id', coreSubjectId)
+                        .maybeSingle();
+
+                    if (existing) continue;
+
+                    await admin.from('subject_cp_mapping').insert({
+                        school_id:       user.school_id,
+                        subject_id:      ps.subject_id,
+                        core_subject_id: coreSubjectId,
+                        mapping_type:    'AUTO',
+                        is_active:       true,
+                    });
+                }
+            }
+        } catch (mappingErr) {
+            console.warn('[apply-schedule-templates] auto-mapping subject_cp_mapping gagal (non-fatal):', mappingErr);
+        }
+
         return ok({
             templates_found:      result.templates_found,
             assignments_upserted: result.assignments_upserted,
