@@ -14,6 +14,7 @@ import {
     getScheduleTemplates, saveScheduleTemplates,
     applyScheduleTemplates, reapplyScheduleTemplates,
     getCoreSubjectsForSchedule,
+    getSubjectCodeAliases, upsertSubjectCodeAlias, deleteSubjectCodeAlias,
 } from './api.js';
 
 const DAYS = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
@@ -26,6 +27,7 @@ let loadSeq = 0; // monotonic counter to cancel stale async loads
 let state = {
     academicYear: null,
     semester: null,
+    schoolId: null,
     day: 'SENIN',
     grade: 10,
     slots: [],       // { start_time, end_time, is_break, break_label }
@@ -47,6 +49,7 @@ export async function openScheduleBuilder() {
 
     state.academicYear = config.current_academic_year;
     state.semester = config.current_semester;
+    state.schoolId = config.school_id;
 
     state.teachers = await getTeacherList();
     state.teacherMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.teacher_code.toUpperCase(), t.user_id]));
@@ -69,30 +72,46 @@ function createOverlay() {
                 <button type="button" class="btn btn-secondary sched-close">✕ Tutup</button>
             </div>
 
-            <div class="sched-toolbar">
-                <div class="sched-grade-tabs" id="sched-grade-tabs">
-                    ${GRADES.map(g => `<button type="button" class="sched-tab ${g === state.grade ? 'active' : ''}" data-grade="${g}">${GRADE_LABELS[g]}</button>`).join('')}
-                </div>
-                <button type="button" class="btn btn-secondary" id="sched-add-slot" style="padding:6px 12px">+ Slot Mengajar</button>
-                <button type="button" class="btn btn-secondary" id="sched-add-break" style="padding:6px 12px">+ Istirahat/Kegiatan</button>
-                <span class="sched-conflict-count" id="sched-conflict-count"></span>
-                <button type="button" class="btn btn-primary" id="sched-save" style="padding:6px 16px;margin-left:auto">Simpan</button>
-                <button type="button" class="btn btn-success" id="sched-apply" style="padding:6px 16px" title="Generate jadwal harian dari template yang sudah disimpan. Tidak mengubah sesi yang sudah ada.">Terapkan Jadwal</button>
-                <button type="button" class="btn btn-warning" id="sched-reapply" style="padding:6px 16px" title="Hapus sesi masa depan (tanpa absensi) lalu generate ulang dari template terkini. Gunakan setelah ganti guru atau ubah slot jadwal.">Terapkan Ulang</button>
+            <div class="sched-panel-tabs">
+                <button type="button" class="sched-ptab active" data-panel="jadwal">📅 Jadwal</button>
+                <button type="button" class="sched-ptab" data-panel="kode-mapel">🗺 Kode Mapel</button>
+                <button type="button" class="sched-ptab" data-panel="kode-guru">👤 Kode Guru</button>
             </div>
 
-            <div class="sched-body">
-                <div class="sched-sidebar" id="sched-day-tabs">
-                    ${DAYS.map(d => `<button type="button" class="sched-day-btn ${d === state.day ? 'active' : ''}" data-day="${d}">${DAY_LABELS[d]}</button>`).join('')}
+            <div id="sched-panel-jadwal">
+                <div class="sched-toolbar">
+                    <div class="sched-grade-tabs" id="sched-grade-tabs">
+                        ${GRADES.map(g => `<button type="button" class="sched-tab ${g === state.grade ? 'active' : ''}" data-grade="${g}">${GRADE_LABELS[g]}</button>`).join('')}
+                    </div>
+                    <button type="button" class="btn btn-secondary" id="sched-add-slot" style="padding:6px 12px">+ Slot Mengajar</button>
+                    <button type="button" class="btn btn-secondary" id="sched-add-break" style="padding:6px 12px">+ Istirahat/Kegiatan</button>
+                    <span class="sched-conflict-count" id="sched-conflict-count"></span>
+                    <button type="button" class="btn btn-primary" id="sched-save" style="padding:6px 16px;margin-left:auto">Simpan</button>
+                    <button type="button" class="btn btn-success" id="sched-apply" style="padding:6px 16px" title="Generate jadwal harian dari template yang sudah disimpan. Tidak mengubah sesi yang sudah ada.">Terapkan Jadwal</button>
+                    <button type="button" class="btn btn-warning" id="sched-reapply" style="padding:6px 16px" title="Hapus sesi masa depan (tanpa absensi) lalu generate ulang dari template terkini. Gunakan setelah ganti guru atau ubah slot jadwal.">Terapkan Ulang</button>
                 </div>
 
-                <div class="sched-main">
-                    <div class="sched-grid-wrapper" id="sched-grid-wrapper">
-                        <p class="hint" style="padding:20px;text-align:center">Memuat...</p>
+                <div class="sched-body">
+                    <div class="sched-sidebar" id="sched-day-tabs">
+                        ${DAYS.map(d => `<button type="button" class="sched-day-btn ${d === state.day ? 'active' : ''}" data-day="${d}">${DAY_LABELS[d]}</button>`).join('')}
                     </div>
 
-                    <div id="sched-status" class="sched-status"></div>
+                    <div class="sched-main">
+                        <div class="sched-grid-wrapper" id="sched-grid-wrapper">
+                            <p class="hint" style="padding:20px;text-align:center">Memuat...</p>
+                        </div>
+
+                        <div id="sched-status" class="sched-status"></div>
+                    </div>
                 </div>
+            </div>
+
+            <div id="sched-panel-kode-mapel" style="display:none;padding:20px">
+                <p class="hint" style="text-align:center">Memuat...</p>
+            </div>
+
+            <div id="sched-panel-kode-guru" style="display:none;padding:20px">
+                <p class="hint" style="text-align:center">Memuat...</p>
             </div>
         </div>
     `;
@@ -100,6 +119,16 @@ function createOverlay() {
     document.body.appendChild(overlayEl);
 
     overlayEl.querySelector('.sched-close').addEventListener('click', closeOverlay);
+
+    overlayEl.querySelector('.sched-panel-tabs').addEventListener('click', e => {
+        const panel = e.target.dataset?.panel;
+        if (!panel) return;
+        overlayEl.querySelectorAll('.sched-ptab').forEach(t => t.classList.toggle('active', t.dataset.panel === panel));
+        overlayEl.querySelectorAll('[id^="sched-panel-"]').forEach(p => { p.style.display = 'none'; });
+        overlayEl.querySelector(`#sched-panel-${panel}`).style.display = '';
+        if (panel === 'kode-mapel') renderKodeMapelPanel();
+        if (panel === 'kode-guru') renderKodeGuruPanel();
+    });
     overlayEl.querySelector('#sched-add-slot').addEventListener('click', () => addRow(false));
     overlayEl.querySelector('#sched-add-break').addEventListener('click', () => addRow(true));
     overlayEl.querySelector('#sched-save').addEventListener('click', save);
@@ -383,6 +412,10 @@ function wireGridEvents() {
     overlayEl.querySelectorAll('.sched-del-row').forEach(btn => {
         btn.addEventListener('click', () => removeRow(Number(btn.dataset.idx)));
     });
+
+    // Multi-cell paste
+    const gridTable = overlayEl.querySelector('.sched-table');
+    if (gridTable) gridTable.addEventListener('paste', handleGridPaste);
 }
 
 function checkConflicts() {
@@ -594,4 +627,184 @@ async function reapplyTemplates() {
 function esc(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ─── Panel: Kode Mapel ─────────────────────────────────────────────────────
+
+async function renderKodeMapelPanel() {
+    const panel = overlayEl.querySelector('#sched-panel-kode-mapel');
+    panel.innerHTML = '<p class="hint" style="text-align:center">Memuat…</p>';
+
+    let aliases = [];
+    try { aliases = await getSubjectCodeAliases(); } catch (_) { /* kosong */ }
+
+    const subjectOptions = state.coreSubjects.map(cs =>
+        `<option value="${esc(cs.subject_id)}">${esc(cs.name)}</option>`
+    ).join('');
+
+    const rows = aliases.map(a => `
+        <tr>
+            <td style="padding:6px 12px">${esc(a.kode)}</td>
+            <td style="padding:6px 12px">${esc(a.subject_name)}</td>
+            <td style="padding:6px 8px">
+                <button type="button" class="btn btn-secondary sca-del" data-id="${esc(a.alias_id)}"
+                    style="padding:2px 10px;font-size:12px">Hapus</button>
+            </td>
+        </tr>`).join('');
+
+    panel.innerHTML = `
+        <h4 style="margin:0 0 12px">Kode Mapel</h4>
+        <p class="hint" style="margin:0 0 12px">
+            Petakan singkatan yang Anda gunakan di grid jadwal ke mata pelajaran kurikulum.
+            Dipakai otomatis saat "Terapkan Jadwal".
+        </p>
+
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
+            <div>
+                <label style="display:block;font-size:12px;margin-bottom:4px">Kode (singkatan)</label>
+                <input type="text" id="sca-kode" class="input" placeholder="mis. B.INGG"
+                    style="width:140px;text-transform:uppercase">
+            </div>
+            <div>
+                <label style="display:block;font-size:12px;margin-bottom:4px">Nama Mapel</label>
+                <select id="sca-subject" class="input" style="width:260px">
+                    <option value="">— pilih —</option>
+                    ${subjectOptions}
+                </select>
+            </div>
+            <button type="button" class="btn btn-primary" id="sca-add" style="padding:6px 16px">Tambah</button>
+            <span id="sca-status" style="font-size:13px"></span>
+        </div>
+
+        ${aliases.length > 0 ? `
+        <table class="table" style="max-width:500px">
+            <thead><tr><th>Kode</th><th>Nama Mapel</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table>` : '<p class="hint">Belum ada alias. Tambahkan di atas.</p>'}
+    `;
+
+    panel.querySelector('#sca-kode').addEventListener('input', e => {
+        e.target.value = e.target.value.toUpperCase();
+    });
+
+    panel.querySelector('#sca-add').addEventListener('click', async () => {
+        const kode = panel.querySelector('#sca-kode').value.trim();
+        const coreSubjectId = panel.querySelector('#sca-subject').value;
+        const statusEl = panel.querySelector('#sca-status');
+        if (!kode || !coreSubjectId) { statusEl.textContent = 'Isi kode dan pilih mapel.'; statusEl.style.color = 'var(--color-danger)'; return; }
+        try {
+            statusEl.textContent = 'Menyimpan…';
+            statusEl.style.color = '';
+            await upsertSubjectCodeAlias(state.schoolId, kode, coreSubjectId);
+            await renderKodeMapelPanel();
+        } catch (err) {
+            panel.querySelector('#sca-status').textContent = `Gagal: ${err.message}`;
+            panel.querySelector('#sca-status').style.color = 'var(--color-danger)';
+        }
+    });
+
+    panel.querySelectorAll('.sca-del').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm('Hapus alias ini?')) return;
+            try {
+                await deleteSubjectCodeAlias(btn.dataset.id);
+                await renderKodeMapelPanel();
+            } catch (err) {
+                alert(`Gagal: ${err.message}`);
+            }
+        });
+    });
+}
+
+// ─── Panel: Kode Guru ─────────────────────────────────────────────────────
+
+function renderKodeGuruPanel() {
+    const panel = overlayEl.querySelector('#sched-panel-kode-guru');
+    const withCode = state.teachers.filter(t => t.teacher_code);
+    const rows = withCode.map(t =>
+        `<tr><td style="padding:6px 12px">${esc(t.teacher_code)}</td><td style="padding:6px 12px">${esc(t.full_name)}</td></tr>`
+    ).join('');
+
+    panel.innerHTML = `
+        <h4 style="margin:0 0 12px">Kode Guru</h4>
+        <p class="hint" style="margin:0 0 12px">
+            Daftar ini otomatis dari data staf. Kolom KG di grid jadwal menggunakan kode-kode berikut.
+        </p>
+        ${withCode.length > 0 ? `
+        <table class="table" style="max-width:400px">
+            <thead><tr><th>Kode</th><th>Nama Guru</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table>` : '<p class="hint">Belum ada guru dengan kode. Isi kode di menu Staf &amp; Peran.</p>'}
+        <p class="hint" style="margin-top:12px">Untuk mengubah kode guru, edit di menu <strong>Staf &amp; Peran</strong>.</p>
+    `;
+}
+
+// ─── Paste handler multi-sel ───────────────────────────────────────────────
+
+function handleGridPaste(e) {
+    const target = e.target;
+    const isMapel = target.classList.contains('sched-mapel');
+    const isKg    = target.classList.contains('sched-kg');
+    if (!isMapel && !isKg) return;
+
+    const text = e.clipboardData?.getData('text/plain') ?? '';
+    const pasteRows = text.split(/\r?\n/).filter(r => r !== '');
+    if (pasteRows.length === 0) return;
+
+    // Jika hanya 1 baris 1 kolom: biarkan browser handle (paste normal)
+    const firstCols = pasteRows[0].split('\t');
+    if (pasteRows.length === 1 && firstCols.length === 1) return;
+
+    e.preventDefault();
+
+    const key = target.dataset.key;
+    if (!key) return;
+    const [startSlotStr, startClassId] = key.split('_');
+    const startSlotIdx = Number(startSlotStr);
+
+    // Indeks kelas awal di state.classes
+    const startClassIdx = state.classes.findIndex(c => c.class_id === startClassId);
+    if (startClassIdx < 0) return;
+
+    // Indeks slot awal di state.slots (hanya non-break)
+    const nonBreakSlots = state.slots
+        .map((s, i) => ({ slot: s, idx: i }))
+        .filter(s => !s.slot.is_break);
+    const startNbIdx = nonBreakSlots.findIndex(s => s.idx === startSlotIdx);
+    if (startNbIdx < 0) return;
+
+    // Kolom awal: 0 = mapel, 1 = kg
+    const startCol = isKg ? 1 : 0;
+
+    for (let ri = 0; ri < pasteRows.length; ri++) {
+        const nbIdx = startNbIdx + ri;
+        if (nbIdx >= nonBreakSlots.length) break;
+        const slotIdx = nonBreakSlots[nbIdx].idx;
+
+        const cols = pasteRows[ri].split('\t');
+        let colOffset = 0;
+        while (colOffset < cols.length) {
+            const absCol = startCol + colOffset;  // 0=mapel, 1=kg, 2=mapel kelas+1, 3=kg kelas+1 …
+            const classOffset = Math.floor(absCol / 2);
+            const fieldIdx    = absCol % 2;       // 0=mapel, 1=kg
+            const classIdx    = startClassIdx + classOffset;
+            if (classIdx >= state.classes.length) break;
+
+            const cellKey = `${slotIdx}_${state.classes[classIdx].class_id}`;
+            if (!state.cells.has(cellKey)) state.cells.set(cellKey, { mapel: '', teacher_code: '' });
+            const cell = state.cells.get(cellKey);
+            const val  = cols[colOffset].trim();
+
+            if (fieldIdx === 0) {
+                cell.mapel = val;
+            } else {
+                cell.teacher_code = val.toUpperCase();
+            }
+            colOffset++;
+        }
+    }
+
+    state.dirty = true;
+    renderGrid();
+    checkConflicts();
 }

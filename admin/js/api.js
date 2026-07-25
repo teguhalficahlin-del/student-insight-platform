@@ -1396,3 +1396,71 @@ export async function getCoreSubjectsForSchedule() {
     if (error) throw error;
     return data ?? [];
 }
+
+// ─────────────────────────────────────────────────────────────
+// SUBJECT CODE ALIASES
+// ─────────────────────────────────────────────────────────────
+
+export async function getSubjectCodeAliases() {
+    const { data: aliases, error } = await supabase
+        .from('subject_code_aliases')
+        .select('alias_id, kode, core_subject_id')
+        .order('kode');
+    if (error) throw error;
+    if (!aliases?.length) return [];
+
+    const ids = aliases.map(a => a.core_subject_id);
+    const { data: cores } = await supabase
+        .from('v_core_subjects')
+        .select('subject_id, name')
+        .in('subject_id', ids);
+    const nameMap = new Map((cores ?? []).map(c => [c.subject_id, c.name]));
+
+    return aliases.map(a => ({
+        alias_id: a.alias_id,
+        kode: a.kode,
+        core_subject_id: a.core_subject_id,
+        subject_name: nameMap.get(a.core_subject_id) ?? '',
+    }));
+}
+
+export async function upsertSubjectCodeAlias(schoolId, kode, coreSubjectId) {
+    const { data, error } = await supabase
+        .from('subject_code_aliases')
+        .upsert(
+            { school_id: schoolId, kode: kode.toUpperCase(), core_subject_id: coreSubjectId },
+            { onConflict: 'school_id,kode' }
+        )
+        .select('alias_id')
+        .single();
+    if (error) throw error;
+    return data.alias_id;
+}
+
+export async function deleteSubjectCodeAlias(aliasId) {
+    const { error } = await supabase
+        .from('subject_code_aliases')
+        .delete()
+        .eq('alias_id', aliasId);
+    if (error) throw error;
+}
+
+export async function resolveSubjectCodes(kodes) {
+    if (!kodes.length) return new Map();
+    const { data, error } = await supabase
+        .from('subject_code_aliases')
+        .select('kode, core_subject_id')
+        .in('kode', kodes.map(k => k.toUpperCase()));
+    if (error) throw error;
+    const ids = (data ?? []).map(r => r.core_subject_id);
+    let nameMap = new Map();
+    if (ids.length) {
+        const { data: cores } = await supabase
+            .from('v_core_subjects').select('subject_id, name').in('subject_id', ids);
+        nameMap = new Map((cores ?? []).map(c => [c.subject_id, c.name]));
+    }
+    return new Map((data ?? []).map(r => [r.kode, {
+        core_subject_id: r.core_subject_id,
+        subject_name: nameMap.get(r.core_subject_id) ?? '',
+    }]));
+}

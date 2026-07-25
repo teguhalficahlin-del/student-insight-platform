@@ -77,6 +77,61 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return badRequest('Belum ada template jadwal untuk periode ini. Susun jadwal terlebih dahulu.');
         }
 
+        // ── Resolve subject_code_aliases → subject_cp_mapping (non-fatal) ──
+        // Petakan singkatan di subject_label (mis. 'B.INGG') ke core_subject_id
+        // via tabel subject_code_aliases yang diisi admin per sekolah.
+        try {
+            const { data: templates } = await admin
+                .from('schedule_templates')
+                .select('subject_label')
+                .eq('school_id', user.school_id)
+                .eq('academic_year', academicYear)
+                .eq('semester', semester)
+                .not('subject_label', 'is', null);
+
+            const kodes = [...new Set(
+                (templates ?? [])
+                    .map((t: { subject_label: string }) => t.subject_label?.toUpperCase())
+                    .filter(Boolean)
+            )];
+
+            if (kodes.length > 0) {
+                const { data: aliases } = await admin
+                    .from('subject_code_aliases')
+                    .select('kode, core_subject_id')
+                    .eq('school_id', user.school_id)
+                    .in('kode', kodes);
+
+                for (const alias of aliases ?? []) {
+                    const { data: pubSubs } = await admin
+                        .from('subjects')
+                        .select('subject_id')
+                        .eq('school_id', user.school_id)
+                        .ilike('name', alias.kode);
+
+                    for (const ps of pubSubs ?? []) {
+                        const { data: existing } = await admin
+                            .from('subject_cp_mapping')
+                            .select('mapping_id')
+                            .eq('school_id', user.school_id)
+                            .eq('subject_id', ps.subject_id)
+                            .eq('core_subject_id', alias.core_subject_id)
+                            .maybeSingle();
+                        if (existing) continue;
+                        await admin.from('subject_cp_mapping').insert({
+                            school_id:       user.school_id,
+                            subject_id:      ps.subject_id,
+                            core_subject_id: alias.core_subject_id,
+                            mapping_type:    'ALIAS',
+                            is_active:       true,
+                        });
+                    }
+                }
+            }
+        } catch (aliasErr) {
+            console.warn('[apply-schedule-templates] resolve alias gagal (non-fatal):', aliasErr);
+        }
+
         // ── Auto-mapping subject_cp_mapping (non-fatal) ──────────────────
         // Setelah RPC berhasil, coba link public.subjects → core.subjects
         // untuk setiap mapel yang dipakai di teaching_assignments periode ini.
