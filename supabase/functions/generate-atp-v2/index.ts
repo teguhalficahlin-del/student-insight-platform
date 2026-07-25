@@ -6,8 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const GEMINI_MODEL = "gemini-2.0-flash";
-const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const ANTHROPIC_MODEL = "claude-haiku-4-5";
+const ANTHROPIC_URL   = "https://api.anthropic.com/v1/messages";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -133,38 +133,35 @@ FORMAT RESPONSE:
 }`;
 }
 
-// ── Gemini Call ─────────────────────────────────────────────────────────────────
+// ── Anthropic Call ──────────────────────────────────────────────────────────────
 
-async function callGemini(prompt: string, apiKey: string): Promise<unknown> {
-  // Format key AQ.xxx benar dipakai sebagai ?key= query param (bukan Bearer)
-  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+async function callAnthropic(prompt: string, apiKey: string): Promise<unknown> {
+  const anthropicResp = await fetch(ANTHROPIC_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature:      0.3,
-        maxOutputTokens:  8192,
-        responseMimeType: "application/json",
-      },
+      model: ANTHROPIC_MODEL,
+      max_tokens: 8192,
+      temperature: 0.3,
+      system: "Kamu adalah asisten kurikulum SMK Indonesia. Respond HANYA dengan JSON valid sesuai format yang diminta. Jangan tambahkan teks, penjelasan, atau markdown apapun di luar JSON.",
+      messages: [
+        { role: "user", content: prompt }
+      ],
     }),
   });
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    // 429 = quota habis, berikan pesan yang jelas
-    if (res.status === 429) {
-      throw new Error(`Quota Gemini API habis. Coba lagi beberapa menit. Detail: ${body.slice(0, 200)}`);
-    }
-    throw new Error(`Gemini API ${res.status}: ${body.slice(0, 400)}`);
-  }
+  const anthropicData = await anthropicResp.json();
+  if (!anthropicResp.ok) throw new Error(anthropicData.error?.message ?? `Anthropic error ${anthropicResp.status}`);
 
-  const json = await res.json();
-  const raw: string = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  if (!raw) throw new Error("Gemini mengembalikan respons kosong");
+  const rawText = anthropicData.content?.[0]?.text ?? "";
+  if (!rawText) throw new Error("Anthropic mengembalikan respons kosong");
 
   // Strip markdown fences jika ada
-  const clean = raw.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
+  const clean = rawText.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
   return JSON.parse(clean);
 }
 
@@ -243,22 +240,22 @@ serve(async (req: Request) => {
 
   const profile = profileData as TeacherProfile | null;
 
-  // ── Build prompt & call Gemini ──────────────────────────────────────────────
-  const geminiKey = Deno.env.get("GEMINI_API_KEY");
-  if (!geminiKey) return errResponse(503, "Konfigurasi Gemini AI belum diatur di server");
+  // ── Build prompt & call Anthropic ───────────────────────────────────────────
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!anthropicKey) return errResponse(503, "Konfigurasi Anthropic AI belum diatur di server");
 
   const prompt = buildPrompt(cp, profile, semester, jp_per_week, weeks_effective);
   const totalJP = jp_per_week * weeks_effective;
 
   let result: { tujuan_pembelajaran: Array<{ jp?: number }>; total_jp?: number; catatan?: string };
   try {
-    result = await callGemini(prompt, geminiKey) as typeof result;
+    result = await callAnthropic(prompt, anthropicKey) as typeof result;
   } catch (e) {
     // Retry sekali
     try {
-      result = await callGemini(prompt + "\n\nPASTIKAN output adalah JSON valid saja.", geminiKey) as typeof result;
+      result = await callAnthropic(prompt + "\n\nPASTIKAN output adalah JSON valid saja.", anthropicKey) as typeof result;
     } catch (e2) {
-      return errResponse(502, `Gagal mendapat respons dari Gemini AI: ${String(e2)}`, { first_error: String(e) });
+      return errResponse(502, `Gagal mendapat respons dari Anthropic AI: ${String(e2)}`, { first_error: String(e) });
     }
   }
 
@@ -281,7 +278,7 @@ serve(async (req: Request) => {
       catatan:             result.catatan ?? "",
     },
     {
-      model:           GEMINI_MODEL,
+      model:           ANTHROPIC_MODEL,
       subject_name:    cp.subject_name,
       fase:            cp.fase_code,
       semester,
