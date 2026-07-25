@@ -1424,11 +1424,11 @@ export async function getSubjectCodeAliases() {
     }));
 }
 
-export async function upsertSubjectCodeAlias(schoolId, kode, coreSubjectId) {
+export async function upsertSubjectCodeAlias(schoolId, kode, coreSubjectId = null) {
     const { data, error } = await supabase
         .from('subject_code_aliases')
         .upsert(
-            { school_id: schoolId, kode: kode.toUpperCase(), core_subject_id: coreSubjectId },
+            { school_id: schoolId, kode: kode.toUpperCase(), core_subject_id: coreSubjectId ?? null },
             { onConflict: 'school_id,kode' }
         )
         .select('alias_id')

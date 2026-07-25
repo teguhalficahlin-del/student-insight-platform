@@ -775,12 +775,7 @@ async function renderKodeMapelPanel() {
 
         let saved = 0, failed = 0;
         for (const r of rows) {
-            const coreSubjectId = nameMap.get(r.nama.toLowerCase());
-            if (!coreSubjectId) {
-                r.errTd.textContent = r.nama ? '✗ nama tidak ditemukan' : '✗ nama kosong';
-                failed++;
-                continue;
-            }
+            const coreSubjectId = nameMap.get(r.nama.toLowerCase()) ?? null;
             try {
                 await upsertSubjectCodeAlias(state.schoolId, r.kode, coreSubjectId);
                 saved++;
