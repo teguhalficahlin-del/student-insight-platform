@@ -631,6 +631,8 @@ function esc(str) {
 
 // ─── Panel: Kode Mapel ─────────────────────────────────────────────────────
 
+const KODE_MAPEL_ROWS = 20;
+
 async function renderKodeMapelPanel() {
     const panel = overlayEl.querySelector('#sched-panel-kode-mapel');
     panel.innerHTML = '<p class="hint" style="text-align:center">Memuat…</p>';
@@ -638,81 +640,130 @@ async function renderKodeMapelPanel() {
     let aliases = [];
     try { aliases = await getSubjectCodeAliases(); } catch (_) { /* kosong */ }
 
-    const subjectOptions = state.coreSubjects.map(cs =>
-        `<option value="${esc(cs.subject_id)}">${esc(cs.name)}</option>`
-    ).join('');
-
-    const rows = aliases.map(a => `
-        <tr>
-            <td style="padding:6px 12px">${esc(a.kode)}</td>
-            <td style="padding:6px 12px">${esc(a.subject_name)}</td>
-            <td style="padding:6px 8px">
-                <button type="button" class="btn btn-secondary sca-del" data-id="${esc(a.alias_id)}"
-                    style="padding:2px 10px;font-size:12px">Hapus</button>
-            </td>
-        </tr>`).join('');
+    // Build 20 rows pre-filled with existing data
+    const tableRows = Array.from({ length: KODE_MAPEL_ROWS }, (_, i) => {
+        const a = aliases[i];
+        const kode = a ? esc(a.kode) : '';
+        const nama = a ? esc(a.subject_name) : '';
+        return `<tr>
+            <td style="padding:2px 4px"><input type="text" class="input sca-cell-kode" value="${kode}"
+                style="width:100%;text-transform:uppercase;font-size:13px;padding:4px 6px"></td>
+            <td style="padding:2px 4px"><input type="text" class="input sca-cell-nama" value="${nama}"
+                style="width:100%;font-size:13px;padding:4px 6px"></td>
+            <td class="sca-row-err" style="padding:2px 6px;font-size:12px;color:var(--color-danger);white-space:nowrap"></td>
+        </tr>`;
+    }).join('');
 
     panel.innerHTML = `
-        <h4 style="margin:0 0 12px">Kode Mapel</h4>
-        <p class="hint" style="margin:0 0 12px">
-            Petakan singkatan yang Anda gunakan di grid jadwal ke mata pelajaran kurikulum.
-            Dipakai otomatis saat "Terapkan Jadwal".
+        <h4 style="margin:0 0 8px">Kode Mapel</h4>
+        <p class="hint" style="margin:0 0 10px">
+            Isi tabel atau <strong>paste langsung dari Excel</strong> (pilih 2 kolom: Kode | Nama Mapel → Ctrl+V di tabel).
+            Nama Mapel harus cocok dengan nama di kurikulum. Baris kosong diabaikan.
         </p>
-
-        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
-            <div>
-                <label style="display:block;font-size:12px;margin-bottom:4px">Kode (singkatan)</label>
-                <input type="text" id="sca-kode" class="input" placeholder="mis. B.INGG"
-                    style="width:140px;text-transform:uppercase">
-            </div>
-            <div>
-                <label style="display:block;font-size:12px;margin-bottom:4px">Nama Mapel</label>
-                <select id="sca-subject" class="input" style="width:260px">
-                    <option value="">— pilih —</option>
-                    ${subjectOptions}
-                </select>
-            </div>
-            <button type="button" class="btn btn-primary" id="sca-add" style="padding:6px 16px">Tambah</button>
+        <div id="sca-paste-target" style="overflow-x:auto">
+            <table class="table" style="min-width:460px;table-layout:fixed">
+                <colgroup>
+                    <col style="width:130px">
+                    <col style="width:280px">
+                    <col style="width:1px">
+                </colgroup>
+                <thead><tr><th>Kode</th><th>Nama Mapel</th><th></th></tr></thead>
+                <tbody>${tableRows}</tbody>
+            </table>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+            <button type="button" class="btn btn-primary" id="sca-save" style="padding:6px 20px">Simpan</button>
             <span id="sca-status" style="font-size:13px"></span>
         </div>
-
-        ${aliases.length > 0 ? `
-        <table class="table" style="max-width:500px">
-            <thead><tr><th>Kode</th><th>Nama Mapel</th><th></th></tr></thead>
-            <tbody>${rows}</tbody>
-        </table>` : '<p class="hint">Belum ada alias. Tambahkan di atas.</p>'}
     `;
 
-    panel.querySelector('#sca-kode').addEventListener('input', e => {
-        e.target.value = e.target.value.toUpperCase();
-    });
+    // Paste handler: intercept Ctrl+V on the table area
+    panel.querySelector('#sca-paste-target').addEventListener('paste', e => {
+        e.preventDefault();
+        const text = e.clipboardData?.getData('text/plain') ?? '';
+        const pasteLines = text.split(/\r?\n/).filter(l => l !== '');
+        const kodeInputs = panel.querySelectorAll('.sca-cell-kode');
+        const namaInputs = panel.querySelectorAll('.sca-cell-nama');
 
-    panel.querySelector('#sca-add').addEventListener('click', async () => {
-        const kode = panel.querySelector('#sca-kode').value.trim();
-        const coreSubjectId = panel.querySelector('#sca-subject').value;
-        const statusEl = panel.querySelector('#sca-status');
-        if (!kode || !coreSubjectId) { statusEl.textContent = 'Isi kode dan pilih mapel.'; statusEl.style.color = 'var(--color-danger)'; return; }
-        try {
-            statusEl.textContent = 'Menyimpan…';
-            statusEl.style.color = '';
-            await upsertSubjectCodeAlias(state.schoolId, kode, coreSubjectId);
-            await renderKodeMapelPanel();
-        } catch (err) {
-            panel.querySelector('#sca-status').textContent = `Gagal: ${err.message}`;
-            panel.querySelector('#sca-status').style.color = 'var(--color-danger)';
-        }
-    });
-
-    panel.querySelectorAll('.sca-del').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            if (!confirm('Hapus alias ini?')) return;
-            try {
-                await deleteSubjectCodeAlias(btn.dataset.id);
-                await renderKodeMapelPanel();
-            } catch (err) {
-                alert(`Gagal: ${err.message}`);
+        // Find which row the focused cell is in (default to 0)
+        let startRow = 0;
+        const focusedCell = document.activeElement;
+        if (focusedCell) {
+            const tr = focusedCell.closest('tr');
+            if (tr) {
+                const trs = [...panel.querySelectorAll('tbody tr')];
+                const idx = trs.indexOf(tr);
+                if (idx >= 0) startRow = idx;
             }
+        }
+
+        pasteLines.forEach((line, li) => {
+            const ri = startRow + li;
+            if (ri >= KODE_MAPEL_ROWS) return;
+            const cols = line.split('\t');
+            kodeInputs[ri].value = (cols[0] ?? '').trim().toUpperCase();
+            namaInputs[ri].value = (cols[1] ?? '').trim();
         });
+    });
+
+    // Auto-uppercase kode inputs
+    panel.querySelectorAll('.sca-cell-kode').forEach(inp => {
+        inp.addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
+    });
+
+    // Build name→subject_id lookup (case-insensitive)
+    const nameMap = new Map(
+        state.coreSubjects.map(cs => [cs.name.toLowerCase(), cs.subject_id])
+    );
+
+    panel.querySelector('#sca-save').addEventListener('click', async () => {
+        const statusEl = panel.querySelector('#sca-status');
+        const kodeInputs = [...panel.querySelectorAll('.sca-cell-kode')];
+        const namaInputs = [...panel.querySelectorAll('.sca-cell-nama')];
+        const errCells  = [...panel.querySelectorAll('.sca-row-err')];
+
+        // Clear previous errors
+        errCells.forEach(td => { td.textContent = ''; });
+
+        const rows = kodeInputs.map((inp, i) => ({
+            kode: inp.value.trim().toUpperCase(),
+            nama: namaInputs[i].value.trim(),
+            errTd: errCells[i],
+        })).filter(r => r.kode !== '');
+
+        if (rows.length === 0) {
+            statusEl.textContent = 'Tidak ada baris yang diisi.';
+            statusEl.style.color = 'var(--color-danger)';
+            return;
+        }
+
+        statusEl.textContent = 'Menyimpan…';
+        statusEl.style.color = '';
+
+        let saved = 0, failed = 0;
+        for (const r of rows) {
+            const coreSubjectId = nameMap.get(r.nama.toLowerCase());
+            if (!coreSubjectId) {
+                r.errTd.textContent = r.nama ? '✗ nama tidak ditemukan' : '✗ nama kosong';
+                failed++;
+                continue;
+            }
+            try {
+                await upsertSubjectCodeAlias(state.schoolId, r.kode, coreSubjectId);
+                saved++;
+            } catch (err) {
+                r.errTd.textContent = `✗ ${err.message}`;
+                failed++;
+            }
+        }
+
+        if (failed === 0) {
+            statusEl.textContent = `✓ ${saved} alias tersimpan.`;
+            statusEl.style.color = 'var(--color-success, green)';
+        } else {
+            statusEl.textContent = `${saved} tersimpan, ${failed} gagal (lihat ✗ di baris).`;
+            statusEl.style.color = 'var(--color-danger)';
+        }
     });
 }
 
@@ -721,20 +772,23 @@ async function renderKodeMapelPanel() {
 function renderKodeGuruPanel() {
     const panel = overlayEl.querySelector('#sched-panel-kode-guru');
     const withCode = state.teachers.filter(t => t.teacher_code);
-    const rows = withCode.map(t =>
-        `<tr><td style="padding:6px 12px">${esc(t.teacher_code)}</td><td style="padding:6px 12px">${esc(t.full_name)}</td></tr>`
+    const items = withCode.map(t =>
+        `<div style="display:flex;align-items:baseline;gap:6px;padding:6px 8px;
+            border:1px solid var(--color-border,#e2e8f0);border-radius:6px;min-width:0">
+            <span style="font-weight:700;white-space:nowrap;flex-shrink:0">${esc(t.teacher_code)}</span>
+            <span style="font-size:13px;color:var(--color-text-muted,#64748b);
+                overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.full_name)}</span>
+        </div>`
     ).join('');
 
     panel.innerHTML = `
-        <h4 style="margin:0 0 12px">Kode Guru</h4>
+        <h4 style="margin:0 0 8px">Kode Guru</h4>
         <p class="hint" style="margin:0 0 12px">
             Daftar ini otomatis dari data staf. Kolom KG di grid jadwal menggunakan kode-kode berikut.
         </p>
         ${withCode.length > 0 ? `
-        <table class="table" style="max-width:400px">
-            <thead><tr><th>Kode</th><th>Nama Guru</th></tr></thead>
-            <tbody>${rows}</tbody>
-        </table>` : '<p class="hint">Belum ada guru dengan kode. Isi kode di menu Staf &amp; Peran.</p>'}
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">${items}</div>`
+        : '<p class="hint">Belum ada guru dengan kode. Isi kode di menu Staf &amp; Peran.</p>'}
         <p class="hint" style="margin-top:12px">Untuk mengubah kode guru, edit di menu <strong>Staf &amp; Peran</strong>.</p>
     `;
 }
