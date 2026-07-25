@@ -5257,7 +5257,7 @@ async function loadPerangkatAjarDashboard() {
                     ${group.docs.slice(0, 3).map(doc => {
                         const lbl = DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type;
                         const col = DOC_STATUS_COLOR[doc.status] ?? 'inherit';
-                        const sem = doc.semester ? ` S${doc.semester}` : '';
+                        const sem = doc.semester ? ` Sem ${doc.semester}` : '';
                         return `<button class="btn btn-secondary btn-sm pa-detail-btn"
                             data-doc-id="${esc(doc.doc_id)}"
                             data-subject-id="${esc(group.core_subject_id)}"
@@ -5273,7 +5273,7 @@ async function loadPerangkatAjarDashboard() {
                         data-phase-id="${esc(group.phase_id)}"
                         data-subject-name="${esc(subjectMap.get(group.core_subject_id)?.name ?? '')}"
                         style="font-size:12px;margin-left:auto">
-                        ✨ Generate ATP
+                        ${group.docs.some(d => d.document_type === 'ATP') ? '🔄 Generate Ulang ATP' : '✨ Generate ATP'}
                     </button>
                 </div>
             </div>`;
