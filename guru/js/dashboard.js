@@ -5149,65 +5149,29 @@ async function loadPerangkatAjarDashboard() {
         const listEl = document.getElementById('pa-mapel-list');
         if (grouped.size === 0) {
             listEl.innerHTML = `
-                <div class="section-card" style="text-align:center;padding:32px 16px">
+                <div class="section-card" style="border:1px solid var(--color-warning,#f59e0b);padding:16px;margin-bottom:12px">
+                    <p style="margin:0 0 8px;font-weight:600">📋 Sebelum membuat perangkat ajar</p>
+                    <ul style="margin:0 0 8px;padding-left:20px;font-size:13px">
+                        <li>Isi Profil Mengajar</li>
+                        <li>Isi Konteks Kelas</li>
+                    </ul>
+                    <p style="margin:0;font-size:12px;color:var(--color-text-muted)">Profil dan konteks kelas membantu AI menghasilkan perangkat ajar yang sesuai dengan gaya mengajar Anda</p>
+                </div>
+                <div class="section-card" style="text-align:center;padding:24px 16px">
                     <div style="font-size:32px;margin-bottom:8px">📚</div>
                     <p style="margin:0 0 4px;font-weight:600">Belum ada perangkat ajar</p>
                     <p style="margin:0 0 16px;font-size:13px;color:var(--color-text-muted)">Mulai dengan membuat ATP untuk mata pelajaran Anda</p>
-                    <button id="empty-generate-atp-btn" class="btn btn-primary">✨ Generate ATP</button>
+                    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+                        <button id="empty-upload-atp-btn" class="btn btn-secondary">📤 Upload ATP</button>
+                        <button id="empty-generate-atp-btn" class="btn btn-primary">✨ Generate ATP</button>
+                    </div>
                 </div>`;
 
-            document.getElementById('empty-generate-atp-btn').onclick = () => {
-                document.getElementById('generate-atp-picker-modal')?.remove();
-
-                const subjectOptions = coreSubjects.map(s =>
-                    `<option value="${esc(s.subject_id)}">${esc(s.name)}</option>`
-                ).join('');
-                const phaseOptions = phases.map(p =>
-                    `<option value="${esc(p.phase_id)}">${esc(p.name)}</option>`
-                ).join('');
-
-                const picker = document.createElement('div');
-                picker.id = 'generate-atp-picker-modal';
-                picker.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000';
-                picker.innerHTML = `
-                    <div style="background:var(--color-bg);border-radius:12px;padding:24px;width:min(400px,90vw);max-height:90vh;overflow-y:auto">
-                        <h3 style="margin:0 0 16px">Generate ATP</h3>
-                        ${coreSubjects.length === 0 ? '<p style="color:var(--color-danger)">Tidak ada mata pelajaran tersedia.</p>' : ''}
-                        <div class="field" style="margin-bottom:12px">
-                            <label for="atp-picker-subject">Mata Pelajaran</label>
-                            <select id="atp-picker-subject" class="input">${subjectOptions}</select>
-                        </div>
-                        <div class="field" style="margin-bottom:12px">
-                            <label for="atp-picker-phase">Fase</label>
-                            <select id="atp-picker-phase" class="input">${phaseOptions}</select>
-                        </div>
-                        <div class="field" style="margin-bottom:16px">
-                            <label for="atp-picker-semester">Semester</label>
-                            <select id="atp-picker-semester" class="input">
-                                <option value="1">Semester 1</option>
-                                <option value="2">Semester 2</option>
-                            </select>
-                        </div>
-                        <div style="display:flex;gap:8px;justify-content:flex-end">
-                            <button id="atp-picker-cancel" class="btn btn-secondary">Batal</button>
-                            <button id="atp-picker-submit" class="btn btn-primary" ${coreSubjects.length === 0 ? 'disabled' : ''}>✨ Generate</button>
-                        </div>
-                    </div>`;
-
-                document.body.appendChild(picker);
-
-                const close = () => picker.remove();
-                document.getElementById('atp-picker-cancel').onclick = close;
-                picker.addEventListener('click', e => { if (e.target === picker) close(); });
-
-                document.getElementById('atp-picker-submit').onclick = () => {
-                    const subjId   = document.getElementById('atp-picker-subject').value;
-                    const phaseId  = document.getElementById('atp-picker-phase').value;
-                    const subjName = coreSubjects.find(s => s.subject_id === subjId)?.name ?? '';
-                    close();
+            document.getElementById('empty-upload-atp-btn').onclick = () => uploadATPFlow(coreSubjects, phases, ay);
+            document.getElementById('empty-generate-atp-btn').onclick = () =>
+                openGenerateATPPicker(coreSubjects, phases, (subjId, phaseId, subjName, _semester) => {
                     openConfirmGenerateModal(subjId, phaseId, subjName, ay);
-                };
-            };
+                });
             return;
         }
 
@@ -6628,6 +6592,137 @@ function openATPReviewModal(result, metadata, params) {
     });
 
     overlay.style.display = 'flex';
+}
+
+// ── ATP Picker & Upload ──────────────────────────────────────
+
+function openGenerateATPPicker(coreSubjects, phases, onSubmit) {
+    document.getElementById('generate-atp-picker-modal')?.remove();
+
+    const subjectOptions = coreSubjects.map(s =>
+        `<option value="${esc(s.subject_id)}">${esc(s.name)}</option>`
+    ).join('');
+    const phaseOptions = phases.map(p =>
+        `<option value="${esc(p.phase_id)}">${esc(p.name)}</option>`
+    ).join('');
+
+    const picker = document.createElement('div');
+    picker.id = 'generate-atp-picker-modal';
+    picker.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000';
+    picker.innerHTML = `
+        <div style="background:var(--color-bg);border-radius:12px;padding:24px;width:min(400px,90vw);max-height:90vh;overflow-y:auto">
+            <h3 style="margin:0 0 16px">Pilih Mata Pelajaran</h3>
+            ${coreSubjects.length === 0 ? '<p style="color:var(--color-danger)">Tidak ada mata pelajaran tersedia.</p>' : ''}
+            <div class="field" style="margin-bottom:12px">
+                <label for="atp-picker-subject">Mata Pelajaran</label>
+                <select id="atp-picker-subject" class="input">${subjectOptions}</select>
+            </div>
+            <div class="field" style="margin-bottom:12px">
+                <label for="atp-picker-phase">Fase</label>
+                <select id="atp-picker-phase" class="input">${phaseOptions}</select>
+            </div>
+            <div class="field" style="margin-bottom:16px">
+                <label for="atp-picker-semester">Semester</label>
+                <select id="atp-picker-semester" class="input">
+                    <option value="1">Semester 1</option>
+                    <option value="2">Semester 2</option>
+                </select>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+                <button id="atp-picker-cancel" class="btn btn-secondary">Batal</button>
+                <button id="atp-picker-submit" class="btn btn-primary" ${coreSubjects.length === 0 ? 'disabled' : ''}>Lanjut →</button>
+            </div>
+        </div>`;
+
+    document.body.appendChild(picker);
+
+    const close = () => picker.remove();
+    document.getElementById('atp-picker-cancel').onclick = close;
+    picker.addEventListener('click', e => { if (e.target === picker) close(); });
+
+    document.getElementById('atp-picker-submit').onclick = () => {
+        const subjId   = document.getElementById('atp-picker-subject').value;
+        const phaseId  = document.getElementById('atp-picker-phase').value;
+        const semester = parseInt(document.getElementById('atp-picker-semester').value, 10);
+        const subjName = coreSubjects.find(s => s.subject_id === subjId)?.name ?? '';
+        close();
+        onSubmit(subjId, phaseId, subjName, semester);
+    };
+}
+
+async function uploadATPFlow(coreSubjects, phases, ay) {
+    const fileInput = document.createElement('input');
+    fileInput.type   = 'file';
+    fileInput.accept = '.pdf,.docx';
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+
+    fileInput.onchange = () => {
+        const file = fileInput.files?.[0];
+        fileInput.remove();
+        if (!file) return;
+
+        if (file.size > 10 * 1024 * 1024) {
+            alert('Ukuran file melebihi batas 10MB. Harap pilih file yang lebih kecil.');
+            return;
+        }
+        const isPdf  = file.name.toLowerCase().endsWith('.pdf');
+        const isDocx = file.name.toLowerCase().endsWith('.docx');
+        if (!isPdf && !isDocx) {
+            alert('Format file tidak didukung. Gunakan PDF atau DOCX.');
+            return;
+        }
+
+        const fileType = isPdf ? 'pdf' : 'docx';
+        const fileName = file.name;
+
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onerror = () => { alert('Gagal membaca file. Coba lagi.'); };
+        reader.onload  = () => {
+            const base64 = reader.result.split(',')[1];
+
+            openGenerateATPPicker(coreSubjects, phases, async (subjId, phaseId, subjName, semester) => {
+                const loadingEl = document.createElement('div');
+                loadingEl.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:2000';
+                loadingEl.innerHTML = `
+                    <div style="background:var(--color-bg);border-radius:12px;padding:32px 24px;text-align:center;max-width:360px">
+                        <div style="font-size:36px;margin-bottom:12px">📄</div>
+                        <p style="margin:0 0 4px;font-weight:600">Claude sedang membaca dokumen ATP Anda…</p>
+                        <p style="margin:0;font-size:13px;color:var(--color-text-muted)">estimasi 15–30 detik</p>
+                    </div>`;
+                document.body.appendChild(loadingEl);
+
+                try {
+                    const { data, error } = await supabase.functions.invoke('parse-atp', {
+                        body: {
+                            school_id:       currentUser.school_id,
+                            file_base64:     base64,
+                            file_type:       fileType,
+                            file_name:       fileName,
+                            core_subject_id: subjId,
+                            phase_id:        phaseId,
+                        },
+                    });
+                    loadingEl.remove();
+                    if (error) throw new Error(error.message ?? 'Edge Function error');
+                    if (!data?.success) throw new Error(data?.error ?? 'Gagal membaca dokumen');
+                    openATPReviewModal(data.data, data.metadata ?? {}, {
+                        coreSubjectId: subjId,
+                        phaseId,
+                        subjectName:   subjName,
+                        academicYear:  ay,
+                        semester,
+                    });
+                } catch (e) {
+                    loadingEl.remove();
+                    alert('Gagal membaca dokumen: ' + (e?.message ?? 'Error tidak diketahui'));
+                }
+            });
+        };
+    };
+
+    fileInput.click();
 }
 
 // ─── Start ───────────────────────────────────────────────────
