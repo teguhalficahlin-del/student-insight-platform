@@ -644,28 +644,12 @@ function esc(str) {
 
 // ─── Panel: Kode Mapel ─────────────────────────────────────────────────────
 
-const KODE_MAPEL_ROWS = 20;
-
 async function renderKodeMapelPanel() {
     const panel = overlayEl.querySelector('#sched-panel-kode-mapel');
     panel.innerHTML = '<p class="hint" style="text-align:center">Memuat…</p>';
 
     let aliases = [];
     try { aliases = await getSubjectCodeAliases(); } catch (_) { /* kosong */ }
-
-    // Build 20 rows pre-filled with existing data
-    const tableRows = Array.from({ length: KODE_MAPEL_ROWS }, (_, i) => {
-        const a = aliases[i];
-        const kode = a ? esc(a.kode) : '';
-        const nama = a ? esc(a.subject_name) : '';
-        return `<tr>
-            <td style="padding:2px 4px"><input type="text" class="input sca-cell-kode" value="${kode}"
-                style="width:100%;text-transform:uppercase;font-size:13px;padding:4px 6px"></td>
-            <td style="padding:2px 4px"><input type="text" class="input sca-cell-nama" value="${nama}"
-                style="width:100%;font-size:13px;padding:4px 6px"></td>
-            <td class="sca-row-err" style="padding:2px 6px;font-size:12px;color:var(--color-danger);white-space:nowrap"></td>
-        </tr>`;
-    }).join('');
 
     panel.innerHTML = `
         <h4 style="margin:0 0 8px">Kode Mapel</h4>
@@ -681,47 +665,72 @@ async function renderKodeMapelPanel() {
                     <col style="width:1px">
                 </colgroup>
                 <thead><tr><th>Kode</th><th>Nama Mapel</th><th></th></tr></thead>
-                <tbody>${tableRows}</tbody>
+                <tbody id="sca-tbody"></tbody>
             </table>
         </div>
         <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+            <button type="button" class="btn btn-secondary" id="sca-add-row" style="padding:6px 16px">+ Tambah Baris</button>
             <button type="button" class="btn btn-primary" id="sca-save" style="padding:6px 20px">Simpan</button>
             <span id="sca-status" style="font-size:13px"></span>
         </div>
     `;
 
-    // Paste handler: intercept Ctrl+V on the table area
+    const tbody = panel.querySelector('#sca-tbody');
+
+    function makeRow(kode = '', nama = '') {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="padding:2px 4px"><input type="text" class="input sca-cell-kode" value="${esc(kode)}"
+                style="width:100%;text-transform:uppercase;font-size:13px;padding:4px 6px"></td>
+            <td style="padding:2px 4px"><input type="text" class="input sca-cell-nama" value="${esc(nama)}"
+                style="width:100%;font-size:13px;padding:4px 6px"></td>
+            <td class="sca-row-err" style="padding:2px 6px;font-size:12px;color:var(--color-danger);white-space:nowrap"></td>
+        `;
+        tr.querySelector('.sca-cell-kode').addEventListener('input', e => {
+            e.target.value = e.target.value.toUpperCase();
+        });
+        tbody.appendChild(tr);
+        return tr;
+    }
+
+    // Pre-fill existing aliases + buffer of empty rows
+    const initCount = Math.max(aliases.length + 3, 8);
+    for (let i = 0; i < initCount; i++) {
+        const a = aliases[i];
+        makeRow(a?.kode ?? '', a?.subject_name ?? '');
+    }
+
+    panel.querySelector('#sca-add-row').addEventListener('click', () => makeRow());
+
+    // Paste handler: expand rows automatically if paste exceeds current count
     panel.querySelector('#sca-paste-target').addEventListener('paste', e => {
         e.preventDefault();
         const text = e.clipboardData?.getData('text/plain') ?? '';
         const pasteLines = text.split(/\r?\n/).filter(l => l !== '');
-        const kodeInputs = panel.querySelectorAll('.sca-cell-kode');
-        const namaInputs = panel.querySelectorAll('.sca-cell-nama');
 
-        // Find which row the focused cell is in (default to 0)
         let startRow = 0;
         const focusedCell = document.activeElement;
         if (focusedCell) {
             const tr = focusedCell.closest('tr');
             if (tr) {
-                const trs = [...panel.querySelectorAll('tbody tr')];
-                const idx = trs.indexOf(tr);
+                const idx = [...tbody.querySelectorAll('tr')].indexOf(tr);
                 if (idx >= 0) startRow = idx;
             }
         }
 
         pasteLines.forEach((line, li) => {
             const ri = startRow + li;
-            if (ri >= KODE_MAPEL_ROWS) return;
             const cols = line.split('\t');
-            kodeInputs[ri].value = (cols[0] ?? '').trim().toUpperCase();
-            namaInputs[ri].value = (cols[1] ?? '').trim();
+            const kode = (cols[0] ?? '').trim().toUpperCase();
+            const nama = (cols[1] ?? '').trim();
+            const trs = [...tbody.querySelectorAll('tr')];
+            if (ri < trs.length) {
+                trs[ri].querySelector('.sca-cell-kode').value = kode;
+                trs[ri].querySelector('.sca-cell-nama').value = nama;
+            } else {
+                makeRow(kode, nama);
+            }
         });
-    });
-
-    // Auto-uppercase kode inputs
-    panel.querySelectorAll('.sca-cell-kode').forEach(inp => {
-        inp.addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
     });
 
     // Build name→subject_id lookup (case-insensitive)
@@ -731,17 +740,13 @@ async function renderKodeMapelPanel() {
 
     panel.querySelector('#sca-save').addEventListener('click', async () => {
         const statusEl = panel.querySelector('#sca-status');
-        const kodeInputs = [...panel.querySelectorAll('.sca-cell-kode')];
-        const namaInputs = [...panel.querySelectorAll('.sca-cell-nama')];
-        const errCells  = [...panel.querySelectorAll('.sca-row-err')];
+        const allTrs = [...tbody.querySelectorAll('tr')];
+        allTrs.forEach(tr => { tr.querySelector('.sca-row-err').textContent = ''; });
 
-        // Clear previous errors
-        errCells.forEach(td => { td.textContent = ''; });
-
-        const rows = kodeInputs.map((inp, i) => ({
-            kode: inp.value.trim().toUpperCase(),
-            nama: namaInputs[i].value.trim(),
-            errTd: errCells[i],
+        const rows = allTrs.map(tr => ({
+            kode: tr.querySelector('.sca-cell-kode').value.trim().toUpperCase(),
+            nama: tr.querySelector('.sca-cell-nama').value.trim(),
+            errTd: tr.querySelector('.sca-row-err'),
         })).filter(r => r.kode !== '');
 
         if (rows.length === 0) {
