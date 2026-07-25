@@ -6401,7 +6401,7 @@ function openATPReviewModal(result, metadata, params) {
     const catatan = result.catatan ?? '';
 
     document.getElementById('atp-review-meta').textContent =
-        `${params.subjectName} · Semester ${params.semester} · Total ${total} JP · Model: ${metadata.model ?? 'gemini-2.0-flash'}`;
+        `${params.subjectName} · Semester ${params.semester} · Total ${total} JP`;
 
     document.getElementById('atp-review-body').innerHTML = `
         <div style="overflow-x:auto;margin-bottom:12px">
