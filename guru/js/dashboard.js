@@ -5259,13 +5259,32 @@ async function openBuatDokumenModal(preselect) {
         getCorePhases(),
     ]);
 
-    // Check apakah ATP sudah ada untuk subject+phase yang dipilih
-    let existingDocs = [];
-    if (preselect?.coreSubjectId) {
-        try {
-            const allDocs = await getMyTeacherDocuments(currentUser.school_id, ay);
-            existingDocs = allDocs.filter(d => d.core_subject_id === preselect.coreSubjectId && d.phase_id === preselect.phaseId);
-        } catch { /* ignore */ }
+    let allDocs = [];
+    try { allDocs = await getMyTeacherDocuments(currentUser.school_id, ay); } catch { /* ignore */ }
+
+    const PREREQS = {
+        PROGRAM_TAHUNAN:  ['ATP'],
+        PROGRAM_SEMESTER: ['ATP', 'PROGRAM_TAHUNAN'],
+        PPM:    ['ATP', 'PROGRAM_TAHUNAN', 'PROGRAM_SEMESTER'],
+        LKPD:   ['ATP', 'PROGRAM_TAHUNAN', 'PROGRAM_SEMESTER', 'PPM'],
+        SOAL:   ['ATP', 'PROGRAM_TAHUNAN', 'PROGRAM_SEMESTER', 'PPM'],
+        RUBRIK: ['ATP', 'PROGRAM_TAHUNAN', 'PROGRAM_SEMESTER', 'PPM', 'SOAL'],
+    };
+    const PREREQ_LABEL = { ATP: 'ATP', PROGRAM_TAHUNAN: 'Program Tahunan', PROGRAM_SEMESTER: 'Program Semester', PPM: 'PPM', SOAL: 'Soal' };
+    function checkPrerequisiteWarning() {
+        const warnEl    = document.getElementById('buat-dok-warning');
+        const subjectId = document.getElementById('buat-dok-subject').value;
+        const dtype     = document.getElementById('buat-dok-type').value;
+        if (!subjectId || !dtype || !PREREQS[dtype]) { warnEl.style.display = 'none'; return; }
+        const phaseId = document.getElementById('buat-dok-phase').value;
+        const docs    = allDocs.filter(d => d.core_subject_id === subjectId && d.phase_id === phaseId);
+        const missing = PREREQS[dtype].filter(p => !docs.some(d => d.document_type === p));
+        if (missing.length) {
+            warnEl.innerHTML = `⚠ Prasyarat belum ada: <strong>${missing.map(m => PREREQ_LABEL[m] ?? m).join(', ')}</strong>. Disarankan buat dokumen prasyarat dulu.`;
+            warnEl.style.display = '';
+        } else {
+            warnEl.style.display = 'none';
+        }
     }
 
     const subjectOptions = coreSubjects.map(s =>
@@ -5324,25 +5343,14 @@ async function openBuatDokumenModal(preselect) {
             <button id="buat-dok-submit" class="btn btn-primary">Simpan</button>
         </div>`;
 
-    // Tampilkan/sembunyikan semester field
+    // Tampilkan/sembunyikan semester field + cek prasyarat
     document.getElementById('buat-dok-type').addEventListener('change', e => {
         const needSem = ['PROGRAM_SEMESTER','PPM','LKPD','SOAL','RUBRIK'].includes(e.target.value);
         document.getElementById('buat-dok-semester-field').style.display = needSem ? '' : 'none';
-        // Warning jika ATP belum ada
-        const warnEl = document.getElementById('buat-dok-warning');
-        const subjectId = document.getElementById('buat-dok-subject').value;
-        const phaseId   = document.getElementById('buat-dok-phase').value;
-        const needsAtp  = ['PPM','LKPD','SOAL','RUBRIK'].includes(e.target.value);
-        if (needsAtp && subjectId) {
-            const hasAtp = existingDocs.some(d => d.document_type === 'ATP');
-            if (!hasAtp) {
-                warnEl.innerHTML = '⚠ ATP belum ada untuk mapel ini. Disarankan buat ATP dulu agar PPM/LKPD lebih terstruktur.';
-                warnEl.style.display = '';
-                return;
-            }
-        }
-        warnEl.style.display = 'none';
+        checkPrerequisiteWarning();
     });
+    document.getElementById('buat-dok-subject').addEventListener('change', checkPrerequisiteWarning);
+    document.getElementById('buat-dok-phase').addEventListener('change', checkPrerequisiteWarning);
 
     document.getElementById('buat-dok-cancel').onclick = () => { modal.style.display = 'none'; };
     document.getElementById('buat-dok-close').onclick  = () => { modal.style.display = 'none'; };
