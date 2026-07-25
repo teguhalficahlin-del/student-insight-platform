@@ -6363,25 +6363,34 @@ async function openConfirmGenerateModal(coreSubjectId, phaseId, subjName, ay) {
         ${profilSection}
         ${ctxSection}
         <div style="margin-bottom:12px;padding:12px;background:var(--color-bg-alt);border-radius:var(--radius)">
-          <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase">Parameter JP</p>
-          <div style="display:flex;gap:12px;flex-wrap:wrap">
-            <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">JP/minggu
-              <input type="number" id="cg-jp-per-week" value="2" min="1" max="10"
-                style="width:70px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
-            </label>
-            <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">Minggu efektif
-              <input type="number" id="cg-weeks-effective" value="18" min="1" max="26"
-                style="width:70px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
-            </label>
-            <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">Semester
-              <select id="cg-semester"
-                style="width:90px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
-                <option value="1">1</option>
-                <option value="2">2</option>
-              </select>
-            </label>
+          <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase">Parameter JP — Satu Tahun Penuh</p>
+          <div style="margin-bottom:8px">
+            <p style="margin:0 0 6px;font-size:12px;color:var(--color-text-muted);font-weight:600">Semester 1</p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">JP/minggu
+                <input type="number" id="cg-jp-s1" value="4" min="1" max="10"
+                  style="width:70px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
+              </label>
+              <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">Minggu efektif
+                <input type="number" id="cg-weeks-s1" value="18" min="1" max="26"
+                  style="width:70px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
+              </label>
+            </div>
           </div>
-          <p style="margin:8px 0 0;font-size:12px;color:var(--color-text-muted)">Total JP: <span id="cg-total-jp-preview">36</span> JP</p>
+          <div style="margin-bottom:8px">
+            <p style="margin:0 0 6px;font-size:12px;color:var(--color-text-muted);font-weight:600">Semester 2</p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">JP/minggu
+                <input type="number" id="cg-jp-s2" value="4" min="1" max="10"
+                  style="width:70px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
+              </label>
+              <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">Minggu efektif
+                <input type="number" id="cg-weeks-s2" value="16" min="1" max="26"
+                  style="width:70px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
+              </label>
+            </div>
+          </div>
+          <p style="margin:8px 0 0;font-size:12px;color:var(--color-text-muted)">Total JP: <span id="cg-total-jp-preview">136</span> JP</p>
         </div>
         <div id="cg-generate-msg" style="display:none;font-size:13px;margin-bottom:8px"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:16px;border-top:1px solid var(--color-border)">
@@ -6400,20 +6409,25 @@ async function openConfirmGenerateModal(coreSubjectId, phaseId, subjName, ay) {
 
     // Update total JP preview saat input berubah
     const updateTotalJP = () => {
-        const jp = parseInt(document.getElementById('cg-jp-per-week')?.value ?? '2', 10) || 0;
-        const wk = parseInt(document.getElementById('cg-weeks-effective')?.value ?? '18', 10) || 0;
+        const jp1 = parseInt(document.getElementById('cg-jp-s1')?.value ?? '4', 10) || 0;
+        const wk1 = parseInt(document.getElementById('cg-weeks-s1')?.value ?? '18', 10) || 0;
+        const jp2 = parseInt(document.getElementById('cg-jp-s2')?.value ?? '4', 10) || 0;
+        const wk2 = parseInt(document.getElementById('cg-weeks-s2')?.value ?? '16', 10) || 0;
         const el = document.getElementById('cg-total-jp-preview');
-        if (el) el.textContent = String(jp * wk);
+        if (el) el.textContent = String(jp1 * wk1 + jp2 * wk2);
     };
-    body.querySelector('#cg-jp-per-week')?.addEventListener('input', updateTotalJP);
-    body.querySelector('#cg-weeks-effective')?.addEventListener('input', updateTotalJP);
+    body.querySelector('#cg-jp-s1')?.addEventListener('input', updateTotalJP);
+    body.querySelector('#cg-weeks-s1')?.addEventListener('input', updateTotalJP);
+    body.querySelector('#cg-jp-s2')?.addEventListener('input', updateTotalJP);
+    body.querySelector('#cg-weeks-s2')?.addEventListener('input', updateTotalJP);
 
     body.querySelector('#cg-generate-btn')?.addEventListener('click', async () => {
         const btn   = body.querySelector('#cg-generate-btn');
         const msgEl = document.getElementById('cg-generate-msg');
-        const jpPerWeek      = parseInt(document.getElementById('cg-jp-per-week')?.value ?? '2', 10);
-        const weeksEffective = parseInt(document.getElementById('cg-weeks-effective')?.value ?? '18', 10);
-        const semester       = parseInt(document.getElementById('cg-semester')?.value ?? '1', 10);
+        const jpPerWeekSem1  = parseInt(document.getElementById('cg-jp-s1')?.value ?? '4', 10);
+        const weeksSem1      = parseInt(document.getElementById('cg-weeks-s1')?.value ?? '18', 10);
+        const jpPerWeekSem2  = parseInt(document.getElementById('cg-jp-s2')?.value ?? '4', 10);
+        const weeksSem2      = parseInt(document.getElementById('cg-weeks-s2')?.value ?? '16', 10);
 
         btn.disabled    = true;
         btn.textContent = '⏳ Generating…';
@@ -6426,9 +6440,8 @@ async function openConfirmGenerateModal(coreSubjectId, phaseId, subjName, ay) {
                 phaseId,
                 subjectName: subjName,
                 academicYear: ay,
-                semester,
-                jpPerWeek,
-                weeksEffective,
+                jpPerWeekSem1, weeksSem1,
+                jpPerWeekSem2, weeksSem2,
             });
         } catch (e) {
             overlay.style.display = 'flex';
@@ -6441,7 +6454,7 @@ async function openConfirmGenerateModal(coreSubjectId, phaseId, subjName, ay) {
     });
 }
 
-async function generateATP({ coreSubjectId, phaseId, subjectName, academicYear, semester, jpPerWeek, weeksEffective }) {
+async function generateATP({ coreSubjectId, phaseId, subjectName, academicYear, jpPerWeekSem1, weeksSem1, jpPerWeekSem2, weeksSem2 }) {
     // Tampilkan loading overlay
     let loadingEl = document.getElementById('atp-loading-overlay');
     if (!loadingEl) {
@@ -6460,14 +6473,14 @@ async function generateATP({ coreSubjectId, phaseId, subjectName, academicYear, 
     try {
         const { data, error } = await supabase.functions.invoke('generate-atp-v2', {
             body: {
-                school_id:       currentUser.school_id,
-                subject_id:      coreSubjectId,
-                core_subject_id: coreSubjectId,
-                phase_id:        phaseId,
-                academic_year:   academicYear,
-                semester,
-                jp_per_week:     jpPerWeek,
-                weeks_effective: weeksEffective,
+                school_id:        currentUser.school_id,
+                core_subject_id:  coreSubjectId,
+                phase_id:         phaseId,
+                academic_year:    academicYear,
+                jp_per_week_sem1: jpPerWeekSem1,
+                weeks_sem1:       weeksSem1,
+                jp_per_week_sem2: jpPerWeekSem2,
+                weeks_sem2:       weeksSem2,
             },
         });
 
@@ -6479,7 +6492,7 @@ async function generateATP({ coreSubjectId, phaseId, subjectName, academicYear, 
         if (!result?.tujuan_pembelajaran?.length) throw new Error('Respons AI kosong atau format tidak valid');
 
         openATPReviewModal(result, data?.metadata ?? {}, {
-            coreSubjectId, phaseId, subjectName, academicYear, semester,
+            coreSubjectId, phaseId, subjectName, academicYear,
         });
     } catch (e) {
         loadingEl.style.display = 'none';
@@ -6508,7 +6521,7 @@ function openATPReviewModal(result, metadata, params) {
 
     const updateMeta = () => {
         document.getElementById('atp-review-meta').textContent =
-            `${params.subjectName} · Semester ${params.semester} · Total ${result.total_jp} JP`;
+            `${params.subjectName} · ${params.academicYear} · Total ${result.total_jp} JP`;
     };
 
     const viewRowHTML = (tp, i) => `
@@ -6612,10 +6625,10 @@ function openATPReviewModal(result, metadata, params) {
                 phaseId:       params.phaseId,
                 programId:     null,
                 scopeType:     'SEMUA_KELAS',
-                semester:      params.semester,
+                semester:      null,
                 tpUrutan:      null,
                 contentJson:   {
-                    judul:               `ATP ${params.subjectName} Semester ${params.semester}`,
+                    judul:               `ATP ${params.subjectName} ${params.academicYear}`,
                     tujuan_pembelajaran: result.tujuan_pembelajaran,
                     total_jp:            result.total_jp,
                     catatan:             result.catatan ?? '',
@@ -6878,16 +6891,9 @@ function openGenerateATPPicker(coreSubjects, phases, onSubmit) {
                 <label for="atp-picker-subject">Mata Pelajaran</label>
                 <select id="atp-picker-subject" class="input">${subjectOptions}</select>
             </div>
-            <div class="field" style="margin-bottom:12px">
+            <div class="field" style="margin-bottom:16px">
                 <label for="atp-picker-phase">Fase</label>
                 <select id="atp-picker-phase" class="input">${phaseOptions}</select>
-            </div>
-            <div class="field" style="margin-bottom:16px">
-                <label for="atp-picker-semester">Semester</label>
-                <select id="atp-picker-semester" class="input">
-                    <option value="1">Semester 1</option>
-                    <option value="2">Semester 2</option>
-                </select>
             </div>
             <div style="display:flex;gap:8px;justify-content:flex-end">
                 <button id="atp-picker-cancel" class="btn btn-secondary">Batal</button>
@@ -6902,12 +6908,11 @@ function openGenerateATPPicker(coreSubjects, phases, onSubmit) {
     picker.addEventListener('click', e => { if (e.target === picker) close(); });
 
     document.getElementById('atp-picker-submit').onclick = () => {
-        const subjId   = document.getElementById('atp-picker-subject').value;
-        const phaseId  = document.getElementById('atp-picker-phase').value;
-        const semester = parseInt(document.getElementById('atp-picker-semester').value, 10);
+        const subjId  = document.getElementById('atp-picker-subject').value;
+        const phaseId = document.getElementById('atp-picker-phase').value;
         const subjName = coreSubjects.find(s => s.subject_id === subjId)?.name ?? '';
         close();
-        onSubmit(subjId, phaseId, subjName, semester);
+        onSubmit(subjId, phaseId, subjName);
     };
 }
 

@@ -12,13 +12,14 @@ const ANTHROPIC_URL   = "https://api.anthropic.com/v1/messages";
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface RequestBody {
-  school_id:       string;
-  core_subject_id: string;
-  phase_id:        string;
-  academic_year:   string;
-  semester:        number;
-  jp_per_week:     number;
-  weeks_effective: number;
+  school_id:        string;
+  core_subject_id:  string;
+  phase_id:         string;
+  academic_year:    string;
+  jp_per_week_sem1: number;
+  weeks_sem1:       number;
+  jp_per_week_sem2: number;
+  weeks_sem2:       number;
 }
 
 interface CPRow {
@@ -68,11 +69,14 @@ function okResponse(data: unknown, metadata: unknown): Response {
 function buildPrompt(
   cp: CPRow,
   profile: TeacherProfile | null,
-  semester: number,
-  jpPerWeek: number,
-  weeksEffective: number,
+  jpPerWeekSem1: number,
+  weeksSem1: number,
+  jpPerWeekSem2: number,
+  weeksSem2: number,
 ): string {
-  const totalJP = jpPerWeek * weeksEffective;
+  const totalJpSem1 = jpPerWeekSem1 * weeksSem1;
+  const totalJpSem2 = jpPerWeekSem2 * weeksSem2;
+  const totalJP = totalJpSem1 + totalJpSem2;
 
   const cpUmumText = (cp.cp_umum && !cp.cp_umum.startsWith("[PENDING"))
     ? cp.cp_umum
@@ -92,7 +96,7 @@ function buildPrompt(
         SPIRAL:             `URUTAN TP: Gunakan pendekatan spiral — setiap topik utama diulang dengan tingkat kesulitan yang meningkat. Satu tema bisa muncul 2-3x dengan kompleksitas berbeda.`,
         BUKU_TEKS:          `URUTAN TP: Ikuti urutan logis silabus resmi Kurikulum Merdeka untuk mata pelajaran ini. Prioritaskan elemen CP sesuai urutan yang tercantum dalam dokumen resmi.`,
       } as Record<string, string>)[profile.sequence_preference] ?? ""
-    : `URUTAN TP: Susun dari sederhana ke kompleks, reseptif ke produktif.`;
+    : `URUTAN TP: Susun dari sederhana ke kompleks, konsep dasar di Semester 1, penerapan dan sintesis di Semester 2.`;
 
   const profilText = profile ? `
 KONTEKS MENGAJAR GURU:
@@ -102,14 +106,13 @@ KONTEKS MENGAJAR GURU:
 - Konteks lokal: ${[profile.local_city, profile.local_industry].filter(Boolean).join(", ") || "Tidak diisi"}` : "";
 
   return `Anda adalah ahli kurikulum SMK Indonesia yang berpengalaman dalam Kurikulum Merdeka (SK BSKAP No. 8 Tahun 2022).
-Buat Alur Tujuan Pembelajaran (ATP) berdasarkan data berikut:
+Buat Alur Tujuan Pembelajaran (ATP) SATU TAHUN PENUH berdasarkan data berikut:
 
 MATA PELAJARAN: ${cp.subject_name}
 FASE: ${cp.fase_code}
-SEMESTER: ${semester}
-JP PER MINGGU: ${jpPerWeek}
-MINGGU EFEKTIF: ${weeksEffective}
-TOTAL JP SEMESTER ${semester}: ${totalJP}
+SEMESTER 1 — JP/minggu: ${jpPerWeekSem1}, Minggu efektif: ${weeksSem1}, Total JP Sem 1: ${totalJpSem1}
+SEMESTER 2 — JP/minggu: ${jpPerWeekSem2}, Minggu efektif: ${weeksSem2}, Total JP Sem 2: ${totalJpSem2}
+TOTAL JP SATU TAHUN: ${totalJP}
 
 CAPAIAN PEMBELAJARAN:
 ${cpUmumText}
@@ -121,19 +124,24 @@ ${profilText}
 ${sequenceInstruction}
 
 INSTRUKSI PENTING:
-1. Buat daftar Tujuan Pembelajaran (TP) untuk Semester ${semester}
-2. Total JP semua TP HARUS TEPAT ${totalJP} JP
-3. Setiap TP merujuk minimal satu elemen CP (sebutkan nama elemennya)
-4. Gunakan kata kerja operasional Bloom's Taxonomy yang terukur
-5. Bahasa Indonesia formal
-6. Minimal 4 TP, maksimal 12 TP
-7. Response HANYA JSON valid, tidak ada teks lain, tidak ada markdown fence
+1. Buat daftar Tujuan Pembelajaran (TP) untuk SATU TAHUN PENUH (Semester 1 DAN Semester 2)
+2. Setiap TP WAJIB memiliki field "semester": 1 atau 2
+3. Total JP TP ber-semester 1 HARUS TEPAT ${totalJpSem1} JP
+4. Total JP TP ber-semester 2 HARUS TEPAT ${totalJpSem2} JP
+5. Total JP semua TP HARUS TEPAT ${totalJP} JP
+6. Semester 1: fondasi konsep dan keterampilan dasar. Semester 2: pendalaman, penerapan, dan sintesis
+7. Setiap TP merujuk minimal satu elemen CP (sebutkan nama elemennya)
+8. Gunakan kata kerja operasional Bloom's Taxonomy yang terukur
+9. Bahasa Indonesia formal
+10. Minimal 6 TP total (min 3 per semester), maksimal 18 TP total
+11. Response HANYA JSON valid, tidak ada teks lain, tidak ada markdown fence
 
 FORMAT RESPONSE:
 {
   "tujuan_pembelajaran": [
     {
       "nomor": 1,
+      "semester": 1,
       "deskripsi": "Peserta didik mampu...",
       "elemen_cp": "nama elemen yang dicakup",
       "jp": 12,
@@ -224,9 +232,9 @@ serve(async (req: Request) => {
     return errResponse(400, "Body JSON tidak valid");
   }
 
-  const { core_subject_id, phase_id, academic_year, semester, jp_per_week, weeks_effective } = body;
-  if (!core_subject_id || !phase_id || !semester || !jp_per_week || !weeks_effective) {
-    return errResponse(400, "Field wajib tidak lengkap: core_subject_id, phase_id, semester, jp_per_week, weeks_effective");
+  const { core_subject_id, phase_id, academic_year, jp_per_week_sem1, weeks_sem1, jp_per_week_sem2, weeks_sem2 } = body;
+  if (!core_subject_id || !phase_id || !jp_per_week_sem1 || !weeks_sem1 || !jp_per_week_sem2 || !weeks_sem2) {
+    return errResponse(400, "Field wajib tidak lengkap: core_subject_id, phase_id, jp_per_week_sem1, weeks_sem1, jp_per_week_sem2, weeks_sem2");
   }
 
   // ── Layer 1: CP via view ────────────────────────────────────────────────────
@@ -265,8 +273,8 @@ serve(async (req: Request) => {
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!anthropicKey) return errResponse(503, "Konfigurasi Anthropic AI belum diatur di server");
 
-  const prompt = buildPrompt(cp, profile, semester, jp_per_week, weeks_effective);
-  const totalJP = jp_per_week * weeks_effective;
+  const prompt = buildPrompt(cp, profile, jp_per_week_sem1, weeks_sem1, jp_per_week_sem2, weeks_sem2);
+  const totalJP = jp_per_week_sem1 * weeks_sem1 + jp_per_week_sem2 * weeks_sem2;
 
   let result: { tujuan_pembelajaran: Array<{ jp?: number }>; total_jp?: number; catatan?: string };
   try {
@@ -299,14 +307,17 @@ serve(async (req: Request) => {
       catatan:             result.catatan ?? "",
     },
     {
-      model:           ANTHROPIC_MODEL,
-      subject_name:    cp.subject_name,
-      fase:            cp.fase_code,
-      semester,
-      total_jp_target: totalJP,
-      total_jp_actual: actualTotal,
-      jp_valid:        actualTotal === totalJP,
-      generated_at:    new Date().toISOString(),
+      model:              ANTHROPIC_MODEL,
+      subject_name:       cp.subject_name,
+      fase:               cp.fase_code,
+      jp_per_week_sem1,
+      weeks_sem1,
+      jp_per_week_sem2,
+      weeks_sem2,
+      total_jp_target:    totalJP,
+      total_jp_actual:    actualTotal,
+      jp_valid:           actualTotal === totalJP,
+      generated_at:       new Date().toISOString(),
     },
   );
 });
