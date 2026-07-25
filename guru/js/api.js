@@ -1347,33 +1347,26 @@ export async function getCoreSubjectsDirect() {
  * Mengembalikan array kosong jika belum ada mapping (bukan error).
  */
 export async function getMyTeachingCoreSubjects(userId, schoolId, academicYear) {
+    // Step 1: teaching_assignments → public.subjects names
     const { data: taData, error: taError } = await supabase
         .from('teaching_assignments')
-        .select('subject_id')
+        .select('subject:subjects(name, code)')
         .eq('user_id', userId)
         .eq('school_id', schoolId)
         .eq('academic_year', academicYear)
         .eq('is_active', true);
     if (taError) throw taError;
 
-    const subjectIds = [...new Set((taData ?? []).map(r => r.subject_id).filter(Boolean))];
-    if (subjectIds.length === 0) return [];
+    const names = [...new Set(
+        (taData ?? []).map(r => r.subject?.name).filter(Boolean)
+    )];
+    if (names.length === 0) return [];
 
-    const { data: mapData, error: mapError } = await supabase
-        .from('subject_cp_mapping')
-        .select('core_subject_id')
-        .eq('school_id', schoolId)
-        .eq('is_active', true)
-        .in('subject_id', subjectIds);
-    if (mapError) throw mapError;
-
-    const coreIds = [...new Set((mapData ?? []).map(r => r.core_subject_id).filter(Boolean))];
-    if (coreIds.length === 0) return [];
-
+    // Step 2: match ke core.subjects via name
     const { data: csData, error: csError } = await supabase
         .from('v_core_subjects')
         .select('subject_id, code, name, subject_type')
-        .in('subject_id', coreIds)
+        .in('name', names)
         .order('name');
     if (csError) throw csError;
 
