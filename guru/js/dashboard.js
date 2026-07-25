@@ -6066,6 +6066,7 @@ function buildKonteksKelasHTML(ctx, subjName, ay) {
     <div class="pm-q"><p class="pm-label">6. Sumber Belajar yang Tersedia</p>
       ${[['BUKU_PAKET','Buku paket resmi'],['MODUL_SEKOLAH','Modul sekolah'],
          ['INTERNET_STABIL','Internet stabil'],['VIDEO_PEMBELAJARAN','Video pembelajaran'],
+         ['AUDIO','Audio (rekaman, podcast, lagu)'],
          ['LABORATORIUM','Laboratorium'],['TEACHING_FACTORY','Teaching Factory']].map(([val,lbl]) =>
         `<label class="pm-radio-row"><input type="checkbox" name="resources_available" value="${val}" ${chk(v.resources_available,val)}> ${lbl}</label>`
       ).join('')}
