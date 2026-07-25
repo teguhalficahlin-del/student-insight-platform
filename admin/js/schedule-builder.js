@@ -37,6 +37,7 @@ let state = {
     teacherIdMap: new Map(), // user_id → teacher_code
     cells: new Map(),  // `${slotIdx}_${classId}` → { mapel, teacher_code }
     coreSubjects: [], // { name, code } dari v_core_subjects untuk datalist
+    aliases: [],      // { kode } dari subject_code_aliases untuk validasi visual
     dirty: false,
 };
 
@@ -60,6 +61,7 @@ export async function openScheduleBuilder() {
     state.teacherMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.teacher_code.toUpperCase(), t.user_id]));
     state.teacherIdMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.user_id, t.teacher_code]));
     try { state.coreSubjects = await getCoreSubjectsForSchedule(); } catch (_) { state.coreSubjects = []; }
+    try { state.aliases = await getSubjectCodeAliases(); } catch (_) { state.aliases = []; }
 
     createOverlay();
     await loadDay();
@@ -67,6 +69,26 @@ export async function openScheduleBuilder() {
 
 function createOverlay() {
     if (overlayEl) overlayEl.remove();
+
+    if (!document.getElementById('sched-dyn-style')) {
+        const s = document.createElement('style');
+        s.id = 'sched-dyn-style';
+        s.textContent = `
+.sched-panel-tabs { display:flex; gap:8px; padding:10px 20px;
+    border-bottom:1px solid var(--color-border); background:var(--color-surface); }
+.sched-ptab { padding:6px 16px; border:2px solid; border-radius:var(--radius);
+    background:var(--color-surface); font-size:13px; font-weight:600; cursor:pointer; }
+.sched-ptab[data-panel="jadwal"]      { color:#3b82f6; border-color:#3b82f6; }
+.sched-ptab[data-panel="jadwal"].active      { background:#3b82f6; color:#fff; }
+.sched-ptab[data-panel="kode-mapel"]  { color:#ca8a04; border-color:#ca8a04; }
+.sched-ptab[data-panel="kode-mapel"].active  { background:#ca8a04; color:#fff; }
+.sched-ptab[data-panel="kode-guru"]   { color:#ef4444; border-color:#ef4444; }
+.sched-ptab[data-panel="kode-guru"].active   { background:#ef4444; color:#fff; }
+.sched-kg-invalid { background:#fee2e2!important; border-color:#ef4444!important; color:#ef4444!important; }
+.sched-mapel-invalid { background:#fef9c3!important; border-color:#ca8a04!important; }
+        `.trim();
+        document.head.appendChild(s);
+    }
 
     overlayEl = document.createElement('div');
     overlayEl.className = 'sched-overlay';
@@ -823,6 +845,27 @@ function renderKodeGuruPanel() {
 
 // ─── Paste handler multi-sel ───────────────────────────────────────────────
 
+function checkCellValidity() {
+    const teacherSet = new Set(
+        state.teachers.filter(t => t.teacher_code).map(t => t.teacher_code.toUpperCase())
+    );
+    const aliasSet = new Set(state.aliases.map(a => a.kode.toUpperCase()));
+
+    overlayEl.querySelectorAll('.sched-kg').forEach(input => {
+        const val = input.value.trim().toUpperCase();
+        const invalid = val !== '' && !teacherSet.has(val);
+        input.classList.toggle('sched-kg-invalid', invalid);
+        input.title = invalid ? 'gagal: kode guru tidak ditemukan' : '';
+    });
+
+    overlayEl.querySelectorAll('.sched-mapel').forEach(input => {
+        const val = input.value.trim().toUpperCase();
+        const invalid = val !== '' && !aliasSet.has(val);
+        input.classList.toggle('sched-mapel-invalid', invalid);
+        input.title = invalid ? 'gagal: kode mapel belum ada di tab Kode Mapel' : '';
+    });
+}
+
 function handleGridPaste(e) {
     const target = e.target;
     const isMapel = target.classList.contains('sched-mapel');
@@ -889,4 +932,5 @@ function handleGridPaste(e) {
     state.dirty = true;
     renderGrid();
     checkConflicts();
+    checkCellValidity();
 }
