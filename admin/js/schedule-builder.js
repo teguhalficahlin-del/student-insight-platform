@@ -646,6 +646,9 @@ function esc(str) {
 
 async function renderKodeMapelPanel() {
     const panel = overlayEl.querySelector('#sched-panel-kode-mapel');
+    panel.style.flex = '1';
+    panel.style.minHeight = '0';
+    panel.style.overflowY = 'auto';
     panel.innerHTML = '<p class="hint" style="text-align:center">Memuat…</p>';
 
     let aliases = [];
