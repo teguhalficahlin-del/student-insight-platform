@@ -5294,13 +5294,12 @@ async function openBuatDokumenModal(preselect) {
             <label for="buat-dok-type">Jenis Dokumen</label>
             <select id="buat-dok-type" class="input">
                 <option value="">— Pilih Jenis —</option>
-                <option value="ATP">① ATP (Alur Tujuan Pembelajaran)</option>
-                <option value="PROGRAM_TAHUNAN">② Program Tahunan</option>
-                <option value="PROGRAM_SEMESTER">③ Program Semester</option>
-                <option value="PPM">④ PPM (Perencanaan Pembelajaran Mendalam)</option>
-                <option value="LKPD">⑤ LKPD</option>
-                <option value="SOAL">⑥ Soal</option>
-                <option value="RUBRIK">⑦ Rubrik</option>
+                <option value="PROGRAM_TAHUNAN">① Program Tahunan</option>
+                <option value="PROGRAM_SEMESTER">② Program Semester</option>
+                <option value="PPM">③ PPM (Perencanaan Pembelajaran Mendalam)</option>
+                <option value="LKPD">④ LKPD</option>
+                <option value="SOAL">⑤ Soal</option>
+                <option value="RUBRIK">⑥ Rubrik</option>
             </select>
         </div>
         <div class="field" id="buat-dok-semester-field" style="display:none">
