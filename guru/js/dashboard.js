@@ -5896,6 +5896,22 @@ function buildProfilMengajarHTML(p) {
       ).join('')}
     </div>
 
+    <div class="pm-q">
+      <p class="pm-label">12. Urutan penyampaian materi</p>
+      <p class="pm-hint">Bagaimana Anda biasanya menyusun urutan topik dalam satu semester?</p>
+      ${(()=>{
+        const seqPref = (v.integration_prefs ?? []).find(x => x.startsWith('SEQUENCE:'))?.replace('SEQUENCE:','') ?? 'RESEPTIF_PRODUKTIF';
+        return [
+          ['RESEPTIF_PRODUKTIF', 'Reseptif dulu, lalu produktif (menyimak/membaca → berbicara/menulis)'],
+          ['TEMATIK',            'Tematik (kelompokkan berdasarkan tema, tidak terikat urutan keterampilan)'],
+          ['SPIRAL',             'Spiral (setiap topik diulang dengan tingkat kesulitan naik)'],
+          ['BUKU_TEKS',          'Ikuti urutan buku teks atau silabus resmi'],
+        ].map(([val, lbl]) =>
+          `<label class="pm-radio-row"><input type="radio" name="sequence_preference" value="${val}" ${seqPref === val ? 'checked' : ''}> ${esc(lbl)}</label>`
+        ).join('');
+      })()}
+    </div>
+
     `;
 }
 
@@ -5927,7 +5943,12 @@ function collectProfilMengajar(form) {
         local_products: txt('local_products'),
         avoided_activities: checks('avoided_activities'),
         avoided_detail: txt('avoided_detail'),
-        integration_prefs: checks('integration_prefs'),
+        integration_prefs: (() => {
+            const seqPref = form.querySelector('[name="sequence_preference"]:checked')?.value;
+            const base = checks('integration_prefs').filter(v => !v.startsWith('SEQUENCE:'));
+            if (seqPref) base.push(`SEQUENCE:${seqPref}`);
+            return base;
+        })(),
     };
 }
 

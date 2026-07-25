@@ -43,6 +43,8 @@ interface TeacherProfile {
   depth_level:          string | null;
   local_city:           string | null;
   local_industry:       string | null;
+  integration_prefs:    string[] | null;
+  sequence_preference:  string | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -83,6 +85,15 @@ function buildPrompt(
         .join("\n")
     : "[Elemen CP tidak tersedia — susun TP berdasarkan karakteristik mata pelajaran]";
 
+  const sequenceInstruction = profile?.sequence_preference
+    ? ({
+        RESEPTIF_PRODUKTIF: `URUTAN TP: Susun dari keterampilan RESEPTIF (menyimak, membaca) ke PRODUKTIF (berbicara, menulis). Dalam setiap keterampilan, mulai dari teks sederhana/familiar ke teks kompleks/akademik. Setiap TP adalah fondasi TP berikutnya.`,
+        TEMATIK:            `URUTAN TP: Kelompokkan berdasarkan tema yang relevan dengan konteks siswa. Setiap cluster tema mencakup beberapa keterampilan sekaligus.`,
+        SPIRAL:             `URUTAN TP: Gunakan pendekatan spiral — setiap topik utama diulang dengan tingkat kesulitan yang meningkat. Satu tema bisa muncul 2-3x dengan kompleksitas berbeda.`,
+        BUKU_TEKS:          `URUTAN TP: Ikuti urutan logis silabus resmi Kurikulum Merdeka untuk mata pelajaran ini. Prioritaskan elemen CP sesuai urutan yang tercantum dalam dokumen resmi.`,
+      } as Record<string, string>)[profile.sequence_preference] ?? ""
+    : `URUTAN TP: Susun dari sederhana ke kompleks, reseptif ke produktif.`;
+
   const profilText = profile ? `
 KONTEKS MENGAJAR GURU:
 - Tujuan pembelajaran: ${profile.instructional_intent ?? "Tidak diisi"}
@@ -106,6 +117,8 @@ ${cpUmumText}
 ELEMEN CAPAIAN PEMBELAJARAN:
 ${elemenText}
 ${profilText}
+
+${sequenceInstruction}
 
 INSTRUKSI PENTING:
 1. Buat daftar Tujuan Pembelajaran (TP) untuk Semester ${semester}
@@ -233,12 +246,20 @@ serve(async (req: Request) => {
   // ── Layer 3: Teacher Profile ────────────────────────────────────────────────
   const { data: profileData } = await userClient
     .from("teacher_profiles")
-    .select("instructional_intent, learning_model, depth_level, local_city, local_industry")
+    .select("instructional_intent, learning_model, depth_level, local_city, local_industry, integration_prefs")
     .eq("teacher_user_id", user.id)
     .eq("school_id", userRow.school_id)
     .maybeSingle();
 
-  const profile = profileData as TeacherProfile | null;
+  const profile = profileData
+    ? {
+        ...(profileData as TeacherProfile),
+        sequence_preference:
+          ((profileData as TeacherProfile).integration_prefs ?? [])
+            .find((x: string) => x.startsWith("SEQUENCE:"))
+            ?.replace("SEQUENCE:", "") ?? null,
+      }
+    : null;
 
   // ── Build prompt & call Anthropic ───────────────────────────────────────────
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
