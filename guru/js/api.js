@@ -1341,6 +1341,45 @@ export async function getCoreSubjectsDirect() {
     return data ?? [];
 }
 
+/**
+ * Hanya core.subjects yang diajar guru ini pada tahun ajaran tertentu.
+ * Jalur: teaching_assignments → subject_cp_mapping → v_core_subjects.
+ * Mengembalikan array kosong jika belum ada mapping (bukan error).
+ */
+export async function getMyTeachingCoreSubjects(userId, schoolId, academicYear) {
+    const { data: taData, error: taError } = await supabase
+        .from('teaching_assignments')
+        .select('subject_id')
+        .eq('user_id', userId)
+        .eq('school_id', schoolId)
+        .eq('academic_year', academicYear)
+        .eq('is_active', true);
+    if (taError) throw taError;
+
+    const subjectIds = [...new Set((taData ?? []).map(r => r.subject_id).filter(Boolean))];
+    if (subjectIds.length === 0) return [];
+
+    const { data: mapData, error: mapError } = await supabase
+        .from('subject_cp_mapping')
+        .select('core_subject_id')
+        .eq('school_id', schoolId)
+        .eq('is_active', true)
+        .in('subject_id', subjectIds);
+    if (mapError) throw mapError;
+
+    const coreIds = [...new Set((mapData ?? []).map(r => r.core_subject_id).filter(Boolean))];
+    if (coreIds.length === 0) return [];
+
+    const { data: csData, error: csError } = await supabase
+        .from('v_core_subjects')
+        .select('subject_id, code, name, subject_type')
+        .in('subject_id', coreIds)
+        .order('name');
+    if (csError) throw csError;
+
+    return csData ?? [];
+}
+
 export async function getCorePhases() {
     // Phase IDs sudah diketahui dari seed Sprint 1 (fixed UUIDs)
     return [

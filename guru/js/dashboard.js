@@ -36,7 +36,7 @@ import {
     getForumPosts, getForumCategories, getForumStudents, createForumPost,
     addForumAcknowledgement, addForumComment, getForumPostComments, getForumClasses,
     withdrawForumPost, updateForumPost, withdrawForumComment, getForumMemberDetails,
-    getCorePhases, getCoreSubjectsDirect,
+    getCorePhases, getCoreSubjectsDirect, getMyTeachingCoreSubjects,
     getMyTeacherDocuments, createTeacherDocument,
     updateDocumentStatus, deleteTeacherDocument, getPendingDocApprovals, wakaApproveDoc,
     getKepsekApprovalHistory, getWakaApprovalHistory, getDisahkanWakaDocs,
@@ -5127,11 +5127,12 @@ async function loadPerangkatAjarDashboard() {
     const ay = config?.current_academic_year ?? getCurrentAcademicYear();
 
     try {
-        const [docs, coreSubjects, phases] = await Promise.all([
+        const [docs, mySubjects, phases] = await Promise.all([
             getMyTeacherDocuments(currentUser.school_id, ay),
-            ensureCoreSubjects(),
+            getMyTeachingCoreSubjects(currentUser.user_id, currentUser.school_id, ay),
             getCorePhases(),
         ]);
+        const coreSubjects = mySubjects.length > 0 ? mySubjects : await ensureCoreSubjects();
 
         const subjectMap = new Map(coreSubjects.map(s => [s.subject_id, s]));
         const phaseMap   = new Map(phases.map(p => [p.phase_id, p]));
