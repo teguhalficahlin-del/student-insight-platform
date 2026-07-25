@@ -5117,12 +5117,10 @@ async function loadPerangkatAjarDashboard() {
             <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
                 <button class="btn btn-secondary btn-sm" id="btn-profil-mengajar">1. Profil Mengajar</button>
                 <button class="btn btn-secondary btn-sm" id="btn-konteks-kelas">2. Konteks Kelas</button>
-                <button class="btn btn-primary btn-sm" id="pa-new-doc-btn">+ Buat Dokumen</button>
             </div>
         </div>
         <div id="pa-mapel-list"><p class="hint">Memuat...</p></div>`;
 
-    document.getElementById('pa-new-doc-btn').addEventListener('click', () => openBuatDokumenModal(null));
     document.getElementById('btn-profil-mengajar').addEventListener('click', () => openProfilMengajarModal());
     document.getElementById('btn-konteks-kelas').addEventListener('click', () => openKonteksKelasModal());
 
