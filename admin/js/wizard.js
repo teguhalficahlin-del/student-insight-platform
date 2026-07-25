@@ -34,6 +34,7 @@ import {
     wizardResetStudents, wizardResetSchedules,
     deleteUserWithAuth,
     logout,
+    getCoreSubjectsForSchedule,
 } from './api.js';
 
 import { openScheduleBuilder } from './schedule-builder.js';
@@ -1575,6 +1576,9 @@ async function renderScheduleStep() {
             const teachersWithCode = teachers.filter(t => t.teacher_code);
             const kelasNames = classes.map(c => c.name);
 
+            let coreSubjects = [];
+            try { coreSubjects = await getCoreSubjectsForSchedule(); } catch (_) { /* sheet referensi dikosongkan jika gagal */ }
+
             // ── Slot waktu (format HH.MM - HH.MM sesuai format sekolah) ──
             // null = baris istirahat
             const SLOTS = [
@@ -1639,7 +1643,14 @@ async function renderScheduleStep() {
             for (const t of teachersWithCode) guruRows.push([t.teacher_code, t.full_name]);
             if (guruRows.length === 1) guruRows.push(['(belum ada guru)', '(import guru dulu di langkah 5)']);
 
-            // ── Sheet 3: Petunjuk ────────────────────────────────────────
+            // ── Sheet 3: Daftar Mapel (referensi Kurikulum Nasional) ──────
+            const mapelRows = [['Nama Mapel', 'Kode', 'Jenis']];
+            for (const cs of coreSubjects) mapelRows.push([cs.name, cs.code, cs.subject_type ?? '']);
+            if (mapelRows.length === 1) mapelRows.push(['(data kurikulum belum tersedia)', '', '']);
+            const wsMapel = XLSX.utils.aoa_to_sheet(mapelRows);
+            wsMapel['!cols'] = [{ wch: 50 }, { wch: 15 }, { wch: 25 }];
+
+            // ── Sheet 4: Petunjuk ────────────────────────────────────────
             const infoRows = [
                 ['PETUNJUK PENGISIAN TEMPLATE JADWAL'],
                 [''],
@@ -1650,6 +1661,11 @@ async function renderScheduleStep() {
                 ['  4. Lihat sheet "Daftar Guru" untuk kode guru yang tersedia.'],
                 ['  5. Biarkan MAPEL dan KG kosong jika tidak ada pelajaran di slot/kelas itu.'],
                 ['  6. Baris ISTRAHAT diabaikan saat impor.'],
+                [''],
+                ['KOLOM MAPEL — PENTING:'],
+                ['  Ketik nama mata pelajaran PERSIS sesuai kolom "Nama Mapel" di sheet "Daftar Mapel".'],
+                ['  Nama yang identik akan otomatis terhubung ke Kurikulum Nasional 2025.'],
+                ['  Nama yang tidak cocok tetap diimpor, tetapi tidak terhubung ke kurikulum.'],
                 [''],
                 ['FORMAT WAKTU:'],
                 ['  Gunakan format HH.MM - HH.MM (titik, bukan titik dua).'],
@@ -1664,6 +1680,7 @@ async function renderScheduleStep() {
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws1,                                 'Template Jadwal');
             XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(guruRows),  'Daftar Guru');
+            XLSX.utils.book_append_sheet(wb, wsMapel,                             'Daftar Mapel');
             XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(infoRows),  'Petunjuk');
             XLSX.writeFile(wb, 'template_jadwal.xlsx');
         } catch (e) {

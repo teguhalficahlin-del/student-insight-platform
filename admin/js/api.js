@@ -1386,3 +1386,13 @@ export async function toggleSubjectActive(subject_id, is_active) {
     if (error) throw error;
     return data;
 }
+
+export async function getCoreSubjectsForSchedule() {
+    const { data, error } = await supabase
+        .from('v_core_subjects')
+        .select('subject_id, name, code, subject_type')
+        .eq('is_generatable', true)
+        .order('name', { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+}

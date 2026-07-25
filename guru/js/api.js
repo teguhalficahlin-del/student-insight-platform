@@ -1360,7 +1360,30 @@ export async function getMyTeachingCoreSubjects(userId, schoolId, academicYear) 
     if (!assignments?.length) return [];
     const subjectIds = [...new Set(assignments.map(a => a.subject_id).filter(Boolean))];
 
-    // Query 2: ambil name + code dari public.subjects
+    // ── JALUR UTAMA: teaching_assignments → subject_cp_mapping → v_core_subjects ──
+    const { data: mappings } = await supabase
+        .from('subject_cp_mapping')
+        .select('core_subject_id')
+        .eq('school_id', schoolId)
+        .eq('is_active', true)
+        .in('subject_id', subjectIds);
+
+    console.log('[DEBUG-PA] mappings:', mappings, 'subjectIds:', subjectIds);
+
+    if (mappings?.length) {
+        const coreIds = [...new Set(mappings.map(m => m.core_subject_id).filter(Boolean))];
+        const { data: coreSubjects } = await supabase
+            .from('v_core_subjects')
+            .select('subject_id, name, code, subject_type')
+            .eq('is_generatable', true)
+            .in('subject_id', coreIds);
+        console.log('[DEBUG-PA] coreSubjects via mapping:', coreSubjects);
+        if (coreSubjects?.length) {
+            return coreSubjects.sort((a, b) => a.name.localeCompare(b.name, 'id'));
+        }
+    }
+
+    // ── FALLBACK: fuzzy match JS (mapping belum tersedia) ────────────────
     const { data: subjects } = await supabase
         .from('subjects')
         .select('name, code')
@@ -1369,7 +1392,6 @@ export async function getMyTeachingCoreSubjects(userId, schoolId, academicYear) 
     console.log('[DEBUG-PA] subjects:', subjects, 'subjectIds:', subjectIds);
     if (!subjects?.length) return [];
 
-    // Query 3: fetch semua core subjects yang bisa di-generate, match di JS
     const { data: allCore } = await supabase
         .from('v_core_subjects')
         .select('subject_id, name, code, subject_type')

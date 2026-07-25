@@ -287,6 +287,39 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 }
             }
 
+            // ── Auto-mapping ke core.subjects via subject_cp_mapping ──────
+            // Hanya jika nama mapel cocok 1:1 (exact, case-insensitive) dengan core.subjects.
+            // Kegagalan blok ini TIDAK menggagalkan import.
+            try {
+                for (const [subNameKey, subjectId] of subjectMap) {
+                    const subName = subjectNames.find(n => n.trim().toUpperCase() === subNameKey) ?? subNameKey;
+                    const { data: coreMatches } = await admin
+                        .schema('core')
+                        .from('subjects')
+                        .select('subject_id')
+                        .ilike('name', subName);
+                    if (!coreMatches || coreMatches.length !== 1) continue;
+                    const coreSubjectId = coreMatches[0].subject_id;
+                    const { data: existing } = await admin
+                        .from('subject_cp_mapping')
+                        .select('mapping_id')
+                        .eq('school_id', user.school_id)
+                        .eq('subject_id', subjectId)
+                        .eq('core_subject_id', coreSubjectId)
+                        .maybeSingle();
+                    if (existing) continue;
+                    await admin.from('subject_cp_mapping').insert({
+                        school_id:       user.school_id,
+                        subject_id:      subjectId,
+                        core_subject_id: coreSubjectId,
+                        mapping_type:    'AUTO',
+                        is_active:       true,
+                    });
+                }
+            } catch (mappingErr) {
+                console.warn('[bulk-import-schedules] auto-mapping subject_cp_mapping gagal (non-fatal):', mappingErr);
+            }
+
             for (const row of [...validRows]) {
                 const classId = classMap.get(row.nama_kelas.trim());
                 if (!classId) {
