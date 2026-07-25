@@ -6495,12 +6495,34 @@ function openATPReviewModal(result, metadata, params) {
         document.body.appendChild(overlay);
     }
 
-    const tps   = result.tujuan_pembelajaran ?? [];
-    const total = result.total_jp ?? 0;
+    const tps     = result.tujuan_pembelajaran ?? [];
     const catatan = result.catatan ?? '';
 
-    document.getElementById('atp-review-meta').textContent =
-        `${params.subjectName} · Semester ${params.semester} · Total ${total} JP`;
+    const updateMeta = () => {
+        document.getElementById('atp-review-meta').textContent =
+            `${params.subjectName} · Semester ${params.semester} · Total ${result.total_jp} JP`;
+    };
+
+    const viewRowHTML = (tp, i) => `
+        <td style="padding:8px;vertical-align:top;color:var(--color-text-muted)">${esc(String(tp.nomor ?? ''))}</td>
+        <td style="padding:8px;vertical-align:top">${esc(tp.deskripsi ?? '')}</td>
+        <td style="padding:8px;vertical-align:top;color:var(--color-text-muted);font-size:12px">${esc(tp.elemen_cp ?? '')}</td>
+        <td style="padding:8px;vertical-align:top;text-align:center;font-weight:600">${esc(String(tp.jp ?? ''))}</td>
+        <td style="padding:8px;vertical-align:top;font-size:12px">${esc(tp.materi_pokok ?? '')}</td>
+        <td style="padding:4px;vertical-align:top;width:36px">
+            <button class="tp-edit-btn btn btn-secondary btn-sm" data-i="${i}" style="padding:2px 8px;font-size:11px">✏</button>
+        </td>`;
+
+    const editRowHTML = (tp, i) => `
+        <td style="padding:4px;vertical-align:top;color:var(--color-text-muted)">${esc(String(tp.nomor ?? ''))}</td>
+        <td style="padding:4px;vertical-align:top"><textarea class="input tp-deskripsi" rows="3" style="width:100%;font-size:12px;resize:vertical">${esc(tp.deskripsi ?? '')}</textarea></td>
+        <td style="padding:4px;vertical-align:top"><input class="input tp-elemen" style="width:100%;font-size:12px" value="${esc(tp.elemen_cp ?? '')}"></td>
+        <td style="padding:4px;vertical-align:top"><input class="input tp-jp" type="number" min="1" style="width:52px;font-size:12px" value="${esc(String(tp.jp ?? ''))}"></td>
+        <td style="padding:4px;vertical-align:top"><input class="input tp-materi" style="width:100%;font-size:12px" value="${esc(tp.materi_pokok ?? '')}"></td>
+        <td style="padding:4px;vertical-align:top">
+            <button class="tp-save-btn btn btn-primary btn-sm" data-i="${i}" style="padding:2px 8px;font-size:11px;display:block;margin-bottom:4px">✓</button>
+            <button class="tp-cancel-btn btn btn-secondary btn-sm" data-i="${i}" style="padding:2px 8px;font-size:11px;display:block">✕</button>
+        </td>`;
 
     document.getElementById('atp-review-body').innerHTML = `
         <div style="overflow-x:auto;margin-bottom:12px">
@@ -6512,26 +6534,53 @@ function openATPReviewModal(result, metadata, params) {
                         <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:140px">Elemen CP</th>
                         <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:50px">JP</th>
                         <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:160px">Materi Pokok</th>
+                        <th style="padding:8px;border-bottom:2px solid var(--color-border);width:36px"></th>
                     </tr>
                 </thead>
-                <tbody>
-                    ${tps.map(tp => `
-                        <tr style="border-bottom:1px solid var(--color-border)">
-                            <td style="padding:8px;vertical-align:top;color:var(--color-text-muted)">${esc(String(tp.nomor ?? ''))}</td>
-                            <td style="padding:8px;vertical-align:top">${esc(tp.deskripsi ?? '')}</td>
-                            <td style="padding:8px;vertical-align:top;color:var(--color-text-muted);font-size:12px">${esc(tp.elemen_cp ?? '')}</td>
-                            <td style="padding:8px;vertical-align:top;text-align:center;font-weight:600">${esc(String(tp.jp ?? ''))}</td>
-                            <td style="padding:8px;vertical-align:top;font-size:12px">${esc(tp.materi_pokok ?? '')}</td>
-                        </tr>`).join('')}
+                <tbody id="atp-tp-tbody">
+                    ${tps.map((tp, i) => `<tr data-tp-index="${i}" style="border-bottom:1px solid var(--color-border)">${viewRowHTML(tp, i)}</tr>`).join('')}
                     <tr style="background:var(--color-bg-alt);font-weight:600">
                         <td colspan="3" style="padding:8px;text-align:right">Total JP</td>
-                        <td style="padding:8px;text-align:center">${esc(String(total))}</td>
-                        <td></td>
+                        <td id="atp-total-jp" style="padding:8px;text-align:center">${esc(String(result.total_jp ?? 0))}</td>
+                        <td colspan="2"></td>
                     </tr>
                 </tbody>
             </table>
         </div>
         ${catatan ? `<p style="font-size:12px;color:var(--color-text-muted);margin:0">📝 ${esc(catatan)}</p>` : ''}`;
+
+    updateMeta();
+
+    document.getElementById('atp-tp-tbody').addEventListener('click', e => {
+        const editBtn   = e.target.closest('.tp-edit-btn');
+        const saveBtn   = e.target.closest('.tp-save-btn');
+        const cancelBtn = e.target.closest('.tp-cancel-btn');
+
+        if (editBtn) {
+            const i   = Number(editBtn.dataset.i);
+            const row = document.querySelector(`#atp-tp-tbody tr[data-tp-index="${i}"]`);
+            row.innerHTML = editRowHTML(tps[i], i);
+        }
+
+        if (saveBtn) {
+            const i   = Number(saveBtn.dataset.i);
+            const row = document.querySelector(`#atp-tp-tbody tr[data-tp-index="${i}"]`);
+            tps[i].deskripsi    = row.querySelector('.tp-deskripsi').value.trim();
+            tps[i].elemen_cp    = row.querySelector('.tp-elemen').value.trim();
+            tps[i].jp           = Number(row.querySelector('.tp-jp').value) || tps[i].jp;
+            tps[i].materi_pokok = row.querySelector('.tp-materi').value.trim();
+            result.total_jp     = tps.reduce((s, t) => s + (Number(t.jp) || 0), 0);
+            document.getElementById('atp-total-jp').textContent = String(result.total_jp);
+            updateMeta();
+            row.innerHTML = viewRowHTML(tps[i], i);
+        }
+
+        if (cancelBtn) {
+            const i   = Number(cancelBtn.dataset.i);
+            const row = document.querySelector(`#atp-tp-tbody tr[data-tp-index="${i}"]`);
+            row.innerHTML = viewRowHTML(tps[i], i);
+        }
+    });
 
     document.getElementById('atp-review-actions').innerHTML = `
         <button class="btn btn-secondary" id="atp-regen-btn">🔄 Generate Ulang</button>
