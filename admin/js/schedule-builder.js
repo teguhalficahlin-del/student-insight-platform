@@ -861,6 +861,16 @@ async function reapplyTemplates() {
 
         localStorage.setItem(reapplyJobKey(), JSON.stringify({ jobId: job.job_id }));
 
+        if (job.status === 'GENERATING') {
+            statusEl.innerHTML = '';
+            statusEl.textContent =
+                '⏳ Sedang generate jadwal baru... (atau koneksi sebelumnya terputus) — ' +
+                'refresh halaman beberapa saat lagi untuk cek hasilnya.';
+            statusEl.style.color = 'var(--color-warning)';
+            reapplyBtn.disabled  = true;
+            return;
+        }
+
         if (job.status === 'DELETED') {
             // Hapus sudah selesai sebelumnya — langsung ke checkpoint konfirmasi
             const goFinalize = confirm(
