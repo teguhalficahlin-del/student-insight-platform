@@ -359,8 +359,8 @@ function renderGrid() {
             state.classes.forEach(c => {
                 const key = `${idx}_${c.class_id}`;
                 const cell = state.cells.get(key) ?? { mapel: '', teacher_code: '' };
-                html += `<td class="sched-cell-mapel"><input type="text" class="sched-input sched-mapel" data-key="${key}" value="${esc(cell.mapel)}" placeholder="—" list="sched-subjects" /></td>`;
-                html += `<td class="sched-cell-kg"><input type="text" class="sched-input sched-kg" data-key="${key}" value="${esc(cell.teacher_code)}" placeholder="—" list="sched-teachers" /></td>`;
+                html += `<td class="sched-cell-mapel"><input type="text" class="sched-input sched-mapel" data-key="${key}" value="${esc(cell.mapel)}" placeholder="—" /></td>`;
+                html += `<td class="sched-cell-kg"><input type="text" class="sched-input sched-kg" data-key="${key}" value="${esc(cell.teacher_code)}" placeholder="—" /></td>`;
             });
 
             html += `<td><button type="button" class="sched-del-row" data-idx="${idx}">✕</button></td>`;
@@ -370,19 +370,6 @@ function renderGrid() {
 
     html += '</tbody></table>';
 
-    // Datalist for teacher autocomplete
-    html += '<datalist id="sched-teachers">';
-    state.teachers.forEach(t => {
-        if (t.teacher_code) html += `<option value="${esc(t.teacher_code)}" label="${esc(t.full_name)}">`;
-    });
-    html += '</datalist>';
-
-    // Datalist for mapel autocomplete (nama dari core.subjects)
-    html += '<datalist id="sched-subjects">';
-    state.coreSubjects.forEach(cs => {
-        html += `<option value="${esc(cs.name)}">`;
-    });
-    html += '</datalist>';
 
     wrapper.innerHTML = html;
     wireGridEvents();
