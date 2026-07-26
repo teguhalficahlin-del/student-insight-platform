@@ -672,9 +672,71 @@ export async function provisionStudentAccounts(limit = 150) {
     return body.data;
 }
 
+// ─────────────────────────────────────────────────────────────
+// BATCH REAPPLY — FASE 1, 2, 3 (orkestrasi baru)
+// reapplyScheduleTemplates() lama di bawah ini DEPRECATED:
+// tidak dipanggil lagi oleh UI baru, tapi dipertahankan untuk
+// kompatibilitas jika ada caller lain yang belum diidentifikasi.
+// ─────────────────────────────────────────────────────────────
+
+/** Cek job reapply aktif untuk periode ini. Null = tidak ada. */
+export async function checkActiveReapplyJob(academicYear, semester) {
+    const { data, error } = await supabase.rpc('fn_get_active_reapply_job', {
+        p_academic_year: academicYear,
+        p_semester:      semester,
+    });
+    if (error) throw error;
+    return data?.[0] ?? null;
+}
+
+/** FASE 1: buat job + populate targets. Idempotent. */
+export async function prepareReapplyJob(academicYear, semester) {
+    const { data, error } = await supabase.rpc('fn_prepare_reapply_job', {
+        p_academic_year: academicYear,
+        p_semester:      semester,
+    });
+    if (error) throw error;
+    return data?.[0];
+}
+
+/** FASE 2: hapus satu batch (max 1000) target sessions. */
+export async function runReapplyBatch(jobId, batchSize = 500) {
+    const { data, error } = await supabase.rpc('fn_reapply_batch', {
+        p_job_id:     jobId,
+        p_batch_size: batchSize,
+    });
+    if (error) throw error;
+    return data?.[0];
+}
+
+/** FASE 3: generate sesi baru via edge function (service_role). */
+export async function finalizeReapplyJob(jobId) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) throw new Error('Sesi login tidak ditemukan. Silakan login ulang.');
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/apply-schedule-templates?mode=finalize`, {
+        method:  'POST',
+        headers: {
+            'Authorization':    `Bearer ${token}`,
+            'Content-Type':     'application/json',
+            'x-schema-version': '1.0.0',
+        },
+        body: JSON.stringify({ job_id: jobId }),
+    });
+
+    const body = await res.json();
+    if (!res.ok) throw new Error(body?.error?.message ?? 'Gagal generate jadwal baru');
+    return body.data;
+}
+
+// ─────────────────────────────────────────────────────────────
+// DEPRECATED — digantikan oleh runBatchLoop + finalizeReapplyJob
+// ─────────────────────────────────────────────────────────────
+
 /**
- * Terapkan template jadwal yang sudah tersimpan menjadi teaching_schedules
- * untuk seluruh rentang academic_periods aktif.
+ * @deprecated Gunakan checkActiveReapplyJob / prepareReapplyJob /
+ * runReapplyBatch / finalizeReapplyJob untuk alur batch baru.
  */
 export async function reapplyScheduleTemplates() {
     const { data: sessionData } = await supabase.auth.getSession();

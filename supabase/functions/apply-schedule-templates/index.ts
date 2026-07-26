@@ -90,11 +90,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
             if (rpcErr) return internalError(rpcErr);
 
+            // fn_finalize_reapply_job tidak pernah RAISE untuk kegagalan bisnis —
+            // selalu return {success, result|error}. Wajib cek field ini.
+            if (!result?.success) {
+                return internalError(new Error(result?.error ?? 'fn_finalize_reapply_job mengembalikan success:false'));
+            }
+
+            const r = result.result as Record<string, unknown>;
             return ok({
-                templates_found:      result.templates_found,
-                assignments_upserted: result.assignments_upserted,
-                schedules_total:      result.schedules_generated,
-                schedules_generated:  result.schedules_generated,
+                templates_found:      r?.templates_found,
+                assignments_upserted: r?.assignments_upserted,
+                schedules_total:      r?.schedules_generated,
+                schedules_generated:  r?.schedules_generated,
             });
         }
 

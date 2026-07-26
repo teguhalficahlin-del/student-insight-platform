@@ -12,7 +12,8 @@ import {
     getSchoolConfig, getClasses, getTeacherList,
     getTimeSlots, saveTimeSlots,
     getScheduleTemplates, saveScheduleTemplates,
-    applyScheduleTemplates, reapplyScheduleTemplates,
+    applyScheduleTemplates,
+    checkActiveReapplyJob, prepareReapplyJob, runReapplyBatch, finalizeReapplyJob,
     getCoreSubjectsForSchedule,
     getSubjectCodeAliases, upsertSubjectCodeAlias, deleteSubjectCodeAlias,
 } from './api.js';
@@ -68,6 +69,7 @@ export async function openScheduleBuilder() {
     try { state.aliases = await getSubjectCodeAliases(); } catch (_) { state.aliases = []; }
 
     createOverlay();
+    checkAndShowResumeBanner(); // fire-and-forget: non-fatal, modifies #sched-status
     await loadDay();
 }
 
@@ -636,6 +638,188 @@ async function applyTemplates() {
     }
 }
 
+// ─── Batch Reapply helpers ─────────────────────────────────────────────────
+
+function reapplyJobKey() {
+    return `sip_reapply_${state.academicYear}_${state.semester}_${state.schoolId}`;
+}
+
+/** Dipanggil saat panel dibuka — query server, tampilkan resume banner jika ada. */
+async function checkAndShowResumeBanner() {
+    const statusEl   = overlayEl?.querySelector('#sched-status');
+    const reapplyBtn = overlayEl?.querySelector('#sched-reapply');
+    if (!statusEl || !reapplyBtn) return;
+
+    let job;
+    try {
+        job = await checkActiveReapplyJob(state.academicYear, state.semester);
+    } catch (_) {
+        return; // non-fatal: gagal cek tidak perlu ganggu UI
+    }
+
+    if (!job) {
+        localStorage.removeItem(reapplyJobKey());
+        return;
+    }
+
+    // Server adalah source of truth — simpan job_id sebagai cache
+    localStorage.setItem(reapplyJobKey(), JSON.stringify({ jobId: job.job_id }));
+
+    if (job.status === 'GENERATING') {
+        // Ambiguous: mungkin sedang running, atau koneksi sebelumnya putus
+        statusEl.innerHTML = '';
+        statusEl.textContent =
+            '⏳ Sedang generate jadwal baru... (atau koneksi sebelumnya terputus) — ' +
+            'refresh halaman beberapa saat lagi untuk cek hasilnya.';
+        statusEl.style.color = 'var(--color-warning)';
+        reapplyBtn.disabled  = true;
+        return;
+    }
+
+    if (job.status === 'DELETED') {
+        // Hapus selesai, menunggu generate
+        const resumeBtn = document.createElement('button');
+        resumeBtn.type      = 'button';
+        resumeBtn.className = 'btn btn-success';
+        resumeBtn.style.cssText = 'margin-left:10px;padding:3px 12px;font-size:12px';
+        resumeBtn.textContent   = 'Generate Jadwal Baru';
+        resumeBtn.addEventListener('click', () => doFinalize(job.job_id, job.deleted_count));
+
+        statusEl.innerHTML  = '';
+        statusEl.style.color = 'var(--color-warning)';
+        statusEl.append(
+            `⚠ Penghapusan ${job.deleted_count} sesi selesai. Siap generate jadwal baru.`,
+            resumeBtn,
+        );
+        reapplyBtn.disabled = true;
+        return;
+    }
+
+    // PENDING atau DELETING — hapus belum selesai
+    const pct = job.total_to_delete > 0
+        ? Math.round(job.deleted_count / job.total_to_delete * 100)
+        : 0;
+    const resumeBtn = document.createElement('button');
+    resumeBtn.type      = 'button';
+    resumeBtn.className = 'btn btn-warning';
+    resumeBtn.style.cssText = 'margin-left:10px;padding:3px 12px;font-size:12px';
+    resumeBtn.textContent   = 'Lanjutkan';
+    resumeBtn.addEventListener('click', () =>
+        runBatchLoop(job.job_id, job.total_to_delete, job.deleted_count));
+
+    statusEl.innerHTML  = '';
+    statusEl.style.color = 'var(--color-warning)';
+    statusEl.append(
+        `⚠ Ada proses Terapkan Ulang yang belum selesai ` +
+        `(${job.deleted_count}/${job.total_to_delete} sesi, ${pct}%).`,
+        resumeBtn,
+    );
+    reapplyBtn.disabled = true;
+}
+
+/** Loop FASE 2: hapus batch sampai done, lalu tanya konfirmasi FASE 3. */
+async function runBatchLoop(jobId, totalToDelete, startDeleted) {
+    const statusEl   = overlayEl.querySelector('#sched-status');
+    const reapplyBtn = overlayEl.querySelector('#sched-reapply');
+    const applyBtn   = overlayEl.querySelector('#sched-apply');
+
+    reapplyBtn.disabled = true;
+    applyBtn.disabled   = true;
+
+    let totalDeleted = startDeleted;
+    const pctOf = (n) => totalToDelete > 0 ? Math.round(n / totalToDelete * 100) : 100;
+
+    statusEl.innerHTML = `
+        <div>
+            <span id="sched-prog-text">Menghapus sesi lama... ${totalDeleted}/${totalToDelete} (${pctOf(totalDeleted)}%)</span>
+            <div style="width:100%;height:6px;background:var(--color-border);border-radius:3px;margin-top:5px">
+                <div id="sched-prog-bar" style="height:100%;border-radius:3px;background:var(--color-warning);transition:width 0.25s;width:${pctOf(totalDeleted)}%"></div>
+            </div>
+        </div>`;
+    statusEl.style.color = '';
+
+    try {
+        while (true) {
+            const batch = await runReapplyBatch(jobId, 500);
+            totalDeleted = batch.total_deleted;
+
+            const pct = pctOf(totalDeleted);
+            const txt = overlayEl.querySelector('#sched-prog-text');
+            const bar = overlayEl.querySelector('#sched-prog-bar');
+            if (txt) txt.textContent = `Menghapus sesi lama... ${totalDeleted}/${totalToDelete} (${pct}%)`;
+            if (bar) bar.style.width = `${pct}%`;
+
+            if (batch.done) break;
+        }
+
+        // Checkpoint eksplisit sebelum FASE 3 — tidak auto-lanjut
+        const goFinalize = confirm(
+            `${totalDeleted} sesi lama berhasil dihapus.\n\n` +
+            `Lanjutkan generate jadwal baru dari template terkini?`
+        );
+        if (!goFinalize) {
+            statusEl.innerHTML  = '';
+            statusEl.textContent =
+                `✓ ${totalDeleted} sesi dihapus. Generate dibatalkan — ` +
+                `klik "Terapkan Ulang" untuk melanjutkan.`;
+            statusEl.style.color = 'var(--color-warning)';
+            reapplyBtn.disabled = false;
+            applyBtn.disabled   = false;
+            // Refresh banner supaya tombol "Generate Jadwal Baru" muncul
+            await checkAndShowResumeBanner();
+            return;
+        }
+
+        await doFinalize(jobId, totalDeleted);
+
+    } catch (err) {
+        statusEl.innerHTML  = '';
+        statusEl.textContent = `✗ Gagal: ${err.message}`;
+        statusEl.style.color = 'var(--color-danger)';
+        reapplyBtn.disabled = false;
+        applyBtn.disabled   = false;
+        // Pertahankan localStorage — supaya bisa resume
+    }
+}
+
+/** FASE 3: generate sesi baru, update status, hapus cache kalau sukses. */
+async function doFinalize(jobId, deletedCount) {
+    const statusEl   = overlayEl.querySelector('#sched-status');
+    const reapplyBtn = overlayEl.querySelector('#sched-reapply');
+    const applyBtn   = overlayEl.querySelector('#sched-apply');
+
+    reapplyBtn.disabled = true;
+    applyBtn.disabled   = true;
+    statusEl.innerHTML  = '';
+    statusEl.textContent = 'Generating jadwal baru...';
+    statusEl.style.color = '';
+
+    try {
+        const result = await finalizeReapplyJob(jobId);
+
+        localStorage.removeItem(reapplyJobKey());
+
+        const generated = result?.schedules_generated ?? 0;
+        statusEl.textContent =
+            `✓ Jadwal diperbarui — ${deletedCount} sesi lama dihapus, ` +
+            `${result?.templates_found} template, ${generated} sesi baru dibuat.`;
+        statusEl.style.color    = 'var(--color-success)';
+        reapplyBtn.textContent  = '✓ Jadwal Diperbarui';
+        reapplyBtn.style.background = 'var(--color-success)';
+
+    } catch (err) {
+        // Jangan hapus localStorage — supaya bisa retry finalize tanpa ulang delete
+        statusEl.textContent = `✗ Gagal generate: ${err.message}`;
+        statusEl.style.color = 'var(--color-danger)';
+
+    } finally {
+        reapplyBtn.disabled = false;
+        applyBtn.disabled   = false;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function reapplyTemplates() {
     if (state.dirty) {
         if (!confirm('Ada perubahan yang belum disimpan. Simpan dulu sebelum menerapkan ulang?')) return;
@@ -657,25 +841,47 @@ async function reapplyTemplates() {
 
     reapplyBtn.disabled = true;
     applyBtn.disabled   = true;
-    reapplyBtn.textContent = 'Menerapkan ulang...';
-    statusEl.textContent   = '';
+    statusEl.innerHTML  = '';
+    statusEl.style.color = '';
 
     try {
-        const result = await reapplyScheduleTemplates();
-        const deleted   = result.sessions_deleted   ?? 0;
-        const generated = result.schedules_generated ?? 0;
-        statusEl.textContent =
-            `✓ Jadwal diperbarui — ${deleted} sesi lama dihapus, ` +
-            `${result.templates_found} template, ${generated} sesi baru dibuat.`;
-        statusEl.style.color    = 'var(--color-success)';
-        reapplyBtn.textContent  = '✓ Jadwal Diperbarui';
-        reapplyBtn.style.background = 'var(--color-success)';
+        // Server adalah source of truth — cek dulu apakah ada job aktif
+        let job = await checkActiveReapplyJob(state.academicYear, state.semester);
+
+        if (!job) {
+            const prepared = await prepareReapplyJob(state.academicYear, state.semester);
+            if (!prepared) throw new Error('Gagal membuat job reapply');
+            job = {
+                job_id:          prepared.job_id,
+                status:          'PENDING',
+                total_to_delete: prepared.total_to_delete,
+                deleted_count:   0,
+            };
+        }
+
+        localStorage.setItem(reapplyJobKey(), JSON.stringify({ jobId: job.job_id }));
+
+        if (job.status === 'DELETED') {
+            // Hapus sudah selesai sebelumnya — langsung ke checkpoint konfirmasi
+            const goFinalize = confirm(
+                `${job.deleted_count} sesi lama sudah dihapus sebelumnya.\n\n` +
+                `Lanjutkan generate jadwal baru?`
+            );
+            if (!goFinalize) {
+                statusEl.textContent = 'Generate dibatalkan.';
+                reapplyBtn.disabled = false;
+                applyBtn.disabled   = false;
+                return;
+            }
+            await doFinalize(job.job_id, job.deleted_count);
+            return;
+        }
+
+        await runBatchLoop(job.job_id, job.total_to_delete, job.deleted_count ?? 0);
+
     } catch (err) {
         statusEl.textContent = `✗ Gagal: ${err.message}`;
         statusEl.style.color = 'var(--color-danger)';
-        reapplyBtn.textContent = 'Terapkan Ulang';
-        reapplyBtn.style.background = '';
-    } finally {
         reapplyBtn.disabled = false;
         applyBtn.disabled   = false;
     }
