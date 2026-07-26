@@ -1356,7 +1356,6 @@ export async function getMyTeachingCoreSubjects(userId, schoolId, academicYear) 
         .eq('academic_year', academicYear)
         .eq('is_active', true);
 
-    console.log('[DEBUG-PA] assignments:', assignments, 'userId:', userId, 'schoolId:', schoolId, 'ay:', academicYear);
     if (!assignments?.length) return [];
     const subjectIds = [...new Set(assignments.map(a => a.subject_id).filter(Boolean))];
 
@@ -1368,8 +1367,6 @@ export async function getMyTeachingCoreSubjects(userId, schoolId, academicYear) 
         .eq('is_active', true)
         .in('subject_id', subjectIds);
 
-    console.log('[DEBUG-PA] mappings:', mappings, 'subjectIds:', subjectIds);
-
     if (mappings?.length) {
         const coreIds = [...new Set(mappings.map(m => m.core_subject_id).filter(Boolean))];
         const { data: coreSubjects } = await supabase
@@ -1377,7 +1374,6 @@ export async function getMyTeachingCoreSubjects(userId, schoolId, academicYear) 
             .select('subject_id, name, code, subject_type')
             .eq('is_generatable', true)
             .in('subject_id', coreIds);
-        console.log('[DEBUG-PA] coreSubjects via mapping:', coreSubjects);
         if (coreSubjects?.length) {
             return coreSubjects.sort((a, b) => a.name.localeCompare(b.name, 'id'));
         }
@@ -1389,7 +1385,6 @@ export async function getMyTeachingCoreSubjects(userId, schoolId, academicYear) 
         .select('name, code')
         .in('subject_id', subjectIds);
 
-    console.log('[DEBUG-PA] subjects:', subjects, 'subjectIds:', subjectIds);
     if (!subjects?.length) return [];
 
     const { data: allCore } = await supabase
@@ -1397,7 +1392,6 @@ export async function getMyTeachingCoreSubjects(userId, schoolId, academicYear) 
         .select('subject_id, name, code, subject_type')
         .eq('is_generatable', true);
 
-    console.log('[DEBUG-PA] allCore:', allCore, 'subjects:', subjects);
     if (!allCore?.length) return [];
 
     const norm = (s) => (s ?? '').toLowerCase().replace(/[._\s-]/g, '');
