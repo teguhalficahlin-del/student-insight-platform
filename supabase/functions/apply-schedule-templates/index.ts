@@ -13,9 +13,14 @@
  *   absensi lalu generate ulang dari template terkini.
  *   Cocok setelah perubahan template mid-semester (ganti guru, ganti slot).
  *
+ * Mode finalize (?mode=finalize):
+ *   FASE 3 batch reapply — generate sesi baru setelah FASE 1+2 selesai.
+ *   Body: { job_id: string }
+ *   Cross-tenant guard di TypeScript sebelum panggil RPC fn_finalize_reapply_job.
+ *
  * CONTRACT:
- *   POST /functions/v1/apply-schedule-templates[?mode=reapply]
- *   Body: kosong
+ *   POST /functions/v1/apply-schedule-templates[?mode=reapply|finalize]
+ *   Body: kosong (default/reapply) | { job_id } (finalize)
  *   Auth: ADMINISTRATIVE
  *   Response: { templates_found, assignments_upserted,
  *               schedules_total, schedules_generated, sessions_deleted? }
@@ -45,8 +50,55 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return forbidden('Hanya akun ADMINISTRATIVE yang dapat menerapkan jadwal');
         }
 
-        const url      = new URL(req.url);
-        const isReapply = url.searchParams.get('mode') === 'reapply';
+        const url  = new URL(req.url);
+        const mode = url.searchParams.get('mode');
+
+        // ── Mode finalize: FASE 3 batch reapply ──────────────────────────────
+        // Dipanggil setelah FASE 1+2 (client langsung via .rpc()) selesai.
+        // Body: { job_id: string }
+        if (mode === 'finalize') {
+            let body: { job_id?: string };
+            try {
+                body = await req.json();
+            } catch {
+                return badRequest('Request body harus JSON dengan field job_id');
+            }
+
+            const jobId = body?.job_id;
+            if (!jobId) return badRequest('Field job_id wajib diisi');
+
+            // Cross-tenant guard di TypeScript — RPC tidak bisa cek auth.uid()
+            // karena dipanggil service_role (uid() = NULL di context SECURITY DEFINER).
+            const { data: job, error: jobErr } = await admin
+                .from('schedule_reapply_jobs')
+                .select('school_id, status')
+                .eq('job_id', jobId)
+                .maybeSingle();
+
+            if (jobErr || !job) {
+                return badRequest('Job tidak ditemukan');
+            }
+
+            if (job.school_id !== user.school_id) {
+                return forbidden('Job ini bukan milik sekolah Anda');
+            }
+
+            const { data: result, error: rpcErr } = await admin.rpc(
+                'fn_finalize_reapply_job',
+                { p_job_id: jobId },
+            );
+
+            if (rpcErr) return internalError(rpcErr);
+
+            return ok({
+                templates_found:      result.templates_found,
+                assignments_upserted: result.assignments_upserted,
+                schedules_total:      result.schedules_generated,
+                schedules_generated:  result.schedules_generated,
+            });
+        }
+
+        const isReapply = mode === 'reapply';
 
         // Periode aktif: academic_year dari fn_current_academic_year (SSoT),
         // semester dari school_config.
