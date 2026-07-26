@@ -1544,7 +1544,7 @@ async function renderScheduleStep() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
         <h3>Jadwal</h3>
-        <p class="hint">Susun jadwal mengajar secara visual, atau impor dari file CSV. Staf (langkah 5) dan kelas (langkah 4) harus sudah ada.</p>
+        <p class="hint">Susun jadwal mengajar secara visual. Staf (langkah 5) dan kelas (langkah 4) harus sudah ada.</p>
         <p class="hint-success">✓ Langkah ini opsional — bisa dilewati dan disusun nanti setelah wizard selesai.</p>
         <button type="button" class="btn btn-primary" id="wz-open-schedule" style="margin-bottom:16px">Susun Jadwal Visual</button>
 
@@ -2469,24 +2469,24 @@ const STEP_LIST = {
         },
     },
     11: {
-        title: 'Jadwal terdaftar',
-        headers: ['Tanggal', 'Waktu', 'Kelas', 'Guru'],
-        deleteTable: 'teaching_schedules',
-        emptyHint: 'Jadwal belum perlu diisi sekarang. Setelah wizard selesai, susun jadwal via menu Jadwal Pelajaran di dashboard, atau impor file CSV di atas.',
+        title: 'Template jadwal terdaftar',
+        headers: ['Hari', 'Waktu', 'Kelas', 'Guru'],
+        deleteTable: 'schedule_templates',
+        emptyHint: 'Jadwal belum perlu diisi sekarang. Setelah wizard selesai, susun jadwal via tombol "Susun Jadwal Visual" di atas.',
         fetch: async () => {
-            const data = await fetchAllRows('teaching_schedules',
+            const data = await fetchAllRows('schedule_templates',
                 q => q.select(`
-                    schedule_id, session_date, session_start, session_end,
+                    template_id, day_of_week, start_time, end_time,
                     class:classes ( name ),
                     teacher:users ( full_name )
-                `).order('session_date', { ascending: false }));
-            return data.map(s => ({
-                id: s.schedule_id,
+                `).order('day_of_week').order('start_time'));
+            return data.map(t => ({
+                id: t.template_id,
                 cells: [
-                    s.session_date,
-                    `${s.session_start?.slice(0,5)}–${s.session_end?.slice(0,5)}`,
-                    s.class?.name ?? '—',
-                    s.teacher?.full_name ?? '—',
+                    t.day_of_week,
+                    `${t.start_time?.slice(0,5)}–${t.end_time?.slice(0,5)}`,
+                    t.class?.name ?? '—',
+                    t.teacher?.full_name ?? '—',
                 ],
             }));
         },
