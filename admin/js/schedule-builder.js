@@ -561,8 +561,18 @@ async function checkAllConflicts() {
               .eq('academic_year', state.academicYear)
               .eq('semester', state.semester));
 
+    // Guru dengan allow_parallel_teaching=true (moving class/team teaching)
+    // dikecualikan — jadwal paralel mereka disengaja, bukan bentrok.
+    const { data: parallelRows } = await supabase
+        .from('users')
+        .select('user_id')
+        .eq('school_id', state.schoolId)
+        .eq('allow_parallel_teaching', true);
+    const parallelIds = new Set((parallelRows ?? []).map(r => r.user_id));
+
     const counts = new Map();
     for (const t of data) {
+        if (parallelIds.has(t.teacher_id)) continue;
         const key = `${t.day_of_week}_${t.start_time}_${t.teacher_id}`;
         counts.set(key, (counts.get(key) || 0) + 1);
     }
