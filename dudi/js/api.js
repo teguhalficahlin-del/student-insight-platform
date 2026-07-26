@@ -206,12 +206,11 @@ export async function markNotificationsRead(ids) {
 export async function getKaprodiAndWakaHumas(schoolId) {
     try {
         const { data, error } = await supabase
-            .from('users')
+            .from('v_users_staff_directory')
             .select('user_id, role_type')
             .in('role_type', ['KAPRODI', 'WAKA_HUMAS'])
             .eq('school_id', schoolId)
-            .eq('is_active', true)
-            .is('deleted_at', null);
+            .eq('is_active', true);
         if (error) { console.warn('[dudi] getKaprodiAndWakaHumas error:', error.message); return []; }
         return data ?? [];
     } catch (e) { console.warn('[dudi] getKaprodiAndWakaHumas exception:', e); return []; }

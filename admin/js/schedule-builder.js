@@ -61,7 +61,7 @@ export async function openScheduleBuilder() {
       state.teachers = data ?? []; }
     state.teacherMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.teacher_code.toUpperCase(), t.user_id]));
     state.teacherIdMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.user_id, t.teacher_code]));
-    { const { data: pr } = await supabase.from('users').select('teacher_code')
+    { const { data: pr } = await supabase.from('v_users_staff_directory').select('teacher_code')
         .eq('school_id', state.schoolId).eq('allow_parallel_teaching', true).not('teacher_code', 'is', null);
       state.parallelCodes = new Set((pr ?? []).map(r => r.teacher_code.toUpperCase())); }
     try { state.coreSubjects = await getCoreSubjectsForSchedule(); } catch (_) { state.coreSubjects = []; }
@@ -165,7 +165,7 @@ function createOverlay() {
             state.teachers = data ?? [];
             state.teacherMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.teacher_code.toUpperCase(), t.user_id]));
             state.teacherIdMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.user_id, t.teacher_code]));
-            { const { data: pr } = await supabase.from('users').select('teacher_code')
+            { const { data: pr } = await supabase.from('v_users_staff_directory').select('teacher_code')
                 .eq('school_id', state.schoolId).eq('allow_parallel_teaching', true).not('teacher_code', 'is', null);
               state.parallelCodes = new Set((pr ?? []).map(r => r.teacher_code.toUpperCase())); }
             renderKodeGuruPanel();
@@ -572,7 +572,7 @@ async function checkAllConflicts() {
     // Guru dengan allow_parallel_teaching=true (moving class/team teaching)
     // dikecualikan — jadwal paralel mereka disengaja, bukan bentrok.
     const { data: parallelRows } = await supabase
-        .from('users')
+        .from('v_users_staff_directory')
         .select('user_id')
         .eq('school_id', state.schoolId)
         .eq('allow_parallel_teaching', true);
