@@ -814,6 +814,12 @@ async function renderKodeMapelPanel() {
             return;
         }
 
+        if (!state.schoolId) {
+            statusEl.textContent = 'Error: school_id belum ter-load. Tutup dan buka kembali wizard.';
+            statusEl.style.color = 'var(--color-danger)';
+            return;
+        }
+
         statusEl.textContent = 'Menyimpan…';
         statusEl.style.color = '';
 
