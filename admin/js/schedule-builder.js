@@ -35,6 +35,7 @@ let state = {
     teachers: [],    // { user_id, full_name, teacher_code }
     teacherMap: new Map(), // teacher_code → user_id
     teacherIdMap: new Map(), // user_id → teacher_code
+    parallelCodes: new Set(), // teacher_code (upper) yang boleh paralel
     cells: new Map(),  // `${slotIdx}_${classId}` → { mapel, teacher_code }
     coreSubjects: [], // { name, code } dari v_core_subjects untuk datalist
     aliases: [],      // { kode } dari subject_code_aliases untuk validasi visual
@@ -60,6 +61,9 @@ export async function openScheduleBuilder() {
       state.teachers = data ?? []; }
     state.teacherMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.teacher_code.toUpperCase(), t.user_id]));
     state.teacherIdMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.user_id, t.teacher_code]));
+    { const { data: pr } = await supabase.from('users').select('teacher_code')
+        .eq('school_id', state.schoolId).eq('allow_parallel_teaching', true).not('teacher_code', 'is', null);
+      state.parallelCodes = new Set((pr ?? []).map(r => r.teacher_code.toUpperCase())); }
     try { state.coreSubjects = await getCoreSubjectsForSchedule(); } catch (_) { state.coreSubjects = []; }
     try { state.aliases = await getSubjectCodeAliases(); } catch (_) { state.aliases = []; }
 
@@ -161,6 +165,9 @@ function createOverlay() {
             state.teachers = data ?? [];
             state.teacherMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.teacher_code.toUpperCase(), t.user_id]));
             state.teacherIdMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.user_id, t.teacher_code]));
+            { const { data: pr } = await supabase.from('users').select('teacher_code')
+                .eq('school_id', state.schoolId).eq('allow_parallel_teaching', true).not('teacher_code', 'is', null);
+              state.parallelCodes = new Set((pr ?? []).map(r => r.teacher_code.toUpperCase())); }
             renderKodeGuruPanel();
         }
     });
@@ -462,6 +469,7 @@ function checkConflicts() {
 
     for (const [key, cell] of state.cells) {
         if (!cell.teacher_code) continue;
+        if (state.parallelCodes.has(cell.teacher_code.toUpperCase())) continue;
         const [slotIdxStr, classId] = key.split('_');
         const conflictKey = `${slotIdxStr}_${cell.teacher_code}`;
         if (!conflicts.has(conflictKey)) conflicts.set(conflictKey, []);
