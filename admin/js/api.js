@@ -623,7 +623,6 @@ export function importUsers(csvText)     { return callBulkImport('bulk-import-us
 export function importPrograms(csvText)  { return callBulkImport('bulk-import-programs', csvText); }
 export function importClasses(csvText)   { return callBulkImport('bulk-import-classes', csvText); }
 export function importStudents(csvText)  { return callBulkImport('bulk-import-students', csvText); }
-export function importSchedules(csvText) { return callBulkImport('bulk-import-schedules', csvText); }
 export function importParents(csvText)   { return callBulkImport('bulk-import-parents', csvText); }
 export function importDudi(csvText)      { return callBulkImport('bulk-import-dudi', csvText); }
 
