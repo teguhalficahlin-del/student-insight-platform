@@ -17,9 +17,12 @@
 -- INVERT (dijawab sebelum apply):
 --   1. Double-click: SELECT FOR UPDATE menjamin hanya satu eksekutor yang
 --      lewat guard status=DELETED — request kedua tunggu lock, lalu tolak.
---   2. fn_apply_schedule_templates gagal: EXCEPTION WHEN OTHERS + SQLERRM
---      menyimpan pesan asli; RAISE re-raise ke edge function → 500 ke client.
---   3. Re-finalize job DONE: status='DONE' <> 'DELETED' → ditolak RAISE EXCEPTION.
+--   2. fn_apply_schedule_templates gagal: EXCEPTION WHEN OTHERS menangkap,
+--      UPDATE status=FAILED di-commit (RETURN bukan RAISE), caller cek
+--      field 'success' di jsonb. Tidak ada RAISE supaya transaksi tidak abort.
+--   3. Re-finalize job DONE: status='DONE' <> 'DELETED' → RETURN success:false.
+--   4. Crash sebelum RETURN: seluruh transaksi rollback, job kembali DELETED
+--      (bukan macet GENERATING) — retry aman.
 --
 -- ROLLBACK: DROP FUNCTION IF EXISTS public.fn_finalize_reapply_job(uuid);
 -- =============================================================================
@@ -46,22 +49,32 @@ BEGIN
 
     -- 2. Job tidak ditemukan
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Job % tidak ditemukan', p_job_id;
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', format('Job %s tidak ditemukan', p_job_id)
+        );
     END IF;
 
     -- 3. Guard ketat: HANYA status DELETED yang boleh lanjut.
     --    PENDING/DELETING → batch DELETE belum selesai
-    --    GENERATING       → concurrent request sudah masuk duluan (dapat lock setelah IF NOT FOUND)
+    --    GENERATING       → concurrent request sudah masuk duluan
     --    DONE             → sudah selesai, cegah double-finalize
     --    FAILED           → terminal state, butuh intervensi manual
     IF v_job.status <> 'DELETED' THEN
-        RAISE EXCEPTION
-            'Job % berstatus % — finalize hanya bisa dijalankan setelah semua '
-            'sesi lama dihapus (status = DELETED). Status saat ini: %',
-            p_job_id, v_job.status, v_job.status;
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', format(
+                'Job %s berstatus %s — finalize hanya bisa dijalankan '
+                'setelah semua sesi lama dihapus (status = DELETED)',
+                p_job_id, v_job.status
+            )
+        );
     END IF;
 
-    -- 4. Tandai sedang generate — commit implisit di akhir blok PL/pgSQL
+    -- 4. Tandai sedang generate.
+    --    Tidak ada commit parsial di sini — UPDATE ini hanya commit kalau
+    --    seluruh function selesai normal (RETURN tercapai). Kalau proses mati
+    --    sebelum RETURN, seluruh transaksi rollback dan job kembali DELETED.
     UPDATE schedule_reapply_jobs
     SET    status     = 'GENERATING',
            updated_at = NOW()
@@ -85,18 +98,21 @@ BEGIN
                updated_at   = NOW()
         WHERE  job_id = p_job_id;
 
-        RETURN v_result;
+        RETURN jsonb_build_object('success', true, 'result', v_result);
 
     EXCEPTION WHEN OTHERS THEN
-        -- Gagal → FAILED, simpan pesan PostgreSQL asli, lalu re-raise
-        -- supaya edge function tahu ini error (bukan diam-diam dianggap sukses).
+        -- Gagal → FAILED, simpan pesan PostgreSQL asli.
+        -- TIDAK RAISE — biarkan transaksi commit dengan status FAILED
+        -- supaya UPDATE ini benar-benar persisten di database.
+        -- Caller (edge function) WAJIB cek field 'success' di jsonb,
+        -- bukan hanya mengandalkan exception dari .rpc() call.
         UPDATE schedule_reapply_jobs
         SET    status        = 'FAILED',
                error_message = SQLERRM,
                updated_at    = NOW()
         WHERE  job_id = p_job_id;
 
-        RAISE;
+        RETURN jsonb_build_object('success', false, 'error', SQLERRM);
     END;
 END;
 $$;
@@ -116,5 +132,6 @@ COMMENT ON FUNCTION public.fn_finalize_reapply_job IS
     'FASE 3 batch reapply: generate sesi baru dari job yang sudah selesai DELETE. '
     'Hanya bisa dijalankan jika status job = DELETED. '
     'FOR UPDATE cegah concurrent double-generate untuk job_id yang sama. '
-    'Ambil academic_year/semester/school_id dari baris job, bukan parameter. '
+    'Return jsonb {success, result|error} — tidak pernah RAISE supaya UPDATE '
+    'status=FAILED benar-benar commit. Caller wajib cek field success. '
     'Dipanggil service_role via edge function apply-schedule-templates?mode=finalize.';
