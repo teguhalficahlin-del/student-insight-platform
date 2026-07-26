@@ -870,15 +870,46 @@ function checkCellValidity() {
     });
 }
 
+function normalizeTime(str) {
+    // Terima "07.00", "7:00", "07:00", "7.00" → "HH:MM"; null jika invalid
+    const s = (str ?? '').trim().replace('.', ':');
+    const m = s.match(/^(\d{1,2}):(\d{2})$/);
+    return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null;
+}
+
 function handleGridPaste(e) {
     const target = e.target;
+    const isTime  = target.classList.contains('sched-time-input');
     const isMapel = target.classList.contains('sched-mapel');
     const isKg    = target.classList.contains('sched-kg');
-    if (!isMapel && !isKg) return;
+    if (!isMapel && !isKg && !isTime) return;
 
     const text = e.clipboardData?.getData('text/plain') ?? '';
     const pasteRows = text.split(/\r?\n/).filter(r => r !== '');
     if (pasteRows.length === 0) return;
+
+    // Paste pada input waktu — isi ke bawah slot per slot
+    if (isTime) {
+        e.preventDefault();
+        const startIdx   = Number(target.dataset.idx);
+        const startField = target.dataset.field; // 'start_time' | 'end_time'
+        for (let ri = 0; ri < pasteRows.length; ri++) {
+            const slotIdx = startIdx + ri;
+            if (slotIdx >= state.slots.length) break;
+            const cols = pasteRows[ri].split('\t');
+            const t0 = normalizeTime(cols[0]);
+            if (t0) state.slots[slotIdx][startField] = t0;
+            // 2 kolom dan mulai dari start_time → kolom 2 = end_time
+            if (startField === 'start_time' && cols.length > 1) {
+                const t1 = normalizeTime(cols[1]);
+                if (t1) state.slots[slotIdx].end_time = t1;
+            }
+        }
+        state.dirty = true;
+        sortSlots();
+        renderGrid();
+        return;
+    }
 
     // Jika hanya 1 baris 1 kolom: biarkan browser handle (paste normal)
     const firstCols = pasteRows[0].split('\t');
