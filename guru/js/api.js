@@ -1114,9 +1114,7 @@ export async function getForumClasses(userId, academicYear) {
     const classMap = new Map();
 
     // Ambil profil user dulu — dibutuhkan untuk menentukan query selanjutnya
-    const { data: u } = await supabase.from('users')
-        .select('wali_kelas_class_id, role_type, program_id, kaprodi_program_id, is_waka_kesiswaan, is_kepsek')
-        .eq('user_id', userId)
+    const { data: u } = await supabase.rpc('fn_get_user_forum_scope', { p_user_id: userId })
         .maybeSingle();
 
     const isOversight = ['WAKA_KESISWAAN', 'KEPSEK', 'ADMINISTRATIVE'].includes(u?.role_type)
