@@ -320,7 +320,9 @@ function renderGrid() {
     html += '<th class="sched-th-no">No</th>';
     html += '<th class="sched-th-time">Waktu</th>';
     state.classes.forEach(c => {
-        html += `<th class="sched-th-class" colspan="2">${esc(c.name)}</th>`;
+        html += `<th class="sched-th-class" colspan="2">` +
+            `<input type="text" class="sched-class-name-input" data-class-id="${esc(c.class_id)}" value="${esc(c.name)}"` +
+            ` style="font-weight:600;border:none;background:transparent;width:100%;text-align:center;font-size:inherit;color:inherit;cursor:text;padding:0" /></th>`;
     });
     html += '<th class="sched-th-del"></th></tr>';
 
@@ -396,6 +398,21 @@ function wireGridEvents() {
             // langsung pindah ke posisi kronologis yang benar.
             sortSlots();
             renderGrid();
+        });
+    });
+
+    // Nama kelas — auto-save ke DB saat blur
+    overlayEl.querySelectorAll('.sched-class-name-input').forEach(input => {
+        input.addEventListener('blur', async () => {
+            const classId = input.dataset.classId;
+            const newName = input.value.trim();
+            const cls = state.classes.find(c => c.class_id === classId);
+            if (!cls) return;
+            if (!newName) { input.value = cls.name; return; }
+            if (cls.name === newName) return;
+            cls.name = newName;
+            const { error } = await supabase.from('classes').update({ name: newName }).eq('class_id', classId);
+            if (error) { alert(`Gagal simpan nama kelas: ${error.message}`); cls.name = input.value; }
         });
     });
 
