@@ -1695,6 +1695,7 @@ export async function saveTeachingContext(schoolId, context) {
 // ─── GURU PIKET ──────────────────────────────────────────────
 
 export async function isOnDutyToday() {
+    if (new Date().getDay() === 0) return false; // MINGGU tidak ada di enum day_of_week
     try {
         const { data, error } = await supabase.rpc('fn_is_on_duty_today');
         if (error) { console.warn('[piket] isOnDutyToday error:', error.message); return false; }
