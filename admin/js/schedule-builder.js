@@ -757,7 +757,7 @@ async function renderKodeMapelPanel() {
     const initCount = Math.max(aliases.length + 3, 8);
     for (let i = 0; i < initCount; i++) {
         const a = aliases[i];
-        makeRow(a?.kode ?? '', a?.subject_name ?? '');
+        makeRow(a?.kode ?? '', a?.nama ?? '', a?.jurusan ?? '');
     }
 
     panel.querySelector('#sca-add-row').addEventListener('click', () => makeRow());
@@ -805,6 +805,7 @@ async function renderKodeMapelPanel() {
         const rows = allTrs.map(tr => ({
             kode: tr.querySelector('.sca-cell-kode').value.trim().toUpperCase(),
             nama: tr.querySelector('.sca-cell-nama').value.trim(),
+            jurusan: tr.querySelector('.sca-cell-jurusan').value.trim(),
             errTd: tr.querySelector('.sca-row-err'),
         })).filter(r => r.kode !== '');
 
@@ -827,7 +828,7 @@ async function renderKodeMapelPanel() {
         for (const r of rows) {
             const coreSubjectId = nameMap.get(r.nama.toLowerCase()) ?? null;
             try {
-                await upsertSubjectCodeAlias(state.schoolId, r.kode, coreSubjectId);
+                await upsertSubjectCodeAlias(state.schoolId, r.kode, coreSubjectId, r.nama, r.jurusan);
                 saved++;
             } catch (err) {
                 r.errTd.textContent = `✗ ${err.message}`;

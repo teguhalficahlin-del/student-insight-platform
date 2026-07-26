@@ -1403,31 +1403,37 @@ export async function getCoreSubjectsForSchedule() {
 export async function getSubjectCodeAliases() {
     const { data: aliases, error } = await supabase
         .from('subject_code_aliases')
-        .select('alias_id, kode, core_subject_id')
+        .select('alias_id, kode, core_subject_id, nama, jurusan')
         .order('kode');
     if (error) throw error;
     if (!aliases?.length) return [];
 
-    const ids = aliases.map(a => a.core_subject_id);
-    const { data: cores } = await supabase
-        .from('v_core_subjects')
-        .select('subject_id, name')
-        .in('subject_id', ids);
-    const nameMap = new Map((cores ?? []).map(c => [c.subject_id, c.name]));
+    const ids = aliases.map(a => a.core_subject_id).filter(Boolean);
+    const nameMap = new Map();
+    if (ids.length) {
+        const { data: cores } = await supabase
+            .from('v_core_subjects')
+            .select('subject_id, name')
+            .in('subject_id', ids);
+        (cores ?? []).forEach(c => nameMap.set(c.subject_id, c.name));
+    }
 
     return aliases.map(a => ({
         alias_id: a.alias_id,
         kode: a.kode,
         core_subject_id: a.core_subject_id,
         subject_name: nameMap.get(a.core_subject_id) ?? '',
+        nama: a.nama ?? '',
+        jurusan: a.jurusan ?? '',
     }));
 }
 
-export async function upsertSubjectCodeAlias(schoolId, kode, coreSubjectId = null) {
+export async function upsertSubjectCodeAlias(schoolId, kode, coreSubjectId = null, nama = null, jurusan = null) {
     const { data, error } = await supabase
         .from('subject_code_aliases')
         .upsert(
-            { school_id: schoolId, kode: kode.toUpperCase(), core_subject_id: coreSubjectId ?? null },
+            { school_id: schoolId, kode: kode.toUpperCase(), core_subject_id: coreSubjectId ?? null,
+              nama: nama || null, jurusan: jurusan || null },
             { onConflict: 'school_id,kode' }
         )
         .select('alias_id')
