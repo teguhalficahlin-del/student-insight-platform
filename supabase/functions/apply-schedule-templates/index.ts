@@ -103,6 +103,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     .in('kode', kodes);
 
                 for (const alias of aliases ?? []) {
+                    if (!alias.core_subject_id) continue;
                     const { data: pubSubs } = await admin
                         .from('subjects')
                         .select('subject_id')
