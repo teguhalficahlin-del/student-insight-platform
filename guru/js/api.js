@@ -1508,14 +1508,11 @@ export async function getKepsekApprovalHistory(schoolId) {
         subjectMap = new Map((subjects ?? []).map(s => [s.subject_id, s.name]));
     }
 
-    // Fetch nama guru via auth_user_id
+    // Fetch nama guru via fn_resolve_teacher_names (cross-tenant safe)
     const authIds = [...new Set((docs ?? []).map(d => d.teacher_user_id).filter(Boolean))];
     let nameMap = new Map();
     if (authIds.length) {
-        const { data: users } = await supabase
-            .from('users')
-            .select('auth_user_id, full_name')
-            .in('auth_user_id', authIds);
+        const { data: users } = await supabase.rpc('fn_resolve_teacher_names', { p_auth_ids: authIds });
         nameMap = new Map((users ?? []).map(u => [u.auth_user_id, u.full_name]));
     }
 
@@ -1560,10 +1557,7 @@ export async function getWakaApprovalHistory(schoolId) {
     const authIds = [...new Set((docs ?? []).map(d => d.teacher_user_id).filter(Boolean))];
     let nameMap = new Map();
     if (authIds.length) {
-        const { data: users } = await supabase
-            .from('users')
-            .select('auth_user_id, full_name')
-            .in('auth_user_id', authIds);
+        const { data: users } = await supabase.rpc('fn_resolve_teacher_names', { p_auth_ids: authIds });
         nameMap = new Map((users ?? []).map(u => [u.auth_user_id, u.full_name]));
     }
 
@@ -1621,10 +1615,7 @@ export async function getDisahkanWakaDocs(schoolId) {
     if (!data?.length) return [];
 
     const authIds = [...new Set(data.map(d => d.teacher_user_id).filter(Boolean))];
-    const { data: users } = await supabase
-        .from('users')
-        .select('auth_user_id, full_name')
-        .in('auth_user_id', authIds);
+    const { data: users } = await supabase.rpc('fn_resolve_teacher_names', { p_auth_ids: authIds });
     const nameMap = new Map((users ?? []).map(u => [u.auth_user_id, u.full_name]));
 
     return data.map(d => ({ ...d, teacher_name: nameMap.get(d.teacher_user_id) ?? null }));
