@@ -1,122 +1,281 @@
-# Student Insight Platform — Konteks untuk Claude Code
+# Student Insight Platform (SIP SMK) — Konteks untuk Claude Code
 
-## Audit Sedang Berjalan
-
-Ada audit keamanan/arsitektur total yang sedang berjalan (dimulai 6 Juli 2026). SEBELUM mengerjakan apapun terkait keamanan/RLS/migration di repo ini, baca dulu:
-
-→ **`docs/audit-handoff.md`** (status lengkap, standing rules wajib, checklist prioritas)
-
-## Aturan Wajib (ringkasan — baca versi lengkap di audit-handoff.md §3a)
-
-1. **Migration wajib dikonfirmasi dulu.** Setiap migration WAJIB ditunjukkan isinya ke user dan menunggu konfirmasi eksplisit SEBELUM dijalankan ke database live — tanpa kecuali.
-2. **SECURITY DEFINER wajib REVOKE dua lapis.** Setiap `CREATE FUNCTION ... SECURITY DEFINER` baru wajib disertai `REVOKE EXECUTE FROM PUBLIC` + `REVOKE EXECUTE FROM anon` di migration yang sama. REVOKE FROM PUBLIC saja tidak cukup (Supabase beri grant eksplisit terpisah ke anon).
-3. **Missing RLS policy bukan otomatis celah.** RLS default-deny: tidak ada policy = akses ditolak. Verifikasi live dulu (simulasi cross-tenant nyata) SEBELUM fix, jangan asumsi dari pola kode saja.
-4. Lihat `docs/audit-handoff.md §3a` untuk daftar lengkap standing rules.
-
-## Sprint 1 — Foundation Schema (18 Juli 2026) — SELESAI
-
-10 migration files: `20260718001000` s/d `20260718010000`
-
-**Schema `core` (11 tabel, append-only):**
-`curriculum_versions`, `education_levels`, `phases`,
-`vocational_fields`, `vocational_programs`, `vocational_concentrations`,
-`subjects`, `subject_phases`, `capaian_pembelajaran`,
-`cp_elements`, `knowledge_national`
-
-**Schema `public` baru (8 tabel, Teacher Workspace + AI Pipeline):**
-`teacher_profiles`, `teaching_contexts`, `teacher_documents`,
-`teacher_document_classes`, `teacher_document_approvals`,
-`prompt_templates`, `generation_jobs`, `evaluation_logs`
-
-**Seed live:**
-1 curriculum version (Kurikulum Nasional 2025) · 1 education level (SMK) ·
-2 phases (Fase E, Fase F) · 20 subjects (15 UMUM + 5 Kejuruan Lintas Prodi) ·
-37 subject_phases · 37 capaian_pembelajaran placeholder `[PENDING]`
-
-**Catatan penting:**
-- `core.*` bersifat **append-only** — tidak pernah DELETE
-- Semua migration idempotent; semua seed menggunakan UPSERT
-- CP placeholder `[PENDING]` diisi SIP Team dari SK BSKAP No. 046/H/KR/2025
-- Migration `20260718100214` ada di remote (dibuat via dashboard),
-  sudah di-repair di migration history (`--status reverted`)
+> Dokumen ini dibaca otomatis setiap sesi Claude Code.
+> Baca SELURUH dokumen sebelum mengerjakan apapun.
 
 ---
 
-## Status Singkat (terakhir diperbarui: 18 Juli 2026)
+## 1. IDENTITAS PROYEK
 
-- **Fase 1**: ✅ Selesai
-- **Fase 2**: ✅ **SELESAI (9 Juli 2026).** Kelompok A-E selesai 100%,
-  coverage scan 70 policy sisa selesai, scan sistemik SECURITY DEFINER selesai
-  (8 Juli 2026): 59 fungsi discan, 4 temuan ditemukan & di-fix. PRIORITAS 1
-  selesai (commit caac5f8): 7 titik query di 4 file portal dimigrasi ke
-  `v_users_staff_directory`. D1 (DELETE `academic_periods`) dan D2 (tabel
-  `achievements`) diinvestigasi dan dikonfirmasi Romo: keduanya **tidak ada
-  isu keamanan**, dicatat sebagai backlog fitur produk. Lihat
-  docs/audit-handoff.md §6 dan §13.
-- **Fase 3**: ✅ **SELESAI (12 Juli 2026).** Tiga item diinvestigasi dan
-  ditutup: (1) 14 fungsi anon=true — query live ke `pg_proc` mengembalikan
-  0 rows, semua REVOKE sudah bersih; (2) WAKA_HUMAS/PKL scope — 6 policy
-  dikonfirmasi konsisten dengan desain; (3) column-restriction
-  `rls_users_read_staff` — investigasi 19 titik `.from('users')` di seluruh
-  portal menunjukkan tidak ada cross-user read kolom sensitif, semua
-  pembacaan sensitif adalah self-read via `auth_user_id = auth.uid()`.
-  Documented risk acceptance. Lihat docs/audit-handoff.md Fase 3.
+**Nama:** Student Insight Platform — SIP SMK
+**Deskripsi:** Multi-tenant SaaS untuk SMK. Satu Supabase project, banyak sekolah,
+terisolasi via RLS `school_id`. Backend: Supabase/PostgreSQL + RLS.
+Frontend: Vanilla JS/HTML. Hosting: GitHub Pages.
 
-**Fitur selesai sesi 12 Juli 2026:**
-- Refactor Portal Ortu → tab layout (lazy load per tab, reset per anak).
-  Commit `0dee5f5`.
-- Test suite: 93/93 ✓. HEAD: `d314175`.
-- **✅ GAP rls_case_events_read_student — SELESAI (9 Juli 2026):**
-  Investigasi selesai: ketiga policy (`rls_case_events_read_student`,
-  `rls_case_events_read_parent`, `rls_student_updates_read_student`) BERDIRI
-  SENDIRI (Rule 3 violation) — non-fungsional total, bukan kebocoran.
-  Ditemukan juga regresi ke-4: `rls_case_events_read_staff` tanpa filter role
-  → SISWA/ORTU dalam audience bisa baca event INTERNAL_SCHOOL (0 baris
-  terekspos saat ditemukan). Keduanya di-fix via migration `20260709010000`
-  (fix b/c/d/e/f), 12/12 skenario BEGIN...ROLLBACK lulus, 42/42 CHECK suite
-  lulus pasca-apply. Commit 28fc884. Lihat docs/audit-handoff.md §11 Blok 3.
-- **✅ Gap test suite §9.4 — SELESAI (9 Juli 2026):** 12 skenario T1–T12 +
-  regresi-f sudah menjadi CHECK 12 (struktural) dan CHECK 13 (behavioral)
-  permanen di `tests/tenant-isolation.mjs`. Baseline 55 ✓ → 77 ✓ (+22).
-  Validasi negatif terbukti non-vacuous. Lihat docs/audit-handoff.md §9.4 dan §12.
-- **✅ Gap test suite §9.1 + rls_cases_update_audience — SELESAI (9 Juli 2026):**
-  Celah keamanan: `rls_cases_update_audience` lama membolehkan SIAPAPUN staf
-  internal yang bisa *lihat* kasus untuk UPDATE semua kolom (termasuk handler/status).
-  Diperbaiki via migration `20260709020000` — policy diperketat ke handler/kepsek/creator.
-  CHECK 14 (13 assertion, write-path kasus) ditambahkan ke test suite: 77 ✓ → 90 ✓.
-  BACKLOG BARU: `fn_can_see_case()` tidak punya cabang `OR fn_is_kepsek()` — KEPSEK
-  tidak bisa lihat kasus PRIVATE/RESTRICTED di luar keterlibatannya (bug fungsional,
-  bukan security leak; ditunda ke Fase 3). Lihat docs/audit-handoff.md §9.1.
-- **Fitur audience RESTRICTED diperluas (8 Juli 2026, blok kedua):**
-  siswa subjek kasus/observasi dan orang tua mereka kini bisa ditambahkan
-  ke audience RESTRICTED secara eksplisit oleh guru (opt-in per-item).
-  Migration 20260708060000, commit 333130e. Perubahan perilaku penting:
-  akses siswa/ortu ke kasus RESTRICTED sebelumnya OTOMATIS, sekarang
-  OPT-IN penuh. Lihat docs/audit-handoff.md §10 untuk detail lengkap.
-- **Version control**: 5 migration 8 Juli 2026 applied live
-  (20260708010000/030000/040000/050000/060000) + 1 migration 9 Juli 2026
-  (20260709010000) + commit a8f7336 (fitur RESTRICTED audience inline form)
-  + commit 333130e (audience siswa/ortu + fix bug added_by_user_id)
-  + commit a6f8eac (update dokumentasi) + commit 28fc884 (fix regresi Rule 3
-  + role filter case_events/student_updates) + commit 411df2e (docs §9.4)
-  + commit 5e7ead5 (CHECK 12+13 permanen + sinkronisasi docs §9.4/§12)
-  + commit caac5f8 (PRIORITAS 1 selesai: 4 file client + docs §6/§13 update)
-  + **commit TBD (Fase 2 SELESAI): docs §6 D1/D2 + §11 status + §14 baru.**
-  + **commit TBD (§9.1 + CHECK 14): mig 20260709020000 live, CHECK 14 (13
-    assertion write-path), docs §9.1 SELESAI, CLAUDE.md update.**
-  Lihat docs/audit-handoff.md §8, §10, §11, §12, §13, §14.
-- **Test suite**: 93/93 ✓ (terakhir dijalankan 12 Juli 2026, pasca Forum Kelas CHECK 15).
-  15 CHECK top-level.
+**Repo GitHub:** https://github.com/teguhalficahlin-del/student-insight-platform
+**Repo lokal:** `D:\ribuan_pengguna\CLAUDE\SIP SMK`
+**Supabase project ID:** `xovvuuwexoweoqyltepq`
+**GitHub Pages:** https://teguhalficahlin-del.github.io/student-insight-platform
 
-**Sesi 15 Juli 2026 — Fix non-keamanan:**
-- PWA manifest: `start_url`/`scope`/`id` di 6 portal diubah ke absolute path
-  (commit `f942004`). Warning Chrome console hilang.
-- Aksesibilitas: 7 `<label>` tanpa `for` di `guru/dashboard.html` diperbaiki
-  (commit `d6bec39`). DevTools Issues = 0.
-- Tab Dashboard Guru: `isTeacher` kini cek `teacher_code` ATAU `teaching_assignments.count > 0`
-  — menangkap guru dengan jabatan (WAKA_KESISWAAN dll) yang mengajar tapi tidak punya
-  `teacher_code` (commit `9174d0d`). Lihat docs/audit-handoff.md §17.
-- Investigasi tenant isolation tab WAKA_KESISWAAN: AMAN — RLS sudah filter `school_id`
-  via migration `20260701130000`. Lihat docs/audit-handoff.md §17.4.
+---
 
-Detail lengkap dan checklist prioritas ada di `docs/audit-handoff.md §6`.
+## 2. DATA KRITIS
+
+| Key | Value |
+|-----|-------|
+| HEAD (26 Jul 2026) | `1e75cd7` |
+| SMKN 1 Ujungbatu `school_id` | `244e389c-de7d-4d70-ac95-346d33a5d02c` |
+| SMKN 1 Ujungbatu slug | `smkn1ujungbatu` |
+| SMK Uji E7 `school_id` | `4c084682-aca3-45c3-8882-24309e4c33a1` |
+| SMK Uji E7 slug | `smk-uji-e7` |
+
+**PENTING:** `school_id` SMKN 1 Ujungbatu adalah `244e389c-...`.
+ID lama `cc1e152e-...` adalah SALAH — jangan gunakan.
+
+---
+
+## 3. STRUKTUR PORTAL
+
+```
+guru/         → guru/js/api.js + guru/js/guru.js (+ per-tab JS)
+siswa/        → siswa/js/api.js + siswa/js/siswa.js
+ortu/         → ortu/js/api.js + ortu/js/ortu.js
+admin/        → admin/js/api.js + admin/js/admin.js
+superadmin/   → superadmin/js/api.js + superadmin/js/superadmin.js
+dudi/         → dudi/js/api.js + dudi/js/dudi.js
+stakeholder/  → stakeholder/js/api.js + stakeholder/js/stakeholder.js
+```
+
+Setiap portal punya `index.html` (login) + `dashboard.html` (main app).
+RLS selalu filter berdasarkan `school_id` tenant.
+
+**View aman:** `v_users_staff_directory` (8 kolom, security_invoker=true) —
+gunakan ini untuk semua query daftar staf, bukan `.from('users')` langsung.
+
+---
+
+## 4. ATURAN WORKFLOW (NON-NEGOTIABLE)
+
+### 4a. Verifikasi pwd
+**LANGKAH PERTAMA setiap sesi:** jalankan `pwd` dan pastikan output mengandung
+`"SIP SMK"`. Jika tidak → STOP, laporkan ke user.
+
+### 4b. Migration
+- Tampilkan isi migration **verbatim** ke user sebelum apply apapun
+- Tunggu konfirmasi eksplisit — tanpa kecuali
+- Selalu jalankan `BEGIN ... ROLLBACK` test dulu sebelum permanent apply
+- Format nama: `YYYYMMDDHHMMSS_nama-fitur.sql` (14 digit timestamp)
+- Selalu `IF NOT EXISTS` / `OR REPLACE` untuk idempotency
+- Setiap `CREATE FUNCTION ... SECURITY DEFINER` baru wajib disertai:
+  ```sql
+  REVOKE EXECUTE ON FUNCTION nama_fungsi FROM PUBLIC;
+  REVOKE EXECUTE ON FUNCTION nama_fungsi FROM anon;
+  ```
+  `REVOKE FROM PUBLIC` saja **tidak cukup** — Supabase beri grant eksplisit ke `anon`.
+
+### 4c. Git
+- Tidak ada `git commit` tanpa review diff verbatim dulu
+- Tidak ada `git push` tanpa konfirmasi eksplisit user
+- Tidak ada combined `git add + commit + push` dalam satu perintah
+- Setiap commit harus atomic (satu concern per commit)
+
+### 4d. Output
+- Semua output penting wajib ditulis verbatim ke badan teks sebagai markdown code block
+- Jangan hanya bilang "sudah selesai" — tunjukkan hasilnya
+
+### 4e. RLS
+- Missing RLS policy **bukan otomatis celah** — RLS default-deny
+- Verifikasi live (simulasi cross-tenant) SEBELUM membuat fix
+- Lihat `docs/audit-handoff.md §3a` untuk standing rules lengkap audit keamanan
+
+---
+
+## 5. ATURAN PROMPT (WAJIB)
+
+### Dua mode:
+
+**MODE A — Konteks BELUM final:**
+Claude Code: investigasi + beri REKOMENDASI FIX saja → STOP → tunggu konfirmasi
+
+**MODE B — Konteks SUDAH final:**
+Claude Code: selesaikan PENUH (investigasi + analisis dampak + self review + apply + push)
+Claude Chat hanya terima hasil akhir.
+
+### Setiap prompt WAJIB memiliki:
+1. `VERIFIKASI pwd` — cek path mengandung "SIP SMK"
+2. `BATASAN KERAS` — file apa saja yang boleh disentuh
+3. `SCOPE` — deskripsi singkat apa yang dikerjakan
+4. `INVESTIGASI` — bash commands untuk gather context
+5. `SELF REVIEW 5 POIN` sebelum apply apapun
+6. `JIKA LULUS` / `JIKA RISIKO` — dua jalur keputusan
+
+### SELF REVIEW 5 POIN (wajib sebelum apply):
+1. Apakah ada side effect ke tenant lain?
+2. Apakah migration sudah idempotent?
+3. Apakah REVOKE sudah dua lapis jika ada SECURITY DEFINER baru?
+4. Apakah diff sudah di-review verbatim?
+5. Apakah ada risiko data loss?
+
+---
+
+## 6. TEMPLATE PROMPT STANDAR
+
+```
+VERIFIKASI pwd — pastikan path mengandung "SIP SMK"
+
+BATASAN KERAS:
+- HANYA boleh mengubah: [daftar file spesifik]
+- DILARANG menyentuh: [daftar file yang off-limits]
+
+SCOPE: [deskripsi satu kalimat]
+
+/plan
+/effort [low|medium|high]
+
+TUJUAN:
+[Apa yang harus dicapai]
+
+KONTEKS:
+- HEAD: [commit hash]
+- [konteks relevan lainnya]
+
+INVESTIGASI:
+```bash
+# [perintah bash untuk gather context]
+```
+
+ANALISIS DAMPAK:
+[Apa yang berubah, tenant mana yang terpengaruh, risiko apa]
+
+SELF REVIEW — sebelum apply:
+1. Side effect ke tenant lain?
+2. Migration idempotent?
+3. REVOKE dua lapis jika ada SECURITY DEFINER baru?
+4. Diff sudah di-review verbatim?
+5. Risiko data loss?
+
+JIKA LULUS → [langkah apply + push]
+JIKA RISIKO → jangan apply + laporkan spesifik + STOP
+```
+
+---
+
+## 7. ATURAN MIGRATION (DETAIL)
+
+```sql
+-- Format nama file: YYYYMMDDHHMMSS_nama-fitur.sql
+-- Selalu test dulu:
+BEGIN;
+  -- isi migration
+ROLLBACK; -- test, pastikan tidak ada error
+
+-- Baru apply permanent:
+BEGIN;
+  -- isi migration
+COMMIT;
+```
+
+**Setelah apply:**
+```bash
+supabase db push   # sync ke remote
+git add supabase/migrations/YYYYMMDDHHMMSS_nama-fitur.sql
+git commit -m "feat(db): deskripsi singkat"
+git push
+```
+
+---
+
+## 8. SLASH COMMANDS RELEVAN
+
+| Command | Kapan dipakai |
+|---------|---------------|
+| `/plan` | Sebelum task kompleks — buat rencana dulu |
+| `/effort high` | Task yang menyentuh migration, RLS, atau multi-file |
+| `/effort medium` | Bug fix single file, UI tweak |
+| `/effort low` | Pertanyaan investigasi, doc update kecil |
+| `/code-review` | Sebelum push fitur baru atau migration |
+| `/simplify` | Setelah implementasi — cek ada yang bisa disederhanakan |
+
+---
+
+## 9. BACKLOG PRIORITAS (per HEAD 1e75cd7, 26 Jul 2026)
+
+### PRIORITAS TINGGI (blocker atau security)
+1. **Jadwal import SMK Uji E7** — blocker Go-Live tenant E1/E2/E4/E7;
+   Excel parser (origin B1, index 0 = kolom B) sudah diimplementasi tapi
+   data E7 belum di-import
+2. **Security: client migration 7 portal** ke `v_users_staff_directory`
+   (PRIORITAS 1 audit — sebagian sudah di-fix di commit caac5f8,
+   sisanya belum dicek semua portal)
+3. **Security: Fase 3 FINDING 4** — 14 anon=true helper functions
+   (query live ke pg_proc sudah konfirmasi 0 rows, tapi perlu verifikasi
+   ulang setelah migration terbaru)
+4. **Recovery UI: timeout 57014** — `fn_apply_schedule_templates` timeout
+   di statement besar; solusi: batch DELETE + path recovery di UI admin
+
+### PRIORITAS SEDANG (fitur)
+5. **Tab Perangkat Ajar** — Generate Promes, PPM, LKPD, Soal, Rubrik
+   (AI pipeline via `generation_jobs` sudah schema-ready, UI belum)
+6. **Download .docx** dari `content_json` hasil generate
+7. **Kolom Mapel di grid jadwal** (admin dashboard + wizard) masih kosong
+8. **Jadwal portal siswa dan ortu** — belum diimplementasi sama sekali
+9. **Filter mapel picker Generate ATP** guru Waka Kurikulum (Ipelda)
+
+### BELUM DISENTUH (backlog jauh)
+- Approval workflow kepsek/waka di UI guru
+- Regenerate limits (counter per tahun ajaran)
+- Notifikasi push (FCM)
+- WAKA_HUMAS PKL scope
+- KEPSEK lihat kasus PRIVATE/RESTRICTED di luar keterlibatan
+  (`fn_can_see_case()` tidak punya cabang `OR fn_is_kepsek()` —
+  bug fungsional, bukan security leak)
+
+---
+
+## 10. CONSTRAINT TEKNIS PENTING
+
+| Constraint | Nilai / Aturan |
+|-----------|----------------|
+| Attendance enum | `ALPA` (bukan `TIDAK_HADIR`) |
+| `day_of_week` enum | `SENIN, SELASA, RABU, KAMIS, JUMAT, SABTU` (tidak ada `MINGGU`) |
+| `isOnDutyToday` guard | `getDay() === 0` → `return false` langsung |
+| Supabase free tier timeout | `statement_timeout = 2 menit` (tidak bisa di-override `SET LOCAL`) |
+| Max rows Supabase | sudah dinaikkan ke 5000 |
+| Excel schedule parser | origin B1 (bukan A1); XLSX.js array index 0 = kolom B |
+| Cron `evaluate-teacher-indicators` | `0 17 * * *` = jam 00:00 WIB |
+| `v_users_staff_directory` | 8 kolom aman, `security_invoker=true` |
+| `subject_code_aliases` | persist `nama` dan `jurusan` (HEAD 1e75cd7) |
+| Tenant isolation anchor | `school_id` di setiap tabel |
+
+---
+
+## 11. STATUS AUDIT KEAMANAN (selesai)
+
+- **Fase 1** ✅ — Schema baseline, RLS foundation
+- **Fase 2** ✅ (9 Jul 2026) — Kelompok A–E, 70 policy scan, 4 SECURITY DEFINER fix,
+  PRIORITAS 1 client migration `v_users_staff_directory`, D1/D2 dikonfirmasi aman
+- **Fase 3** ✅ (12 Jul 2026) — 14 anon=true functions verified clean,
+  WAKA_HUMAS/PKL scope confirmed by design, column-restriction risk accepted
+- **Test suite:** 93/93 ✓ (terakhir dijalankan 12 Jul 2026, 15 CHECK top-level)
+- **Sprint 1 Foundation Schema** ✅ (18 Jul 2026) — schema `core` (11 tabel append-only)
+  + schema `public` baru (8 tabel Teacher Workspace + AI Pipeline)
+
+Detail lengkap: `docs/audit-handoff.md`
+
+---
+
+## 12. REFERENSI CEPAT
+
+```bash
+# Lihat migration terbaru
+ls supabase/migrations/ | tail -5
+
+# Status git
+git status && git log --oneline -5
+
+# Push ke Supabase
+supabase db push
+
+# Test suite
+node tests/tenant-isolation.mjs
+```
