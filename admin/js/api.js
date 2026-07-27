@@ -1465,7 +1465,7 @@ export async function getCoreSubjectsForSchedule() {
 export async function getSubjectCodeAliases() {
     const { data: aliases, error } = await supabase
         .from('subject_code_aliases')
-        .select('alias_id, kode, core_subject_id, nama, jurusan')
+        .select('alias_id, kode, core_subject_id, nama, jurusan, kelas')
         .order('kode');
     if (error) throw error;
     if (!aliases?.length) return [];
@@ -1487,15 +1487,16 @@ export async function getSubjectCodeAliases() {
         subject_name: nameMap.get(a.core_subject_id) ?? '',
         nama: a.nama ?? '',
         jurusan: a.jurusan ?? '',
+        kelas: a.kelas ?? '',
     }));
 }
 
-export async function upsertSubjectCodeAlias(schoolId, kode, coreSubjectId = null, nama = null, jurusan = null) {
+export async function upsertSubjectCodeAlias(schoolId, kode, coreSubjectId = null, nama = null, jurusan = null, kelas = null) {
     const { data, error } = await supabase
         .from('subject_code_aliases')
         .upsert(
             { school_id: schoolId, kode: kode.toUpperCase(), core_subject_id: coreSubjectId ?? null,
-              nama: nama || null, jurusan: jurusan || null },
+              nama: nama || null, jurusan: jurusan || null, kelas: kelas || null },
             { onConflict: 'school_id,kode' }
         )
         .select('alias_id')

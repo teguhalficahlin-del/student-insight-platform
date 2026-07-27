@@ -925,7 +925,7 @@ async function renderKodeMapelPanel() {
         <h4 style="margin:0 0 8px">Kode Mapel</h4>
         <p class="hint" style="margin:0 0 10px">
             Isi tabel atau <strong>paste langsung dari Excel</strong> (pilih 4 kolom: Kode | Nama Mapel Lengkap | Jurusan/Konteks | Berlaku di Kelas → Ctrl+V di tabel).
-            Nama Mapel harus cocok dengan nama di kurikulum. Kolom Jurusan dan Kelas hanya referensi, tidak disimpan. Baris kosong diabaikan.
+            Nama Mapel harus cocok dengan nama di kurikulum. Kolom Jurusan hanya referensi, tidak disimpan. Kolom Berlaku di Kelas disimpan. Baris kosong diabaikan.
         </p>
         <div id="sca-paste-target">
             <table class="table" style="min-width:760px;table-layout:fixed">
@@ -934,9 +934,10 @@ async function renderKodeMapelPanel() {
                     <col style="width:260px">
                     <col style="width:200px">
                     <col style="width:160px">
-                    <col style="width:1px">
+                    <col style="width:180px">
+                    <col style="width:36px">
                 </colgroup>
-                <thead><tr><th>Kode</th><th>Nama Mapel Lengkap</th><th>Jurusan / Konteks</th><th>Berlaku di Kelas</th><th></th></tr></thead>
+                <thead><tr><th>Kode</th><th>Nama Mapel Lengkap</th><th>Jurusan / Konteks</th><th>Berlaku di Kelas</th><th></th><th></th></tr></thead>
                 <tbody id="sca-tbody"></tbody>
             </table>
         </div>
@@ -949,8 +950,9 @@ async function renderKodeMapelPanel() {
 
     const tbody = panel.querySelector('#sca-tbody');
 
-    function makeRow(kode = '', nama = '', jurusan = '', kelas = '') {
+    function makeRow(kode = '', nama = '', jurusan = '', kelas = '', aliasId = null) {
         const tr = document.createElement('tr');
+        if (aliasId) tr.dataset.aliasId = aliasId;
         tr.innerHTML = `
             <td style="padding:2px 4px"><input type="text" class="input sca-cell-kode" value="${esc(kode)}"
                 style="width:100%;text-transform:uppercase;font-size:13px;padding:4px 6px"></td>
@@ -960,10 +962,24 @@ async function renderKodeMapelPanel() {
                 style="width:100%;font-size:13px;padding:4px 6px"></td>
             <td style="padding:2px 4px"><input type="text" class="input sca-cell-kelas" value="${esc(kelas)}"
                 style="width:100%;font-size:13px;padding:4px 6px"></td>
-            <td class="sca-row-err" style="padding:2px 6px;font-size:12px;color:var(--color-danger);white-space:nowrap"></td>
+            <td class="sca-row-err" style="padding:2px 6px;font-size:12px;color:var(--color-danger);white-space:normal;word-break:break-word"></td>
+            <td style="padding:2px 4px;text-align:center">
+                <button type="button" class="sca-btn-del" title="Hapus baris"
+                    style="background:none;border:none;cursor:pointer;font-size:18px;line-height:1;color:var(--color-danger);padding:2px 6px">×</button>
+            </td>
         `;
         tr.querySelector('.sca-cell-kode').addEventListener('input', e => {
             e.target.value = e.target.value.toUpperCase();
+        });
+        tr.querySelector('.sca-btn-del').addEventListener('click', async () => {
+            const id = tr.dataset.aliasId;
+            if (id) {
+                try { await deleteSubjectCodeAlias(id); } catch (err) {
+                    tr.querySelector('.sca-row-err').textContent = `✗ ${err.message}`;
+                    return;
+                }
+            }
+            tr.remove();
         });
         tbody.appendChild(tr);
         return tr;
@@ -973,7 +989,7 @@ async function renderKodeMapelPanel() {
     const initCount = Math.max(aliases.length + 3, 8);
     for (let i = 0; i < initCount; i++) {
         const a = aliases[i];
-        makeRow(a?.kode ?? '', a?.nama ?? '', a?.jurusan ?? '');
+        makeRow(a?.kode ?? '', a?.nama ?? '', a?.jurusan ?? '', a?.kelas ?? '', a?.alias_id ?? null);
     }
 
     panel.querySelector('#sca-add-row').addEventListener('click', () => makeRow());
@@ -1022,6 +1038,7 @@ async function renderKodeMapelPanel() {
             kode: tr.querySelector('.sca-cell-kode').value.trim().toUpperCase(),
             nama: tr.querySelector('.sca-cell-nama').value.trim(),
             jurusan: tr.querySelector('.sca-cell-jurusan').value.trim(),
+            kelas: tr.querySelector('.sca-cell-kelas').value.trim(),
             errTd: tr.querySelector('.sca-row-err'),
         })).filter(r => r.kode !== '');
 
@@ -1044,7 +1061,7 @@ async function renderKodeMapelPanel() {
         for (const r of rows) {
             const coreSubjectId = nameMap.get(r.nama.toLowerCase()) ?? null;
             try {
-                await upsertSubjectCodeAlias(state.schoolId, r.kode, coreSubjectId, r.nama, r.jurusan);
+                await upsertSubjectCodeAlias(state.schoolId, r.kode, coreSubjectId, r.nama, r.jurusan, r.kelas);
                 saved++;
             } catch (err) {
                 r.errTd.textContent = `✗ ${err.message}`;
