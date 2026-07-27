@@ -928,7 +928,7 @@ async function renderKodeMapelPanel() {
             Nama Mapel harus cocok dengan nama di kurikulum. Kolom Jurusan hanya referensi, tidak disimpan. Kolom Berlaku di Kelas disimpan. Baris kosong diabaikan.
         </p>
         <div id="sca-paste-target">
-            <table class="table" style="min-width:760px;table-layout:auto">
+            <table class="table" style="width:max-content;table-layout:auto">
                 <colgroup>
                     <col style="width:110px">
                     <col style="width:260px">
