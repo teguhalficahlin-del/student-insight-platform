@@ -535,7 +535,7 @@ function renderGuruRekapPage() {
                 const grouped = [];
                 const seen = new Map();
                 for (const s of sessions) {
-                    const key = `${s.schedule.session_date}|${s.schedule.subject?.name ?? ''}`;
+                    const key = `${s.schedule.session_date}|${s.schedule.subject_label ?? ''}`;
                     if (!seen.has(key)) { seen.set(key, true); grouped.push(s); }
                 }
                 body.innerHTML = grouped.map(s => `
@@ -545,7 +545,7 @@ function renderGuruRekapPage() {
                             ${esc(s.schedule.session_date)}
                         </span>
                         <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
-                            ${esc(s.schedule.subject?.name ?? '—')}
+                            ${esc(s.schedule.subject_label ?? '—')}
                         </span>
                         <span style="font-size:11px;font-weight:600;
                             color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
@@ -1280,7 +1280,7 @@ async function initWaliTab() {
                     ...sessions.map(s => [
                         s.schedule?.session_date ?? '',
                         s.schedule?.session_start ? fmtTime(s.schedule.session_start) : '',
-                        s.schedule?.subject?.name ?? '',
+                        s.schedule?.subject_label ?? '',
                         s.schedule?.teacher?.full_name ?? '',
                         s.status ?? '',
                     ])
@@ -1367,7 +1367,7 @@ async function loadWaliSummary() {
                     const grouped = [];
                     const seen = new Map();
                     for (const s of sessions) {
-                        const key = `${s.schedule.session_date}|${s.schedule.subject?.name ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
+                        const key = `${s.schedule.session_date}|${s.schedule.subject_label ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
                         if (!seen.has(key)) {
                             seen.set(key, true);
                             grouped.push(s);
@@ -1387,7 +1387,7 @@ async function loadWaliSummary() {
                                 ${esc(s.schedule.session_date)}
                             </span>
                             <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
-                                ${esc(s.schedule.subject?.name ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
+                                ${esc(s.schedule.subject_label ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
                             </span>
                             <span style="font-size:11px;font-weight:600;
                                 color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
@@ -1566,7 +1566,7 @@ async function loadBkAttendanceRecap() {
                                 const grouped = [];
                                 const seen = new Map();
                                 for (const s of sessions) {
-                                    const key = `${s.schedule.session_date}|${s.schedule.subject?.name ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
+                                    const key = `${s.schedule.session_date}|${s.schedule.subject_label ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
                                     if (!seen.has(key)) { seen.set(key, true); grouped.push(s); }
                                 }
                                 sBody.innerHTML = grouped.map(s => `
@@ -1576,7 +1576,7 @@ async function loadBkAttendanceRecap() {
                                             ${esc(s.schedule.session_date)}
                                         </span>
                                         <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
-                                            ${esc(s.schedule.subject?.name ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
+                                            ${esc(s.schedule.subject_label ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
                                         </span>
                                         <span style="font-size:11px;font-weight:600;
                                             color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
@@ -1814,7 +1814,7 @@ async function loadWkAttendanceRecap() {
                                 const grouped = [];
                                 const seen = new Map();
                                 for (const s of sessions) {
-                                    const key = `${s.schedule.session_date}|${s.schedule.subject?.name ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
+                                    const key = `${s.schedule.session_date}|${s.schedule.subject_label ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
                                     if (!seen.has(key)) { seen.set(key, true); grouped.push(s); }
                                 }
                                 sBody.innerHTML = grouped.map(s => `
@@ -1824,7 +1824,7 @@ async function loadWkAttendanceRecap() {
                                             ${esc(s.schedule.session_date)}
                                         </span>
                                         <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
-                                            ${esc(s.schedule.subject?.name ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
+                                            ${esc(s.schedule.subject_label ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
                                         </span>
                                         <span style="font-size:11px;font-weight:600;
                                             color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
@@ -2208,7 +2208,7 @@ async function loadKpClsRecap() {
                                 const grouped = [];
                                 const seen = new Map();
                                 for (const s of sessions) {
-                                    const key = `${s.schedule.session_date}|${s.schedule.subject?.name ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
+                                    const key = `${s.schedule.session_date}|${s.schedule.subject_label ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
                                     if (!seen.has(key)) { seen.set(key, true); grouped.push(s); }
                                 }
                                 sBody.innerHTML = grouped.map(s => `
@@ -2218,7 +2218,7 @@ async function loadKpClsRecap() {
                                             ${esc(s.schedule.session_date)}
                                         </span>
                                         <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
-                                            ${esc(s.schedule.subject?.name ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
+                                            ${esc(s.schedule.subject_label ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
                                         </span>
                                         <span style="font-size:11px;font-weight:600;
                                             color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
