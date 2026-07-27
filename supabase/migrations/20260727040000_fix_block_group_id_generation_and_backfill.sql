@@ -282,6 +282,14 @@ REVOKE EXECUTE ON FUNCTION public.fn_apply_schedule_templates(text, semester, uu
 --   Ini wajib agar LAG() melihat SEMUA baris di partisi (termasuk yang sudah
 --   punya block_group_id dari backfill lama 20260715060000), sehingga urutan
 --   gap-detection tetap benar secara global per (teacher, class, date).
+--
+-- CATATAN — block_uuids pakai COALESCE(MIN...FILTER, gen_random_uuid()):
+--   Investigasi (2026-07-27) menemukan 16 baris "grup campuran": sebagian
+--   baris dalam satu grup (teacher,class,date,block_number) sudah punya UUID
+--   dari backfill 20260715060000, sebagian lagi masih NULL. Query konflik
+--   (LANGKAH 1) memastikan 0 grup punya >1 UUID berbeda — setiap grup campuran
+--   punya tepat satu UUID lama. MIN dipakai murni untuk pilih nilai deterministik
+--   itu; gen_random_uuid() hanya fallback untuk grup yang 100% NULL.
 
 WITH ordered AS (
     SELECT
@@ -290,6 +298,7 @@ WITH ordered AS (
         class_id,
         session_date,
         session_start,
+        block_group_id,
         LAG(session_end) OVER (
             PARTITION BY scheduled_teacher_id, class_id, session_date
             ORDER BY session_start
@@ -311,6 +320,7 @@ grouped AS (
         scheduled_teacher_id,
         class_id,
         session_date,
+        block_group_id,
         SUM(is_new_block) OVER (
             PARTITION BY scheduled_teacher_id, class_id, session_date
             ORDER BY session_start
@@ -319,13 +329,17 @@ grouped AS (
     FROM flagged
 ),
 block_uuids AS (
-    SELECT DISTINCT
+    SELECT
         scheduled_teacher_id,
         class_id,
         session_date,
         block_number,
-        gen_random_uuid() AS block_uuid
+        COALESCE(
+            MIN(block_group_id) FILTER (WHERE block_group_id IS NOT NULL),
+            gen_random_uuid()
+        ) AS block_uuid
     FROM grouped
+    GROUP BY scheduled_teacher_id, class_id, session_date, block_number
 )
 UPDATE teaching_schedules ts
 SET    block_group_id = bu.block_uuid
