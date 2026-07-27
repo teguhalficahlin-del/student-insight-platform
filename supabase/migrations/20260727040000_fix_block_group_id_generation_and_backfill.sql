@@ -335,7 +335,7 @@ block_uuids AS (
         session_date,
         block_number,
         COALESCE(
-            MIN(block_group_id) FILTER (WHERE block_group_id IS NOT NULL),
+            (array_agg(block_group_id) FILTER (WHERE block_group_id IS NOT NULL))[1],
             gen_random_uuid()
         ) AS block_uuid
     FROM grouped
