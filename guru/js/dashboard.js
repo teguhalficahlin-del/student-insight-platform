@@ -7044,6 +7044,7 @@ async function initPenilaianTab() {
                     s === sub ? '' : 'none';
             });
             if (sub === 'input') await initPenilaianInputTab();
+            if (sub === 'hasil') await initPenilaianHasilTab();
         });
     });
 
@@ -7786,6 +7787,246 @@ async function saveInputNilai() {
         await loadInputGrid(loId);
     } catch (e) {
         showPenilaianMsg('input', `Gagal menyimpan: ${esc(e.message)}`, 'error');
+    }
+}
+
+// ── Sub-tab Nilai Akhir ──────────────────────────────────────
+
+let _penilaianHasilInit = false;
+let _penilaianHasilData = null;
+
+async function initPenilaianHasilTab() {
+    if (!_penilaianHasilInit) {
+        _penilaianHasilInit = true;
+
+        document.getElementById('penilaian-hitung-btn')
+            .addEventListener('click', async () => {
+                await hitungNilaiAkhir();
+            });
+
+        document.getElementById('penilaian-publikasi-btn')
+            .addEventListener('click', async () => {
+                await publikasiNilai();
+            });
+    }
+    await loadHasilNilai();
+}
+
+async function loadHasilNilai() {
+    const { kelasId, subjectId, year, semester } = _penilaianCtx;
+    const gridEl = document.getElementById('penilaian-hasil-grid');
+    const warnEl = document.getElementById('penilaian-stale-warning');
+    const pubBtn = document.getElementById('penilaian-publikasi-btn');
+
+    warnEl.style.display = 'none';
+    pubBtn.style.display = 'none';
+
+    if (!kelasId || !subjectId || !year || !semester) {
+        gridEl.innerHTML = '<p class="hint">Pilih kelas, mapel, dan semester terlebih dahulu.</p>';
+        return;
+    }
+
+    gridEl.innerHTML = '<p class="hint">Memuat…</p>';
+
+    try {
+        const { data, error } = await supabase.rpc('fn_get_grade_summary', {
+            p_subject_id:    subjectId,
+            p_class_id:      kelasId,
+            p_academic_year: year,
+            p_semester:      semester
+        });
+        if (error) throw error;
+
+        _penilaianHasilData = data;
+        const students = data?.students || [];
+
+        if (!students.length) {
+            gridEl.innerHTML =
+                '<p class="hint">Belum ada nilai akhir. ' +
+                'Klik "Hitung Nilai Akhir" untuk menghitung.</p>';
+            return;
+        }
+
+        // Ambil nama siswa dari tabel students
+        const studentIds = students.map(s => s.student_id);
+        const { data: siswaRows } = await supabase
+            .from('students')
+            .select('student_id, nama_lengkap')
+            .in('student_id', studentIds)
+            .eq('school_id', currentUser.school_id);
+        const namaMap = {};
+        (siswaRows || []).forEach(r => { namaMap[r.student_id] = r.nama_lengkap; });
+
+        const isPublished = students.every(s => s.grade_summary?.published_at != null);
+        pubBtn.style.display  = isPublished ? 'none' : '';
+        pubBtn.textContent    = isPublished ? 'Sudah Dipublikasi' : 'Publikasi ke Siswa & Orang Tua';
+        pubBtn.disabled       = isPublished;
+
+        renderHasilGrid(students, namaMap);
+
+    } catch (e) {
+        gridEl.innerHTML =
+            `<p class="hint" style="color:var(--color-danger)">Gagal memuat nilai akhir: ${esc(e.message)}</p>`;
+    }
+}
+
+function renderHasilGrid(students, namaMap) {
+    const gridEl = document.getElementById('penilaian-hasil-grid');
+    if (!students.length) {
+        gridEl.innerHTML = '<p class="hint">Belum ada nilai akhir yang dihitung.</p>';
+        return;
+    }
+
+    gridEl.innerHTML = `
+        <table style="width:100%; border-collapse:collapse; font-size:13px">
+          <thead>
+            <tr style="border-bottom:2px solid var(--color-border)">
+              <th style="text-align:left; padding:8px 4px; width:40px">No</th>
+              <th style="text-align:left; padding:8px 4px">Nama Siswa</th>
+              <th style="text-align:center; padding:8px 4px; width:80px">Nilai Akhir</th>
+              <th style="text-align:center; padding:8px 4px; width:80px">Predikat</th>
+              <th style="text-align:left; padding:8px 4px">Deskripsi Naratif</th>
+              <th style="text-align:center; padding:8px 4px; width:100px">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${students.map((s, i) => {
+                const gs  = s.grade_summary || {};
+                const pub = gs.published_at
+                    ? `<span style="color:var(--color-success);font-size:11px">✓ Dipublikasi</span>`
+                    : `<span style="color:var(--color-text-muted);font-size:11px">Belum</span>`;
+                return `
+                  <tr style="border-bottom:1px solid var(--color-border)"
+                      data-grade-summary-id="${esc(gs.grade_summary_id || '')}">
+                    <td style="padding:8px 4px; color:var(--color-text-muted)">${i + 1}</td>
+                    <td style="padding:8px 4px">${esc(namaMap[s.student_id] || s.student_id)}</td>
+                    <td style="padding:8px 4px; text-align:center; font-weight:600">
+                      ${gs.nilai_akhir != null ? Number(gs.nilai_akhir).toFixed(1) : '—'}
+                    </td>
+                    <td style="padding:8px 4px; text-align:center">${esc(gs.predikat || '—')}</td>
+                    <td style="padding:8px 4px">
+                      <textarea class="input naratif-input" rows="2"
+                                placeholder="Deskripsi untuk rapor…"
+                                style="width:100%; font-size:12px; resize:vertical"
+                                data-grade-summary-id="${esc(gs.grade_summary_id || '')}"
+                      >${esc(gs.deskripsi_naratif || '')}</textarea>
+                      <button type="button"
+                              class="btn btn-ghost btn-sm simpan-naratif-btn"
+                              style="margin-top:4px; font-size:11px"
+                              data-grade-summary-id="${esc(gs.grade_summary_id || '')}">
+                        Simpan deskripsi
+                      </button>
+                    </td>
+                    <td style="padding:8px 4px; text-align:center">${pub}</td>
+                  </tr>
+                `;
+            }).join('')}
+          </tbody>
+        </table>
+    `;
+
+    gridEl.querySelectorAll('.simpan-naratif-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const gsId     = btn.dataset.gradeSummaryId;
+            const textarea = gridEl.querySelector(
+                `.naratif-input[data-grade-summary-id="${gsId}"]`
+            );
+            if (!gsId || !textarea) return;
+            await simpanNaratif(gsId, textarea.value);
+        });
+    });
+}
+
+async function simpanNaratif(gradeSummaryId, naratif) {
+    try {
+        const { error } = await supabase
+            .from('grade_summaries')
+            .update({ deskripsi_naratif: naratif, updated_at: new Date().toISOString() })
+            .eq('grade_summary_id', gradeSummaryId)
+            .eq('school_id', currentUser.school_id);
+        if (error) throw error;
+        showPenilaianMsg('hasil', 'Deskripsi berhasil disimpan.', 'success');
+    } catch (e) {
+        showPenilaianMsg('hasil', `Gagal: ${esc(e.message)}`, 'error');
+    }
+}
+
+async function hitungNilaiAkhir() {
+    const { kelasId, subjectId, year, semester } = _penilaianCtx;
+    if (!kelasId || !subjectId || !year || !semester) {
+        showPenilaianMsg('hasil', 'Pilih kelas, mapel, dan semester terlebih dahulu.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('penilaian-hitung-btn');
+    btn.disabled    = true;
+    btn.textContent = 'Menghitung…';
+
+    try {
+        const { data, error } = await supabase.rpc('fn_calculate_grade_summary', {
+            p_subject_id:    subjectId,
+            p_class_id:      kelasId,
+            p_academic_year: year,
+            p_semester:      semester
+        });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Kalkulasi gagal');
+
+        showPenilaianMsg('hasil',
+            `Nilai akhir berhasil dihitung untuk ${data.updated} siswa.`, 'success');
+        await loadHasilNilai();
+    } catch (e) {
+        showPenilaianMsg('hasil', `Gagal menghitung: ${esc(e.message)}`, 'error');
+    } finally {
+        btn.disabled    = false;
+        btn.textContent = 'Hitung Nilai Akhir';
+    }
+}
+
+async function publikasiNilai() {
+    if (!confirm(
+        'Publikasi nilai ke siswa dan orang tua?\n\n' +
+        'Setelah publikasi, pengaturan kalkulasi akan dikunci dan ' +
+        'tidak bisa diubah lagi tanpa membuka kunci secara manual.'
+    )) return;
+
+    const { kelasId, subjectId, year, semester } = _penilaianCtx;
+    const btn = document.getElementById('penilaian-publikasi-btn');
+    btn.disabled    = true;
+    btn.textContent = 'Mempublikasi…';
+
+    try {
+        const now = new Date().toISOString();
+
+        const { error: gsErr } = await supabase
+            .from('grade_summaries')
+            .update({ published_at: now, updated_at: now })
+            .eq('school_id', currentUser.school_id)
+            .eq('subject_id', subjectId)
+            .eq('class_id', kelasId)
+            .eq('academic_year', year)
+            .eq('semester', semester)
+            .is('published_at', null);
+        if (gsErr) throw gsErr;
+
+        const { error: lockErr } = await supabase
+            .from('grading_settings')
+            .update({ is_published: true, published_at: now, locked_at: now, updated_at: now })
+            .eq('school_id', currentUser.school_id)
+            .eq('teacher_user_id', currentUser.user_id)
+            .eq('subject_id', subjectId)
+            .eq('class_id', kelasId)
+            .eq('academic_year', year)
+            .eq('semester', semester);
+        if (lockErr) throw lockErr;
+
+        showPenilaianMsg('hasil',
+            'Nilai berhasil dipublikasi. Siswa dan orang tua kini bisa melihat nilai.', 'success');
+        await loadHasilNilai();
+    } catch (e) {
+        showPenilaianMsg('hasil', `Gagal publikasi: ${esc(e.message)}`, 'error');
+        btn.disabled    = false;
+        btn.textContent = 'Publikasi ke Siswa & Orang Tua';
     }
 }
 
