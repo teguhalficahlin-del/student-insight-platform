@@ -850,34 +850,248 @@
     <div class="tab-panel" id="tab-jurnal">
         <div class="page-body">
 
-            <!-- Form tulis entri baru -->
-            <div class="section-card">
-                <h3>Tulis Catatan</h3>
-                <form id="journal-form">
-                    <div class="field">
-                        <textarea id="journal-content" class="input" rows="5"
-                            placeholder="Tulis catatan mengajar…"
-                            style="resize:vertical; width:100%"></textarea>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px">
-                        <button type="submit" class="btn btn-primary" id="journal-submit-btn" style="flex:1">Simpan</button>
-                        <button type="button" id="journal-date-toggle" style="font-size:0.85em; color:var(--color-text-muted); cursor:pointer; text-decoration:underline; background:none; border:none; padding:4px 0; min-height:44px">Ubah tanggal</button>
-                    </div>
-                    <div id="journal-date-row" style="display:none; margin-top:8px">
-                        <input type="date" id="journal-date" class="input" style="width:auto">
-                    </div>
-                    <div id="journal-form-msg" style="display:none; margin-top:6px" class="hint"></div>
-                </form>
+            <!-- Sub-tab navigation -->
+            <div style="display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid var(--color-border); padding-bottom:0">
+                <button class="jurnal-sub-btn active" data-jurnal-sub="catatan"
+                        style="padding:8px 16px; border:none; background:none; cursor:pointer; font-weight:600; border-bottom:2px solid var(--color-primary); color:var(--color-primary)">
+                    Catatan Jurnal
+                </button>
+                <button class="jurnal-sub-btn" data-jurnal-sub="penilaian"
+                        style="padding:8px 16px; border:none; background:none; cursor:pointer; color:var(--color-text-muted); border-bottom:2px solid transparent">
+                    Penilaian
+                </button>
             </div>
 
-            <!-- Daftar entri -->
-            <div class="section-card">
-                <h3>Riwayat Jurnal</h3>
-                <div id="journal-list"><p class="hint">Memuat…</p></div>
-            </div>
+            <!-- Sub-panel: Catatan Jurnal -->
+            <div id="jurnal-sub-catatan">
 
-        </div>
-    </div>
+                <!-- Form tulis entri baru -->
+                <div class="section-card">
+                    <h3>Tulis Catatan</h3>
+                    <form id="journal-form">
+                        <div class="field">
+                            <textarea id="journal-content" class="input" rows="5"
+                                placeholder="Tulis catatan mengajar…"
+                                style="resize:vertical; width:100%"></textarea>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px">
+                            <button type="submit" class="btn btn-primary" id="journal-submit-btn" style="flex:1">Simpan</button>
+                            <button type="button" id="journal-date-toggle" style="font-size:0.85em; color:var(--color-text-muted); cursor:pointer; text-decoration:underline; background:none; border:none; padding:4px 0; min-height:44px">Ubah tanggal</button>
+                        </div>
+                        <div id="journal-date-row" style="display:none; margin-top:8px">
+                            <input type="date" id="journal-date" class="input" style="width:auto">
+                        </div>
+                        <div id="journal-form-msg" style="display:none; margin-top:6px" class="hint"></div>
+                    </form>
+                </div>
+
+                <!-- Daftar entri -->
+                <div class="section-card">
+                    <h3>Riwayat Jurnal</h3>
+                    <div id="journal-list"><p class="hint">Memuat…</p></div>
+                </div>
+
+            </div><!-- /jurnal-sub-catatan -->
+
+            <!-- Sub-panel: Penilaian -->
+            <div id="jurnal-sub-penilaian" style="display:none">
+
+                <!-- Selector konteks -->
+                <div class="section-card">
+                    <div style="display:flex; gap:12px; flex-wrap:wrap">
+                        <div class="field" style="flex:1; min-width:160px">
+                            <label class="label">Kelas</label>
+                            <select id="penilaian-kelas-select" class="input">
+                                <option value="">— Pilih Kelas —</option>
+                            </select>
+                        </div>
+                        <div class="field" style="flex:2; min-width:200px">
+                            <label class="label">Mata Pelajaran</label>
+                            <select id="penilaian-mapel-select" class="input">
+                                <option value="">— Pilih Mapel —</option>
+                            </select>
+                        </div>
+                        <div class="field" style="flex:1; min-width:140px">
+                            <label class="label">Tahun Ajaran</label>
+                            <select id="penilaian-year-select" class="input">
+                                <option value="">— Pilih Tahun —</option>
+                            </select>
+                        </div>
+                        <div class="field" style="min-width:120px">
+                            <label class="label">Semester</label>
+                            <select id="penilaian-semester-select" class="input">
+                                <option value="1">Semester 1</option>
+                                <option value="2">Semester 2</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sub-sub-tab navigation: Setup | Input Nilai | Nilai Akhir -->
+                <div style="display:flex; gap:8px; margin-bottom:16px">
+                    <button class="penilaian-sub-btn active" data-penilaian-sub="setup"
+                            style="padding:6px 14px; border-radius:6px; background:var(--color-primary); color:#fff; border:none; cursor:pointer; font-size:13px">
+                        Setup TP &amp; KKTP
+                    </button>
+                    <button class="penilaian-sub-btn" data-penilaian-sub="input"
+                            style="padding:6px 14px; border-radius:6px; background:var(--color-surface-alt); color:var(--color-text); border:none; cursor:pointer; font-size:13px">
+                        Input Nilai
+                    </button>
+                    <button class="penilaian-sub-btn" data-penilaian-sub="hasil"
+                            style="padding:6px 14px; border-radius:6px; background:var(--color-surface-alt); color:var(--color-text); border:none; cursor:pointer; font-size:13px">
+                        Nilai Akhir
+                    </button>
+                </div>
+
+                <!-- Penilaian sub-panel: Setup TP & KKTP -->
+                <div id="penilaian-sub-setup">
+
+                    <!-- Grading Settings -->
+                    <div class="section-card">
+                        <h3>Pengaturan Kalkulasi</h3>
+                        <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px; cursor:pointer">
+                            <input type="checkbox" id="penilaian-formatif-included">
+                            Nilai Formatif ikut kalkulasi nilai akhir
+                        </label>
+                        <div id="penilaian-formatif-options" style="display:none">
+                            <div class="field">
+                                <label class="label">Metode</label>
+                                <select id="penilaian-metode-formatif" class="input">
+                                    <option value="BOBOT">Berbobot (% formatif + % sumatif = 100%)</option>
+                                    <option value="KONTEKS_SAJA">Konteks saja (tidak mempengaruhi angka akhir)</option>
+                                </select>
+                            </div>
+                            <div id="penilaian-bobot-row" style="display:none; display:flex; gap:12px; margin-top:8px">
+                                <div class="field" style="flex:1">
+                                    <label class="label">Bobot Formatif (%)</label>
+                                    <input type="number" id="penilaian-bobot-formatif" class="input" min="0" max="100" placeholder="mis. 30">
+                                </div>
+                                <div class="field" style="flex:1">
+                                    <label class="label">Bobot Sumatif (%)</label>
+                                    <input type="number" id="penilaian-bobot-sumatif" class="input" min="0" max="100" placeholder="mis. 70">
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" id="penilaian-save-settings" style="margin-top:12px">Simpan Pengaturan</button>
+                        <div id="penilaian-settings-msg" class="hint" style="display:none; margin-top:6px"></div>
+                    </div>
+
+                    <!-- Daftar TP -->
+                    <div class="section-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
+                            <h3 style="margin:0">Tujuan Pembelajaran (TP)</h3>
+                            <button class="btn btn-secondary" id="penilaian-add-tp">+ Tambah TP</button>
+                        </div>
+                        <div id="penilaian-tp-list">
+                            <p class="hint">Pilih kelas dan mapel untuk melihat TP.</p>
+                        </div>
+                    </div>
+
+                    <!-- Form TP (tersembunyi) -->
+                    <div class="section-card" id="penilaian-tp-form-card" style="display:none">
+                        <h3 id="penilaian-tp-form-title">Tambah Tujuan Pembelajaran</h3>
+                        <input type="hidden" id="penilaian-tp-id">
+                        <div class="field">
+                            <label class="label">Kode TP</label>
+                            <input type="text" id="penilaian-tp-kode" class="input" placeholder="mis. TP 1.1" maxlength="30">
+                        </div>
+                        <div class="field">
+                            <label class="label">Deskripsi TP</label>
+                            <textarea id="penilaian-tp-deskripsi" class="input" rows="3" placeholder="Peserta didik mampu…"></textarea>
+                        </div>
+                        <div class="field">
+                            <label class="label">Urutan</label>
+                            <input type="number" id="penilaian-tp-urutan" class="input" min="1" value="1">
+                        </div>
+                        <div class="field">
+                            <label class="label">Berlaku untuk</label>
+                            <select id="penilaian-tp-berlaku" class="input">
+                                <option value="SEMUA_KELAS">Semua kelas yang saya ajar (mapel ini)</option>
+                                <option value="KELAS_TERTENTU">Kelas tertentu saja</option>
+                            </select>
+                        </div>
+                        <div class="field" id="penilaian-tp-kelas-list" style="display:none">
+                            <label class="label">Pilih Kelas</label>
+                            <div id="penilaian-tp-kelas-checkboxes" style="display:flex; flex-wrap:wrap; gap:8px"></div>
+                        </div>
+
+                        <!-- KKTP -->
+                        <div style="margin-top:16px">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+                                <h4 style="margin:0">Kriteria Ketercapaian (KKTP)</h4>
+                                <button class="btn btn-secondary btn-sm" id="penilaian-add-kktp" type="button">+ Tambah Kriteria</button>
+                            </div>
+                            <div id="penilaian-kktp-rows"></div>
+                        </div>
+
+                        <div style="display:flex; gap:8px; margin-top:16px">
+                            <button class="btn btn-primary" id="penilaian-save-tp" type="button">Simpan TP</button>
+                            <button class="btn btn-ghost" id="penilaian-cancel-tp" type="button">Batal</button>
+                        </div>
+                    </div>
+
+                </div><!-- /penilaian-sub-setup -->
+
+                <!-- Penilaian sub-panel: Input Nilai -->
+                <div id="penilaian-sub-input" style="display:none">
+                    <div class="section-card">
+                        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px">
+                            <div class="field" style="flex:2; min-width:180px">
+                                <label class="label">Tujuan Pembelajaran</label>
+                                <select id="penilaian-input-tp-select" class="input">
+                                    <option value="">— Pilih TP —</option>
+                                </select>
+                            </div>
+                            <div class="field" style="flex:1; min-width:130px">
+                                <label class="label">Tipe</label>
+                                <select id="penilaian-input-tipe" class="input">
+                                    <option value="FORMATIF">Formatif</option>
+                                    <option value="SUMATIF">Sumatif</option>
+                                </select>
+                            </div>
+                            <div class="field" style="flex:2; min-width:180px">
+                                <label class="label">Judul / Keterangan</label>
+                                <input type="text" id="penilaian-input-judul" class="input" placeholder="mis. Ulangan Harian 1">
+                            </div>
+                            <div class="field" style="min-width:140px">
+                                <label class="label">Tanggal</label>
+                                <input type="date" id="penilaian-input-tanggal" class="input">
+                            </div>
+                        </div>
+                        <div id="penilaian-input-grid">
+                            <p class="hint">Pilih TP untuk menampilkan daftar siswa.</p>
+                        </div>
+                        <button class="btn btn-primary" id="penilaian-save-nilai" style="margin-top:12px; display:none">Simpan Nilai</button>
+                        <div id="penilaian-input-msg" class="hint" style="display:none; margin-top:6px"></div>
+                    </div>
+                </div><!-- /penilaian-sub-input -->
+
+                <!-- Penilaian sub-panel: Nilai Akhir -->
+                <div id="penilaian-sub-hasil" style="display:none">
+                    <div class="section-card alert-warning" id="penilaian-stale-warning"
+                         style="display:none; border-left:4px solid var(--color-warning)">
+                        ⚠️ Ada perubahan nilai sejak terakhir dihitung.
+                        Klik <strong>Hitung Ulang</strong> untuk memperbarui.
+                    </div>
+                    <div class="section-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
+                            <h3 style="margin:0">Nilai Akhir Siswa</h3>
+                            <div style="display:flex; gap:8px">
+                                <button class="btn btn-secondary" id="penilaian-hitung-btn">Hitung Nilai Akhir</button>
+                                <button class="btn btn-primary" id="penilaian-publikasi-btn" style="display:none">Publikasi ke Siswa &amp; Orang Tua</button>
+                            </div>
+                        </div>
+                        <div id="penilaian-hasil-grid">
+                            <p class="hint">Klik "Hitung Nilai Akhir" untuk menampilkan nilai akhir semua siswa.</p>
+                        </div>
+                        <div id="penilaian-hasil-msg" class="hint" style="display:none; margin-top:6px"></div>
+                    </div>
+                </div><!-- /penilaian-sub-hasil -->
+
+            </div><!-- /jurnal-sub-penilaian -->
+
+        </div><!-- /page-body -->
+    </div><!-- /tab-jurnal -->
 
     <!-- ═══════════════════════════════════════════════════════
          TAB: KASUS
