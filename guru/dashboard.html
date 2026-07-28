@@ -982,8 +982,36 @@
                             <h3 style="margin:0">Tujuan Pembelajaran (TP)</h3>
                             <button class="btn btn-secondary" id="penilaian-add-tp">+ Tambah TP</button>
                         </div>
+                        <div style="display:flex; gap:8px; margin-bottom:12px">
+                            <button class="btn btn-ghost" id="penilaian-download-template" type="button">⬇ Download Template</button>
+                            <button class="btn btn-ghost" id="penilaian-upload-btn" type="button">⬆ Upload CP &amp; TP</button>
+                            <input type="file" id="penilaian-upload-input" accept=".xlsx,.xls" style="display:none">
+                        </div>
                         <div id="penilaian-tp-list">
                             <p class="hint">Pilih kelas dan mapel untuk melihat TP.</p>
+                        </div>
+                    </div>
+
+                    <!-- Modal preview upload CP & TP -->
+                    <div id="penilaian-upload-modal" style="display:none; position:fixed; inset:0; z-index:1000">
+                        <div class="modal-backdrop" style="position:absolute; inset:0; background:rgba(0,0,0,.45)"
+                             id="upload-modal-backdrop"></div>
+                        <div class="modal-card" style="position:relative; z-index:1; max-width:720px; max-height:85vh; overflow-y:auto; margin:5vh auto; background:var(--color-surface); border-radius:10px; padding:24px; box-shadow:0 8px 32px rgba(0,0,0,.25)">
+                            <h3 style="margin:0 0 16px 0">Preview Upload CP &amp; TP</h3>
+                            <section style="margin-bottom:16px">
+                                <h4 style="margin:0 0 8px 0">Capaian Pembelajaran</h4>
+                                <div id="upload-preview-cp"></div>
+                            </section>
+                            <section style="margin-bottom:16px">
+                                <h4 style="margin:0 0 8px 0">Tujuan Pembelajaran</h4>
+                                <div id="upload-preview-tp"></div>
+                            </section>
+                            <div id="upload-preview-error" class="alert-error"
+                                 style="display:none; margin-bottom:12px; padding:10px 12px; border-radius:6px; font-size:13px; background:var(--color-danger-light,#fee2e2); color:var(--color-danger,#dc2626)"></div>
+                            <div style="display:flex; gap:8px; justify-content:flex-end">
+                                <button class="btn btn-ghost" id="upload-cancel-btn" type="button">Batal</button>
+                                <button class="btn btn-primary" id="upload-confirm-btn" type="button">Simpan ke Sistem</button>
+                            </div>
                         </div>
                     </div>
 

@@ -7094,6 +7094,28 @@ async function initPenilaianTab() {
         openTpForm(null);
     });
 
+    // ── Setup TP: download template Excel ──
+    document.getElementById('penilaian-download-template').addEventListener('click', () => {
+        downloadCpTpTemplate();
+    });
+
+    // ── Setup TP: upload CP & TP via Excel ──
+    document.getElementById('penilaian-upload-btn').addEventListener('click', () => {
+        document.getElementById('penilaian-upload-input').click();
+    });
+    document.getElementById('penilaian-upload-input').addEventListener('change', async e => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        await parseCpTpExcel(file);
+    });
+    document.getElementById('upload-cancel-btn').addEventListener('click', () => {
+        document.getElementById('penilaian-upload-modal').style.display = 'none';
+    });
+    document.getElementById('upload-modal-backdrop').addEventListener('click', () => {
+        document.getElementById('penilaian-upload-modal').style.display = 'none';
+    });
+
     // ── Setup TP: tombol batal di form ──
     document.getElementById('penilaian-cancel-tp').addEventListener('click', () => {
         document.getElementById('penilaian-tp-form-card').style.display = 'none';
@@ -7604,6 +7626,266 @@ async function deleteTp(loId) {
         await loadTpList();
     } catch (e) {
         alert(`Gagal hapus TP: ${esc(e.message)}`);
+    }
+}
+
+// ── Download Template Excel CP & TP ──────────────────────────────────────────
+
+function downloadCpTpTemplate() {
+    const wb = XLSX.utils.book_new();
+
+    const wsCP = XLSX.utils.aoa_to_sheet([
+        ['Elemen CP', 'Deskripsi CP'],
+        ['Elemen 1', 'Peserta didik mampu memahami...'],
+        ['Elemen 2', 'Peserta didik mampu menerapkan...'],
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsCP, 'Capaian Pembelajaran');
+
+    const wsTP = XLSX.utils.aoa_to_sheet([
+        ['Kode TP', 'Deskripsi TP', 'Urutan', 'KKTP Batas Bawah', 'KKTP Batas Atas', 'KKTP Predikat', 'KKTP Keterangan'],
+        ['TP 1.1', 'Peserta didik mampu...', 1, 0,  74,  'Perlu Bimbingan', ''],
+        ['TP 1.1', '',                        '',  75, 100, 'Sudah Tercapai',  ''],
+        ['TP 1.2', 'Peserta didik mampu...', 2, 0,  74,  'Perlu Bimbingan', ''],
+        ['TP 1.2', '',                        '',  75, 100, 'Sudah Tercapai',  ''],
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsTP, 'Tujuan Pembelajaran');
+
+    XLSX.writeFile(wb, 'Template_CP_TP.xlsx');
+}
+
+// ── Parse Excel Upload CP & TP ───────────────────────────────────────────────
+
+async function parseCpTpExcel(file) {
+    const errEl   = document.getElementById('upload-preview-error');
+    const confirmBtn = document.getElementById('upload-confirm-btn');
+    errEl.style.display = 'none';
+    confirmBtn.disabled = false;
+
+    const buf  = await file.arrayBuffer();
+    const wb   = XLSX.read(buf, { type: 'array' });
+
+    const sheetCP = wb.Sheets['Capaian Pembelajaran'];
+    const sheetTP = wb.Sheets['Tujuan Pembelajaran'];
+
+    const errors = [];
+
+    if (!sheetCP) errors.push('Sheet "Capaian Pembelajaran" tidak ditemukan.');
+    if (!sheetTP) errors.push('Sheet "Tujuan Pembelajaran" tidak ditemukan.');
+
+    if (errors.length) {
+        errEl.textContent = errors.join(' ');
+        errEl.style.display = '';
+        confirmBtn.disabled = true;
+        document.getElementById('penilaian-upload-modal').style.display = '';
+        return;
+    }
+
+    // Parse CP (skip baris header, index 0)
+    const rawCP = XLSX.utils.sheet_to_json(sheetCP, { header: 1, defval: '' });
+    const cpRows = rawCP.slice(1)
+        .filter(r => String(r[0] ?? '').trim())
+        .map(r => ({
+            elemen:      String(r[0] ?? '').trim(),
+            deskripsi_cp: String(r[1] ?? '').trim(),
+        }));
+
+    if (!cpRows.length) errors.push('Sheet "Capaian Pembelajaran" tidak punya data (selain header).');
+
+    // Parse TP (skip baris header, index 0)
+    const rawTP = XLSX.utils.sheet_to_json(sheetTP, { header: 1, defval: '' });
+    const tpRowsRaw = rawTP.slice(1).filter(r => r.some(c => String(c ?? '').trim() !== ''));
+
+    if (!tpRowsRaw.length) errors.push('Sheet "Tujuan Pembelajaran" tidak punya data (selain header).');
+
+    // Group by kode_tp
+    const tpMap = new Map();
+    let currentKode = null;
+    tpRowsRaw.forEach((r, ri) => {
+        const kode   = String(r[0] ?? '').trim();
+        const desk   = String(r[1] ?? '').trim();
+        const urutan = r[2] !== '' ? parseInt(r[2]) : null;
+        const bawah  = r[3] !== '' ? parseFloat(r[3]) : NaN;
+        const atas   = r[4] !== '' ? parseFloat(r[4]) : NaN;
+        const pred   = String(r[5] ?? '').trim();
+        const ket    = String(r[6] ?? '').trim();
+
+        if (kode) currentKode = kode;
+        if (!currentKode) return;
+
+        if (!tpMap.has(currentKode)) {
+            if (!desk) errors.push(`Baris ${ri + 2}: TP "${currentKode}" tidak punya deskripsi.`);
+            tpMap.set(currentKode, {
+                kode_tp:     currentKode,
+                deskripsi_tp: desk,
+                urutan:      isNaN(urutan) ? (tpMap.size + 1) : urutan,
+                kktp:        [],
+            });
+        }
+
+        if (!isNaN(bawah) && !isNaN(atas) && pred) {
+            if (bawah < 0 || bawah > 100 || atas < 0 || atas > 100)
+                errors.push(`Baris ${ri + 2}: KKTP "${pred}" — batas harus 0–100.`);
+            tpMap.get(currentKode).kktp.push({ batas_bawah: bawah, batas_atas: atas, predikat: pred, keterangan: ket || null });
+        }
+    });
+
+    const tpGroups = [...tpMap.values()];
+
+    // Render preview CP
+    const previewCP = document.getElementById('upload-preview-cp');
+    if (cpRows.length) {
+        previewCP.innerHTML = `
+            <table style="width:100%; border-collapse:collapse; font-size:13px">
+                <thead><tr style="background:var(--color-surface-alt,#f3f4f6)">
+                    <th style="padding:6px 8px; text-align:left; border:1px solid var(--color-border)">Elemen CP</th>
+                    <th style="padding:6px 8px; text-align:left; border:1px solid var(--color-border)">Deskripsi CP</th>
+                </tr></thead>
+                <tbody>${cpRows.map(r => `
+                    <tr>
+                        <td style="padding:6px 8px; border:1px solid var(--color-border); vertical-align:top; white-space:nowrap">${esc(r.elemen)}</td>
+                        <td style="padding:6px 8px; border:1px solid var(--color-border)">${esc(r.deskripsi_cp)}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+    } else {
+        previewCP.innerHTML = '<p class="hint">Tidak ada data CP.</p>';
+    }
+
+    // Render preview TP
+    const previewTP = document.getElementById('upload-preview-tp');
+    if (tpGroups.length) {
+        previewTP.innerHTML = tpGroups.map(tp => `
+            <div style="margin-bottom:12px; border:1px solid var(--color-border); border-radius:6px; overflow:hidden">
+                <div style="background:var(--color-surface-alt,#f3f4f6); padding:8px 10px; font-size:13px">
+                    <strong>${esc(tp.kode_tp)}</strong> — Urutan ${tp.urutan}<br>
+                    <span style="color:var(--color-text-muted)">${esc(tp.deskripsi_tp)}</span>
+                </div>
+                ${tp.kktp.length ? `
+                <table style="width:100%; border-collapse:collapse; font-size:12px">
+                    <thead><tr style="background:var(--color-surface-alt,#f3f4f6)">
+                        <th style="padding:4px 8px; border:1px solid var(--color-border)">Batas Bawah</th>
+                        <th style="padding:4px 8px; border:1px solid var(--color-border)">Batas Atas</th>
+                        <th style="padding:4px 8px; border:1px solid var(--color-border)">Predikat</th>
+                        <th style="padding:4px 8px; border:1px solid var(--color-border)">Keterangan</th>
+                    </tr></thead>
+                    <tbody>${tp.kktp.map(k => `
+                        <tr>
+                            <td style="padding:4px 8px; border:1px solid var(--color-border); text-align:center">${k.batas_bawah}</td>
+                            <td style="padding:4px 8px; border:1px solid var(--color-border); text-align:center">${k.batas_atas}</td>
+                            <td style="padding:4px 8px; border:1px solid var(--color-border)">${esc(k.predikat)}</td>
+                            <td style="padding:4px 8px; border:1px solid var(--color-border)">${esc(k.keterangan || '')}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>` : '<p class="hint" style="margin:6px 10px">Tidak ada KKTP.</p>'}
+            </div>`).join('');
+    } else {
+        previewTP.innerHTML = '<p class="hint">Tidak ada data TP.</p>';
+    }
+
+    if (errors.length) {
+        errEl.innerHTML = errors.map(e => `• ${esc(e)}`).join('<br>');
+        errEl.style.display = '';
+        confirmBtn.disabled = true;
+    }
+
+    // Pasang handler konfirmasi (replace agar tidak accumulate)
+    const newBtn = confirmBtn.cloneNode(true);
+    confirmBtn.replaceWith(newBtn);
+    if (!errors.length) {
+        newBtn.disabled = false;
+        newBtn.addEventListener('click', () => saveUploadedCpTp(cpRows, tpGroups));
+    }
+
+    document.getElementById('penilaian-upload-modal').style.display = '';
+}
+
+// ── Simpan hasil upload CP & TP ──────────────────────────────────────────────
+
+async function saveUploadedCpTp(cpRows, tpGroups) {
+    const errEl     = document.getElementById('upload-preview-error');
+    const confirmBtn = document.getElementById('upload-confirm-btn');
+    errEl.style.display = 'none';
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Menyimpan…';
+
+    const { subjectId, year, semester } = _penilaianCtx;
+    let fase = 'E';
+    if (_penilaianCtx.kelasId) {
+        try {
+            const ctx = await getClassProgramContext(_penilaianCtx.kelasId);
+            fase = ctx.grade_level === 10 ? 'E' : 'F';
+        } catch (_) { /* fallback E */ }
+    }
+
+    try {
+        // Langkah 1 — Simpan CP (upsert per elemen)
+        if (cpRows.length) {
+            const cpPayload = cpRows.map(r => ({
+                school_id:    currentUser.school_id,
+                subject_id:   subjectId,
+                program_id:   null,
+                fase,
+                elemen:       r.elemen,
+                deskripsi_cp: r.deskripsi_cp,
+                generated_by: 'MANUAL',
+                created_by:   currentUser.user_id,
+            }));
+            const { error } = await supabase
+                .from('capaian_pembelajaran')
+                .upsert(cpPayload, {
+                    onConflict:        'school_id,subject_id,program_id,fase,elemen',
+                    ignoreDuplicates:  false,
+                });
+            if (error) throw new Error(`Simpan CP: ${error.message}`);
+        }
+
+        // Langkah 2 — Simpan TP + KKTP
+        let savedTp = 0;
+        for (const tp of tpGroups) {
+            const { data, error: errLo } = await supabase
+                .from('learning_objectives')
+                .insert({
+                    school_id:       currentUser.school_id,
+                    teacher_user_id: currentUser.user_id,
+                    subject_id:      subjectId,
+                    academic_year:   year,
+                    semester,
+                    kode_tp:         tp.kode_tp,
+                    deskripsi_tp:    tp.deskripsi_tp,
+                    urutan:          tp.urutan,
+                    berlaku_untuk:   'SEMUA_KELAS',
+                    element_id:      null,
+                })
+                .select('learning_objective_id')
+                .single();
+            if (errLo) throw new Error(`Simpan TP "${tp.kode_tp}": ${errLo.message}`);
+
+            if (tp.kktp.length) {
+                const { error: errKk } = await supabase
+                    .from('assessment_criteria')
+                    .insert(tp.kktp.map(k => ({
+                        learning_objective_id: data.learning_objective_id,
+                        school_id:   currentUser.school_id,
+                        batas_bawah: k.batas_bawah,
+                        batas_atas:  k.batas_atas,
+                        predikat:    k.predikat,
+                        keterangan:  k.keterangan,
+                    })));
+                if (errKk) throw new Error(`Simpan KKTP "${tp.kode_tp}": ${errKk.message}`);
+            }
+            savedTp++;
+        }
+
+        document.getElementById('penilaian-upload-modal').style.display = 'none';
+        showPenilaianMsg('settings',
+            `${cpRows.length} CP dan ${savedTp} TP berhasil disimpan.`, 'success');
+        await loadTpList();
+
+    } catch (e) {
+        errEl.textContent = e.message;
+        errEl.style.display = '';
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Simpan ke Sistem';
     }
 }
 
