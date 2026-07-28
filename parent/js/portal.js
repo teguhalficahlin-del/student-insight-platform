@@ -95,7 +95,7 @@ const LC = {
 let children    = [];
 let currentClassId = null;
 let tabLoaded = { pkl:false, schedule:false, attendance:false,
-                  observations:false, cases:false, forum:false };
+                  observations:false, cases:false, forum:false, nilai:false };
 
 const STATUS_LABELS = {
     HADIR:       'Hadir',
@@ -190,6 +190,7 @@ function getTabKey(sectionId) {
         'section-observations': 'observations',
         'section-cases':        'cases',
         'section-forum':         'forum',
+        'section-nilai':         'nilai',
     };
     return map[sectionId] ?? null;
 }
@@ -228,6 +229,7 @@ async function showTab(sectionId) {
     }
     if (key === 'cases')        await loadCases(child.student_id);
     if (key === 'forum')         await initForumSection();
+    if (key === 'nilai')         await initNilaiTab(child.student_id);
 }
 
 const STATUS_STUDENT_LABEL = { AKTIF: 'Aktif', PKL: 'Sedang PKL', LULUS: 'Lulus', KELUAR: 'Tidak aktif' };
@@ -251,7 +253,7 @@ async function loadChildData(index) {
 
     // Reset lazy-load flags untuk anak baru
     tabLoaded = { pkl:false, schedule:false, attendance:false,
-                  observations:false, cases:false, forum:false };
+                  observations:false, cases:false, forum:false, nilai:false };
     forumInitDone = false;
 
     // Tampilkan tab-nav dan bottom-nav, atur tombol mana yang visible
@@ -1081,6 +1083,98 @@ function fmtRelative(isoStr) {
     const h = Math.floor(m / 60);
     if (h < 24) return `${h} jam lalu`;
     return formatDate(isoStr);
+}
+
+// ── Tab Nilai (ortu) ──
+let _nilaiStudentId = null;
+
+async function initNilaiTab(studentId) {
+    // Populate tahun ajaran hanya sekali
+    const selYear = document.getElementById('nilai-year-select');
+    if (!selYear.dataset.populated) {
+        selYear.dataset.populated = '1';
+        const yr = new Date().getFullYear();
+        [yr - 1, yr, yr + 1].forEach(y => {
+            const opt = document.createElement('option');
+            opt.value = `${y}/${y + 1}`;
+            opt.textContent = `${y}/${y + 1}`;
+            if (y === yr) opt.selected = true;
+            selYear.appendChild(opt);
+        });
+        selYear.addEventListener('change', () => loadNilaiGrid(_nilaiStudentId));
+        document.getElementById('nilai-semester-select')
+            .addEventListener('change', () => loadNilaiGrid(_nilaiStudentId));
+    }
+    _nilaiStudentId = studentId;
+    await loadNilaiGrid(studentId);
+}
+
+async function loadNilaiGrid(studentId) {
+    const gridEl = document.getElementById('nilai-grid');
+    const year   = document.getElementById('nilai-year-select').value || null;
+    const semStr = document.getElementById('nilai-semester-select').value;
+    const sem    = semStr ? parseInt(semStr) : null;
+    if (!studentId) {
+        gridEl.innerHTML = '<p class="hint">Pilih anak terlebih dahulu.</p>';
+        return;
+    }
+    gridEl.innerHTML = '<p class="hint">Memuat…</p>';
+    try {
+        const { data, error } = await supabase.rpc('fn_get_all_grades_summary', {
+            p_student_id:    studentId,
+            p_academic_year: year,
+            p_semester:      sem
+        });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Gagal memuat nilai');
+        renderNilaiGrid(data.grades || [], gridEl);
+    } catch (e) {
+        gridEl.innerHTML =
+            `<p class="hint" style="color:var(--color-danger)">Gagal memuat nilai: ${esc(e.message)}</p>`;
+    }
+}
+
+function renderNilaiGrid(grades, gridEl) {
+    if (!grades.length) {
+        gridEl.innerHTML = '<p class="hint">Belum ada nilai yang dipublikasi.</p>';
+        return;
+    }
+    const bySem = {};
+    grades.forEach(g => {
+        const key = `${g.academic_year} Sem ${g.semester}`;
+        if (!bySem[key]) bySem[key] = [];
+        bySem[key].push(g);
+    });
+    gridEl.innerHTML = Object.entries(bySem).map(([label, items]) => `
+        <div style="margin-bottom:24px">
+          <h4 style="margin:0 0 8px; color:var(--color-text-muted); font-size:13px;
+                     text-transform:uppercase; letter-spacing:0.5px">${esc(label)}</h4>
+          <table style="width:100%; border-collapse:collapse; font-size:13px">
+            <thead>
+              <tr style="border-bottom:2px solid var(--color-border)">
+                <th style="text-align:left; padding:8px 4px">Mata Pelajaran</th>
+                <th style="text-align:center; padding:8px 4px; width:80px">Nilai</th>
+                <th style="text-align:center; padding:8px 4px; width:80px">Predikat</th>
+                <th style="text-align:left; padding:8px 4px">Deskripsi</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(g => `
+                <tr style="border-bottom:1px solid var(--color-border)">
+                  <td style="padding:8px 4px">${esc(g.subject_name || '—')}</td>
+                  <td style="padding:8px 4px; text-align:center; font-weight:600">
+                    ${g.nilai_akhir != null ? Number(g.nilai_akhir).toFixed(1) : '—'}
+                  </td>
+                  <td style="padding:8px 4px; text-align:center">${esc(g.predikat || '—')}</td>
+                  <td style="padding:8px 4px; color:var(--color-text-muted); font-size:12px">
+                    ${esc(g.deskripsi_naratif || '—')}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+    `).join('');
 }
 
 init().catch(err => {

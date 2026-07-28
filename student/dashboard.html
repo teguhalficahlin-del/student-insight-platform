@@ -188,6 +188,35 @@
         </div>
     </div>
 
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: NILAI
+    ════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-nilai">
+        <div class="page-body">
+            <div class="section-card">
+                <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px">
+                    <div class="field" style="flex:1; min-width:160px">
+                        <label class="label">Tahun Ajaran</label>
+                        <select id="nilai-year-select" class="input">
+                            <option value="">Semua Tahun</option>
+                        </select>
+                    </div>
+                    <div class="field" style="min-width:140px">
+                        <label class="label">Semester</label>
+                        <select id="nilai-semester-select" class="input">
+                            <option value="">Semua Semester</option>
+                            <option value="1">Semester 1</option>
+                            <option value="2">Semester 2</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="nilai-grid">
+                    <p class="hint">Memuat nilai…</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div><!-- #app -->
 
 <script type="module" src="js/dashboard.js"></script>

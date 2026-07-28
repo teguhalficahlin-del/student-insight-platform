@@ -128,8 +128,8 @@ async function init() {
 }
 
 // ─── Tab navigation ──────────────────────────────────────────
-const TAB_SHORT = { jadwal: 'Jadwal', kehadiran: 'Hadir', observasi: 'Catatan', pkl: 'PKL' };
-const TAB_ICON  = { jadwal: 'ti-calendar', kehadiran: 'ti-clipboard-check', observasi: 'ti-notes', pkl: 'ti-briefcase', forum: 'ti-messages' };
+const TAB_SHORT = { jadwal: 'Jadwal', kehadiran: 'Hadir', observasi: 'Catatan', pkl: 'PKL', nilai: 'Nilai' };
+const TAB_ICON  = { jadwal: 'ti-calendar', kehadiran: 'ti-clipboard-check', observasi: 'ti-notes', pkl: 'ti-briefcase', forum: 'ti-messages', nilai: 'ti-chart-bar' };
 
 function buildTabs() {
     const nav    = document.getElementById('tab-nav');
@@ -140,6 +140,7 @@ function buildTabs() {
     tabs.push({ key: 'kehadiran', label: 'Kehadiran' });
     tabs.push({ key: 'observasi', label: 'Catatan' });
     tabs.push({ key: 'forum', label: 'Forum' });
+    tabs.push({ key: 'nilai', label: 'Nilai' });
     if (isPkl)  tabs.push({ key: 'pkl', label: 'PKL' });
 
     nav.innerHTML = tabs.map(t =>
@@ -178,6 +179,7 @@ async function loadTabContent(key) {
         case 'observasi': if (!obsLoaded) await loadObservations(); break;
         case 'pkl':       if (!pklLoaded) await loadPkl(); break;
         case 'forum':     await initForumTab(); break;
+        case 'nilai':     await initNilaiTab(); break;
     }
 }
 
@@ -974,4 +976,90 @@ function fmtRelative(isoStr) {
     if (diff < 3600) return `${Math.floor(diff / 60)} menit lalu`;
     if (diff < 86400) return `${Math.floor(diff / 3600)} jam lalu`;
     return `${Math.floor(diff / 86400)} hari lalu`;
+}
+
+// ── Tab Nilai ──
+let _nilaiTabInit = false;
+
+async function initNilaiTab() {
+    if (!_nilaiTabInit) {
+        _nilaiTabInit = true;
+        const yr = new Date().getFullYear();
+        const selYear = document.getElementById('nilai-year-select');
+        [yr - 1, yr, yr + 1].forEach(y => {
+            const opt = document.createElement('option');
+            opt.value = `${y}/${y + 1}`;
+            opt.textContent = `${y}/${y + 1}`;
+            if (y === yr) opt.selected = true;
+            selYear.appendChild(opt);
+        });
+        selYear.addEventListener('change', () => loadNilaiGrid());
+        document.getElementById('nilai-semester-select')
+            .addEventListener('change', () => loadNilaiGrid());
+    }
+    await loadNilaiGrid();
+}
+
+async function loadNilaiGrid() {
+    const gridEl = document.getElementById('nilai-grid');
+    const year   = document.getElementById('nilai-year-select').value || null;
+    const semStr = document.getElementById('nilai-semester-select').value;
+    const sem    = semStr ? parseInt(semStr) : null;
+    gridEl.innerHTML = '<p class="hint">Memuat…</p>';
+    try {
+        const { data, error } = await supabase.rpc('fn_get_all_grades_summary', {
+            p_student_id:    null,
+            p_academic_year: year,
+            p_semester:      sem
+        });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Gagal memuat nilai');
+        renderNilaiGrid(data.grades || [], gridEl);
+    } catch (e) {
+        gridEl.innerHTML =
+            `<p class="hint" style="color:var(--color-danger)">Gagal memuat nilai: ${esc(e.message)}</p>`;
+    }
+}
+
+function renderNilaiGrid(grades, gridEl) {
+    if (!grades.length) {
+        gridEl.innerHTML = '<p class="hint">Belum ada nilai yang dipublikasi.</p>';
+        return;
+    }
+    const bySem = {};
+    grades.forEach(g => {
+        const key = `${g.academic_year} Sem ${g.semester}`;
+        if (!bySem[key]) bySem[key] = [];
+        bySem[key].push(g);
+    });
+    gridEl.innerHTML = Object.entries(bySem).map(([label, items]) => `
+        <div style="margin-bottom:24px">
+          <h4 style="margin:0 0 8px; color:var(--color-text-muted); font-size:13px;
+                     text-transform:uppercase; letter-spacing:0.5px">${esc(label)}</h4>
+          <table style="width:100%; border-collapse:collapse; font-size:13px">
+            <thead>
+              <tr style="border-bottom:2px solid var(--color-border)">
+                <th style="text-align:left; padding:8px 4px">Mata Pelajaran</th>
+                <th style="text-align:center; padding:8px 4px; width:80px">Nilai</th>
+                <th style="text-align:center; padding:8px 4px; width:80px">Predikat</th>
+                <th style="text-align:left; padding:8px 4px">Deskripsi</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(g => `
+                <tr style="border-bottom:1px solid var(--color-border)">
+                  <td style="padding:8px 4px">${esc(g.subject_name || '—')}</td>
+                  <td style="padding:8px 4px; text-align:center; font-weight:600">
+                    ${g.nilai_akhir != null ? Number(g.nilai_akhir).toFixed(1) : '—'}
+                  </td>
+                  <td style="padding:8px 4px; text-align:center">${esc(g.predikat || '—')}</td>
+                  <td style="padding:8px 4px; color:var(--color-text-muted); font-size:12px">
+                    ${esc(g.deskripsi_naratif || '—')}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+    `).join('');
 }
