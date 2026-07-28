@@ -7030,7 +7030,7 @@ async function initPenilaianTab() {
 
     // ── Switching sub-sub-tab penilaian (Setup | Input | Hasil) ──
     document.querySelectorAll('.penilaian-sub-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
             const sub = btn.dataset.penilaianSub;
             document.querySelectorAll('.penilaian-sub-btn').forEach(b => {
                 const active = b.dataset.penilaianSub === sub;
@@ -7043,6 +7043,7 @@ async function initPenilaianTab() {
                 document.getElementById(`penilaian-sub-${s}`).style.display =
                     s === sub ? '' : 'none';
             });
+            if (sub === 'input') await initPenilaianInputTab();
         });
     });
 
@@ -7130,6 +7131,12 @@ async function initPenilaianTab() {
     document.getElementById('penilaian-save-settings')
         .addEventListener('click', async () => {
             await saveGradingSettings();
+        });
+
+    // ── Input Nilai: tombol simpan ──
+    document.getElementById('penilaian-save-nilai')
+        .addEventListener('click', async () => {
+            await saveInputNilai();
         });
 }
 
@@ -7570,6 +7577,216 @@ function showPenilaianMsg(area, text, type) {
         ? 'var(--color-danger)'
         : 'var(--color-success, #16a34a)';
     setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+// ── Sub-tab Input Nilai ──────────────────────────────────────
+
+let _penilaianInputInit = false;
+
+async function initPenilaianInputTab() {
+    // Populate dropdown TP dari _penilaianTpList
+    const selTp = document.getElementById('penilaian-input-tp-select');
+    selTp.innerHTML = '<option value="">— Pilih TP —</option>';
+    _penilaianTpList.forEach(tp => {
+        const opt = document.createElement('option');
+        opt.value = tp.learning_objective_id;
+        opt.textContent = `${tp.kode_tp} — ${tp.deskripsi_tp.substring(0, 50)}`;
+        selTp.appendChild(opt);
+    });
+
+    // Set tanggal default hari ini
+    const tanggalEl = document.getElementById('penilaian-input-tanggal');
+    if (!tanggalEl.value) tanggalEl.value = localDateStr();
+
+    if (!_penilaianInputInit) {
+        _penilaianInputInit = true;
+
+        selTp.addEventListener('change', async () => {
+            if (selTp.value) {
+                await loadInputGrid(selTp.value);
+            } else {
+                document.getElementById('penilaian-input-grid').innerHTML =
+                    '<p class="hint">Pilih TP untuk menampilkan daftar siswa.</p>';
+                document.getElementById('penilaian-save-nilai').style.display = 'none';
+            }
+        });
+
+        document.getElementById('penilaian-input-tipe').addEventListener('change', async () => {
+            if (selTp.value) await loadInputGrid(selTp.value);
+        });
+    }
+
+    document.getElementById('penilaian-input-grid').innerHTML =
+        '<p class="hint">Pilih TP untuk menampilkan daftar siswa.</p>';
+    document.getElementById('penilaian-save-nilai').style.display = 'none';
+}
+
+async function loadInputGrid(loId) {
+    const gridEl = document.getElementById('penilaian-input-grid');
+    gridEl.innerHTML = '<p class="hint">Memuat siswa…</p>';
+    const { kelasId, year } = _penilaianCtx;
+    if (!kelasId) {
+        gridEl.innerHTML = '<p class="hint">Pilih kelas terlebih dahulu.</p>';
+        return;
+    }
+    try {
+        // Ambil daftar siswa aktif di kelas via class_enrollments
+        const students = await getEnrolledStudents(kelasId, year);
+
+        if (!students?.length) {
+            gridEl.innerHTML = '<p class="hint">Tidak ada siswa aktif di kelas ini.</p>';
+            document.getElementById('penilaian-save-nilai').style.display = 'none';
+            return;
+        }
+
+        // Ambil riwayat nilai untuk TP ini, tipe ini, kelas ini
+        const tipe = document.getElementById('penilaian-input-tipe').value;
+        const { data: existing, error: aErr } = await supabase
+            .from('tp_assessments')
+            .select('assessment_id, student_id, nilai_angka, judul, tanggal')
+            .eq('school_id', currentUser.school_id)
+            .eq('learning_objective_id', loId)
+            .eq('class_id', kelasId)
+            .eq('tipe', tipe)
+            .eq('is_void', false)
+            .order('tanggal', { ascending: false });
+        if (aErr) throw aErr;
+
+        // Group riwayat per student_id
+        const riwayat = {};
+        (existing || []).forEach(a => {
+            if (!riwayat[a.student_id]) riwayat[a.student_id] = [];
+            riwayat[a.student_id].push(a);
+        });
+
+        gridEl.innerHTML = `
+            <div style="overflow-x:auto">
+            <table style="width:100%; border-collapse:collapse; font-size:13px">
+              <thead>
+                <tr style="border-bottom:2px solid var(--color-border)">
+                  <th style="text-align:left; padding:8px 4px; width:36px">No</th>
+                  <th style="text-align:left; padding:8px 4px">Nama Siswa</th>
+                  <th style="text-align:left; padding:8px 4px; width:80px">NIS</th>
+                  <th style="text-align:center; padding:8px 4px; width:110px">Nilai Baru</th>
+                  <th style="text-align:left; padding:8px 4px">Riwayat</th>
+                </tr>
+              </thead>
+              <tbody id="penilaian-input-tbody">
+                ${students.map((s, i) => `
+                  <tr style="border-bottom:1px solid var(--color-border)"
+                      data-student-id="${esc(s.student_id)}">
+                    <td style="padding:8px 4px; color:var(--color-text-muted)">${i + 1}</td>
+                    <td style="padding:8px 4px">${esc(s.full_name)}</td>
+                    <td style="padding:8px 4px; color:var(--color-text-muted)">${esc(s.nis || '')}</td>
+                    <td style="padding:8px 4px; text-align:center">
+                      <input type="number" class="input nilai-input"
+                             min="0" max="100" step="0.01" placeholder="0–100"
+                             style="width:84px; text-align:center">
+                    </td>
+                    <td style="padding:8px 4px">
+                      ${renderRiwayatNilai(riwayat[s.student_id] || [])}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            </div>
+        `;
+        document.getElementById('penilaian-save-nilai').style.display = '';
+
+    } catch (e) {
+        gridEl.innerHTML =
+            `<p class="hint" style="color:var(--color-danger)">Gagal memuat siswa: ${esc(e.message)}</p>`;
+    }
+}
+
+function renderRiwayatNilai(entries) {
+    if (!entries.length) return '<span style="color:var(--color-text-muted)">—</span>';
+    return entries.map(a => `
+        <span style="display:inline-flex; align-items:center; gap:4px;
+                     background:var(--color-surface-alt); border-radius:4px;
+                     padding:2px 6px; margin:2px; font-size:12px">
+            <strong>${a.nilai_angka != null ? a.nilai_angka : '—'}</strong>
+            ${a.judul ? `<span style="color:var(--color-text-muted)">${esc(a.judul)}</span>` : ''}
+            <button type="button"
+                    style="background:none; border:none; cursor:pointer;
+                           color:var(--color-danger); font-size:11px;
+                           padding:0 2px; line-height:1"
+                    onclick="voidNilai('${esc(a.assessment_id)}', this)">×</button>
+        </span>
+    `).join('');
+}
+
+async function voidNilai(assessmentId, btnEl) {
+    if (!confirm('Batalkan nilai ini?')) return;
+    try {
+        const { error } = await supabase
+            .from('tp_assessments')
+            .update({ is_void: true, void_reason: 'Dibatalkan oleh guru' })
+            .eq('assessment_id', assessmentId)
+            .eq('school_id', currentUser.school_id);
+        if (error) throw error;
+        btnEl.closest('span').remove();
+    } catch (e) {
+        alert(`Gagal membatalkan nilai: ${esc(e.message)}`);
+    }
+}
+
+async function saveInputNilai() {
+    const loId  = document.getElementById('penilaian-input-tp-select').value;
+    const tipe  = document.getElementById('penilaian-input-tipe').value;
+    const judul = document.getElementById('penilaian-input-judul').value.trim();
+    const tgl   = document.getElementById('penilaian-input-tanggal').value;
+
+    if (!loId) {
+        showPenilaianMsg('input', 'Pilih Tujuan Pembelajaran terlebih dahulu.', 'error');
+        return;
+    }
+    if (!tgl) {
+        showPenilaianMsg('input', 'Tanggal wajib diisi.', 'error');
+        return;
+    }
+
+    const rows = [...document.querySelectorAll('#penilaian-input-tbody tr')];
+    const { kelasId } = _penilaianCtx;
+
+    const toInsert = [];
+    rows.forEach(tr => {
+        const studentId = tr.dataset.studentId;
+        const val = tr.querySelector('.nilai-input')?.value.trim();
+        if (!val || isNaN(parseFloat(val))) return;
+        toInsert.push({
+            school_id:             currentUser.school_id,
+            learning_objective_id: loId,
+            student_id:            studentId,
+            teacher_user_id:       currentUser.user_id,
+            class_id:              kelasId,
+            tipe,
+            judul:                 judul || null,
+            nilai_angka:           parseFloat(val),
+            tanggal:               tgl
+        });
+    });
+
+    if (!toInsert.length) {
+        showPenilaianMsg('input', 'Tidak ada nilai yang diisi.', 'error');
+        return;
+    }
+
+    try {
+        const { error } = await supabase
+            .from('tp_assessments')
+            .insert(toInsert);
+        if (error) throw error;
+        showPenilaianMsg('input', `${toInsert.length} nilai berhasil disimpan.`, 'success');
+        rows.forEach(tr => {
+            const el = tr.querySelector('.nilai-input');
+            if (el) el.value = '';
+        });
+        await loadInputGrid(loId);
+    } catch (e) {
+        showPenilaianMsg('input', `Gagal menyimpan: ${esc(e.message)}`, 'error');
+    }
 }
 
 // ─── Start ───────────────────────────────────────────────────
