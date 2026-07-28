@@ -1853,3 +1853,36 @@ export async function getLateArrivalsAggregate(dateStart, dateEnd) {
         .sort((a, b) => b[0].localeCompare(a[0]))
         .map(([date, total]) => ({ date, total }));
 }
+
+export async function getClassProgramContext(classId) {
+    const { data, error } = await supabase
+        .from('classes')
+        .select('grade_level, programs(code)')
+        .eq('class_id', classId)
+        .single();
+    if (error) throw error;
+    return {
+        grade_level:  data.grade_level ?? null,
+        program_code: data.programs?.code ?? null,
+    };
+}
+
+export async function getCpForSubject(subjectId, programCode, gradeLevel) {
+    const { data, error } = await supabase.rpc('fn_get_cp_for_subject', {
+        p_subject_id:   subjectId,
+        p_program_code: programCode,
+        p_grade_level:  gradeLevel,
+    });
+    if (error) throw error;
+    return data;
+}
+
+export async function checkElementDuplicate(elementId, schoolId, loId) {
+    const { data, error } = await supabase.rpc('fn_check_element_duplicate', {
+        p_element_id: elementId,
+        p_school_id:  schoolId,
+        p_lo_id:      loId ?? null,
+    });
+    if (error) throw error;
+    return data ?? [];
+}

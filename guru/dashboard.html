@@ -1024,6 +1024,36 @@
                             <div id="penilaian-kktp-rows"></div>
                         </div>
 
+                        <!-- Panel CP -->
+                        <div id="penilaian-cp-panel" style="display:none; margin-top:16px; padding:12px; background:var(--color-surface-alt,var(--color-surface)); border:1px solid var(--color-border); border-radius:8px">
+                            <div id="cp-panel-loading" style="display:none">
+                                <p class="hint" style="margin:0">Memuat Capaian Pembelajaran...</p>
+                            </div>
+                            <div id="cp-panel-found" style="display:none">
+                                <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:6px; flex-wrap:wrap">
+                                    <span id="cp-panel-badge" style="font-size:11px; font-weight:700; padding:2px 7px; border-radius:999px; background:var(--color-primary); color:#fff"></span>
+                                    <strong id="cp-panel-subject-name" style="font-size:14px"></strong>
+                                    <span id="cp-panel-bskap" class="hint" style="font-size:12px"></span>
+                                </div>
+                                <p id="cp-panel-umum" style="font-size:13px; color:var(--color-text-muted); margin:0 0 10px 0; line-height:1.5"></p>
+                                <div id="cp-panel-elemen-list"></div>
+                            </div>
+                            <div id="cp-panel-not-found" style="display:none">
+                                <p class="hint" style="margin:0">ℹ️ CP untuk mapel ini belum terhubung ke repositori. Anda tetap bisa membuat TP secara manual.</p>
+                            </div>
+                        </div>
+
+                        <!-- Picker elemen CP (hanya muncul jika CP ditemukan) -->
+                        <div id="penilaian-cp-elemen-picker" style="display:none; margin-top:12px">
+                            <div class="field">
+                                <label class="label">Elemen CP yang Dicakup TP Ini <span class="hint">(opsional)</span></label>
+                                <select id="penilaian-tp-element-id" class="input">
+                                    <option value="">— Tidak dikaitkan ke elemen CP —</option>
+                                </select>
+                            </div>
+                            <div id="penilaian-duplikat-warning" class="alert-warning" style="display:none; margin-top:8px; padding:10px 12px; border-radius:6px; font-size:13px"></div>
+                        </div>
+
                         <div style="display:flex; gap:8px; margin-top:16px">
                             <button class="btn btn-primary" id="penilaian-save-tp" type="button">Simpan TP</button>
                             <button class="btn btn-ghost" id="penilaian-cancel-tp" type="button">Batal</button>

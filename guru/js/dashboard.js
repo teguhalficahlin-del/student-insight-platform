@@ -45,6 +45,7 @@ import {
     isOnDutyToday, getTodayLateArrivals, recordLateArrival, deleteLateArrival,
     getLateArrivalsByRange, getLateArrivalsAggregate,
     getTodayExits, recordExit, updateReturnTime, deleteExit,
+    getClassProgramContext, getCpForSubject, checkElementDuplicate,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
@@ -7096,6 +7097,8 @@ async function initPenilaianTab() {
     // ── Setup TP: tombol batal di form ──
     document.getElementById('penilaian-cancel-tp').addEventListener('click', () => {
         document.getElementById('penilaian-tp-form-card').style.display = 'none';
+        document.getElementById('penilaian-cp-panel').style.display        = 'none';
+        document.getElementById('penilaian-cp-elemen-picker').style.display = 'none';
     });
 
     // ── Setup TP: berlaku_untuk toggle ──
@@ -7273,6 +7276,7 @@ async function openTpForm(loId) {
     document.getElementById('penilaian-tp-kelas-list').style.display = 'none';
     document.getElementById('penilaian-kktp-rows').innerHTML = '';
 
+    let preselectedElementId = null;
     if (loId) {
         title.textContent = 'Edit Tujuan Pembelajaran';
         const tp = _penilaianTpList.find(t => t.learning_objective_id === loId);
@@ -7284,6 +7288,7 @@ async function openTpForm(loId) {
             if (tp.berlaku_untuk === 'KELAS_TERTENTU') {
                 document.getElementById('penilaian-tp-kelas-list').style.display = '';
             }
+            preselectedElementId = tp.element_id || null;
         }
         await loadKktpRows(loId);
     } else {
@@ -7294,6 +7299,115 @@ async function openTpForm(loId) {
     await populateTpKelasCheckboxes(loId);
     card.style.display = '';
     card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Muat panel CP secara async (tidak memblokir tampilan form)
+    loadCpPanel(loId, preselectedElementId);
+}
+
+async function loadCpPanel(loId, preselectedElementId) {
+    const panel   = document.getElementById('penilaian-cp-panel');
+    const loading = document.getElementById('cp-panel-loading');
+    const found   = document.getElementById('cp-panel-found');
+    const notFound= document.getElementById('cp-panel-not-found');
+    const picker  = document.getElementById('penilaian-cp-elemen-picker');
+    const warning = document.getElementById('penilaian-duplikat-warning');
+
+    // Reset state
+    panel.style.display   = '';
+    loading.style.display = '';
+    found.style.display   = 'none';
+    notFound.style.display= 'none';
+    picker.style.display  = 'none';
+    warning.style.display = 'none';
+    document.getElementById('penilaian-tp-element-id').innerHTML =
+        '<option value="">— Tidak dikaitkan ke elemen CP —</option>';
+
+    try {
+        const { kelasId, subjectId } = _penilaianCtx;
+        if (!kelasId || !subjectId) {
+            panel.style.display = 'none';
+            return;
+        }
+
+        const ctx = await getClassProgramContext(kelasId);
+        const cp  = await getCpForSubject(subjectId, ctx.program_code, ctx.grade_level);
+
+        loading.style.display = 'none';
+
+        if (!cp || !cp.found) {
+            notFound.style.display = '';
+            return;
+        }
+
+        // Isi header
+        const badge = document.getElementById('cp-panel-badge');
+        badge.textContent = cp.confidence;
+        badge.style.background = cp.confidence === 'HIGH'
+            ? 'var(--color-primary)'
+            : cp.confidence === 'MEDIUM' ? '#f59e0b' : '#ef4444';
+        document.getElementById('cp-panel-subject-name').textContent = cp.core_subject_name || '';
+        document.getElementById('cp-panel-bskap').textContent = cp.bskap_ref ? `(${cp.bskap_ref})` : '';
+        document.getElementById('cp-panel-umum').textContent  = cp.cp_umum || '';
+
+        // Render daftar elemen (collapsed per elemen)
+        const elemenList = document.getElementById('cp-panel-elemen-list');
+        elemenList.innerHTML = '';
+        (cp.elemen || []).forEach(el => {
+            const item = document.createElement('div');
+            item.style.cssText = 'border-top:1px solid var(--color-border); padding:6px 0';
+            item.innerHTML = `
+                <div style="display:flex; align-items:center; gap:6px; cursor:pointer"
+                     onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display?'':'block'">
+                    <span style="font-size:12px; color:var(--color-text-muted)">▶</span>
+                    <span style="font-size:13px; font-weight:600">${esc(el.nama_elemen)}</span>
+                </div>
+                <p style="display:none; font-size:12px; color:var(--color-text-muted); margin:4px 0 0 18px; line-height:1.5">${esc(el.deskripsi_cp || '')}</p>
+            `;
+            elemenList.appendChild(item);
+        });
+
+        found.style.display = '';
+
+        // Isi dropdown picker
+        const sel = document.getElementById('penilaian-tp-element-id');
+        (cp.elemen || []).forEach(el => {
+            const opt = document.createElement('option');
+            opt.value       = el.element_id;
+            opt.textContent = `${el.element_order}. ${el.nama_elemen}`;
+            sel.appendChild(opt);
+        });
+        if (preselectedElementId) sel.value = preselectedElementId;
+
+        picker.style.display = '';
+
+        // Event: cek duplikat saat elemen dipilih
+        sel.onchange = async () => {
+            warning.style.display = 'none';
+            if (!sel.value) return;
+            try {
+                const dupes = await checkElementDuplicate(
+                    sel.value, currentUser.school_id, loId || null
+                );
+                if (dupes.length > 0) {
+                    const lines = dupes.map(d =>
+                        `• ${esc(d.guru_nama)} — ${esc(d.kelas_nama)} — ${esc(d.kode_tp)}`
+                    ).join('<br>');
+                    warning.innerHTML = `⚠️ Elemen ini sudah digunakan di TP lain:<br>${lines}`;
+                    warning.style.display = '';
+                }
+            } catch (e) {
+                console.error('checkElementDuplicate:', e);
+            }
+        };
+
+        // Jika mode Edit dan sudah ada element_id, langsung cek duplikat
+        if (preselectedElementId && sel.value) sel.dispatchEvent(new Event('change'));
+
+    } catch (e) {
+        console.error('loadCpPanel:', e);
+        loading.style.display = 'none';
+        notFound.style.display = '';
+    }
 }
 
 async function populateTpKelasCheckboxes(loId) {
@@ -7374,11 +7488,13 @@ function addKktpRow(criterion = null) {
 }
 
 async function saveTp() {
-    const loId    = document.getElementById('penilaian-tp-id').value || null;
-    const kode    = document.getElementById('penilaian-tp-kode').value.trim();
-    const desk    = document.getElementById('penilaian-tp-deskripsi').value.trim();
-    const urutan  = parseInt(document.getElementById('penilaian-tp-urutan').value) || 1;
-    const berlaku = document.getElementById('penilaian-tp-berlaku').value;
+    const loId     = document.getElementById('penilaian-tp-id').value || null;
+    const kode     = document.getElementById('penilaian-tp-kode').value.trim();
+    const desk     = document.getElementById('penilaian-tp-deskripsi').value.trim();
+    const urutan   = parseInt(document.getElementById('penilaian-tp-urutan').value) || 1;
+    const berlaku  = document.getElementById('penilaian-tp-berlaku').value;
+    const elementIdRaw = document.getElementById('penilaian-tp-element-id')?.value || '';
+    const elementId    = elementIdRaw || null;
     const { subjectId, year, semester } = _penilaianCtx;
 
     if (!kode || !desk) {
@@ -7395,7 +7511,7 @@ async function saveTp() {
         if (loId) {
             const { error } = await supabase
                 .from('learning_objectives')
-                .update({ kode_tp: kode, deskripsi_tp: desk, urutan, berlaku_untuk: berlaku })
+                .update({ kode_tp: kode, deskripsi_tp: desk, urutan, berlaku_untuk: berlaku, element_id: elementId })
                 .eq('learning_objective_id', loId)
                 .eq('school_id', currentUser.school_id);
             if (error) throw error;
@@ -7411,7 +7527,8 @@ async function saveTp() {
                     kode_tp:         kode,
                     deskripsi_tp:    desk,
                     urutan,
-                    berlaku_untuk:   berlaku
+                    berlaku_untuk:   berlaku,
+                    element_id:      elementId
                 })
                 .select('learning_objective_id')
                 .single();
@@ -7466,6 +7583,8 @@ async function saveTp() {
         }
 
         document.getElementById('penilaian-tp-form-card').style.display = 'none';
+        document.getElementById('penilaian-cp-panel').style.display        = 'none';
+        document.getElementById('penilaian-cp-elemen-picker').style.display = 'none';
         await loadTpList();
 
     } catch (e) {
