@@ -4947,13 +4947,14 @@ function renderRecipientChips() {
 
     container.querySelectorAll('.recipient-chip').forEach(el => el.remove());
 
-    if (_forumRecipients.size === 0) {
+    if (_forumRecipients.size === 0 && _forumGroupLabels.size === 0) {
         emptyEl.style.display = 'inline';
         countEl.textContent = '';
         return;
     }
     emptyEl.style.display = 'none';
-    countEl.textContent = `${_forumRecipients.size} penerima dipilih`;
+    countEl.textContent = _forumRecipients.size > 0
+        ? `${_forumRecipients.size} penerima dipilih` : '';
 
     const chipCss = 'display:inline-flex;align-items:center;gap:4px;padding:2px 8px;' +
         'background:var(--color-bg-alt);border-radius:12px;font-size:12px';
