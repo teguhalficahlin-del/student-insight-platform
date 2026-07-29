@@ -16,6 +16,9 @@ import {
     fetchLateArrivals,
     fetchAttendanceSummary,
     getExitsByRange,
+    getForumSekolahPosts, getForumSekolahSentPosts, getForumSekolahComments,
+    addForumSekolahComment, addForumSekolahAck, createForumSekolahPost,
+    updateForumSekolahPost, deleteForumSekolahPost, getForumRecipientCandidates,
 } from './api.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
 
@@ -26,7 +29,7 @@ const logoutBtn      = document.getElementById('logout-btn');
 const loadingEl      = document.getElementById('loading');
 const tabNav         = document.getElementById('tab-nav');
 const bottomNav      = document.getElementById('tu-bottom-nav');
-const ALL_SECTIONS   = ['section-piket', 'section-late', 'section-exits', 'section-attendance'];
+const ALL_SECTIONS   = ['section-piket', 'section-late', 'section-exits', 'section-attendance', 'section-forum'];
 const tabBtns        = document.querySelectorAll('.tab-btn');
 
 let currentUser  = null;
@@ -48,9 +51,10 @@ function showTab(sectionId) {
     tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === sectionId));
 }
 
-tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => showTab(btn.dataset.tab));
-});
+tabBtns.forEach(btn => btn.addEventListener('click', async () => {
+    showTab(btn.dataset.tab);
+    if (btn.dataset.tab === 'section-forum') await initForumSection();
+}));
 
 // ── Helpers ────────────────────────────────────────────────────
 function esc(str) {
@@ -393,6 +397,380 @@ logoutBtn.addEventListener('click', async () => {
     await logout();
     window.location.replace(getLoginUrl());
 });
+
+// ─── Forum Sekolah ────────────────────────────────────────────
+
+let _forumMode        = 'masuk';
+let _forumOffset      = 0;
+let _forumHasMore     = false;
+let _forumInitDone    = false;
+let _forumScope       = null;
+let _forumEditPostId  = null;
+let _forumRecipients  = new Map();
+let _forumPrograms    = [];
+let _forumClasses     = [];
+
+async function initForumSection() {
+    if (_forumInitDone) { await loadForumPosts(); return; }
+    _forumInitDone = true;
+
+    const { data: scope } = await supabase
+        .rpc('fn_get_user_forum_scope', { p_user_id: currentUser.user_id })
+        .maybeSingle();
+    _forumScope = scope;
+
+    const [progRes, classRes] = await Promise.all([
+        supabase.from('programs').select('program_id, name').eq('is_active', true)
+            .eq('school_id', currentUser.school_id).order('name'),
+        supabase.from('classes').select('class_id, name, grade_level, program_id')
+            .eq('is_active', true).eq('school_id', currentUser.school_id).order('name'),
+    ]);
+    _forumPrograms = progRes.data ?? [];
+    _forumClasses  = classRes.data ?? [];
+
+    const selJur = document.getElementById('forum-filter-jurusan');
+    _forumPrograms.forEach(p => {
+        selJur.insertAdjacentHTML('beforeend',
+            `<option value="${p.program_id}">${esc(p.name)}</option>`);
+    });
+    const selKls = document.getElementById('forum-filter-kelas');
+    _forumClasses.forEach(c => {
+        selKls.insertAdjacentHTML('beforeend',
+            `<option value="${c.class_id}">${esc(c.name)}</option>`);
+    });
+
+    document.getElementById('forum-tab-masuk').addEventListener('click', () => {
+        _forumMode = 'masuk'; _forumOffset = 0;
+        document.getElementById('forum-tab-masuk').className = 'btn btn-primary';
+        document.getElementById('forum-tab-terkirim').className = 'btn btn-secondary';
+        loadForumPosts();
+    });
+    document.getElementById('forum-tab-terkirim').addEventListener('click', () => {
+        _forumMode = 'terkirim'; _forumOffset = 0;
+        document.getElementById('forum-tab-masuk').className = 'btn btn-secondary';
+        document.getElementById('forum-tab-terkirim').className = 'btn btn-primary';
+        loadForumPosts();
+    });
+
+    document.getElementById('btn-forum-buat').addEventListener('click', () => openForumModal());
+    document.getElementById('btn-forum-modal-batal').addEventListener('click', closeForumModal);
+    document.getElementById('modal-forum-post').addEventListener('click', e => {
+        if (e.target === e.currentTarget) closeForumModal();
+    });
+    document.getElementById('btn-forum-modal-simpan').addEventListener('click', submitForumPost);
+
+    document.getElementById('btn-forum-detail-close').addEventListener('click', closeForumDetail);
+    document.getElementById('modal-forum-detail').addEventListener('click', e => {
+        if (e.target === e.currentTarget) closeForumDetail();
+    });
+    document.getElementById('btn-forum-comment-submit').addEventListener('click', submitForumComment);
+    document.getElementById('btn-forum-edit').addEventListener('click', () => {
+        const postId = document.getElementById('modal-forum-detail').dataset.postId;
+        openForumModal(postId);
+    });
+    document.getElementById('btn-forum-delete').addEventListener('click', async () => {
+        const postId = document.getElementById('modal-forum-detail').dataset.postId;
+        if (!confirm('Hapus posting ini?')) return;
+        try {
+            await deleteForumSekolahPost(postId);
+            closeForumDetail();
+            loadForumPosts();
+        } catch (err) { alert(fe(err)); }
+    });
+
+    document.getElementById('btn-load-more-forum')
+        .addEventListener('click', () => loadForumPosts(true));
+
+    await loadForumPosts();
+}
+
+async function loadForumPosts(loadMore = false) {
+    const loadingEl = document.getElementById('forum-loading');
+    const listEl    = document.getElementById('forum-posts-list');
+    const moreBtn   = document.getElementById('btn-load-more-forum');
+    const LIMIT     = 20;
+
+    if (!loadMore) { _forumOffset = 0; listEl.innerHTML = ''; }
+    loadingEl.style.display = ''; loadingEl.textContent = 'Memuat…';
+    moreBtn.style.display = 'none';
+
+    try {
+        const posts = _forumMode === 'masuk'
+            ? await getForumSekolahPosts(currentUser.school_id, currentUser.user_id, LIMIT, _forumOffset)
+            : await getForumSekolahSentPosts(currentUser.school_id, currentUser.user_id, LIMIT, _forumOffset);
+
+        loadingEl.style.display = 'none';
+        if (!posts.length && _forumOffset === 0) {
+            loadingEl.style.display = '';
+            loadingEl.textContent = 'Belum ada posting.';
+            return;
+        }
+        posts.forEach(p => listEl.appendChild(renderForumCard(p)));
+        _forumOffset += posts.length;
+        _forumHasMore = posts.length === LIMIT;
+        moreBtn.style.display = _forumHasMore ? '' : 'none';
+    } catch (e) {
+        loadingEl.style.display = '';
+        loadingEl.textContent = 'Gagal memuat forum.';
+    }
+}
+
+function renderForumCard(post) {
+    const card = document.createElement('div');
+    card.className = 'section-card';
+    card.style.cssText = 'margin-bottom:12px;cursor:pointer';
+    const time   = new Date(post.created_at).toLocaleString('id-ID',
+        { dateStyle: 'medium', timeStyle: 'short' });
+    const author = esc(post.author?.full_name ?? (_forumMode === 'terkirim' ? 'Anda' : '—'));
+    const ackCnt = post.acknowledgements?.length ?? 0;
+    const edited = post.is_edited ? ' <span class="hint" style="font-size:11px">(diedit)</span>' : '';
+    const bodyText = post.body ?? '';
+    card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <strong>${esc(post.title ?? '')}${edited}</strong>
+            <span class="hint" style="white-space:nowrap;font-size:12px">${time}</span>
+        </div>
+        <p class="hint" style="margin:4px 0 8px">${author}</p>
+        <p style="margin:0 0 8px;font-size:14px;white-space:pre-wrap">${
+            esc(bodyText).substring(0, 160)}${bodyText.length > 160 ? '…' : ''}</p>
+        <div style="display:flex;gap:12px;font-size:12px;color:var(--color-muted)">
+            ${post.attachment_url ? '<span>📎 Lampiran</span>' : ''}
+            <span>✓ ${ackCnt} dibaca</span>
+        </div>`;
+    card.addEventListener('click', () => openForumDetail(post));
+    return card;
+}
+
+function openForumModal(postId = null) {
+    _forumEditPostId = postId;
+    _forumRecipients.clear();
+    renderRecipientChips();
+    document.getElementById('modal-forum-title').textContent = postId ? 'Edit Posting' : 'Buat Posting';
+    document.getElementById('forum-input-title').value = '';
+    document.getElementById('forum-input-body').value  = '';
+    document.getElementById('forum-input-file').value  = '';
+    document.getElementById('forum-file-name').textContent = '';
+    document.getElementById('forum-post-error').style.display = 'none';
+    buildRecipientGroupButtons();
+    document.getElementById('modal-forum-post').style.display = 'flex';
+}
+
+function closeForumModal() {
+    document.getElementById('modal-forum-post').style.display = 'none';
+    _forumEditPostId = null; _forumRecipients.clear();
+}
+
+function buildRecipientGroupButtons() {
+    const container = document.getElementById('forum-recipient-group-btns');
+    container.innerHTML = '';
+    const groups = [
+        { label: 'Semua Guru',      group: 'SEMUA_GURU'       },
+        { label: 'Semua Waka',      group: 'SEMUA_WAKA'       },
+        { label: 'Semua Kaprodi',   group: 'SEMUA_KAPRODI'    },
+        { label: 'Semua Wali Kls',  group: 'SEMUA_WALI_KELAS' },
+        { label: 'Semua Guru BK',   group: 'SEMUA_BK'         },
+        { label: 'Semua Siswa',     group: 'SEMUA_SISWA'      },
+        { label: 'Siswa Kelas',     group: 'SISWA_KELAS',     needsKelas: true },
+        { label: 'Siswa Jurusan',   group: 'SISWA_JURUSAN',   needsJurusan: true },
+        { label: 'Semua Ortu',      group: 'SEMUA_ORTU'       },
+        { label: 'Ortu Kelas',      group: 'ORTU_KELAS',      needsKelas: true },
+        { label: 'Ortu Jurusan',    group: 'ORTU_JURUSAN',    needsJurusan: true },
+        { label: 'Kepsek',          group: 'KEPSEK'           },
+        { label: 'Semua TU',        group: 'SEMUA_TU'         },
+        { label: 'Guru Piket',      group: 'GURU_PIKET',      needsHari: true },
+    ];
+    groups.forEach(g => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-secondary';
+        btn.textContent = g.label;
+        btn.addEventListener('click', () => addRecipientGroup(g));
+        container.appendChild(btn);
+    });
+}
+
+async function addRecipientGroup(groupDef) {
+    const errEl = document.getElementById('forum-post-error');
+    errEl.style.display = 'none';
+    let programId = null, classId = null, dayOfWeek = null;
+
+    if (groupDef.needsJurusan) {
+        const sel = document.getElementById('forum-filter-jurusan');
+        document.getElementById('forum-filter-jurusan-wrap').style.display = 'block';
+        if (!sel.value) { errEl.textContent = 'Pilih jurusan dulu.'; errEl.style.display = 'block'; return; }
+        programId = sel.value;
+    }
+    if (groupDef.needsKelas) {
+        const sel = document.getElementById('forum-filter-kelas');
+        document.getElementById('forum-filter-kelas-wrap').style.display = 'block';
+        if (!sel.value) { errEl.textContent = 'Pilih kelas dulu.'; errEl.style.display = 'block'; return; }
+        classId = sel.value;
+    }
+    if (groupDef.needsHari) {
+        const sel = document.getElementById('forum-filter-hari');
+        document.getElementById('forum-filter-hari-wrap').style.display = 'block';
+        if (!sel.value) { errEl.textContent = 'Pilih hari dulu.'; errEl.style.display = 'block'; return; }
+        dayOfWeek = parseInt(sel.value, 10);
+    }
+    try {
+        const candidates = await getForumRecipientCandidates(groupDef.group, {
+            programId, classId, dayOfWeek,
+            academicYear: schoolConfig?.current_academic_year,
+        });
+        candidates.forEach(c => _forumRecipients.set(c.user_id, c));
+        renderRecipientChips();
+    } catch (err) {
+        errEl.textContent = fe(err); errEl.style.display = 'block';
+    }
+}
+
+function renderRecipientChips() {
+    const container = document.getElementById('forum-recipient-chips');
+    const emptyEl   = document.getElementById('forum-chips-empty');
+    const countEl   = document.getElementById('forum-recipient-count');
+    container.querySelectorAll('.recipient-chip').forEach(el => el.remove());
+    if (_forumRecipients.size === 0) {
+        emptyEl.style.display = 'inline'; countEl.textContent = ''; return;
+    }
+    emptyEl.style.display = 'none';
+    countEl.textContent = `${_forumRecipients.size} penerima dipilih`;
+    _forumRecipients.forEach((r, uid) => {
+        const chip = document.createElement('span');
+        chip.className = 'recipient-chip';
+        chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:2px 8px;' +
+            'background:var(--color-bg-alt);border-radius:12px;font-size:12px';
+        chip.innerHTML = `${esc(r.full_name)} <button data-uid="${uid}"
+            style="background:none;border:none;cursor:pointer;padding:0;line-height:1">✕</button>`;
+        chip.querySelector('button').addEventListener('click', () => {
+            _forumRecipients.delete(uid); renderRecipientChips();
+        });
+        container.appendChild(chip);
+    });
+}
+
+async function submitForumPost() {
+    const errEl  = document.getElementById('forum-post-error');
+    const btnEl  = document.getElementById('btn-forum-modal-simpan');
+    const title  = document.getElementById('forum-input-title').value.trim();
+    const body   = document.getElementById('forum-input-body').value.trim();
+    const fileEl = document.getElementById('forum-input-file');
+    errEl.style.display = 'none';
+    if (!title) { errEl.textContent = 'Judul wajib diisi.'; errEl.style.display = 'block'; return; }
+    if (!body)  { errEl.textContent = 'Isi posting wajib diisi.'; errEl.style.display = 'block'; return; }
+    if (_forumRecipients.size === 0 && !_forumEditPostId) {
+        errEl.textContent = 'Pilih minimal satu penerima.'; errEl.style.display = 'block'; return;
+    }
+    btnEl.disabled = true; btnEl.textContent = 'Mengirim…';
+    try {
+        let attachmentUrl = null, attachmentName = null;
+        if (fileEl.files[0]) {
+            const file = fileEl.files[0];
+            if (file.size > 10 * 1024 * 1024) {
+                errEl.textContent = 'Ukuran file maks. 10 MB.'; errEl.style.display = 'block'; return;
+            }
+            const ext  = file.name.split('.').pop();
+            const path = `${currentUser.school_id}/${Date.now()}.${ext}`;
+            const { error: upErr } = await supabase.storage
+                .from('forum-attachments').upload(path, file, { upsert: false });
+            if (upErr) throw upErr;
+            const { data: urlData } = supabase.storage
+                .from('forum-attachments').getPublicUrl(path);
+            attachmentUrl = urlData.publicUrl; attachmentName = file.name;
+        }
+        if (_forumEditPostId) {
+            await updateForumSekolahPost(_forumEditPostId, title, body);
+        } else {
+            const recipientIds = [..._forumRecipients.keys()];
+            await createForumSekolahPost(title, body, recipientIds,
+                schoolConfig?.current_academic_year ?? '');
+            if (attachmentUrl) {
+                await supabase.from('forum_posts')
+                    .update({ attachment_url: attachmentUrl, attachment_name: attachmentName })
+                    .eq('author_user_id', currentUser.user_id)
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+            }
+        }
+        closeForumModal();
+        _forumMode = 'terkirim';
+        document.getElementById('forum-tab-masuk').className    = 'btn btn-secondary';
+        document.getElementById('forum-tab-terkirim').className = 'btn btn-primary';
+        _forumOffset = 0; loadForumPosts();
+    } catch (err) {
+        errEl.textContent = fe(err); errEl.style.display = 'block';
+    } finally {
+        btnEl.disabled = false; btnEl.textContent = 'Kirim';
+    }
+}
+
+async function openForumDetail(post) {
+    const modal = document.getElementById('modal-forum-detail');
+    modal.dataset.postId = post.post_id;
+    modal.style.display  = 'flex';
+    document.getElementById('detail-forum-title').textContent = post.title ?? '';
+    document.getElementById('detail-forum-body').textContent  = post.body ?? '';
+    const time   = new Date(post.created_at).toLocaleString('id-ID',
+        { dateStyle: 'long', timeStyle: 'short' });
+    const author = post.author?.full_name ?? (_forumMode === 'terkirim' ? 'Anda' : '—');
+    document.getElementById('detail-forum-meta').textContent =
+        `${author} · ${time}${post.is_edited ? ' • diedit' : ''}`;
+    const attEl = document.getElementById('detail-forum-attachment');
+    attEl.innerHTML = post.attachment_url
+        ? `<a href="${post.attachment_url}" target="_blank" class="btn btn-secondary"
+              style="font-size:13px">📎 ${esc(post.attachment_name ?? 'Unduh')}</a>` : '';
+    document.getElementById('forum-author-actions').style.display =
+        post.author_user_id === currentUser.user_id ? 'block' : 'none';
+    document.getElementById('forum-comment-error').style.display = 'none';
+    document.getElementById('forum-comment-input').value = '';
+    if (_forumMode === 'masuk') {
+        addForumSekolahAck(post.post_id, currentUser.user_id, currentUser.school_id).catch(() => {});
+    }
+    await loadForumComments(post.post_id);
+}
+
+function closeForumDetail() {
+    document.getElementById('modal-forum-detail').style.display = 'none';
+}
+
+async function loadForumComments(postId) {
+    const loadEl = document.getElementById('detail-forum-comments-loading');
+    const listEl = document.getElementById('detail-forum-comments-list');
+    try {
+        const comments = await getForumSekolahComments(postId);
+        loadEl.style.display = 'none';
+        listEl.innerHTML = comments.length
+            ? comments.map(c => {
+                const time   = new Date(c.created_at).toLocaleString('id-ID',
+                    { dateStyle: 'short', timeStyle: 'short' });
+                const author = esc(c.author?.full_name ?? '—');
+                return `<div style="padding:8px 0;border-bottom:1px solid var(--color-border)">
+                    <div style="display:flex;justify-content:space-between">
+                        <strong style="font-size:13px">${author}</strong>
+                        <span class="hint" style="font-size:11px">${time}</span>
+                    </div>
+                    <p style="margin:4px 0 0;font-size:14px;white-space:pre-wrap">${esc(c.body)}</p>
+                </div>`;
+              }).join('')
+            : '<p class="hint">Belum ada komentar.</p>';
+    } catch (e) {
+        loadEl.textContent = 'Gagal memuat komentar.'; loadEl.style.display = '';
+    }
+}
+
+async function submitForumComment() {
+    const input  = document.getElementById('forum-comment-input');
+    const errEl  = document.getElementById('forum-comment-error');
+    const postId = document.getElementById('modal-forum-detail').dataset.postId;
+    const body   = input.value.trim();
+    errEl.style.display = 'none';
+    if (!body) return;
+    try {
+        await addForumSekolahComment(postId, body, currentUser.school_id);
+        input.value = '';
+        await loadForumComments(postId);
+    } catch (err) {
+        errEl.textContent = fe(err); errEl.style.display = 'block';
+    }
+}
 
 // ── Init ───────────────────────────────────────────────────────
 async function init() {

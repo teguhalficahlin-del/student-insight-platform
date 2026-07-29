@@ -213,3 +213,131 @@ export async function fetchAttendanceSummary(dateStart, dateEnd, statuses = ['AL
     }
     return rows;
 }
+
+// ─── Forum Sekolah ────────────────────────────────────────────
+
+export async function getForumSekolahPosts(schoolId, userId, limit = 20, offset = 0) {
+    const { data, error } = await supabase
+        .from('forum_posts')
+        .select(`
+            post_id, title, body, attachment_url, attachment_name,
+            is_edited, created_at, updated_at,
+            author_user_id,
+            author:users!forum_posts_author_user_id_fkey(user_id, full_name, role_type),
+            acknowledgements:forum_post_acknowledgements(user_id),
+            forum_post_audience!inner(user_id)
+        `)
+        .eq('scope_type', 'SEKOLAH')
+        .eq('school_id', schoolId)
+        .is('deleted_at', null)
+        .eq('forum_post_audience.user_id', userId)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+    if (error) throw error;
+    return (data ?? []).map(({ forum_post_audience: _a, ...rest }) => rest);
+}
+
+export async function getForumSekolahSentPosts(schoolId, userId, limit = 20, offset = 0) {
+    const { data, error } = await supabase
+        .from('forum_posts')
+        .select(`
+            post_id, title, body, attachment_url, attachment_name,
+            is_edited, created_at, updated_at,
+            author_user_id,
+            acknowledgements:forum_post_acknowledgements(user_id),
+            audience:forum_post_audience(user_id)
+        `)
+        .eq('scope_type', 'SEKOLAH')
+        .eq('school_id', schoolId)
+        .eq('author_user_id', userId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function getForumSekolahComments(postId) {
+    const { data, error } = await supabase
+        .from('forum_post_comments')
+        .select(`
+            comment_id, body, created_at,
+            author_user_id,
+            author:users!forum_post_comments_author_user_id_fkey(user_id, full_name, role_type)
+        `)
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function addForumSekolahComment(postId, body, schoolId) {
+    const { error } = await supabase
+        .from('forum_post_comments')
+        .insert({ post_id: postId, body, school_id: schoolId });
+    if (error) throw error;
+}
+
+export async function addForumSekolahAck(postId, userId, schoolId) {
+    const { error } = await supabase
+        .from('forum_post_acknowledgements')
+        .upsert(
+            { post_id: postId, user_id: userId, school_id: schoolId },
+            { onConflict: 'post_id,user_id', ignoreDuplicates: true }
+        );
+    if (error) throw error;
+}
+
+export async function createForumSekolahPost(title, body, recipientUserIds, academicYear) {
+    const { data, error } = await supabase.rpc('fn_create_forum_post', {
+        p_class_id:            null,
+        p_academic_year:       academicYear,
+        p_content:             body,
+        p_category_code:       null,
+        p_subject_student_ids: [],
+        p_audience_type:       'ORANG_TERTENTU',
+        p_specific_user_ids:   recipientUserIds,
+        p_audience_type_2:     null,
+        p_specific_user_ids_2: [],
+        p_scope_type:          'SEKOLAH',
+        p_title:               title,
+    });
+    if (error) throw error;
+    return data;
+}
+
+export async function updateForumSekolahPost(postId, newTitle, newBody) {
+    const { error } = await supabase
+        .from('forum_posts')
+        .update({
+            title:      newTitle,
+            body:       newBody,
+            is_edited:  true,
+            edited_at:  new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        })
+        .eq('post_id', postId);
+    if (error) throw error;
+}
+
+export async function deleteForumSekolahPost(postId) {
+    const { error } = await supabase
+        .from('forum_posts')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('post_id', postId);
+    if (error) throw error;
+}
+
+export async function getForumRecipientCandidates(
+    targetGroup, { programId = null, classId = null, dayOfWeek = null, academicYear = null } = {}
+) {
+    const { data, error } = await supabase.rpc('fn_get_forum_recipient_candidates', {
+        p_target_group:  targetGroup,
+        p_program_id:    programId,
+        p_class_id:      classId,
+        p_day_of_week:   dayOfWeek,
+        p_academic_year: academicYear,
+    });
+    if (error) throw error;
+    return data ?? [];
+}
