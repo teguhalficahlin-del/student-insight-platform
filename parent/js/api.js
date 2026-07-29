@@ -351,39 +351,36 @@ export async function getMyChildren() {
     return result;
 }
 
-export async function getForumPosts(classId, academicYear, userId, schoolId, limit = 20, offset = 0) {
+// ─── Forum Sekolah ────────────────────────────────────────────
+
+/**
+ * Ambil posting Forum Sekolah untuk inbox ortu.
+ */
+export async function getForumSekolahPosts(schoolId, userId, limit = 20, offset = 0) {
     const { data, error } = await supabase
         .from('forum_posts')
         .select(`
-            post_id, title, body, visibility, is_pinned, created_at, updated_at,
+            post_id, title, body, attachment_url, attachment_name,
+            is_edited, created_at, updated_at,
             author_user_id,
-            category:communication_categories ( category_code, label_sekolah, polarity ),
-            author:users!forum_posts_author_user_id_fkey ( user_id, full_name ),
-            subjects:forum_post_subjects (
-                student:students ( student_id, full_name, nis )
-            ),
-            acknowledgements:forum_post_acknowledgements ( user_id ),
-            comments:forum_post_comments (
-                comment_id, body, created_at,
-                author:users!forum_post_comments_author_user_id_fkey ( user_id, full_name )
-            ),
-            forum_post_audience!inner ( user_id )
+            author:users!forum_posts_author_user_id_fkey(user_id, full_name, role_type),
+            acknowledgements:forum_post_acknowledgements(user_id),
+            forum_post_audience!inner(user_id)
         `)
-        .eq('class_id', classId)
-        .eq('academic_year', academicYear)
+        .eq('scope_type', 'SEKOLAH')
         .eq('school_id', schoolId)
+        .is('deleted_at', null)
         .eq('forum_post_audience.user_id', userId)
-        .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
     if (error) throw error;
-    return (data ?? []).map(p => {
-        const { forum_post_audience: _aud, ...rest } = p;
-        return rest;
-    });
+    return (data ?? []).map(({ forum_post_audience: _a, ...rest }) => rest);
 }
 
-export async function addForumAck(postId, userId, schoolId) {
+/**
+ * Tandai posting sudah dibaca. Idempoten.
+ */
+export async function addForumSekolahAck(postId, userId, schoolId) {
     const { error } = await supabase
         .from('forum_post_acknowledgements')
         .upsert(
@@ -393,71 +390,81 @@ export async function addForumAck(postId, userId, schoolId) {
     if (error) throw error;
 }
 
-export async function addForumComment(postId, userId, schoolId, body) {
-    const { data, error } = await supabase
-        .from('forum_post_comments')
-        .insert({ post_id: postId, author_user_id: userId, school_id: schoolId, body })
-        .select('comment_id, body, created_at, author:users!forum_post_comments_author_user_id_fkey ( user_id, full_name )')
-        .single();
-    if (error) throw error;
-    return data;
-}
+/**
+ * Resolve penerima otomatis untuk posting ortu berdasarkan anak yang dipilih.
+ * Penerima: Wali Kelas + Guru BK + Guru Wali + Guru yang mengajar hari ini.
+ */
+export async function getParentForumRecipients(classId) {
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
 
-export async function createParentForumPost(classId, academicYear, content) {
-    // Ambil wali kelas + guru yang mengajar hari ini di kelas anak
-    const [waliId, teacherIds] = await Promise.all([
-        getWaliKelas(classId),
-        getClassTeachersToday(classId),
+    const [waliRes, bkRes, guruWaliRes, jadwalRes] = await Promise.all([
+        // Wali Kelas
+        supabase.from('users')
+            .select('user_id')
+            .eq('wali_kelas_class_id', classId)
+            .eq('is_active', true)
+            .maybeSingle(),
+
+        // Guru BK yang menangani kelas ini
+        supabase.from('bk_class_assignments')
+            .select('bk_user_id')
+            .eq('class_id', classId)
+            .eq('is_active', true),
+
+        // Guru Wali yang menangani siswa di kelas ini
+        supabase.from('guru_wali_assignments')
+            .select('guru_user_id')
+            .eq('is_active', true)
+            .in('student_id',
+                supabase.from('class_enrollments')
+                    .select('student_id')
+                    .eq('class_id', classId)
+                    .is('withdrawn_at', null)
+            ),
+
+        // Guru yang mengajar hari ini
+        supabase.from('teaching_schedules')
+            .select('scheduled_teacher_id')
+            .eq('class_id', classId)
+            .eq('session_date', today),
     ]);
 
-    const specificIds = [...new Set([
-        ...(waliId ? [waliId] : []),
-        ...teacherIds,
-    ])];
+    const ids = new Set();
+    if (waliRes.data?.user_id) ids.add(waliRes.data.user_id);
+    (bkRes.data ?? []).forEach(r => ids.add(r.bk_user_id));
+    (guruWaliRes.data ?? []).forEach(r => ids.add(r.guru_user_id));
+    (jadwalRes.data ?? []).forEach(r => {
+        if (r.scheduled_teacher_id) ids.add(r.scheduled_teacher_id);
+    });
 
-    // Fallback ke STAF_SAJA jika tidak ada penerima spesifik
-    const audienceType    = specificIds.length > 0 ? 'ORANG_TERTENTU' : 'STAF_SAJA';
-    const specificUserIds = specificIds.length > 0 ? specificIds : [];
+    return [...ids];
+}
+
+/**
+ * Buat posting Forum Sekolah dari ortu ke guru terkait anak.
+ */
+export async function createParentForumPost(title, body, classId, academicYear, schoolId) {
+    const recipientIds = await getParentForumRecipients(classId);
+
+    if (recipientIds.length === 0) {
+        throw new Error('Tidak ada guru yang dapat ditemukan untuk anak ini hari ini.');
+    }
 
     const { data, error } = await supabase.rpc('fn_create_forum_post', {
-        p_class_id:            classId,
+        p_class_id:            null,
         p_academic_year:       academicYear,
-        p_content:             content,
+        p_content:             body,
         p_category_code:       null,
         p_subject_student_ids: [],
-        p_audience_type:       audienceType,
-        p_specific_user_ids:   specificUserIds,
+        p_audience_type:       'ORANG_TERTENTU',
+        p_specific_user_ids:   recipientIds,
+        p_audience_type_2:     null,
+        p_specific_user_ids_2: [],
+        p_scope_type:          'SEKOLAH',
+        p_title:               title,
     });
     if (error) throw error;
     return data;
-}
-
-export async function getClassTeachersToday(classId) {
-    try {
-        const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-        const { data, error } = await supabase
-            .from('teaching_schedules')
-            .select('scheduled_teacher_id')
-            .eq('class_id', classId)
-            .eq('session_date', today);
-        if (error) { console.warn('[forum] getClassTeachersToday error:', error.message); return []; }
-        const ids = [...new Set((data ?? []).map(r => r.scheduled_teacher_id).filter(Boolean))];
-        return ids;
-    } catch (e) {
-        console.warn('[forum] getClassTeachersToday exception:', e);
-        return [];
-    }
-}
-
-export async function getWaliKelas(classId) {
-    const { data, error } = await supabase
-        .from('users')
-        .select('user_id')
-        .eq('wali_kelas_class_id', classId)
-        .eq('is_active', true)
-        .maybeSingle();
-    if (error) console.error('getWaliKelas error:', error);
-    return data?.user_id ?? null;
 }
 
 export async function getChildLateArrivals(studentId) {

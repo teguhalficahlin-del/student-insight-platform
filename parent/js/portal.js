@@ -24,10 +24,7 @@ import {
     getRecentNotifications,
     markNotificationsRead,
     getMyChildren,
-    getForumPosts,
-    addForumAck,
-    addForumComment,
-    createParentForumPost,
+    getForumSekolahPosts, addForumSekolahAck, createParentForumPost,
     getChildLateArrivals,
     getChildExits,
 } from './api.js';
@@ -254,7 +251,7 @@ async function loadChildData(index) {
     // Reset lazy-load flags untuk anak baru
     tabLoaded = { pkl:false, schedule:false, attendance:false,
                   observations:false, cases:false, forum:false, nilai:false };
-    forumInitDone = false;
+    _forumInitDone = false;
 
     // Tampilkan tab-nav dan bottom-nav, atur tombol mana yang visible
     tabNav.style.display = 'flex';
@@ -759,319 +756,254 @@ logoutBtn.addEventListener('click', async () => {
     window.location.replace(getLoginUrl());
 });
 
-// ─── Forum Kelas ──────────────────────────────────────────────
-let forumChildren        = [];
-let forumSelectedChild   = null;
-let forumOffset          = 0;
-let forumHasMore         = false;
-let forumInitDone        = false;
-let forumListenerSetup   = false; // tidak di-reset saat ganti anak
+// ─── Forum Sekolah ────────────────────────────────────────────
 
-const FORUM_LIMIT = 20;
+let _forumMode      = 'masuk';
+let _forumOffset    = 0;
+let _forumHasMore   = false;
+let _forumInitDone  = false;
+let _forumChildren  = [];   // [{ user_id, full_name, class_id, academic_year }]
 
 async function initForumSection() {
-    if (forumInitDone) {
-        updateForumPostPlaceholder();
-        await loadForumPosts();
-        return;
-    }
-    forumInitDone = true;
+    if (_forumInitDone) { await loadForumPosts(); return; }
+    _forumInitDone = true;
 
-    const loadingEl2 = document.getElementById('forum-loading');
-    const selectEl   = document.getElementById('forum-child-select');
-    const listEl     = document.getElementById('forum-posts-list');
-
-    loadingEl2.textContent = 'Memuat data anak…';
-    loadingEl2.style.display = 'block';
-    listEl.innerHTML = '';
-
+    // Ambil daftar anak
     try {
-        forumChildren = await getMyChildren();
-    } catch (err) {
-        loadingEl2.textContent = `Gagal memuat data anak. ${esc(fe(err))}`;
+        _forumChildren = await getMyChildren();
+    } catch (e) {
+        document.getElementById('forum-loading').textContent = 'Gagal memuat data anak.';
         return;
     }
 
-    if (!forumChildren.length) {
-        selectEl.innerHTML = '<option value="">Tidak ada data anak terdaftar</option>';
-        loadingEl2.textContent = 'Tidak ada data anak terdaftar.';
-        return;
-    }
+    // Isi dropdown anak di modal buat posting
+    const childSel = document.getElementById('forum-child-select');
+    childSel.innerHTML = _forumChildren.length
+        ? _forumChildren.map((c, i) =>
+            `<option value="${i}">${esc(c.full_name)}${c.class_name ? ' — ' + esc(c.class_name) : ''}</option>`
+          ).join('')
+        : '<option value="">Tidak ada anak terdaftar</option>';
 
-    selectEl.innerHTML = forumChildren.map((c, i) =>
-        `<option value="${i}">${esc(c.full_name)}${c.class_name ? ' — ' + esc(c.class_name) : ''}</option>`
-    ).join('');
+    // Sub-tab
+    document.getElementById('forum-tab-masuk').addEventListener('click', () => {
+        _forumMode = 'masuk'; _forumOffset = 0;
+        document.getElementById('forum-tab-masuk').className = 'btn btn-primary';
+        document.getElementById('forum-tab-terkirim').className = 'btn btn-secondary';
+        loadForumPosts();
+    });
+    document.getElementById('forum-tab-terkirim').addEventListener('click', () => {
+        _forumMode = 'terkirim'; _forumOffset = 0;
+        document.getElementById('forum-tab-masuk').className = 'btn btn-secondary';
+        document.getElementById('forum-tab-terkirim').className = 'btn btn-primary';
+        loadForumPosts();
+    });
 
-    forumSelectedChild = forumChildren[0];
+    // Buat posting
+    document.getElementById('btn-forum-buat').addEventListener('click', openForumBuat);
+    document.getElementById('btn-forum-buat-batal').addEventListener('click', closeForumBuat);
+    document.getElementById('modal-forum-buat').addEventListener('click', e => {
+        if (e.target === e.currentTarget) closeForumBuat();
+    });
+    document.getElementById('btn-forum-buat-kirim').addEventListener('click', submitForumBuat);
 
-    // ── Render form buat post ──────────────────────────────────
-    const formWrap = document.getElementById('forum-post-form-wrap');
-    if (formWrap) {
-        formWrap.innerHTML = `
-            <div style="margin-bottom:16px;padding:14px;border:1px solid var(--color-border);border-radius:var(--radius,8px)">
-                <p style="margin:0 0 8px;font-size:0.85rem;font-weight:600;color:var(--color-text)">Kirim pemberitahuan ke guru</p>
-                <textarea id="forum-new-post-content" class="input" rows="3"
-                    style="width:100%;resize:vertical;font-size:0.9rem;margin-bottom:8px"
-                    maxlength="2000"
-                    placeholder=""></textarea>
-                <div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">
-                    <span id="forum-post-err" style="display:none;color:var(--color-danger);font-size:0.82rem"></span>
-                    <button id="btn-forum-post-submit" class="btn btn-primary" style="font-size:0.85rem;padding:6px 16px">Kirim</button>
-                </div>
-            </div>`;
-        document.getElementById('btn-forum-post-submit').addEventListener('click', submitParentForumPost);
-        updateForumPostPlaceholder();
-    }
+    // Modal detail
+    document.getElementById('btn-forum-detail-close').addEventListener('click', closeForumDetail);
+    document.getElementById('modal-forum-detail').addEventListener('click', e => {
+        if (e.target === e.currentTarget) closeForumDetail();
+    });
 
-    if (!forumListenerSetup) {
-        forumListenerSetup = true;
-        selectEl.addEventListener('change', async () => {
-            const idx = Number(selectEl.value);
-            forumSelectedChild = forumChildren[idx] ?? null;
-            forumOffset = 0;
-            updateForumPostPlaceholder();
-            await loadForumPosts();
-        });
-        document.getElementById('btn-load-more-forum')?.addEventListener('click', () => loadForumPosts(true));
-    }
+    // Load more
+    document.getElementById('btn-load-more-forum').addEventListener('click', () => loadForumPosts(true));
 
     await loadForumPosts();
 }
 
-function updateForumPostPlaceholder() {
-    const ta = document.getElementById('forum-new-post-content');
-    const formWrap = document.getElementById('forum-post-form-wrap');
-    if (!formWrap) return;
-    if (!forumSelectedChild?.class_id) {
-        formWrap.style.display = 'none';
-        return;
-    }
-    formWrap.style.display = 'block';
-    if (ta) {
-        const nama = forumSelectedChild.full_name ?? 'anak saya';
-        ta.placeholder = `Contoh: "Anak saya, ${nama}, tidak dapat hadir ke sekolah selama 2 hari mulai hari ini karena sakit. Mohon informasi tugas yang perlu dikerjakan. Terima kasih."`;
-    }
-}
-
-async function submitParentForumPost() {
-    const ta      = document.getElementById('forum-new-post-content');
-    const btn     = document.getElementById('btn-forum-post-submit');
-    const errEl   = document.getElementById('forum-post-err');
-    const content = ta?.value?.trim();
-
-    errEl.style.display = 'none';
-
-    if (!content || content.length < 3) {
-        errEl.textContent = 'Pesan tidak boleh kosong.';
-        errEl.style.display = 'inline';
-        return;
-    }
-    if (!forumSelectedChild?.class_id) {
-        errEl.textContent = 'Anak belum terdaftar di kelas.';
-        errEl.style.display = 'inline';
-        return;
-    }
-
-    btn.disabled = true;
-    btn.textContent = 'Mengirim…';
-    try {
-        await createParentForumPost(
-            forumSelectedChild.class_id,
-            forumSelectedChild.academic_year,
-            content
-        );
-        ta.value = '';
-        forumOffset = 0;
-        await loadForumPosts();
-    } catch (err) {
-        errEl.textContent = `Gagal mengirim: ${fe(err)}`;
-        errEl.style.display = 'inline';
-    } finally {
-        btn.disabled = false;
-        btn.textContent = 'Kirim';
-    }
-}
-
 async function loadForumPosts(loadMore = false) {
-    const loadingEl2 = document.getElementById('forum-loading');
-    const listEl     = document.getElementById('forum-posts-list');
-    const btnMore    = document.getElementById('btn-load-more-forum');
-
-    if (!forumSelectedChild) {
-        loadingEl2.textContent = 'Pilih anak untuk melihat forum kelasnya.';
-        loadingEl2.style.display = 'block';
-        return;
-    }
-    if (!forumSelectedChild.class_id) {
-        loadingEl2.textContent = 'Anak belum terdaftar di kelas pada tahun ajaran ini.';
-        loadingEl2.style.display = 'block';
-        listEl.innerHTML = '';
-        if (btnMore) btnMore.style.display = 'none';
-        return;
-    }
+    const loadingEl = document.getElementById('forum-loading');
+    const listEl    = document.getElementById('forum-posts-list');
+    const moreBtn   = document.getElementById('btn-load-more-forum');
+    const LIMIT     = 20;
 
     if (!loadMore) {
-        forumOffset = 0;
+        _forumOffset = 0;
         listEl.innerHTML = '';
     }
-
-    loadingEl2.textContent = 'Memuat…';
-    loadingEl2.style.display = 'block';
+    loadingEl.style.display = '';
+    loadingEl.textContent   = 'Memuat…';
+    moreBtn.style.display   = 'none';
 
     try {
-        const posts = await getForumPosts(
-            forumSelectedChild.class_id,
-            forumSelectedChild.academic_year,
-            currentUser.user_id,
-            currentUser.school_id,
-            FORUM_LIMIT,
-            forumOffset
-        );
+        let posts;
+        if (_forumMode === 'masuk') {
+            posts = await getForumSekolahPosts(
+                currentUser.school_id, currentUser.user_id, LIMIT, _forumOffset);
+        } else {
+            // Terkirim: posting yang dibuat ortu ini
+            const { data, error } = await supabase
+                .from('forum_posts')
+                .select(`
+                    post_id, title, body, created_at, is_edited,
+                    author_user_id,
+                    acknowledgements:forum_post_acknowledgements(user_id),
+                    audience:forum_post_audience(user_id)
+                `)
+                .eq('scope_type', 'SEKOLAH')
+                .eq('school_id', currentUser.school_id)
+                .eq('author_user_id', currentUser.user_id)
+                .is('deleted_at', null)
+                .order('created_at', { ascending: false })
+                .range(_forumOffset, _forumOffset + LIMIT - 1);
+            if (error) throw error;
+            posts = data ?? [];
+        }
 
-        loadingEl2.style.display = 'none';
-        forumHasMore = posts.length === FORUM_LIMIT;
-        forumOffset += posts.length;
+        loadingEl.style.display = 'none';
 
-        if (!loadMore && posts.length === 0) {
-            listEl.innerHTML = '<p class="hint">Belum ada posting forum untuk kelas ini.</p>';
-            if (btnMore) btnMore.style.display = 'none';
+        if (!posts.length && _forumOffset === 0) {
+            loadingEl.style.display = '';
+            loadingEl.textContent   = _forumMode === 'masuk'
+                ? 'Belum ada pengumuman untukmu.'
+                : 'Belum ada pesan yang dikirim.';
             return;
         }
 
-        posts.forEach(p => listEl.appendChild(renderForumCardParent(p)));
-
-        if (btnMore) btnMore.style.display = forumHasMore ? 'block' : 'none';
-    } catch (err) {
-        loadingEl2.textContent = `Gagal memuat forum. ${esc(fe(err))}`;
+        posts.forEach(p => listEl.appendChild(renderForumCard(p)));
+        _forumOffset += posts.length;
+        _forumHasMore = posts.length === LIMIT;
+        moreBtn.style.display = _forumHasMore ? '' : 'none';
+    } catch (e) {
+        loadingEl.style.display = '';
+        loadingEl.textContent   = 'Gagal memuat forum.';
     }
 }
 
-function renderForumCardParent(p) {
+function renderForumCard(post) {
     const card = document.createElement('div');
     card.className = 'section-card';
-    card.style.marginBottom = '12px';
+    card.style.cssText = 'margin-bottom:12px;cursor:pointer';
 
-    // Badge kategori
-    let badgeHtml = '';
-    if (p.category) {
-        const color = p.category.polarity === 'positive'
-            ? 'color:var(--color-success);background:rgba(74,222,128,0.15)'
-            : p.category.polarity === 'concern'
-            ? 'color:var(--color-danger);background:rgba(248,113,113,0.15)'
-            : 'color:#e2e8f0;background:rgba(148,163,184,0.25)';
-        badgeHtml = `<span style="font-size:0.75rem;padding:2px 8px;border-radius:99px;${color}">${esc(p.category.label_sekolah)}</span>`;
-    }
-
-    // Chip nama siswa subjek
-    let subjectsHtml = '';
-    if (p.subjects?.length) {
-        const chips = p.subjects
-            .filter(s => s.student)
-            .map(s => `<span style="font-size:0.75rem;background:var(--color-surface);color:var(--color-text);border-radius:99px;padding:2px 8px">${esc(s.student.full_name)}</span>`)
-            .join(' ');
-        if (chips) subjectsHtml = `<div style="margin:6px 0;display:flex;flex-wrap:wrap;gap:4px">${chips}</div>`;
-    }
-
-    // Acknowledgement
-    const alreadyAck = (p.acknowledgements ?? []).some(a => a.user_id === currentUser.user_id);
-    const ackBtnId   = `ack-${p.post_id}`;
-    const ackHtml    = alreadyAck
-        ? `<button class="btn btn-secondary" disabled style="font-size:0.8rem;padding:4px 12px">✓ Sudah dibaca</button>`
-        : `<button id="${ackBtnId}" class="btn btn-primary" style="font-size:0.8rem;padding:4px 12px">Tandai sudah baca</button>`;
-
-    // Pin
-    const pinHtml = p.is_pinned
-        ? `<span style="font-size:0.75rem;color:var(--color-warning,#d97706)">📌 Disematkan · </span>`
-        : '';
-
-    // Waktu
-    const timeAgo = fmtRelative(p.created_at);
-
-    // Komentar
-    const comments = p.comments ?? [];
-    const commentsId = `comments-${p.post_id}`;
-    const commentsHtml = comments.length
-        ? comments.map(c => `
-            <div style="padding:6px 0;border-top:1px solid var(--color-border,#e5e7eb);font-size:0.85rem">
-                <span style="font-weight:600">${esc(c.author?.full_name ?? '—')}</span>
-                <span style="color:var(--color-text-muted,#6b7280)"> · ${fmtRelative(c.created_at)}</span>
-                <p style="margin:3px 0 0">${esc(c.body)}</p>
-            </div>`).join('')
-        : '';
-
-    const commentFormId  = `comment-form-${p.post_id}`;
-    const commentInputId = `comment-input-${p.post_id}`;
-    const commentBtnId   = `comment-btn-${p.post_id}`;
+    const time    = new Date(post.created_at).toLocaleString('id-ID',
+        { dateStyle: 'medium', timeStyle: 'short' });
+    const author  = post.author?.full_name
+        ? esc(post.author.full_name)
+        : _forumMode === 'terkirim' ? 'Anda' : '—';
+    const ackCnt  = post.acknowledgements?.length ?? 0;
+    const hasFile = !!post.attachment_url;
+    const edited  = post.is_edited
+        ? '<span class="hint" style="font-size:11px"> (diedit)</span>' : '';
+    const bodyText = post.body ?? '';
 
     card.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:6px">
-            <div>
-                ${pinHtml}
-                <span style="font-weight:600">${esc(p.author?.full_name ?? '—')}</span>
-                <span style="font-size:0.8rem;color:var(--color-text-muted,#6b7280)"> · ${timeAgo}</span>
-            </div>
-            ${badgeHtml}
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <strong>${esc(post.title ?? '(tanpa judul)')}${edited}</strong>
+            <span class="hint" style="white-space:nowrap;font-size:12px">${time}</span>
         </div>
-        ${subjectsHtml}
-        ${p.title && p.title !== p.body ? `<div style="font-weight:600;margin-bottom:4px">${esc(p.title)}</div>` : ''}
-        <div style="white-space:pre-wrap;font-size:0.9rem">${esc(p.body ?? '')}</div>
-        <div style="margin-top:10px;display:flex;align-items:center;gap:12px">
-            ${ackHtml}
-        </div>
-        <div id="${commentsId}" style="margin-top:10px">
-            ${commentsHtml}
-        </div>
-        <div id="${commentFormId}" style="margin-top:8px;display:flex;gap:8px;align-items:flex-end">
-            <textarea id="${commentInputId}" class="input" rows="2"
-                style="flex:1;resize:vertical;font-size:0.85rem"
-                placeholder="Tulis komentar…"></textarea>
-            <button id="${commentBtnId}" class="btn btn-primary" style="font-size:0.8rem;padding:6px 12px">Kirim</button>
-        </div>
-    `;
+        <p class="hint" style="margin:4px 0 8px">${author}</p>
+        <p style="margin:0 0 8px;font-size:14px;white-space:pre-wrap">${
+            esc(bodyText).substring(0, 160)}${bodyText.length > 160 ? '…' : ''}</p>
+        <div style="display:flex;gap:12px;font-size:12px;color:var(--color-muted)">
+            ${hasFile ? '<span>📎 Lampiran</span>' : ''}
+            <span>✓ ${ackCnt} dibaca</span>
+        </div>`;
 
-    // Ack handler
-    if (!alreadyAck) {
-        card.querySelector(`#${ackBtnId}`)?.addEventListener('click', async function () {
-            this.disabled = true;
-            this.textContent = '…';
-            try {
-                await addForumAck(p.post_id, currentUser.user_id, currentUser.school_id);
-                this.textContent = '✓ Sudah dibaca';
-                this.className = 'btn btn-secondary';
-            } catch {
-                this.disabled = false;
-                this.textContent = 'Tandai sudah baca';
-            }
-        });
+    card.addEventListener('click', () => openForumDetail(post));
+    return card;
+}
+
+function openForumDetail(post) {
+    const modal = document.getElementById('modal-forum-detail');
+    modal.style.display = 'flex';
+
+    document.getElementById('detail-forum-title').textContent = post.title ?? '(tanpa judul)';
+    document.getElementById('detail-forum-body').textContent  = post.body ?? '';
+
+    const time   = new Date(post.created_at).toLocaleString('id-ID',
+        { dateStyle: 'long', timeStyle: 'short' });
+    const author = post.author?.full_name
+        ? post.author.full_name
+        : _forumMode === 'terkirim' ? 'Anda' : '—';
+    const edited = post.is_edited ? ' • diedit' : '';
+    document.getElementById('detail-forum-meta').textContent =
+        `${author} · ${time}${edited}`;
+
+    const attEl = document.getElementById('detail-forum-attachment');
+    attEl.innerHTML = post.attachment_url
+        ? `<a href="${post.attachment_url}" target="_blank"
+              class="btn btn-secondary" style="font-size:13px">
+              📎 ${esc(post.attachment_name ?? 'Unduh Lampiran')}</a>`
+        : '';
+
+    // Acknowledge otomatis saat dibuka (hanya untuk inbox)
+    if (_forumMode === 'masuk') {
+        addForumSekolahAck(post.post_id, currentUser.user_id, currentUser.school_id)
+            .catch(() => {});
+    }
+}
+
+function closeForumDetail() {
+    document.getElementById('modal-forum-detail').style.display = 'none';
+}
+
+// ─── Modal Buat Posting ────────────────────────────────────────
+
+function openForumBuat() {
+    document.getElementById('forum-input-title').value = '';
+    document.getElementById('forum-input-body').value  = '';
+    document.getElementById('forum-buat-error').style.display = 'none';
+    document.getElementById('modal-forum-buat').style.display = 'flex';
+}
+
+function closeForumBuat() {
+    document.getElementById('modal-forum-buat').style.display = 'none';
+}
+
+async function submitForumBuat() {
+    const errEl   = document.getElementById('forum-buat-error');
+    const btnEl   = document.getElementById('btn-forum-buat-kirim');
+    const title   = document.getElementById('forum-input-title').value.trim();
+    const body    = document.getElementById('forum-input-body').value.trim();
+    const childIdx = parseInt(document.getElementById('forum-child-select').value, 10);
+
+    errEl.style.display = 'none';
+
+    if (!title) {
+        errEl.textContent = 'Judul wajib diisi.';
+        errEl.style.display = 'block'; return;
+    }
+    if (!body) {
+        errEl.textContent = 'Isi pesan wajib diisi.';
+        errEl.style.display = 'block'; return;
+    }
+    if (isNaN(childIdx) || !_forumChildren[childIdx]) {
+        errEl.textContent = 'Pilih anak terlebih dahulu.';
+        errEl.style.display = 'block'; return;
     }
 
-    // Comment handler
-    card.querySelector(`#${commentBtnId}`)?.addEventListener('click', async function () {
-        const input = card.querySelector(`#${commentInputId}`);
-        const body  = input?.value?.trim();
-        if (!body) return;
-        this.disabled = true;
-        this.textContent = '…';
-        try {
-            const c = await addForumComment(p.post_id, currentUser.user_id, currentUser.school_id, body);
-            input.value = '';
-            const commentsEl = card.querySelector(`#${commentsId}`);
-            const newComment = document.createElement('div');
-            newComment.style.cssText = 'padding:6px 0;border-top:1px solid var(--color-border,#e5e7eb);font-size:0.85rem';
-            newComment.innerHTML = `
-                <span style="font-weight:600">${esc(c.author?.full_name ?? currentUser.full_name)}</span>
-                <span style="color:var(--color-text-muted,#6b7280)"> · baru saja</span>
-                <p style="margin:3px 0 0">${esc(c.body)}</p>`;
-            commentsEl.appendChild(newComment);
-        } catch (err) {
-            alert(`Gagal mengirim komentar: ${fe(err)}`);
-        } finally {
-            this.disabled = false;
-            this.textContent = 'Kirim';
-        }
-    });
+    const child = _forumChildren[childIdx];
 
-    return card;
+    btnEl.disabled = true;
+    btnEl.textContent = 'Mengirim…';
+
+    try {
+        await createParentForumPost(
+            title, body,
+            child.class_id,
+            child.academic_year,
+            currentUser.school_id
+        );
+        closeForumBuat();
+        _forumMode = 'terkirim';
+        document.getElementById('forum-tab-masuk').className    = 'btn btn-secondary';
+        document.getElementById('forum-tab-terkirim').className = 'btn btn-primary';
+        _forumOffset = 0;
+        loadForumPosts();
+    } catch (err) {
+        errEl.textContent = err.message ?? 'Gagal mengirim pesan.';
+        errEl.style.display = 'block';
+    } finally {
+        btnEl.disabled = false;
+        btnEl.textContent = 'Kirim';
+    }
 }
 
 function fmtRelative(isoStr) {

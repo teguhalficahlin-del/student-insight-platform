@@ -170,18 +170,83 @@
         </section>
 
         <section id="section-forum" class="section" style="display:none">
-            <h3>Forum Kelas</h3>
-            <div id="forum-child-selector" style="margin-bottom:16px">
-                <select id="forum-child-select" class="input" style="max-width:320px">
-                    <option value="">Memuat data anak…</option>
-                </select>
+            <h3>Forum Sekolah</h3>
+
+            <!-- Sub-tab: Masuk / Terkirim / Buat -->
+            <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+                <button id="forum-tab-masuk" class="btn btn-primary">Masuk</button>
+                <button id="forum-tab-terkirim" class="btn btn-secondary">Terkirim</button>
+                <button id="btn-forum-buat" class="btn btn-primary" style="margin-left:auto">+ Buat Pesan</button>
             </div>
-            <div id="forum-post-form-wrap" style="display:none"></div>
-            <div id="forum-loading" class="hint">Pilih anak untuk melihat forum kelasnya.</div>
+
+            <div id="forum-loading" class="hint">Memuat forum…</div>
             <div id="forum-posts-list"></div>
             <div style="text-align:center">
-                <button id="btn-load-more-forum" class="btn btn-secondary" style="display:none;margin:16px auto">Muat lebih banyak</button>
+                <button id="btn-load-more-forum" class="btn btn-secondary"
+                    style="display:none;margin:16px auto">
+                    Muat lebih banyak
+                </button>
             </div>
+
+            <!-- Modal: buat posting -->
+            <div id="modal-forum-buat" class="modal-overlay" style="display:none">
+                <div class="modal-box" style="max-width:480px;width:100%">
+                    <h3 style="margin:0 0 16px">Kirim Pesan ke Guru</h3>
+
+                    <!-- Pilih anak -->
+                    <div class="field">
+                        <label for="forum-child-select">Untuk anak</label>
+                        <select id="forum-child-select" class="input">
+                            <option value="">Memuat data anak…</option>
+                        </select>
+                    </div>
+
+                    <!-- Judul -->
+                    <div class="field">
+                        <label for="forum-input-title">Judul</label>
+                        <input type="text" id="forum-input-title" class="input"
+                               placeholder="Judul pesan…" maxlength="200">
+                    </div>
+
+                    <!-- Isi -->
+                    <div class="field">
+                        <label for="forum-input-body">Isi pesan</label>
+                        <textarea id="forum-input-body" class="input" rows="4"
+                                  placeholder="Tuliskan pesan untuk guru…"
+                                  maxlength="2000"></textarea>
+                    </div>
+
+                    <p class="hint" style="margin-bottom:8px">
+                        Pesan akan dikirim ke: Wali Kelas, Guru BK, Guru Wali,
+                        dan guru yang mengajar anak Anda hari ini.
+                    </p>
+
+                    <p id="forum-buat-error"
+                       style="color:var(--color-danger);font-size:13px;display:none"></p>
+
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+                        <button id="btn-forum-buat-batal" class="btn btn-secondary">Batal</button>
+                        <button id="btn-forum-buat-kirim" class="btn btn-primary">Kirim</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: detail posting -->
+            <div id="modal-forum-detail" class="modal-overlay" style="display:none">
+                <div class="modal-box" style="max-width:560px;width:100%">
+                    <div style="display:flex;justify-content:space-between;
+                                align-items:flex-start;gap:8px">
+                        <h3 id="detail-forum-title" style="margin:0"></h3>
+                        <button id="btn-forum-detail-close" class="btn btn-secondary"
+                                style="flex-shrink:0">✕</button>
+                    </div>
+                    <p id="detail-forum-meta" class="hint" style="margin:6px 0 12px"></p>
+                    <div id="detail-forum-body"
+                         style="white-space:pre-wrap;margin-bottom:12px;font-size:14px"></div>
+                    <div id="detail-forum-attachment" style="margin-bottom:12px"></div>
+                </div>
+            </div>
+
         </section>
 
     </div>
