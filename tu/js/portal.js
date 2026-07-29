@@ -597,10 +597,31 @@ function buildRecipientGroupButtons() {
         { label: 'TU / Admin',    group: 'SEMUA_TU',         hasIndividual: true, skipSemua: true },
     ];
 
+    const rendered = new Set();
     groups.forEach(g => {
+        if (rendered.has(g.group)) return;
+
+        // SEMUA_SISWA + SEMUA_ORTU → satu baris berdampingan
+        if (g.group === 'SEMUA_SISWA') {
+            const ortu = groups.find(x => x.group === 'SEMUA_ORTU');
+            if (ortu) {
+                rendered.add('SEMUA_ORTU');
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'display:flex;gap:8px;margin-bottom:6px;width:auto;flex-wrap:wrap';
+                [g, ortu].forEach(entry => {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-secondary';
+                    btn.textContent = entry.labelSemua ?? `Semua ${entry.label}`;
+                    btn.addEventListener('click', () => addRecipientGroup({ ...entry, mode: 'semua' }, btn));
+                    wrap.appendChild(btn);
+                });
+                container.appendChild(wrap);
+                return;
+            }
+        }
+
         const wrap = document.createElement('div');
         wrap.style.cssText = `display:flex;gap:2px;margin-bottom:6px;width:${g.hasIndividual ? '100%' : 'auto'}`;
-
 
         // skipSemua: true → jangan tampilkan tombol "Semua X" (hanya picker)
         if (!g.skipSemua) {
