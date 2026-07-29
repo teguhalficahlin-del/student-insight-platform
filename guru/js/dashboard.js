@@ -4600,8 +4600,11 @@ function buildRecipientGroupButtons() {
             { label: 'Guru BK',     group: 'SEMUA_BK',         hasIndividual: true  },
             { label: 'Siswa Kelas', group: 'SISWA_KELAS',      hasIndividual: true, needsKelas: true },
             { label: 'Siswa Jurusan', group: 'SISWA_JURUSAN',  hasIndividual: true, needsJurusan: true },
-            { label: 'Ortu Kelas',  group: 'ORTU_KELAS',       hasIndividual: true, needsKelas: true },
-            { label: 'TU / Admin',  group: 'SEMUA_TU',         hasIndividual: true  },
+            { label: 'Ortu Kelas',    group: 'ORTU_KELAS',    hasIndividual: true, needsKelas: true },
+            { label: 'Ortu Jurusan',  group: 'ORTU_JURUSAN',  hasIndividual: true, needsJurusan: true },
+            { label: 'Semua Ortu',    group: 'SEMUA_ORTU',    hasIndividual: false },
+            { label: 'Guru Piket',    group: 'GURU_PIKET',    hasIndividual: true, needsHari: true },
+            { label: 'TU / Admin',    group: 'SEMUA_TU',      hasIndividual: true  },
         ];
     }
 
@@ -4645,20 +4648,29 @@ async function addRecipientGroup(groupDef) {
     let dayOfWeek = null;
 
     if (groupDef.needsJurusan && groupDef.mode === 'semua') {
-        const sel = document.getElementById('forum-filter-jurusan');
-        document.getElementById('forum-filter-jurusan-wrap').style.display = 'block';
+        const wrap = document.getElementById('forum-filter-jurusan-wrap');
+        const sel  = document.getElementById('forum-filter-jurusan');
+        if (wrap.style.display === 'none' || wrap.style.display === '') {
+            wrap.style.display = 'block'; return;
+        }
         if (!sel.value) { errEl.textContent = 'Pilih jurusan dulu.'; errEl.style.display = 'block'; return; }
         programId = sel.value;
     }
     if (groupDef.needsKelas && groupDef.mode === 'semua') {
-        const sel = document.getElementById('forum-filter-kelas');
-        document.getElementById('forum-filter-kelas-wrap').style.display = 'block';
+        const wrap = document.getElementById('forum-filter-kelas-wrap');
+        const sel  = document.getElementById('forum-filter-kelas');
+        if (wrap.style.display === 'none' || wrap.style.display === '') {
+            wrap.style.display = 'block'; return;
+        }
         if (!sel.value) { errEl.textContent = 'Pilih kelas dulu.'; errEl.style.display = 'block'; return; }
         classId = sel.value;
     }
     if (groupDef.needsHari && groupDef.mode === 'semua') {
-        const sel = document.getElementById('forum-filter-hari');
-        document.getElementById('forum-filter-hari-wrap').style.display = 'block';
+        const wrap = document.getElementById('forum-filter-hari-wrap');
+        const sel  = document.getElementById('forum-filter-hari');
+        if (wrap.style.display === 'none' || wrap.style.display === '') {
+            wrap.style.display = 'block'; return;
+        }
         if (!sel.value) { errEl.textContent = 'Pilih hari dulu.'; errEl.style.display = 'block'; return; }
         dayOfWeek = parseInt(sel.value, 10);
     }
