@@ -560,69 +560,266 @@ function closeForumModal() {
     _forumEditPostId = null; _forumRecipients.clear();
 }
 
+// ─── Panel Penerima — State Picker ────────────────────────────
+let _pickerGroupDef   = null;
+let _pickerCandidates = [];
+let _pickerSelected   = new Map();
+
+// ─── Bangun Tombol Grup Penerima ─────────────────────────────
 function buildRecipientGroupButtons() {
     const container = document.getElementById('forum-recipient-group-btns');
     container.innerHTML = '';
+
     const groups = [
-        { label: 'Semua Guru',      group: 'SEMUA_GURU'       },
-        { label: 'Semua Waka',      group: 'SEMUA_WAKA'       },
-        { label: 'Semua Kaprodi',   group: 'SEMUA_KAPRODI'    },
-        { label: 'Semua Wali Kls',  group: 'SEMUA_WALI_KELAS' },
-        { label: 'Semua Guru BK',   group: 'SEMUA_BK'         },
-        { label: 'Semua Siswa',     group: 'SEMUA_SISWA'      },
-        { label: 'Siswa Kelas',     group: 'SISWA_KELAS',     needsKelas: true },
-        { label: 'Siswa Jurusan',   group: 'SISWA_JURUSAN',   needsJurusan: true },
-        { label: 'Semua Ortu',      group: 'SEMUA_ORTU'       },
-        { label: 'Ortu Kelas',      group: 'ORTU_KELAS',      needsKelas: true },
-        { label: 'Ortu Jurusan',    group: 'ORTU_JURUSAN',    needsJurusan: true },
-        { label: 'Kepsek',          group: 'KEPSEK'           },
-        { label: 'Semua TU',        group: 'SEMUA_TU'         },
-        { label: 'Guru Piket',      group: 'GURU_PIKET',      needsHari: true },
+        { label: 'Kepsek',        group: 'KEPSEK',           hasIndividual: false },
+        { label: 'Waka',          group: 'SEMUA_WAKA',       hasIndividual: true, needsJabatan: true },
+        { label: 'Kaprodi',       group: 'SEMUA_KAPRODI',    hasIndividual: true, needsJurusan: true },
+        { label: 'Guru',          group: 'SEMUA_GURU',       hasIndividual: true, pickerGroup: 'GURU_MAPEL'  },
+        { label: 'Wali Kelas',    group: 'SEMUA_WALI_KELAS', hasIndividual: true, needsJurusan: true },
+        { label: 'Guru BK',       group: 'SEMUA_BK',         hasIndividual: true  },
+        { label: 'Guru Piket',    group: 'GURU_PIKET',       hasIndividual: true, needsHari: true },
+        { label: 'Semua Siswa',   group: 'SEMUA_SISWA',      hasIndividual: false },
+        { label: 'Siswa Kelas',   group: 'SISWA_KELAS',      hasIndividual: true, needsKelas: true },
+        { label: 'Siswa Jurusan', group: 'SISWA_JURUSAN',    hasIndividual: true, needsJurusan: true },
+        { label: 'Semua Ortu',    group: 'SEMUA_ORTU',       hasIndividual: false },
+        { label: 'Ortu Kelas',    group: 'ORTU_KELAS',       hasIndividual: true, needsKelas: true },
+        { label: 'Ortu Jurusan',  group: 'ORTU_JURUSAN',     hasIndividual: true, needsJurusan: true },
+        { label: 'TU / Admin',    group: 'SEMUA_TU',         hasIndividual: true  },
     ];
+
     groups.forEach(g => {
-        const btn = document.createElement('button');
-        btn.className = 'btn btn-secondary';
-        btn.textContent = g.label;
-        btn.addEventListener('click', () => addRecipientGroup(g));
-        container.appendChild(btn);
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display:inline-flex;gap:2px;margin-bottom:4px';
+
+        const btnAll = document.createElement('button');
+        btnAll.className = 'btn btn-secondary';
+        btnAll.style.cssText = g.hasIndividual
+            ? 'border-radius:6px 0 0 6px;padding-right:8px'
+            : '';
+        btnAll.textContent = `Semua ${g.label}`;
+        btnAll.addEventListener('click', () => addRecipientGroup({ ...g, mode: 'semua' }));
+        wrap.appendChild(btnAll);
+
+        if (g.hasIndividual) {
+            const btnPick = document.createElement('button');
+            btnPick.className = 'btn btn-secondary';
+            btnPick.style.cssText = 'border-radius:0 6px 6px 0;padding-left:6px;' +
+                'border-left:1px solid var(--color-border)';
+            btnPick.textContent = `${g.label} tertentu`;
+            btnPick.addEventListener('click', () => addRecipientGroup({ ...g, mode: 'tertentu' }));
+            wrap.appendChild(btnPick);
+        }
+
+        container.appendChild(wrap);
     });
 }
 
+// ─── Tambah Grup Penerima ─────────────────────────────────────
 async function addRecipientGroup(groupDef) {
     const errEl = document.getElementById('forum-post-error');
     errEl.style.display = 'none';
-    let programId = null, classId = null, dayOfWeek = null;
 
-    if (groupDef.needsJurusan) {
+    let programId = groupDef.programId ?? null;
+    let classId   = null;
+    let dayOfWeek = null;
+
+    if (groupDef.needsJurusan && groupDef.mode === 'semua') {
         const sel = document.getElementById('forum-filter-jurusan');
         document.getElementById('forum-filter-jurusan-wrap').style.display = 'block';
         if (!sel.value) { errEl.textContent = 'Pilih jurusan dulu.'; errEl.style.display = 'block'; return; }
         programId = sel.value;
     }
-    if (groupDef.needsKelas) {
+    if (groupDef.needsKelas && groupDef.mode === 'semua') {
         const sel = document.getElementById('forum-filter-kelas');
         document.getElementById('forum-filter-kelas-wrap').style.display = 'block';
         if (!sel.value) { errEl.textContent = 'Pilih kelas dulu.'; errEl.style.display = 'block'; return; }
         classId = sel.value;
     }
-    if (groupDef.needsHari) {
+    if (groupDef.needsHari && groupDef.mode === 'semua') {
         const sel = document.getElementById('forum-filter-hari');
         document.getElementById('forum-filter-hari-wrap').style.display = 'block';
         if (!sel.value) { errEl.textContent = 'Pilih hari dulu.'; errEl.style.display = 'block'; return; }
         dayOfWeek = parseInt(sel.value, 10);
     }
-    try {
-        const candidates = await getForumRecipientCandidates(groupDef.group, {
-            programId, classId, dayOfWeek,
-            academicYear: schoolConfig?.current_academic_year,
+
+    if (groupDef.mode === 'semua') {
+        try {
+            const candidates = await getForumRecipientCandidates(groupDef.group, {
+                programId, classId, dayOfWeek,
+                academicYear: schoolConfig?.current_academic_year,
+            });
+            candidates.forEach(c => _forumRecipients.set(c.user_id, c));
+            renderRecipientChips();
+        } catch (err) {
+            errEl.textContent = fe(err);
+            errEl.style.display = 'block';
+        }
+    } else {
+        await openRecipientPicker({
+            ...groupDef,
+            group: groupDef.pickerGroup ?? groupDef.group,
         });
-        candidates.forEach(c => _forumRecipients.set(c.user_id, c));
-        renderRecipientChips();
-    } catch (err) {
-        errEl.textContent = fe(err); errEl.style.display = 'block';
     }
 }
 
+// ─── Modal Picker ─────────────────────────────────────────────
+async function openRecipientPicker(groupDef) {
+    _pickerGroupDef   = groupDef;
+    _pickerSelected   = new Map();
+    _pickerCandidates = [];
+
+    const modal    = document.getElementById('modal-forum-picker');
+    const titleEl  = document.getElementById('picker-title');
+    const listEl   = document.getElementById('picker-list');
+    const errEl    = document.getElementById('picker-error');
+    const searchEl = document.getElementById('picker-search');
+
+    titleEl.textContent = `Pilih ${groupDef.label} tertentu`;
+    listEl.innerHTML    = '';
+    searchEl.value      = '';
+    errEl.style.display = 'none';
+
+    document.getElementById('picker-filter-jabatan-wrap').style.display =
+        groupDef.needsJabatan ? 'block' : 'none';
+    document.getElementById('picker-filter-jurusan-wrap').style.display =
+        groupDef.needsJurusan ? 'block' : 'none';
+    document.getElementById('picker-filter-kelas-wrap').style.display =
+        groupDef.needsKelas ? 'block' : 'none';
+    document.getElementById('picker-filter-hari-wrap').style.display =
+        groupDef.needsHari ? 'block' : 'none';
+
+    const selJurPicker = document.getElementById('picker-filter-jurusan');
+    selJurPicker.innerHTML = '<option value="">Semua Jurusan</option>';
+    _forumPrograms.forEach(p => {
+        selJurPicker.insertAdjacentHTML('beforeend',
+            `<option value="${p.program_id}">${esc(p.name)}</option>`);
+    });
+
+    const selKlsPicker = document.getElementById('picker-filter-kelas');
+    selKlsPicker.innerHTML = '<option value="">Semua Kelas</option>';
+    _forumClasses.forEach(c => {
+        selKlsPicker.insertAdjacentHTML('beforeend',
+            `<option value="${c.class_id}">${esc(c.name)}</option>`);
+    });
+
+    modal.style.display = 'flex';
+    await loadPickerCandidates();
+
+    if (!modal.dataset.wired) {
+        modal.dataset.wired = '1';
+        document.getElementById('btn-picker-batal').addEventListener('click', closeRecipientPicker);
+        modal.addEventListener('click', e => { if (e.target === e.currentTarget) closeRecipientPicker(); });
+        searchEl.addEventListener('input', renderPickerList);
+        document.getElementById('picker-filter-jabatan').addEventListener('change', loadPickerCandidates);
+        document.getElementById('picker-filter-jurusan').addEventListener('change', loadPickerCandidates);
+        document.getElementById('picker-filter-kelas').addEventListener('change', loadPickerCandidates);
+        document.getElementById('picker-filter-hari').addEventListener('change', loadPickerCandidates);
+        document.getElementById('btn-picker-tambahkan').addEventListener('click', () => {
+            _pickerSelected.forEach((c, uid) => _forumRecipients.set(uid, c));
+            renderRecipientChips();
+            closeRecipientPicker();
+        });
+    }
+}
+
+async function loadPickerCandidates() {
+    const loadEl   = document.getElementById('picker-loading');
+    const errEl    = document.getElementById('picker-error');
+    const groupDef = _pickerGroupDef;
+    if (!groupDef) return;
+
+    let programId = groupDef.programId ?? null;
+    let classId   = null;
+    let dayOfWeek = null;
+
+    if (groupDef.needsJurusan) {
+        programId = document.getElementById('picker-filter-jurusan').value || null;
+    }
+    if (groupDef.needsKelas) {
+        classId = document.getElementById('picker-filter-kelas').value || null;
+    }
+    if (groupDef.needsHari) {
+        const v = document.getElementById('picker-filter-hari').value;
+        dayOfWeek = v ? parseInt(v, 10) : null;
+    }
+
+    loadEl.style.display = 'block';
+    errEl.style.display  = 'none';
+
+    try {
+        _pickerCandidates = await getForumRecipientCandidates(groupDef.group, {
+            programId, classId, dayOfWeek,
+            academicYear: schoolConfig?.current_academic_year,
+        });
+        renderPickerList();
+    } catch (err) {
+        errEl.textContent   = fe(err);
+        errEl.style.display = 'block';
+    } finally {
+        loadEl.style.display = 'none';
+    }
+}
+
+function renderPickerList() {
+    const listEl    = document.getElementById('picker-list');
+    const searchVal = document.getElementById('picker-search').value.toLowerCase();
+    const jabatan   = document.getElementById('picker-filter-jabatan')?.value ?? '';
+
+    let filtered = _pickerCandidates;
+
+    if (searchVal) {
+        filtered = filtered.filter(c =>
+            c.full_name.toLowerCase().includes(searchVal));
+    }
+
+    if (jabatan && _pickerGroupDef?.needsJabatan) {
+        filtered = filtered.filter(c => c.role_label === jabatan);
+    }
+
+    if (!filtered.length) {
+        listEl.innerHTML = '<p class="hint" style="padding:8px">Tidak ada hasil.</p>';
+        return;
+    }
+
+    listEl.innerHTML = filtered.map(c => {
+        const checked = _pickerSelected.has(c.user_id);
+        const roleLabel = c.extra_info
+            ? `${c.role_label} · ${esc(c.extra_info)}`
+            : esc(c.role_label ?? '');
+        return `
+        <label style="display:flex;align-items:center;gap:8px;padding:8px;
+                      cursor:pointer;border-bottom:1px solid var(--color-border)">
+            <input type="checkbox" data-uid="${c.user_id}"
+                   ${checked ? 'checked' : ''}
+                   style="width:16px;height:16px;flex-shrink:0">
+            <div>
+                <div style="font-size:14px">${esc(c.full_name)}</div>
+                <div class="hint" style="font-size:12px">${roleLabel}</div>
+            </div>
+        </label>`;
+    }).join('');
+
+    listEl.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const uid = cb.dataset.uid;
+            const candidate = _pickerCandidates.find(c => c.user_id === uid);
+            if (!candidate) return;
+            if (cb.checked) {
+                _pickerSelected.set(uid, candidate);
+            } else {
+                _pickerSelected.delete(uid);
+            }
+        });
+    });
+}
+
+function closeRecipientPicker() {
+    document.getElementById('modal-forum-picker').style.display = 'none';
+    _pickerGroupDef   = null;
+    _pickerCandidates = [];
+}
+
+// ─── Chips Penerima ───────────────────────────────────────────
 function renderRecipientChips() {
     const container = document.getElementById('forum-recipient-chips');
     const emptyEl   = document.getElementById('forum-chips-empty');

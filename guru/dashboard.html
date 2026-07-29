@@ -288,6 +288,71 @@
             </div>
         </div>
 
+        <!-- Modal: name picker (muncul di atas modal-forum-post) -->
+        <div id="modal-forum-picker" class="modal-overlay" style="display:none;z-index:1100">
+            <div class="modal-box" style="max-width:480px;width:100%">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                    <h3 id="picker-title" style="margin:0">Pilih Penerima</h3>
+                    <button id="btn-picker-batal" class="btn btn-secondary">Batal</button>
+                </div>
+
+                <!-- Search -->
+                <div style="margin-bottom:8px">
+                    <input type="text" id="picker-search" class="input"
+                           placeholder="Cari nama…" autocomplete="off">
+                </div>
+
+                <!-- Filter jabatan Waka (muncul kondisional) -->
+                <div id="picker-filter-jabatan-wrap" style="display:none;margin-bottom:8px">
+                    <select id="picker-filter-jabatan" class="input">
+                        <option value="">Semua Jabatan</option>
+                        <option value="WAKA_KURIKULUM">Waka Kurikulum</option>
+                        <option value="WAKA_KESISWAAN">Waka Kesiswaan</option>
+                        <option value="WAKA_HUMAS">Waka Humas</option>
+                    </select>
+                </div>
+
+                <!-- Filter jurusan (muncul kondisional) -->
+                <div id="picker-filter-jurusan-wrap" style="display:none;margin-bottom:8px">
+                    <select id="picker-filter-jurusan" class="input">
+                        <option value="">Semua Jurusan</option>
+                    </select>
+                </div>
+
+                <!-- Filter kelas (muncul kondisional) -->
+                <div id="picker-filter-kelas-wrap" style="display:none;margin-bottom:8px">
+                    <select id="picker-filter-kelas" class="input">
+                        <option value="">Semua Kelas</option>
+                    </select>
+                </div>
+
+                <!-- Filter hari (muncul kondisional) -->
+                <div id="picker-filter-hari-wrap" style="display:none;margin-bottom:8px">
+                    <select id="picker-filter-hari" class="input">
+                        <option value="">Pilih hari…</option>
+                        <option value="1">Senin</option>
+                        <option value="2">Selasa</option>
+                        <option value="3">Rabu</option>
+                        <option value="4">Kamis</option>
+                        <option value="5">Jumat</option>
+                        <option value="6">Sabtu</option>
+                    </select>
+                </div>
+
+                <!-- Daftar hasil -->
+                <div id="picker-loading" class="hint" style="display:none">Memuat…</div>
+                <div id="picker-list"
+                     style="max-height:300px;overflow-y:auto;border:1px solid var(--color-border);
+                            border-radius:6px;margin-bottom:12px"></div>
+
+                <p id="picker-error" style="color:var(--color-danger);font-size:13px;display:none"></p>
+
+                <div style="display:flex;justify-content:flex-end">
+                    <button id="btn-picker-tambahkan" class="btn btn-primary">Tambahkan</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal: detail posting (baca + komentar) -->
         <div id="modal-forum-detail" class="modal-overlay" style="display:none">
             <div class="modal-box" style="max-width:600px;width:100%">
