@@ -4356,7 +4356,9 @@ let _forumEditPostId  = null;      // null = buat baru, uuid = edit
 
 // State panel pilih penerima
 let _forumRecipients  = new Map(); // user_id → { user_id, full_name, role_label }
-let _forumGroupLabels = new Map(); // groupKey → { label, uids: Set<uid>, btnEl }
+let _forumGroupLabels = new Map(); // groupKey → label string
+let _forumGroupBtns   = new Map(); // groupKey → btnEl
+let _forumGroupUids   = new Map(); // groupKey → Set<uid>
 let _forumPrograms    = [];        // [{ program_id, name }]
 let _forumClasses     = [];        // [{ class_id, name, grade_level, program_id }]
 
@@ -4519,6 +4521,8 @@ function openForumModal(postId = null) {
     _forumEditPostId = postId;
     _forumRecipients.clear();
     _forumGroupLabels.clear();
+    _forumGroupBtns.clear();
+    _forumGroupUids.clear();
     renderRecipientChips();
 
     const modal = document.getElementById('modal-forum-post');
@@ -4541,9 +4545,31 @@ function closeForumModal() {
     _forumEditPostId = null;
     _forumRecipients.clear();
     _forumGroupLabels.clear();
+    _forumGroupBtns.clear();
+    _forumGroupUids.clear();
 }
 
 // ─── Tombol Grup Penerima ─────────────────────────────────────
+const GROUP_LABELS = {
+    SEMUA_WAKA:          'Semua Waka dipilih',
+    SEMUA_KAPRODI:       'Semua Kaprodi dipilih',
+    SEMUA_GURU:          'Semua Guru dipilih',
+    GURU_MAPEL:          'Semua Guru dipilih',
+    SEMUA_WALI_KELAS:    'Semua Wali Kelas dipilih',
+    WALI_KELAS_JURUSAN:  'Semua Wali Kelas dipilih',
+    SEMUA_GURU_WALI:     'Semua Guru Wali dipilih',
+    SEMUA_BK:            'Semua Guru BK dipilih',
+    GURU_PIKET:          'Semua Guru Piket dipilih',
+    SEMUA_SISWA:         'Semua Siswa dipilih',
+    SISWA_KELAS:         'Siswa Semua Kelas dipilih',
+    SISWA_JURUSAN:       'Siswa Semua Jurusan dipilih',
+    SEMUA_ORTU:          'Semua Ortu dipilih',
+    ORTU_KELAS:          'Ortu Semua Kelas dipilih',
+    ORTU_JURUSAN:        'Ortu Semua Jurusan dipilih',
+    SEMUA_TU:            'Semua TU/Admin dipilih',
+    KEPSEK:              'Kepsek dipilih',
+};
+
 // ─── Panel Penerima — State Picker ────────────────────────────
 let _pickerGroupDef   = null;
 let _pickerCandidates = [];
@@ -4721,17 +4747,16 @@ async function addRecipientGroup(groupDef, btnEl = null) {
                 academicYear: config.current_academic_year,
             });
             // Jika grup sudah ada, hapus uid lama dulu sebelum re-add
-            if (_forumGroupLabels.has(groupDef.group)) {
-                const old = _forumGroupLabels.get(groupDef.group);
-                old.uids.forEach(uid => _forumRecipients.delete(uid));
-                if (old.btnEl) old.btnEl.className = 'btn btn-secondary';
+            if (_forumGroupUids.has(groupDef.group)) {
+                _forumGroupUids.get(groupDef.group).forEach(uid => _forumRecipients.delete(uid));
+                const oldBtn = _forumGroupBtns.get(groupDef.group);
+                if (oldBtn) oldBtn.className = 'btn btn-secondary';
             }
             candidates.forEach(c => _forumRecipients.set(c.user_id, c));
-            _forumGroupLabels.set(groupDef.group, {
-                label: `${groupDef.labelSemua ?? 'Semua ' + groupDef.label} dipilih`,
-                uids: new Set(candidates.map(c => c.user_id)),
-                btnEl,
-            });
+            _forumGroupLabels.set(groupDef.group,
+                GROUP_LABELS[groupDef.group] ?? `${groupDef.labelSemua ?? 'Semua ' + groupDef.label} dipilih`);
+            _forumGroupBtns.set(groupDef.group, btnEl);
+            _forumGroupUids.set(groupDef.group, new Set(candidates.map(c => c.user_id)));
             if (btnEl) btnEl.className = 'btn btn-primary';
             renderRecipientChips();
         } catch (err) {
@@ -4925,16 +4950,20 @@ function renderRecipientChips() {
 
     // Satu chip ringkas per grup "Semua X"
     const groupedUids = new Set();
-    _forumGroupLabels.forEach((g, groupKey) => {
-        g.uids.forEach(uid => groupedUids.add(uid));
+    _forumGroupLabels.forEach((label, groupKey) => {
+        const uids = _forumGroupUids.get(groupKey) ?? new Set();
+        uids.forEach(uid => groupedUids.add(uid));
         const chip = document.createElement('span');
         chip.className = 'recipient-chip';
         chip.style.cssText = chipCss;
-        chip.innerHTML = `${esc(g.label)} <button style="${btnCss}">\u2715</button>`;
+        chip.innerHTML = `${esc(label)} <button style="${btnCss}">\u2715</button>`;
         chip.querySelector('button').addEventListener('click', () => {
-            g.uids.forEach(uid => _forumRecipients.delete(uid));
+            uids.forEach(uid => _forumRecipients.delete(uid));
             _forumGroupLabels.delete(groupKey);
-            if (g.btnEl) g.btnEl.className = 'btn btn-secondary';
+            _forumGroupUids.delete(groupKey);
+            const btn = _forumGroupBtns.get(groupKey);
+            if (btn) btn.className = 'btn btn-secondary';
+            _forumGroupBtns.delete(groupKey);
             renderRecipientChips();
         });
         container.appendChild(chip);
