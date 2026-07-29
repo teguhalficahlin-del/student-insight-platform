@@ -5077,6 +5077,8 @@ async function submitForumComment() {
     }
 }
 
+let _paTabInit = false;
+
 async function initPerangkatAjarTab() {
     if (_paTabInit) {
         // Refresh data setiap kali tab dibuka (tapi jangan re-wire events)
