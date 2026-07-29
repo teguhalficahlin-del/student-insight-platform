@@ -572,6 +572,7 @@ let _pickerSelected   = new Map();
 function buildRecipientGroupButtons() {
     const container = document.getElementById('forum-recipient-group-btns');
     container.innerHTML = '';
+    container.style.cssText = 'display:flex;flex-wrap:wrap;align-items:flex-start;';
 
     // Bug #6: TU tidak boleh broadcast ke sesama TU — hapus "Semua TU/Admin",
     //          hanya "TU/Admin tertentu" (hasIndividual: true, labelSemua kosong trick: tidak ada btnAll)
@@ -596,7 +597,8 @@ function buildRecipientGroupButtons() {
 
     groups.forEach(g => {
         const wrap = document.createElement('div');
-        wrap.style.cssText = 'display:flex;gap:2px;margin-bottom:6px;width:100%';
+        wrap.style.cssText = `display:flex;gap:2px;margin-bottom:6px;width:${g.hasIndividual ? '100%' : 'auto'}`;
+
 
         // skipSemua: true → jangan tampilkan tombol "Semua X" (hanya picker)
         if (!g.skipSemua) {

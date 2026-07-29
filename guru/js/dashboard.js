@@ -4551,6 +4551,7 @@ function buildRecipientGroupButtons() {
     const scope = _forumScope;
     const container = document.getElementById('forum-recipient-group-btns');
     container.innerHTML = '';
+    container.style.cssText = 'display:flex;flex-wrap:wrap;align-items:flex-start;';
 
     const isKepsek  = scope?.is_kepsek || scope?.role_type === 'KEPSEK';
     const isWaka    = scope?.is_waka_kurikulum || scope?.is_waka_kesiswaan
@@ -4623,7 +4624,7 @@ function buildRecipientGroupButtons() {
 
     groups.forEach(g => {
         const wrap = document.createElement('div');
-        wrap.style.cssText = 'display:flex;gap:2px;margin-bottom:6px;width:100%';
+        wrap.style.cssText = `display:flex;gap:2px;margin-bottom:6px;width:${g.hasIndividual ? '100%' : 'auto'}`;
 
         const btnAll = document.createElement('button');
         btnAll.className = 'btn btn-secondary';
