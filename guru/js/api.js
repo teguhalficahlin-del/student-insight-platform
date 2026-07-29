@@ -1107,105 +1107,85 @@ export async function removeSchoolAdmin(user_id) {
     return _callManageAdmin('DELETE', { user_id });
 }
 
-// ─── Forum Kelas ──────────────────────────────────────────────
+// ─── Forum Sekolah ────────────────────────────────────────────
 
-export async function getForumClasses(userId, academicYear) {
-    const classMap = new Map();
-
-    // Ambil profil user dulu — dibutuhkan untuk menentukan query selanjutnya
-    const { data: u } = await supabase.rpc('fn_get_user_forum_scope', { p_user_id: userId })
-        .maybeSingle();
-
-    const isOversight = ['WAKA_KESISWAAN', 'KEPSEK', 'ADMINISTRATIVE'].includes(u?.role_type)
-        || u?.is_waka_kesiswaan === true
-        || u?.is_kepsek === true;
-    const programId = u?.kaprodi_program_id ?? (u?.role_type === 'KAPRODI' ? u?.program_id : null);
-
-    // Jalankan semua query independen secara paralel
-    const [cls, ta, bk, gwa, allCls, kpCls] = await Promise.all([
-        // 1. Wali kelas
-        u?.wali_kelas_class_id
-            ? supabase.from('classes').select('class_id, name').eq('class_id', u.wali_kelas_class_id).maybeSingle().then(r => r.data)
-            : Promise.resolve(null),
-        // 2. Guru mapel
-        supabase.from('teaching_assignments').select('class:classes(class_id, name)')
-            .eq('user_id', userId).eq('academic_year', academicYear).eq('is_active', true).then(r => r.data),
-        // 3. BK
-        supabase.from('bk_class_assignments').select('class:classes(class_id, name)')
-            .eq('bk_user_id', userId).eq('academic_year', academicYear).eq('is_active', true).then(r => r.data),
-        // 4a. Guru wali (hasil dipakai untuk query enrollments berikutnya)
-        supabase.from('guru_wali_assignments').select('student_id')
-            .eq('guru_user_id', userId).eq('academic_year', academicYear).eq('is_active', true).then(r => r.data),
-        // 5. Oversight → semua kelas
-        isOversight
-            ? supabase.from('classes').select('class_id, name').eq('academic_year', academicYear).then(r => r.data)
-            : Promise.resolve(null),
-        // 6. Kaprodi → kelas program
-        programId
-            ? supabase.from('classes').select('class_id, name').eq('program_id', programId).eq('academic_year', academicYear).then(r => r.data)
-            : Promise.resolve(null),
-    ]);
-
-    if (cls) classMap.set(cls.class_id, cls.name);
-    (ta  ?? []).forEach(r => r.class && classMap.set(r.class.class_id, r.class.name));
-    (bk  ?? []).forEach(r => r.class && classMap.set(r.class.class_id, r.class.name));
-    (allCls ?? []).forEach(c => classMap.set(c.class_id, c.name));
-    (kpCls  ?? []).forEach(c => classMap.set(c.class_id, c.name));
-
-    // 4b. Enrollments — dependen pada hasil gwa, dijalankan setelah batch pertama
-    if (gwa?.length) {
-        const { data: enr } = await supabase.from('class_enrollments')
-            .select('class:classes(class_id, name)')
-            .in('student_id', gwa.map(r => r.student_id))
-            .eq('academic_year', academicYear)
-            .is('withdrawn_at', null);
-        (enr ?? []).forEach(r => r.class && classMap.set(r.class.class_id, r.class.name));
-    }
-
-    return Array.from(classMap, ([class_id, name]) => ({ class_id, name }))
-        .sort((a, b) => a.name.localeCompare(b.name, 'id'));
+/**
+ * Ambil kandidat penerima berdasarkan target group dan filter.
+ * Memanggil fn_get_forum_recipient_candidates.
+ */
+export async function getForumRecipientCandidates(
+    targetGroup, { programId = null, classId = null, dayOfWeek = null, academicYear = null } = {}
+) {
+    const { data, error } = await supabase.rpc('fn_get_forum_recipient_candidates', {
+        p_target_group:  targetGroup,
+        p_program_id:    programId,
+        p_class_id:      classId,
+        p_day_of_week:   dayOfWeek,
+        p_academic_year: academicYear,
+    });
+    if (error) throw error;
+    return data ?? [];
 }
 
-export async function getForumPosts(classId, academicYear, callerId, schoolId, limit = 20, offset = 0, skipAudienceFilter = false) {
-    // Waka/Kepsek/Kaprodi tidak perlu filter audience — RLS sudah guard akses.
-    // User biasa hanya melihat posting yang ada di audience-nya.
-    const audienceSel = skipAudienceFilter
-        ? 'forum_post_audience(user_id)'
-        : 'forum_post_audience!inner(user_id)';
-    let q = supabase
+/**
+ * Ambil posting Forum Sekolah untuk inbox caller.
+ * Filter: scope_type='SEKOLAH', caller ada di forum_post_audience.
+ */
+export async function getForumSekolahPosts(schoolId, callerId, limit = 20, offset = 0) {
+    const { data, error } = await supabase
         .from('forum_posts')
         .select(`
-            post_id, title, body, visibility, is_pinned, is_withdrawn,
-            created_at, updated_at, author_user_id,
-            category:communication_categories(category_code, label_sekolah, polarity),
-            author:users!forum_posts_author_user_id_fkey(user_id, full_name),
-            subjects:forum_post_subjects(
-                student:students(student_id, full_name, nis)
-            ),
-            acknowledgements:forum_post_acknowledgements(user_id),
+            post_id, title, body, attachment_url, attachment_name,
+            is_edited, edited_at, deleted_at, created_at, updated_at,
+            author_user_id,
+            author:users!forum_posts_author_user_id_fkey(user_id, full_name, role_type),
             comments:forum_post_comments(comment_id),
-            ${audienceSel}
+            acknowledgements:forum_post_acknowledgements(user_id),
+            audience:forum_post_audience!inner(user_id)
         `)
-        .eq('class_id',    classId)
-        .eq('academic_year', academicYear)
-        .eq('school_id',   schoolId)
-        .order('is_pinned',  { ascending: false })
+        .eq('scope_type', 'SEKOLAH')
+        .eq('school_id', schoolId)
+        .is('deleted_at', null)
+        .eq('forum_post_audience.user_id', callerId)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
-    if (!skipAudienceFilter) {
-        q = q.eq('forum_post_audience.user_id', callerId);
-    }
-    const { data, error } = await q;
     if (error) throw error;
-    return (data ?? []).map(({ forum_post_audience: _aud, ...rest }) => rest);
+    return (data ?? []).map(({ audience: _a, ...rest }) => rest);
 }
 
-export async function getForumPostComments(postId) {
+/**
+ * Ambil posting yang dibuat oleh caller (tab Terkirim).
+ */
+export async function getForumSekolahSentPosts(schoolId, callerId, limit = 20, offset = 0) {
+    const { data, error } = await supabase
+        .from('forum_posts')
+        .select(`
+            post_id, title, body, attachment_url, attachment_name,
+            is_edited, edited_at, deleted_at, created_at, updated_at,
+            author_user_id,
+            comments:forum_post_comments(comment_id),
+            acknowledgements:forum_post_acknowledgements(user_id),
+            audience:forum_post_audience(user_id)
+        `)
+        .eq('scope_type', 'SEKOLAH')
+        .eq('school_id', schoolId)
+        .eq('author_user_id', callerId)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+    if (error) throw error;
+    return data ?? [];
+}
+
+/**
+ * Ambil komentar untuk satu posting.
+ */
+export async function getForumSekolahComments(postId) {
     const { data, error } = await supabase
         .from('forum_post_comments')
         .select(`
-            comment_id, body, created_at, author_user_id,
-            author:users!forum_post_comments_author_user_id_fkey(user_id, full_name)
+            comment_id, body, created_at, updated_at,
+            author_user_id,
+            author:users!forum_post_comments_author_user_id_fkey(user_id, full_name, role_type)
         `)
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
@@ -1213,103 +1193,95 @@ export async function getForumPostComments(postId) {
     return data ?? [];
 }
 
-export async function getForumCategories() {
-    const { data, error } = await supabase
-        .from('communication_categories')
-        .select('category_id, category_code, label_sekolah, polarity, display_order')
-        .eq('is_active', true)
-        .order('display_order');
-    if (error) throw error;
-    return data ?? [];
-}
-
-export async function getForumStudents(classId, academicYear) {
-    const { data, error } = await supabase
-        .from('class_enrollments')
-        .select('student:students(student_id, full_name, nis)')
-        .eq('class_id', classId)
-        .eq('academic_year', academicYear)
-        .is('withdrawn_at', null);
-    if (error) throw error;
-    return (data ?? [])
-        .map(r => r.student)
-        .filter(Boolean)
-        .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
-}
-
-export async function getForumMemberDetails(classId, academicYear) {
-    const { data, error } = await supabase.rpc(
-        'fn_get_forum_member_details',
-        {
-            p_class_id:      classId,
-            p_academic_year: academicYear,
-        }
-    );
-    if (error) throw error;
-    return (data ?? []).map(r => ({
-        user_id:      r.user_id,
-        full_name:    r.full_name,
-        role_type:    r.role_type,
-        student_name: r.student_name ?? null,
-    }));
-}
-
-export async function createForumPost(
-    classId, academicYear, content,
-    categoryCode, subjectStudentIds, audienceType,
-    specificUserIds = [],
-    audienceType2 = null,
-    specificUserIds2 = []
+/**
+ * Buat posting Forum Sekolah baru.
+ * recipientUserIds: array user_id yang sudah di-resolve di sisi client.
+ */
+export async function createForumSekolahPost(
+    title, body, recipientUserIds, academicYear,
+    { attachmentUrl = null, attachmentName = null } = {}
 ) {
     const { data, error } = await supabase.rpc('fn_create_forum_post', {
-        p_class_id:              classId,
-        p_academic_year:         academicYear,
-        p_content:               content,
-        p_category_code:         categoryCode || null,
-        p_subject_student_ids:   subjectStudentIds ?? [],
-        p_audience_type:         audienceType,
-        p_specific_user_ids:     specificUserIds,
-        p_audience_type_2:       audienceType2 || null,
-        p_specific_user_ids_2:   specificUserIds2,
+        p_class_id:            null,
+        p_academic_year:       academicYear,
+        p_content:             body,
+        p_category_code:       null,
+        p_subject_student_ids: [],
+        p_audience_type:       'ORANG_TERTENTU',
+        p_specific_user_ids:   recipientUserIds,
+        p_audience_type_2:     null,
+        p_specific_user_ids_2: [],
+        p_scope_type:          'SEKOLAH',
+        p_title:               title,
     });
     if (error) throw error;
+    // Update attachment jika ada
+    if (attachmentUrl && data) {
+        await supabase
+            .from('forum_posts')
+            .update({ attachment_url: attachmentUrl, attachment_name: attachmentName })
+            .eq('post_id', data);
+    }
     return data;
 }
 
-export async function addForumAcknowledgement(postId, userId, schoolId) {
-    const { error } = await supabase.from('forum_post_acknowledgements')
-        .insert({ post_id: postId, user_id: userId, school_id: schoolId });
-    // 23505 = unique_violation: sudah di-ack sebelumnya — abaikan
-    if (error && error.code !== '23505') throw error;
-}
-
-export async function addForumComment(postId, body, authorUserId, schoolId) {
-    const { data, error } = await supabase.from('forum_post_comments')
-        .insert({ post_id: postId, body, author_user_id: authorUserId, school_id: schoolId })
-        .select('comment_id')
-        .single();
-    if (error) throw error;
-    return data;
-}
-
-export async function withdrawForumPost(postId) {
-    const { error } = await supabase.from('forum_posts')
-        .update({ is_withdrawn: true })
+/**
+ * Edit posting (hanya author).
+ */
+export async function updateForumSekolahPost(postId, newTitle, newBody) {
+    const { error } = await supabase
+        .from('forum_posts')
+        .update({
+            title:      newTitle,
+            body:       newBody,
+            is_edited:  true,
+            edited_at:  new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        })
         .eq('post_id', postId);
     if (error) throw error;
 }
 
-export async function updateForumPost(postId, newBody) {
-    const { error } = await supabase.from('forum_posts')
-        .update({ body: newBody, updated_at: new Date().toISOString() })
+/**
+ * Hapus posting secara soft delete (hanya author).
+ */
+export async function deleteForumSekolahPost(postId) {
+    const { error } = await supabase
+        .from('forum_posts')
+        .update({ deleted_at: new Date().toISOString() })
         .eq('post_id', postId);
     if (error) throw error;
 }
 
-export async function withdrawForumComment(commentId) {
-    const { error } = await supabase.from('forum_post_comments')
+/**
+ * Tambah komentar ke posting.
+ */
+export async function addForumSekolahComment(postId, body, schoolId) {
+    const { error } = await supabase
+        .from('forum_post_comments')
+        .insert({ post_id: postId, body, school_id: schoolId });
+    if (error) throw error;
+}
+
+/**
+ * Hapus komentar (hanya author komentar).
+ */
+export async function deleteForumSekolahComment(commentId) {
+    const { error } = await supabase
+        .from('forum_post_comments')
         .delete()
         .eq('comment_id', commentId);
+    if (error) throw error;
+}
+
+/**
+ * Tandai posting sudah dibaca (upsert).
+ */
+export async function addForumSekolahAcknowledgement(postId, userId, schoolId) {
+    const { error } = await supabase
+        .from('forum_post_acknowledgements')
+        .upsert({ post_id: postId, user_id: userId, school_id: schoolId },
+                 { ignoreDuplicates: true });
     if (error) throw error;
 }
 

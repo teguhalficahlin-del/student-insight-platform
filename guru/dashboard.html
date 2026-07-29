@@ -184,106 +184,141 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════════
-         TAB: FORUM KELAS
+         TAB: FORUM SEKOLAH
     ════════════════════════════════════════════════════════ -->
     <div class="tab-panel" id="tab-forum">
         <div class="page-body">
 
-            <!-- Header: pilih kelas -->
-            <div class="section-card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px">
-                <select id="forum-class-select" class="input" style="flex:1;min-width:180px;max-width:320px">
-                    <option value="">Memuat kelas…</option>
-                </select>
-                <button id="btn-create-post" class="btn btn-primary">+ Buat Posting</button>
+            <!-- Sub-tab: Masuk / Terkirim -->
+            <div style="display:flex;gap:8px;margin-bottom:12px">
+                <button id="forum-tab-masuk" class="btn btn-primary">Masuk</button>
+                <button id="forum-tab-terkirim" class="btn btn-secondary">Terkirim</button>
+                <button id="btn-forum-buat" class="btn btn-primary" style="margin-left:auto">+ Buat Posting</button>
             </div>
 
-            <!-- Aliran posting -->
-            <div class="section-card" id="forum-posts-container">
+            <!-- Daftar posting -->
+            <div id="forum-list-container">
                 <p id="forum-loading" class="hint">Memuat forum…</p>
                 <div id="forum-posts-list"></div>
                 <div style="text-align:center;margin-top:12px">
-                    <button id="btn-load-more-posts" class="btn btn-secondary" style="display:none">Muat lebih banyak</button>
+                    <button id="btn-forum-load-more" class="btn btn-secondary" style="display:none">Muat lebih banyak</button>
                 </div>
             </div>
 
         </div>
 
-        <!-- Modal: buat posting -->
-        <div id="modal-create-post" class="modal-overlay">
-            <div class="modal-box">
-                <h3 style="margin:0 0 16px">Buat Posting</h3>
+        <!-- Modal: buat/edit posting -->
+        <div id="modal-forum-post" class="modal-overlay" style="display:none">
+            <div class="modal-box" style="max-width:560px;width:100%">
+                <h3 id="modal-forum-title" style="margin:0 0 16px">Buat Posting</h3>
 
-                <!-- Subjek siswa -->
+                <!-- Judul -->
                 <div class="field">
-                    <p class="field-label">Siswa yang dibahas <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></p>
-                    <div id="forum-student-list" style="max-height:160px;overflow-y:auto;border:1px solid var(--color-border);border-radius:var(--radius);padding:8px;display:flex;flex-direction:column;gap:4px">
-                        <p class="hint" style="margin:0">Memuat daftar siswa…</p>
+                    <label for="forum-input-title">Judul</label>
+                    <input type="text" id="forum-input-title" class="input"
+                           placeholder="Judul pengumuman…" maxlength="200">
+                </div>
+
+                <!-- Isi -->
+                <div class="field">
+                    <label for="forum-input-body">Isi</label>
+                    <textarea id="forum-input-body" class="input" rows="5"
+                              placeholder="Tuliskan isi pengumuman…" maxlength="5000"></textarea>
+                </div>
+
+                <!-- Pilih penerima -->
+                <div class="field">
+                    <label>Penerima</label>
+
+                    <!-- Grup penerima -->
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px" id="forum-recipient-group-btns">
+                        <!-- Diisi JS berdasarkan role pembuat -->
                     </div>
-                </div>
 
-                <!-- Kategori (muncul jika ada subjek) -->
-                <div id="forum-category-section" class="field" style="display:none">
-                    <p class="field-label">Kategori kejadian <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></p>
-                    <div id="forum-category-grid" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-                </div>
-
-                <!-- Audiens -->
-                <div class="field">
-                    <label for="forum-audience-select">Siapa yang boleh melihat?</label>
-                    <select id="forum-audience-select" class="input">
-                        <option value="STAF_SAJA">Staf saja</option>
-                        <option value="ORTU_SISWA_SUBJEK">Orang tua &amp; siswa yang dibahas</option>
-                        <option value="ORTU_SISWA_KELAS">Semua orang tua &amp; siswa kelas ini</option>
-                        <option value="PUBLIK">Semua (publik)</option>
-                        <option value="ORANG_TERTENTU">Orang tertentu saja</option>
-                    </select>
-                    <p id="forum-audience-warning" class="hint" style="color:var(--color-warning,#b45309);margin:4px 0 0;display:none"></p>
-                </div>
-
-                <!-- Audiens tambahan (dropdown 2) -->
-                <div class="field" id="forum-audience-2-field" style="margin-top:8px">
-                    <label for="forum-audience-select-2">Tambahan (opsional)</label>
-                    <select id="forum-audience-select-2" class="input">
-                        <option value="">— Tidak ada tambahan —</option>
-                        <option value="STAF_SAJA">Staf saja</option>
-                        <option value="ORTU_SISWA_SUBJEK">Orang tua &amp; siswa yang dibahas</option>
-                        <option value="ORTU_SISWA_KELAS">Semua orang tua &amp; siswa kelas ini</option>
-                        <option value="PUBLIK">Semua (publik)</option>
-                        <option value="ORANG_TERTENTU">Orang tertentu saja</option>
-                    </select>
-                </div>
-
-                <!-- Tambah orang tertentu -->
-                <div class="field" id="forum-specific-section">
-                    <label for="forum-specific-search">Tambah orang tertentu <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></label>
-                    <div style="position:relative">
-                        <input
-                            type="text"
-                            id="forum-specific-search"
-                            class="input"
-                            placeholder="Ketik nama staf atau orang tua…"
-                            autocomplete="off"
-                            style="width:100%"
-                        >
-                        <div
-                            id="forum-specific-dropdown"
-                            style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius);box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:300;max-height:180px;overflow-y:auto"
-                        ></div>
+                    <!-- Filter jurusan (muncul kondisional) -->
+                    <div id="forum-filter-jurusan-wrap" style="display:none;margin-bottom:8px">
+                        <select id="forum-filter-jurusan" class="input">
+                            <option value="">Semua Jurusan</option>
+                        </select>
                     </div>
-                    <div id="forum-specific-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+
+                    <!-- Filter kelas (muncul kondisional) -->
+                    <div id="forum-filter-kelas-wrap" style="display:none;margin-bottom:8px">
+                        <select id="forum-filter-kelas" class="input">
+                            <option value="">Semua Kelas</option>
+                        </select>
+                    </div>
+
+                    <!-- Filter hari piket (muncul kondisional) -->
+                    <div id="forum-filter-hari-wrap" style="display:none;margin-bottom:8px">
+                        <select id="forum-filter-hari" class="input">
+                            <option value="">Pilih hari…</option>
+                            <option value="1">Senin</option>
+                            <option value="2">Selasa</option>
+                            <option value="3">Rabu</option>
+                            <option value="4">Kamis</option>
+                            <option value="5">Jumat</option>
+                            <option value="6">Sabtu</option>
+                        </select>
+                    </div>
+
+                    <!-- Chips penerima terpilih -->
+                    <div id="forum-recipient-chips"
+                         style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;min-height:32px;
+                                padding:6px;border:1px solid var(--color-border);border-radius:6px">
+                        <span class="hint" id="forum-chips-empty">Belum ada penerima dipilih</span>
+                    </div>
+                    <p id="forum-recipient-count" class="hint" style="margin-top:4px"></p>
                 </div>
 
-                <!-- Isi teks -->
+                <!-- Lampiran -->
                 <div class="field">
-                    <label for="forum-post-content">Catatan <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></label>
-                    <textarea id="forum-post-content" class="input" rows="4" placeholder="Tuliskan catatan…" maxlength="2000"></textarea>
+                    <label for="forum-input-file">Lampiran (PDF / Word, maks. 10 MB)</label>
+                    <input type="file" id="forum-input-file" accept=".pdf,.doc,.docx"
+                           style="display:block;margin-top:4px">
+                    <p id="forum-file-name" class="hint" style="margin-top:4px"></p>
                 </div>
 
-                <p id="forum-post-error" style="color:var(--color-danger);font-size:13px;margin:0 0 12px;display:none"></p>
+                <p id="forum-post-error" style="color:var(--color-danger);font-size:13px;display:none"></p>
 
-                <div style="display:flex;gap:8px;justify-content:flex-end">
-                    <button id="btn-cancel-post" class="btn btn-secondary">Batal</button>
-                    <button id="btn-submit-post" class="btn btn-primary">Simpan</button>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+                    <button id="btn-forum-modal-batal" class="btn btn-secondary">Batal</button>
+                    <button id="btn-forum-modal-simpan" class="btn btn-primary">Kirim</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: detail posting (baca + komentar) -->
+        <div id="modal-forum-detail" class="modal-overlay" style="display:none">
+            <div class="modal-box" style="max-width:600px;width:100%">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+                    <h3 id="detail-forum-title" style="margin:0"></h3>
+                    <button id="btn-forum-detail-close" class="btn btn-secondary" style="flex-shrink:0">✕</button>
+                </div>
+                <p id="detail-forum-meta" class="hint" style="margin:6px 0 12px"></p>
+                <div id="detail-forum-body" style="white-space:pre-wrap;margin-bottom:12px"></div>
+                <div id="detail-forum-attachment" style="margin-bottom:12px"></div>
+
+                <!-- Komentar -->
+                <div id="detail-forum-comments" style="border-top:1px solid var(--color-border);padding-top:12px">
+                    <p class="hint" id="detail-forum-comments-loading">Memuat komentar…</p>
+                    <div id="detail-forum-comments-list"></div>
+                </div>
+
+                <!-- Input komentar -->
+                <div style="display:flex;gap:8px;margin-top:12px">
+                    <textarea id="forum-comment-input" class="input" rows="2"
+                              placeholder="Tulis komentar…" maxlength="1000"
+                              style="flex:1;resize:none"></textarea>
+                    <button id="btn-forum-comment-submit" class="btn btn-primary">Kirim</button>
+                </div>
+                <p id="forum-comment-error" style="color:var(--color-danger);font-size:13px;display:none"></p>
+
+                <!-- Aksi author -->
+                <div id="forum-author-actions" style="display:none;margin-top:12px;
+                     border-top:1px solid var(--color-border);padding-top:12px">
+                    <button id="btn-forum-edit" class="btn btn-secondary">Edit</button>
+                    <button id="btn-forum-delete" class="btn btn-danger" style="margin-left:8px">Hapus</button>
                 </div>
             </div>
         </div>
