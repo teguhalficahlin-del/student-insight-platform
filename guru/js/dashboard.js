@@ -4574,7 +4574,7 @@ function buildRecipientGroupButtons() {
             { label: 'Ortu Kelas',  group: 'ORTU_KELAS',       hasIndividual: true, needsKelas: true },
             { label: 'Ortu Jurusan', group: 'ORTU_JURUSAN',    hasIndividual: true, needsJurusan: true },
             { label: 'TU / Admin',  group: 'SEMUA_TU',         hasIndividual: true  },
-            ...(isKepsek ? [] : [{ label: 'Kepsek', group: 'KEPSEK', hasIndividual: false }]),
+            ...(isKepsek ? [] : [{ label: 'Kepsek', group: 'KEPSEK', hasIndividual: false, labelSemua: 'Kepsek' }]),
         ];
     } else if (isKaprodi) {
         groups = [
@@ -4583,13 +4583,13 @@ function buildRecipientGroupButtons() {
             { label: 'Guru BK',          group: 'SEMUA_BK',           hasIndividual: true  },
             { label: 'Siswa Jurusan',    group: 'SISWA_JURUSAN',       hasIndividual: true, needsJurusan: true },
             { label: 'Ortu Jurusan',     group: 'ORTU_JURUSAN',        hasIndividual: true, needsJurusan: true },
-            { label: 'Kepsek',           group: 'KEPSEK',              hasIndividual: false },
+            { label: 'Kepsek',           group: 'KEPSEK',              hasIndividual: false, labelSemua: 'Kepsek' },
             { label: 'Waka',             group: 'SEMUA_WAKA',          hasIndividual: true, needsJabatan: true },
             { label: 'TU / Admin',       group: 'SEMUA_TU',            hasIndividual: true  },
         ];
     } else {
         groups = [
-            { label: 'Kepsek',      group: 'KEPSEK',           hasIndividual: false },
+            { label: 'Kepsek',      group: 'KEPSEK',           hasIndividual: false, labelSemua: 'Kepsek' },
             { label: 'Waka',        group: 'SEMUA_WAKA',       hasIndividual: true, needsJabatan: true },
             { label: 'Kaprodi',     group: 'SEMUA_KAPRODI',    hasIndividual: true, needsJurusan: true },
             { label: 'Guru',        group: 'SEMUA_GURU',       hasIndividual: true, pickerGroup: 'GURU_MAPEL'  },
@@ -4604,14 +4604,14 @@ function buildRecipientGroupButtons() {
 
     groups.forEach(g => {
         const wrap = document.createElement('div');
-        wrap.style.cssText = 'display:inline-flex;gap:2px;margin-bottom:4px';
+        wrap.style.cssText = 'display:flex;gap:2px;margin-bottom:6px;width:100%';
 
         const btnAll = document.createElement('button');
         btnAll.className = 'btn btn-secondary';
         btnAll.style.cssText = g.hasIndividual
             ? 'border-radius:6px 0 0 6px;padding-right:8px'
             : '';
-        btnAll.textContent = `Semua ${g.label}`;
+        btnAll.textContent = g.labelSemua ?? `Semua ${g.label}`;
         btnAll.addEventListener('click', () => addRecipientGroup({ ...g, mode: 'semua' }));
         wrap.appendChild(btnAll);
 
