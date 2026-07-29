@@ -450,18 +450,14 @@ export async function getClassTeachersToday(classId) {
 }
 
 export async function getWaliKelas(classId) {
-    try {
-        const { data, error } = await supabase
-            .from('classes')
-            .select('wali_kelas_user_id')
-            .eq('class_id', classId)
-            .maybeSingle();
-        if (error) { console.warn('[forum] getWaliKelas error:', error.message); return null; }
-        return data?.wali_kelas_user_id ?? null;
-    } catch (e) {
-        console.warn('[forum] getWaliKelas exception:', e);
-        return null;
-    }
+    const { data, error } = await supabase
+        .from('users')
+        .select('user_id')
+        .eq('wali_kelas_class_id', classId)
+        .eq('is_active', true)
+        .maybeSingle();
+    if (error) console.error('getWaliKelas error:', error);
+    return data?.user_id ?? null;
 }
 
 export async function getChildLateArrivals(studentId) {
