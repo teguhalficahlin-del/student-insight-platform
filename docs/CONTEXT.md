@@ -1,3 +1,8 @@
+> **DEPRECATED** — Isi dokumen ini sudah dikonsolidasi ke `CLAUDE.md` di root repo.
+> Untuk Claude Code: baca `CLAUDE.md`. Untuk Claude Chat: baca `CLAUDE.md` + bagian "CARA KERJA SESI" di bawah ini.
+
+---
+
 # SIP SMK — Context Document untuk Claude Chat Baru
 
 > **Cara membaca dokumen ini:**
