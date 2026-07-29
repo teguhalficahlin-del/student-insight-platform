@@ -291,7 +291,7 @@ textarea.input { resize: vertical; min-height: 80px; }
 .radio-hadir input:checked + label        { background: var(--color-success-bg); color: var(--color-success); border-color: var(--color-success); }
 .radio-izin input:checked + label         { background: rgba(29,78,216,0.15); color: #60a5fa; border-color: #60a5fa; }
 .radio-sakit input:checked + label        { background: var(--color-warning-bg); color: var(--color-warning); border-color: var(--color-warning); }
-.radio-tidak_hadir input:checked + label  { background: var(--color-danger-bg); color: var(--color-danger); border-color: var(--color-danger); }
+.radio-alpa input:checked + label  { background: var(--color-danger-bg); color: var(--color-danger); border-color: var(--color-danger); }
 
 .attendance-save-btn {
     white-space: nowrap;

@@ -23,7 +23,7 @@ const STORE_CASE = 'case_queue';
 // Versi schema antrian. Naikkan saat format payload berubah secara breaking.
 // Item lama dengan versi berbeda akan di-discard (bukan dikirim) saat flush.
 // Item tanpa tag (dari sebelum LF-8) dianggap kompatibel dengan versi saat ini.
-const OFFLINE_SCHEMA_VER = 'v2';
+const OFFLINE_SCHEMA_VER = 'v3';
 
 // Alias lama untuk kompatibilitas mundur dengan kode yang sudah ada
 const STORE = STORE_ATT;

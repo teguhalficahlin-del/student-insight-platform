@@ -93,7 +93,7 @@ const STATUS_LABELS = {
     HADIR:       'Hadir',
     IZIN:        'Izin',
     SAKIT:       'Sakit',
-    TIDAK_HADIR: 'Alpa',
+    ALPA: 'Alpa',
 };
 
 // ── Offline banner ────────────────────────────────────────────
@@ -307,7 +307,7 @@ function renderAttendanceRows(byStudent, date) {
         const existing = byStudent.get(s.student_id);
         const currentStatus = existing?.status ?? '';
 
-        const radios = ['HADIR', 'IZIN', 'SAKIT', 'TIDAK_HADIR'].map(st => `
+        const radios = ['HADIR', 'IZIN', 'SAKIT', 'ALPA'].map(st => `
             <span class="status-radio radio-${st.toLowerCase()}">
                 <input type="radio"
                        name="status-${s.student_id}"
