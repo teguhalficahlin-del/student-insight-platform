@@ -407,6 +407,7 @@ let _forumInitDone    = false;
 let _forumScope       = null;
 let _forumEditPostId  = null;
 let _forumRecipients  = new Map();
+let _forumGroupLabels = new Map(); // groupKey → { label, uids: Set<uid>, btnEl }
 let _forumPrograms    = [];
 let _forumClasses     = [];
 
@@ -544,6 +545,7 @@ function renderForumCard(post) {
 function openForumModal(postId = null) {
     _forumEditPostId = postId;
     _forumRecipients.clear();
+    _forumGroupLabels.clear();
     renderRecipientChips();
     document.getElementById('modal-forum-title').textContent = postId ? 'Edit Posting' : 'Buat Posting';
     document.getElementById('forum-input-title').value = '';
@@ -560,7 +562,7 @@ function openForumModal(postId = null) {
 
 function closeForumModal() {
     document.getElementById('modal-forum-post').style.display = 'none';
-    _forumEditPostId = null; _forumRecipients.clear();
+    _forumEditPostId = null; _forumRecipients.clear(); _forumGroupLabels.clear();
 }
 
 // ─── Panel Penerima — State Picker ────────────────────────────
@@ -608,7 +610,7 @@ function buildRecipientGroupButtons() {
                 ? 'border-radius:6px 0 0 6px;padding-right:8px'
                 : '';
             btnAll.textContent = g.labelSemua ?? `Semua ${g.label}`;
-            btnAll.addEventListener('click', () => addRecipientGroup({ ...g, mode: 'semua' }));
+            btnAll.addEventListener('click', () => addRecipientGroup({ ...g, mode: 'semua' }, btnAll));
             wrap.appendChild(btnAll);
         }
 
@@ -619,7 +621,7 @@ function buildRecipientGroupButtons() {
                 ? 'border-radius:6px;'
                 : 'border-radius:0 6px 6px 0;padding-left:6px;border-left:1px solid var(--color-border)';
             btnPick.textContent = `${g.label} tertentu`;
-            btnPick.addEventListener('click', () => addRecipientGroup({ ...g, mode: 'tertentu' }));
+            btnPick.addEventListener('click', () => addRecipientGroup({ ...g, mode: 'tertentu' }, btnPick));
             wrap.appendChild(btnPick);
         }
 
@@ -628,7 +630,7 @@ function buildRecipientGroupButtons() {
 }
 
 // ─── Tambah Grup Penerima ─────────────────────────────────────
-async function addRecipientGroup(groupDef) {
+async function addRecipientGroup(groupDef, btnEl = null) {
     const errEl = document.getElementById('forum-post-error');
     errEl.style.display = 'none';
     document.getElementById('forum-filter-jurusan-wrap').style.display = 'none';
@@ -673,7 +675,19 @@ async function addRecipientGroup(groupDef) {
                 programId, classId, dayOfWeek,
                 academicYear: schoolConfig?.current_academic_year,
             });
+            // Jika grup sudah ada, hapus uid lama dulu sebelum re-add
+            if (_forumGroupLabels.has(groupDef.group)) {
+                const old = _forumGroupLabels.get(groupDef.group);
+                old.uids.forEach(uid => _forumRecipients.delete(uid));
+                if (old.btnEl) old.btnEl.className = 'btn btn-secondary';
+            }
             candidates.forEach(c => _forumRecipients.set(c.user_id, c));
+            _forumGroupLabels.set(groupDef.group, {
+                label: `${groupDef.labelSemua ?? 'Semua ' + groupDef.label} dipilih`,
+                uids: new Set(candidates.map(c => c.user_id)),
+                btnEl,
+            });
+            if (btnEl) btnEl.className = 'btn btn-primary';
             renderRecipientChips();
         } catch (err) {
             errEl.textContent = fe(err);
@@ -855,13 +869,35 @@ function renderRecipientChips() {
     }
     emptyEl.style.display = 'none';
     countEl.textContent = `${_forumRecipients.size} penerima dipilih`;
-    _forumRecipients.forEach((r, uid) => {
+
+    const chipCss = 'display:inline-flex;align-items:center;gap:4px;padding:2px 8px;' +
+        'background:var(--color-bg-alt);border-radius:12px;font-size:12px';
+    const btnCss  = 'background:none;border:none;cursor:pointer;padding:0;line-height:1';
+
+    // Satu chip ringkas per grup "Semua X"
+    const groupedUids = new Set();
+    _forumGroupLabels.forEach((g, groupKey) => {
+        g.uids.forEach(uid => groupedUids.add(uid));
         const chip = document.createElement('span');
         chip.className = 'recipient-chip';
-        chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:2px 8px;' +
-            'background:var(--color-bg-alt);border-radius:12px;font-size:12px';
-        chip.innerHTML = `${esc(r.full_name)} <button data-uid="${uid}"
-            style="background:none;border:none;cursor:pointer;padding:0;line-height:1">✕</button>`;
+        chip.style.cssText = chipCss;
+        chip.innerHTML = `${esc(g.label)} <button style="${btnCss}">✕</button>`;
+        chip.querySelector('button').addEventListener('click', () => {
+            g.uids.forEach(uid => _forumRecipients.delete(uid));
+            _forumGroupLabels.delete(groupKey);
+            if (g.btnEl) g.btnEl.className = 'btn btn-secondary';
+            renderRecipientChips();
+        });
+        container.appendChild(chip);
+    });
+
+    // Chip individual untuk penerima di luar grup
+    _forumRecipients.forEach((r, uid) => {
+        if (groupedUids.has(uid)) return;
+        const chip = document.createElement('span');
+        chip.className = 'recipient-chip';
+        chip.style.cssText = chipCss;
+        chip.innerHTML = `${esc(r.full_name)} <button data-uid="${uid}" style="${btnCss}">✕</button>`;
         chip.querySelector('button').addEventListener('click', () => {
             _forumRecipients.delete(uid); renderRecipientChips();
         });
