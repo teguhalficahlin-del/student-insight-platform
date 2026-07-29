@@ -5076,6 +5076,3340 @@ async function submitForumComment() {
         errEl.style.display = 'block';
     }
 }
+
+async function initPerangkatAjarTab() {
+    if (_paTabInit) {
+        // Refresh data setiap kali tab dibuka (tapi jangan re-wire events)
+        await loadPerangkatAjarDashboard();
+        return;
+    }
+    _paTabInit = true;
+    await loadPerangkatAjarDashboard();
+
+    // Wire tombol buat dokumen baru (header)
+    document.getElementById('pa-new-doc-btn')?.addEventListener('click', () => openBuatDokumenModal(null));
+}
+
+async function loadPerangkatAjarDashboard() {
+    const container = document.getElementById('perangkat-ajar-container');
+    container.innerHTML = `
+        <div class="pa-header" style="margin-bottom:16px">
+            <h3 style="margin:0 0 10px">Perangkat Ajar Saya</h3>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                <button class="btn btn-secondary btn-sm" id="btn-profil-mengajar">1. Profil Mengajar</button>
+                <button class="btn btn-secondary btn-sm" id="btn-konteks-kelas">2. Konteks Kelas</button>
+            </div>
+        </div>
+        <div id="pa-mapel-list"><p class="hint">Memuat...</p></div>`;
+
+    document.getElementById('btn-profil-mengajar').addEventListener('click', () => openProfilMengajarModal());
+    document.getElementById('btn-konteks-kelas').addEventListener('click', () => openKonteksKelasModal());
+
+    const ay = config?.current_academic_year ?? getCurrentAcademicYear();
+
+    try {
+        const [docs, mySubjects, phases] = await Promise.all([
+            getMyTeacherDocuments(currentUser.school_id, ay),
+            getMyTeachingCoreSubjects(currentUser.user_id, currentUser.school_id, ay),
+            getCorePhases(),
+        ]);
+        const coreSubjects = mySubjects.length > 0 ? mySubjects : await ensureCoreSubjects();
+
+        const subjectMap = new Map(coreSubjects.map(s => [s.subject_id, s]));
+        const phaseMap   = new Map(phases.map(p => [p.phase_id, p]));
+
+        // Group docs by core_subject_id+phase_id
+        const grouped = new Map();
+        for (const doc of docs) {
+            const key = `${doc.core_subject_id}__${doc.phase_id}`;
+            if (!grouped.has(key)) grouped.set(key, { core_subject_id: doc.core_subject_id, phase_id: doc.phase_id, docs: [] });
+            grouped.get(key).docs.push(doc);
+        }
+
+        const listEl = document.getElementById('pa-mapel-list');
+        if (grouped.size === 0) {
+            listEl.innerHTML = `
+                <div style="text-align:center;padding:2.5rem 1rem;border:0.5px solid var(--color-border,#334);border-radius:12px">
+                    <div style="font-size:36px;margin-bottom:12px">📚</div>
+                    <p style="font-size:15px;font-weight:600;margin:0 0 6px;color:var(--color-text)">Belum ada perangkat ajar</p>
+                    <p style="font-size:13px;color:var(--color-text-muted,#888);margin:0 0 20px">
+                        Mulai dengan mengisi Profil Mengajar dan Konteks Kelas,<br>
+                        lalu buat ATP untuk mata pelajaran Anda.
+                    </p>
+                    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+                        <button class="btn btn-secondary btn-sm" id="pa-empty-upload-btn">📤 Upload ATP</button>
+                        <button class="btn btn-primary btn-sm" id="pa-empty-generate-btn">✨ Generate ATP</button>
+                    </div>
+                    <p style="font-size:11px;color:var(--color-text-muted,#888);margin-top:10px">
+                        Upload: PDF atau DOCX &middot; Generate: AI menyusun dari CP
+                    </p>
+                </div>`;
+
+            document.getElementById('pa-empty-upload-btn')
+                ?.addEventListener('click', () => uploadATPFlow(coreSubjects, phases, ay));
+            document.getElementById('pa-empty-generate-btn')
+                ?.addEventListener('click', () => openGenerateATPPicker(coreSubjects, phases,
+                    (subjId, phaseId, subjName, _semester) =>
+                        openConfirmGenerateModal(subjId, phaseId, subjName, ay)
+                ));
+            return;
+        }
+
+        listEl.innerHTML = [...grouped.values()].map(group => {
+            const subj  = subjectMap.get(group.core_subject_id);
+            const phase = phaseMap.get(group.phase_id);
+            const subjName  = subj?.name ?? '—';
+            const phaseName = phase?.code ? `Fase ${phase.code}` : '—';
+
+            // Hitung progress
+            const doneStatuses = ['DIREVIEW_GURU', 'DISAHKAN_WAKA'];
+            const hasPT  = group.docs.some(d => d.document_type === 'PROGRAM_TAHUNAN'  && doneStatuses.includes(d.status));
+            const hasPS1 = group.docs.some(d => d.document_type === 'PROGRAM_SEMESTER' && d.semester === 1 && doneStatuses.includes(d.status));
+            const hasPS2 = group.docs.some(d => d.document_type === 'PROGRAM_SEMESTER' && d.semester === 2 && doneStatuses.includes(d.status));
+            const hasATP = group.docs.some(d => d.document_type === 'ATP'              && doneStatuses.includes(d.status));
+            const pct    = (hasPT ? 10 : 0) + (hasPS1 ? 10 : 0) + (hasPS2 ? 10 : 0) + (hasATP ? 20 : 0)
+                         + (group.docs.some(d => d.document_type === 'PPM' && doneStatuses.includes(d.status)) ? 50 : 0);
+
+            const dokRows = ['ATP','PROGRAM_TAHUNAN','PROGRAM_SEMESTER','PPM','LKPD','SOAL','RUBRIK'].map(dtype => {
+                const typeDocs = group.docs.filter(d => d.document_type === dtype);
+                const badgeHtml = typeDocs.length
+                    ? `<span style="font-size:11px;color:var(--color-success,#16a34a)">✓ Ada</span>`
+                    : `<span style="font-size:11px;color:var(--color-text-muted)">—</span>`;
+                return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:13px">
+                    <span>${esc(DOC_TYPE_LABEL[dtype] ?? dtype)}</span>
+                    ${badgeHtml}
+                </div>`;
+            }).join('');
+
+            return `
+            <div class="section-card" style="margin-bottom:12px">
+                <div style="margin-bottom:12px">
+                    <h4 style="margin:0 0 4px">${esc(subjName)}</h4>
+                    <span style="font-size:12px;padding:2px 8px;border-radius:12px;background:var(--color-bg-alt);color:var(--color-text-muted)">${esc(phaseName)}</span>
+                </div>
+                <div style="margin-bottom:10px">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                        <span style="font-size:12px;color:var(--color-text-muted)">Progress</span>
+                        <span style="font-size:12px;font-weight:600;color:${pct >= 70 ? 'var(--color-success,#16a34a)' : pct >= 30 ? 'var(--color-warning,#f59e0b)' : 'var(--color-text-muted)'}">${pct}%</span>
+                    </div>
+                    <div style="height:6px;background:var(--color-bg-alt);border-radius:3px;overflow:hidden">
+                        <div style="height:100%;width:${pct}%;background:${pct >= 70 ? 'var(--color-success,#16a34a)' : pct >= 30 ? 'var(--color-warning,#f59e0b)' : 'var(--color-primary)'};border-radius:3px;transition:width .3s"></div>
+                    </div>
+                </div>
+                <div style="border-top:1px solid var(--color-border);padding-top:10px">${dokRows}</div>
+                <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap" id="pa-doc-actions-${esc(group.core_subject_id)}-${esc(group.phase_id)}">
+                    ${group.docs.slice(0, 3).map(doc => {
+                        const lbl = DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type;
+                        const col = DOC_STATUS_COLOR[doc.status] ?? 'inherit';
+                        const sem = doc.semester ? ` Sem ${doc.semester}` : '';
+                        return `<button class="btn btn-secondary btn-sm pa-detail-btn"
+                            data-doc-id="${esc(doc.doc_id)}"
+                            data-subject-id="${esc(group.core_subject_id)}"
+                            data-phase-id="${esc(group.phase_id)}"
+                            style="font-size:12px">
+                            ${esc(lbl)}${esc(sem)}
+                            <span style="font-size:10px;color:${col};margin-left:4px">${esc(DOC_STATUS_LABEL[doc.status] ?? doc.status)}</span>
+                        </button>`;
+                    }).join('')}
+                    ${group.docs.length > 3 ? `<span style="font-size:12px;color:var(--color-text-muted);align-self:center">+${group.docs.length - 3} lainnya</span>` : ''}
+                    <button class="btn btn-primary btn-sm pa-generate-atp-btn"
+                        data-core-subject-id="${esc(group.core_subject_id)}"
+                        data-phase-id="${esc(group.phase_id)}"
+                        data-subject-name="${esc(subjectMap.get(group.core_subject_id)?.name ?? '')}"
+                        style="font-size:12px;margin-left:auto">
+                        ${group.docs.some(d => d.document_type === 'ATP') ? '🔄 Generate Ulang ATP' : '✨ Generate ATP'}
+                    </button>
+                    ${(() => {
+                        const atpDoc = group.docs.find(d => d.document_type === 'ATP');
+                        const hasProtaAny = group.docs.some(d => d.document_type === 'PROGRAM_TAHUNAN');
+                        if (!atpDoc || hasProtaAny) return '';
+                        return `<button class="btn btn-secondary btn-sm pa-generate-prota-btn"
+                            data-core-subject-id="${esc(group.core_subject_id)}"
+                            data-phase-id="${esc(group.phase_id)}"
+                            data-subject-name="${esc(subjectMap.get(group.core_subject_id)?.name ?? '')}"
+                            data-atp-doc-id="${esc(atpDoc.doc_id)}"
+                            style="font-size:12px">
+                            📅 Generate Prota
+                        </button>`;
+                    })()}
+                </div>
+            </div>`;
+        }).join('');
+
+        // Wire event delegation untuk tombol Detail
+        document.getElementById('pa-mapel-list').addEventListener('click', e => {
+            const detailBtn = e.target.closest('.pa-detail-btn');
+            if (detailBtn) {
+                openDetailDokumenModal(detailBtn.dataset.docId, detailBtn.dataset.subjectId, detailBtn.dataset.phaseId);
+            }
+            const genBtn = e.target.closest('.pa-generate-atp-btn');
+            if (genBtn) {
+                openConfirmGenerateModal(
+                    genBtn.dataset.coreSubjectId,
+                    genBtn.dataset.phaseId,
+                    genBtn.dataset.subjectName,
+                    ay,
+                );
+            }
+            const protaBtn = e.target.closest('.pa-generate-prota-btn');
+            if (protaBtn) {
+                openConfirmProtaModal(
+                    protaBtn.dataset.coreSubjectId,
+                    protaBtn.dataset.phaseId,
+                    protaBtn.dataset.subjectName,
+                    protaBtn.dataset.atpDocId,
+                    ay,
+                );
+            }
+        });
+
+    } catch (err) {
+        document.getElementById('pa-mapel-list').innerHTML =
+            `<div class="status-err">Gagal memuat. ${esc(fe(err))}</div>`;
+    }
+}
+
+async function openBuatDokumenModal(preselect) {
+    const modal = document.getElementById('buat-dokumen-modal');
+    const body  = document.getElementById('buat-dok-body');
+    document.getElementById('buat-dok-title').textContent = 'Buat Dokumen';
+
+    const ay = config?.current_academic_year ?? getCurrentAcademicYear();
+
+    const [coreSubjects, phases] = await Promise.all([
+        ensureCoreSubjects(),
+        getCorePhases(),
+    ]);
+
+    let allDocs = [];
+    try { allDocs = await getMyTeacherDocuments(currentUser.school_id, ay); } catch { /* ignore */ }
+
+    const PREREQS = {
+        PROGRAM_TAHUNAN:  ['ATP'],
+        PROGRAM_SEMESTER: ['ATP', 'PROGRAM_TAHUNAN'],
+        PPM:    ['ATP', 'PROGRAM_TAHUNAN', 'PROGRAM_SEMESTER'],
+        LKPD:   ['ATP', 'PROGRAM_TAHUNAN', 'PROGRAM_SEMESTER', 'PPM'],
+        SOAL:   ['ATP', 'PROGRAM_TAHUNAN', 'PROGRAM_SEMESTER', 'PPM'],
+        RUBRIK: ['ATP', 'PROGRAM_TAHUNAN', 'PROGRAM_SEMESTER', 'PPM', 'SOAL'],
+    };
+    const PREREQ_LABEL = { ATP: 'ATP', PROGRAM_TAHUNAN: 'Program Tahunan', PROGRAM_SEMESTER: 'Program Semester', PPM: 'PPM', SOAL: 'Soal' };
+    function checkPrerequisiteWarning() {
+        const warnEl    = document.getElementById('buat-dok-warning');
+        const subjectId = document.getElementById('buat-dok-subject').value;
+        const dtype     = document.getElementById('buat-dok-type').value;
+        if (!subjectId || !dtype || !PREREQS[dtype]) { warnEl.style.display = 'none'; return; }
+        const phaseId = document.getElementById('buat-dok-phase').value;
+        const docs    = allDocs.filter(d => d.core_subject_id === subjectId && d.phase_id === phaseId);
+        const missing = PREREQS[dtype].filter(p => !docs.some(d => d.document_type === p));
+        if (missing.length) {
+            warnEl.innerHTML = `⚠ Prasyarat belum ada: <strong>${missing.map(m => PREREQ_LABEL[m] ?? m).join(', ')}</strong>. Disarankan buat dokumen prasyarat dulu.`;
+            warnEl.style.display = '';
+        } else {
+            warnEl.style.display = 'none';
+        }
+    }
+
+    const subjectOptions = coreSubjects.map(s =>
+        `<option value="${esc(s.subject_id)}" ${preselect?.coreSubjectId === s.subject_id ? 'selected' : ''}>${esc(s.name)}</option>`
+    ).join('');
+
+    const phaseOptions = phases.map(p =>
+        `<option value="${esc(p.phase_id)}" ${preselect?.phaseId === p.phase_id ? 'selected' : ''}>${esc(p.name)}</option>`
+    ).join('');
+
+    body.innerHTML = `
+        <div class="field">
+            <label for="buat-dok-subject">Mata Pelajaran</label>
+            <select id="buat-dok-subject" class="input">
+                <option value="">— Pilih Mata Pelajaran —</option>
+                ${subjectOptions}
+            </select>
+        </div>
+        <div class="field">
+            <label for="buat-dok-phase">Fase</label>
+            <select id="buat-dok-phase" class="input">
+                ${phaseOptions}
+            </select>
+        </div>
+        <div class="field">
+            <label for="buat-dok-type">Jenis Dokumen</label>
+            <select id="buat-dok-type" class="input">
+                <option value="">— Pilih Jenis —</option>
+                <option value="PROGRAM_TAHUNAN">① Program Tahunan</option>
+                <option value="PROGRAM_SEMESTER">② Program Semester</option>
+                <option value="PPM">③ PPM (Perencanaan Pembelajaran Mendalam)</option>
+                <option value="LKPD">④ LKPD</option>
+                <option value="SOAL">⑤ Soal</option>
+                <option value="RUBRIK">⑥ Rubrik</option>
+            </select>
+        </div>
+        <div class="field" id="buat-dok-semester-field" style="display:none">
+            <label for="buat-dok-semester">Semester</label>
+            <select id="buat-dok-semester" class="input">
+                <option value="1">Semester 1</option>
+                <option value="2">Semester 2</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="buat-dok-judul">Judul Dokumen</label>
+            <input type="text" id="buat-dok-judul" class="input" placeholder="Contoh: Program Tahunan Matematika Fase E 2026/2027" maxlength="200">
+        </div>
+        <div class="field">
+            <label for="buat-dok-catatan">Catatan <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></label>
+            <textarea id="buat-dok-catatan" class="input" rows="3" placeholder="Catatan tambahan..."></textarea>
+        </div>
+        <div id="buat-dok-warning" style="display:none;padding:8px 12px;background:var(--color-warning-bg,#fffbeb);border:1px solid var(--color-warning,#f59e0b);border-radius:6px;font-size:13px;margin-bottom:12px"></div>
+        <div id="buat-dok-msg" style="display:none" class="hint"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+            <button id="buat-dok-cancel" class="btn btn-secondary">Batal</button>
+            <button id="buat-dok-submit" class="btn btn-primary">Simpan</button>
+        </div>`;
+
+    // Tampilkan/sembunyikan semester field + cek prasyarat
+    document.getElementById('buat-dok-type').addEventListener('change', e => {
+        const needSem = ['PROGRAM_SEMESTER','PPM','LKPD','SOAL','RUBRIK'].includes(e.target.value);
+        document.getElementById('buat-dok-semester-field').style.display = needSem ? '' : 'none';
+        checkPrerequisiteWarning();
+    });
+    document.getElementById('buat-dok-subject').addEventListener('change', checkPrerequisiteWarning);
+    document.getElementById('buat-dok-phase').addEventListener('change', checkPrerequisiteWarning);
+
+    document.getElementById('buat-dok-cancel').onclick = () => { modal.style.display = 'none'; };
+    document.getElementById('buat-dok-close').onclick  = () => { modal.style.display = 'none'; };
+
+    document.getElementById('buat-dok-submit').onclick = async () => {
+        const btn    = document.getElementById('buat-dok-submit');
+        const msgEl  = document.getElementById('buat-dok-msg');
+        const subjId = document.getElementById('buat-dok-subject').value;
+        const phId   = document.getElementById('buat-dok-phase').value;
+        const dtype  = document.getElementById('buat-dok-type').value;
+        const judul  = document.getElementById('buat-dok-judul').value.trim();
+        const catatan= document.getElementById('buat-dok-catatan').value.trim();
+        const semEl  = document.getElementById('buat-dok-semester');
+        const sem    = ['PROGRAM_SEMESTER','PPM','LKPD','SOAL','RUBRIK'].includes(dtype) ? parseInt(semEl.value, 10) : null;
+
+        if (!subjId || !phId || !dtype) {
+            msgEl.style.color   = 'var(--color-danger)';
+            msgEl.textContent   = 'Pilih mata pelajaran, fase, dan jenis dokumen.';
+            msgEl.style.display = '';
+            return;
+        }
+        btn.disabled    = true;
+        btn.textContent = 'Menyimpan…';
+        msgEl.style.display = 'none';
+
+        try {
+            await createTeacherDocument({
+                schoolId:       currentUser.school_id,
+                academicYear:   ay,
+                documentType:   dtype,
+                coreSubjectId:  subjId,
+                phaseId:        phId,
+                programId:      null,
+                scopeType:      'SEMUA_KELAS',
+                semester:       sem,
+                tpUrutan:       null,
+                contentJson:    { judul, catatan },
+            });
+            msgEl.style.color   = 'var(--color-success,#16a34a)';
+            msgEl.textContent   = '✓ Dokumen berhasil disimpan.';
+            msgEl.style.display = '';
+            setTimeout(async () => {
+                modal.style.display = 'none';
+                await loadPerangkatAjarDashboard();
+            }, 900);
+        } catch (err) {
+            msgEl.style.color   = 'var(--color-danger)';
+            msgEl.textContent   = `✗ ${fe(err, 's')}`;
+            msgEl.style.display = '';
+            btn.disabled    = false;
+            btn.textContent = 'Simpan';
+        }
+    };
+
+    modal.style.display = 'flex';
+}
+
+async function openDetailDokumenModal(docId, coreSubjectId, phaseId) {
+    const modal = document.getElementById('buat-dokumen-modal');
+    const body  = document.getElementById('buat-dok-body');
+    document.getElementById('buat-dok-title').textContent = 'Detail Dokumen';
+
+    body.innerHTML = '<p class="hint">Memuat...</p>';
+    modal.style.display = 'flex';
+    document.getElementById('buat-dok-close').onclick = () => { modal.style.display = 'none'; };
+
+    const ay = config?.current_academic_year ?? getCurrentAcademicYear();
+    try {
+        const allDocs = await getMyTeacherDocuments(currentUser.school_id, ay);
+        const doc = allDocs.find(d => d.doc_id === docId);
+        if (!doc) { body.innerHTML = '<p style="color:var(--color-danger)">Dokumen tidak ditemukan.</p>'; return; }
+
+        const judul   = doc.content_json?.judul   ?? '—';
+        const catatan = doc.content_json?.catatan ?? '';
+        const dtype   = DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type;
+        const semLabel= doc.semester ? ` · Semester ${doc.semester}` : '';
+        const statusCol = DOC_STATUS_COLOR[doc.status] ?? 'inherit';
+
+        // Status transitions untuk tombol
+        const isOwn = true; // RLS sudah jamin hanya dokumen milik sendiri
+        const canMarkReview  = isOwn && doc.status === 'AI_DRAFT';
+        const canSubmitWaka  = isOwn && doc.status === 'DIREVIEW_GURU';
+        const canDraftBack   = isOwn && doc.status === 'DIREVIEW_GURU';
+
+        body.innerHTML = `
+            <div style="margin-bottom:16px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                    <span style="font-weight:600;font-size:15px">${esc(dtype)}${esc(semLabel)}</span>
+                    <span style="font-size:12px;padding:2px 10px;border-radius:20px;color:${statusCol};background:var(--color-bg-alt)">${esc(DOC_STATUS_LABEL[doc.status] ?? doc.status)}</span>
+                </div>
+                <p style="margin:0 0 6px;font-size:13px"><strong>Judul:</strong> ${esc(judul)}</p>
+                ${catatan ? `<p style="margin:0;font-size:13px;color:var(--color-text-muted)"><strong>Catatan:</strong> ${esc(catatan)}</p>` : ''}
+                <p style="margin:8px 0 0;font-size:12px;color:var(--color-text-muted)">Dibuat: ${fmt(doc.created_at)}</p>
+            </div>
+
+            ${(() => {
+                const tps   = doc.document_type === 'ATP' ? (doc.content_json?.tujuan_pembelajaran ?? []) : [];
+                const total = doc.content_json?.total_jp ?? 0;
+                if (!tps.length) return '';
+                return `<div style="border-top:1px solid var(--color-border);padding-top:12px;margin-bottom:12px">
+                    <p style="font-size:12px;font-weight:600;margin:0 0 8px">Tujuan Pembelajaran (${tps.length} TP · ${total} JP)</p>
+                    <div style="overflow-x:auto">
+                        <table style="width:100%;border-collapse:collapse;font-size:13px">
+                            <thead>
+                                <tr style="background:var(--color-bg-alt)">
+                                    <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:40px">No</th>
+                                    <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border)">Deskripsi TP</th>
+                                    <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:140px">Elemen CP</th>
+                                    <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:50px">JP</th>
+                                    <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:160px">Materi Pokok</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${tps.map(tp => `
+                                    <tr style="border-bottom:1px solid var(--color-border)">
+                                        <td style="padding:8px;vertical-align:top;color:var(--color-text-muted)">${esc(String(tp.nomor ?? ''))}</td>
+                                        <td style="padding:8px;vertical-align:top">${esc(tp.deskripsi ?? '')}</td>
+                                        <td style="padding:8px;vertical-align:top;color:var(--color-text-muted);font-size:12px">${esc(tp.elemen_cp ?? '')}</td>
+                                        <td style="padding:8px;vertical-align:top;text-align:center;font-weight:600">${esc(String(tp.jp ?? ''))}</td>
+                                        <td style="padding:8px;vertical-align:top;font-size:12px">${esc(tp.materi_pokok ?? '')}</td>
+                                    </tr>`).join('')}
+                                <tr style="background:var(--color-bg-alt);font-weight:600">
+                                    <td colspan="3" style="padding:8px;text-align:right">Total JP</td>
+                                    <td style="padding:8px;text-align:center">${esc(String(total))}</td>
+                                    <td></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+            })()}
+
+            <div style="border-top:1px solid var(--color-border);padding-top:12px">
+                <p style="font-size:12px;color:var(--color-text-muted);margin:0 0 10px">Ubah status dokumen:</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    ${canDraftBack  ? `<button class="btn btn-secondary btn-sm" id="doc-to-draft">Simpan sebagai Draft</button>` : ''}
+                    ${canMarkReview ? `<button class="btn btn-secondary btn-sm" id="doc-to-review">Tandai Sudah Direview</button>` : ''}
+                    ${canSubmitWaka ? `<button class="btn btn-primary btn-sm" id="doc-to-waka">Ajukan ke Waka Kurikulum</button>` : ''}
+                    ${doc.status === 'DISAHKAN_WAKA' ? `<span style="font-size:13px;color:var(--color-success,#16a34a)">✓ Sudah disahkan Waka Kurikulum</span>` : ''}
+                    ${doc.status === 'MENUNGGU_WAKA'  ? `<span style="font-size:13px;color:var(--color-warning,#f59e0b)">⏳ Menunggu persetujuan Waka Kurikulum...</span>` : ''}
+                </div>
+                <div id="doc-status-msg" style="display:none;margin-top:8px;font-size:13px"></div>
+            </div>
+            ${doc.status !== 'DISAHKAN_WAKA' ? `
+            <div style="border-top:1px solid var(--color-border);padding-top:12px;margin-top:12px">
+                <button id="btn-hapus-dokumen" class="btn btn-danger-outline btn-sm" data-doc-id="${doc.doc_id}">
+                    🗑 Hapus Dokumen
+                </button>
+            </div>` : ''}`;
+
+        const showMsg = (text, isErr = false) => {
+            const el = document.getElementById('doc-status-msg');
+            el.textContent   = text;
+            el.style.color   = isErr ? 'var(--color-danger)' : 'var(--color-success,#16a34a)';
+            el.style.display = '';
+        };
+
+        const doStatusChange = async (newStatus, btn) => {
+            btn.disabled    = true;
+            btn.textContent = '…';
+            try {
+                await updateDocumentStatus(docId, newStatus);
+                showMsg(`✓ Status diubah ke: ${DOC_STATUS_LABEL[newStatus]}`);
+                setTimeout(async () => {
+                    modal.style.display = 'none';
+                    await loadPerangkatAjarDashboard();
+                }, 900);
+            } catch (err) {
+                showMsg(`✗ ${fe(err, 's')}`, true);
+                btn.disabled    = false;
+                btn.textContent = btn.dataset.label;
+            }
+        };
+
+        document.getElementById('doc-to-draft')?.addEventListener('click', e => {
+            e.target.dataset.label = e.target.textContent;
+            doStatusChange('AI_DRAFT', e.target);
+        });
+        document.getElementById('doc-to-review')?.addEventListener('click', e => {
+            e.target.dataset.label = e.target.textContent;
+            doStatusChange('DIREVIEW_GURU', e.target);
+        });
+        document.getElementById('doc-to-waka')?.addEventListener('click', e => {
+            e.target.dataset.label = e.target.textContent;
+            doStatusChange('MENUNGGU_WAKA', e.target);
+        });
+
+        document.getElementById('btn-hapus-dokumen')?.addEventListener('click', async e => {
+            if (!confirm('Hapus dokumen ini? Tindakan tidak bisa dibatalkan.')) return;
+            const btn = e.target;
+            btn.disabled    = true;
+            btn.textContent = '…';
+            try {
+                await deleteTeacherDocument(docId);
+                modal.style.display = 'none';
+                await loadPerangkatAjarDashboard();
+                alert('Dokumen berhasil dihapus.');
+            } catch (err) {
+                showMsg(`✗ ${fe(err, 's')}`, true);
+                btn.disabled    = false;
+                btn.textContent = '🗑 Hapus Dokumen';
+            }
+        });
+
+    } catch (err) {
+        body.innerHTML = `<p style="color:var(--color-danger)">Gagal memuat: ${esc(err.message)}</p>`;
+    }
+}
+
+// Dipanggil dari initWakaKurTab — approval & riwayat untuk Waka Kurikulum
+async function loadWakaDocApprovals() {
+    const section = document.getElementById('kepsek-approval-section');
+    if (!section) return;
+
+    const listEl = document.getElementById('kepsek-approval-list');
+    listEl.innerHTML = '<p class="hint">Memuat...</p>';
+
+    try {
+        const [docs, history, phases] = await Promise.all([
+            getPendingDocApprovals(currentUser.school_id),
+            getWakaApprovalHistory(currentUser.school_id),
+            getCorePhases(),
+        ]);
+        const phaseMap = new Map(phases.map(p => [p.phase_id, p]));
+
+        let html = '';
+
+        // ── Bagian 1: Menunggu Persetujuan ──────────────────────
+        html += `<h4 style="margin:0 0 10px;font-size:14px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Menunggu Persetujuan</h4>`;
+        if (!docs.length) {
+            html += '<p class="hint" style="margin-bottom:16px">Tidak ada dokumen yang menunggu persetujuan.</p>';
+        } else {
+            html += docs.map(doc => {
+                const dtype    = DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type;
+                const phase    = phaseMap.get(doc.phase_id);
+                const semLabel = doc.semester ? ` · Semester ${doc.semester}` : '';
+                const judul    = doc.content_json?.judul ?? '—';
+                return `
+                <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:12px;margin-bottom:10px">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px">
+                        <div>
+                            <p style="margin:0 0 4px;font-weight:600">${esc(dtype)}${esc(semLabel)}</p>
+                            <p style="margin:0 0 4px;font-size:13px">${esc(judul)}</p>
+                            <p style="margin:0;font-size:12px;color:var(--color-text-muted)">${phase ? `Fase ${phase.code}` : ''} · ${doc.academic_year} · ${fmt(doc.created_at)}</p>
+                        </div>
+                        <div style="display:flex;gap:6px;align-items:center">
+                            <button class="btn btn-sm btn-secondary wk-reject-btn" data-doc-id="${esc(doc.doc_id)}" style="color:var(--color-danger)">✕ Kembalikan</button>
+                            <button class="btn btn-sm btn-primary wk-approve-btn" data-doc-id="${esc(doc.doc_id)}">✓ Setujui</button>
+                        </div>
+                    </div>
+                    <div id="wk-approve-msg-${esc(doc.doc_id)}" style="display:none;font-size:13px;margin-top:8px"></div>
+                    <div id="wk-catatan-row-${esc(doc.doc_id)}" style="display:none;margin-top:8px">
+                        <input type="text" class="input" placeholder="Catatan pengembalian (opsional)..." style="width:100%;margin-bottom:6px">
+                        <button class="btn btn-sm btn-danger wk-reject-confirm-btn" data-doc-id="${esc(doc.doc_id)}">Konfirmasi Kembalikan</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // ── Bagian 2: Riwayat ───────────────────────────────────
+        html += `<h4 style="margin:16px 0 10px;font-size:14px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em">Riwayat</h4>`;
+        if (!history.length) {
+            html += '<p class="hint">Belum ada riwayat persetujuan.</p>';
+        } else {
+            html += history.map(row => {
+                const td          = row.teacher_documents;
+                const dtype       = DOC_TYPE_LABEL[td?.document_type] ?? td?.document_type ?? '—';
+                const phase       = phaseMap.get(td?.phase_id);
+                const semLabel    = td?.semester ? ` · Semester ${td.semester}` : '';
+                const isOk        = row.status === 'APPROVED';
+                const badge       = isOk
+                    ? `<span style="color:var(--color-success,#16a34a);font-weight:600">✅ Disahkan</span>`
+                    : `<span style="color:var(--color-primary);font-weight:600">↩ Dikembalikan</span>`;
+                const subjectHtml = row.subject_name
+                    ? `<p style="margin:2px 0 0;font-size:12px;color:var(--color-text-muted)">Mapel: ${esc(row.subject_name)}</p>`
+                    : '';
+                const guruHtml    = row.teacher_name
+                    ? `<p style="margin:2px 0 0;font-size:12px;color:var(--color-text-muted)">Guru: ${esc(row.teacher_name)}</p>`
+                    : '';
+                const catatanHtml = row.catatan
+                    ? `<p style="margin:4px 0 0;font-size:12px;color:var(--color-text-muted);font-style:italic">"${esc(row.catatan)}"</p>`
+                    : '';
+                const metaLine = [phase ? `Fase ${phase.code}` : '', td?.academic_year ?? '', fmt(row.approved_at)]
+                    .filter(Boolean).join(' · ');
+                return `
+                <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;opacity:.9">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">
+                        <div>
+                            <p style="margin:0 0 2px;font-weight:600;font-size:13px">${esc(dtype)}${esc(semLabel)}</p>
+                            ${subjectHtml}
+                            ${guruHtml}
+                            <p style="margin:2px 0 0;font-size:12px;color:var(--color-text-muted)">${metaLine}</p>
+                            ${catatanHtml}
+                        </div>
+                        <div>${badge}</div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        listEl.innerHTML = html;
+
+        listEl.addEventListener('click', async e => {
+            const approveBtn = e.target.closest('.wk-approve-btn');
+            const rejectBtn  = e.target.closest('.wk-reject-btn');
+            const confirmBtn = e.target.closest('.wk-reject-confirm-btn');
+
+            if (approveBtn) {
+                const docId = approveBtn.dataset.docId;
+                approveBtn.disabled    = true;
+                approveBtn.textContent = '…';
+                const msgEl = document.getElementById(`wk-approve-msg-${docId}`);
+                try {
+                    await supabase.auth.refreshSession();
+                    await wakaApproveDoc(docId, 'APPROVE', null);
+                    msgEl.style.color   = 'var(--color-success,#16a34a)';
+                    msgEl.textContent   = '✓ Dokumen berhasil disahkan.';
+                    msgEl.style.display = '';
+                    setTimeout(() => loadWakaDocApprovals(), 1200);
+                } catch (err) {
+                    msgEl.style.color   = 'var(--color-danger)';
+                    msgEl.textContent   = `✗ ${fe(err, 's')}`;
+                    msgEl.style.display = '';
+                    approveBtn.disabled    = false;
+                    approveBtn.textContent = '✓ Setujui';
+                }
+            }
+
+            if (rejectBtn) {
+                const docId = rejectBtn.dataset.docId;
+                const row   = document.getElementById(`wk-catatan-row-${docId}`);
+                row.style.display = row.style.display === 'none' ? '' : 'none';
+            }
+
+            if (confirmBtn) {
+                const docId   = confirmBtn.dataset.docId;
+                const row     = document.getElementById(`wk-catatan-row-${docId}`);
+                const catatan = row.querySelector('input')?.value.trim() ?? null;
+                confirmBtn.disabled    = true;
+                confirmBtn.textContent = '…';
+                const msgEl = document.getElementById(`wk-approve-msg-${docId}`);
+                try {
+                    await supabase.auth.refreshSession();
+                    await wakaApproveDoc(docId, 'REJECT', catatan);
+                    msgEl.style.color   = 'var(--color-primary)';
+                    msgEl.textContent   = '↩ Dokumen dikembalikan ke guru.';
+                    msgEl.style.display = '';
+                    setTimeout(() => loadWakaDocApprovals(), 1200);
+                } catch (err) {
+                    msgEl.style.color   = 'var(--color-danger)';
+                    msgEl.textContent   = `✗ ${fe(err, 's')}`;
+                    msgEl.style.display = '';
+                    confirmBtn.disabled    = false;
+                    confirmBtn.textContent = 'Konfirmasi Kembalikan';
+                }
+            }
+        });
+
+    } catch (err) {
+        listEl.innerHTML = `<div class="status-err">Gagal memuat. ${esc(fe(err))}</div>`;
+    }
+}
+
+// Dipanggil dari initKepsekTab — daftar dokumen DISAHKAN_WAKA (read-only)
+async function loadKepsekDisahkanDocs() {
+    const section = document.getElementById('ks-disahkan-section');
+    if (!section) return;
+
+    const listEl = document.getElementById('ks-disahkan-list');
+    listEl.innerHTML = '<p class="hint">Memuat...</p>';
+
+    try {
+        const [docs, phases] = await Promise.all([
+            getDisahkanWakaDocs(currentUser.school_id),
+            getCorePhases(),
+        ]);
+        const phaseMap = new Map(phases.map(p => [p.phase_id, p]));
+
+        if (!docs.length) {
+            listEl.innerHTML = '<p class="hint">Belum ada dokumen yang disahkan Waka Kurikulum.</p>';
+            return;
+        }
+
+        listEl.innerHTML = docs.map(doc => {
+            const dtype    = DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type;
+            const phase    = phaseMap.get(doc.phase_id);
+            const semLabel = doc.semester ? ` · Semester ${doc.semester}` : '';
+            const guruHtml = doc.teacher_name
+                ? `<p style="margin:2px 0 0;font-size:12px;color:var(--color-text-muted)">Guru: ${esc(doc.teacher_name)}</p>`
+                : '';
+            return `
+            <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">
+                    <div>
+                        <p style="margin:0 0 2px;font-weight:600;font-size:13px">
+                            <span style="color:var(--color-success,#16a34a)">✅</span>
+                            ${esc(dtype)}${esc(semLabel)}
+                        </p>
+                        ${guruHtml}
+                        <p style="margin:2px 0 0;font-size:12px;color:var(--color-text-muted)">
+                            Disahkan: ${fmt(doc.updated_at)} · ${phase ? `Fase ${phase.code}` : ''} · ${doc.academic_year}
+                        </p>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+
+    } catch (err) {
+        listEl.innerHTML = `<div class="status-err">Gagal memuat. ${esc(fe(err))}</div>`;
+    }
+}
+
+// ─── Modal: Profil Mengajar ───────────────────────────────────
+function buildProfilMengajarHTML(p) {
+    const v = p ?? {};
+    const chk = (arr, val) => (arr ?? []).includes(val) ? 'checked' : '';
+    const sel = (field, val) => v[field] === val ? 'checked' : '';
+    return `
+    <h2 style="margin:0 0 4px;font-size:18px">Profil Mengajar</h2>
+    <p style="margin:0 0 20px;font-size:13px;color:var(--color-text-muted)">Diisi sekali, berlaku untuk semua mata pelajaran</p>
+
+    <div class="pm-q"><p class="pm-label">1. Tujuan Utama Pembelajaran</p>
+      ${[
+        ['PKL',                  'Persiapan PKL',                      null],
+        ['DUNIA_KERJA',          'Persiapan Dunia Kerja',               null],
+        ['SERTIFIKASI',          'Persiapan Sertifikasi',               'Nama sertifikasi (contoh: Mikrotik MTCNA)'],
+        ['LKS',                  'Persiapan LKS',                       'Bidang/skill yang difokuskan'],
+        ['KONSEP_DASAR',         'Penguatan Konsep Dasar',              null],
+        ['KEWIRAUSAHAAN',        'Projek Kewirausahaan',                null],
+        ['UMKM',                 'UMKM Lokal',                          null],
+        ['LITERASI',             'Penguatan Literasi',                   'Jenis literasi (membaca, menulis, dst)'],
+        ['NUMERASI',             'Penguatan Numerasi',                   null],
+        ['KOMUNIKASI',           'Komunikasi dan Interaksi',             'Konteks komunikasi (formal, informal, dunia kerja, dst)'],
+        ['PENGEMBANGAN_KARAKTER','Pengembangan Karakter',               null],
+        ['PERSIAPAN_AN',         'Persiapan Asesmen Nasional',          null],
+        ['LAINNYA',              'Lainnya',                              'Jelaskan tujuan pembelajaran Anda'],
+      ].map(([val, lbl, placeholder]) => {
+        const isSelected = v.instructional_intent === val;
+        const condDetail  = isSelected ? (v.intent_detail ?? '') : '';
+        const condHtml    = placeholder ? `
+          <div class="pm-cond-intent" id="pm-cond-${val}" style="display:${isSelected?'':'none'};margin:6px 0 4px 24px">
+            <input type="text" class="input input-sm pm-cond-input" placeholder="${esc(placeholder)}" value="${esc(condDetail)}" style="width:100%;max-width:320px">
+          </div>` : '';
+        return `<label class="pm-radio-row"><input type="radio" name="instructional_intent" value="${val}" ${sel('instructional_intent',val)}> ${lbl}</label>${condHtml}`;
+      }).join('')}
+      <div style="margin-top:12px">
+        <label style="font-size:13px;display:block;margin-bottom:4px;color:var(--color-text-muted)">Informasi tambahan <span style="font-weight:400">(opsional)</span></label>
+        <textarea name="intent_detail" class="input" rows="3" placeholder="Tuliskan informasi tambahan tentang tujuan pembelajaran Anda..." style="width:100%;resize:vertical;font-size:13px">${esc(v.intent_detail ?? '')}</textarea>
+      </div>
+    </div>
+
+    <div class="pm-q"><p class="pm-label">2. Cara Penilaian Utama</p>
+      ${[['PRAKTIK','Praktik'],['PORTOFOLIO','Portofolio'],['PRESENTASI','Presentasi'],
+         ['OBSERVASI','Observasi'],['TES_TERTULIS','Tes Tertulis'],['KOMBINASI','Kombinasi']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="assessment_philosophy" value="${val}" ${sel('assessment_philosophy',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">3. Gaya Mengajar</p>
+      ${[['GURU_DOMINAN','Guru dominan (saya memandu setiap langkah)'],
+         ['SISWA_DOMINAN','Siswa dominan (saya sebagai fasilitator)'],
+         ['SEIMBANG','Seimbang']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="teaching_style" value="${val}" ${sel('teaching_style',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">4. Model Pembelajaran</p>
+      ${[['PBL_PROJECT','Project-Based Learning'],['PBL_PROBLEM','Problem-Based Learning'],
+         ['DISCOVERY','Discovery Learning'],['CERAMAH_LATIHAN','Ceramah + Latihan']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="learning_model" value="${val}" ${sel('learning_model',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">5. Gaya Penyampaian</p>
+      ${[['PRAKTIK','Banyak praktik'],['DISKUSI','Banyak diskusi'],['DEMONSTRASI','Banyak demonstrasi']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="delivery_style" value="${val}" ${sel('delivery_style',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">6. Pola Jadwal Mengajar</p>
+      ${[['SPLIT_2JP','2 JP × beberapa hari terpisah'],['BLOCK_6JP','6 JP sekaligus (block)'],
+         ['TEORI_PRAKTIK','Teori dulu lalu praktik'],['PRAKTIK_PENUH','Praktik penuh']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="schedule_pattern" value="${val}" ${sel('schedule_pattern',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">7. Durasi Proyek</p>
+      ${[['1_MINGGU','1 minggu'],['2_4_MINGGU','2–4 minggu'],['SATU_SEMESTER','Satu semester']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="project_duration" value="${val}" ${sel('project_duration',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">8. Tingkat Kedalaman Materi</p>
+      ${[['DASAR','Dasar'],['MENENGAH','Menengah'],['MAHIR','Mahir']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="depth_level" value="${val}" ${sel('depth_level',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">9. Konteks Lokal <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></p>
+      <div style="display:grid;gap:8px;max-width:360px">
+        <label style="font-size:13px">Kota/daerah<input type="text" class="input input-sm" name="local_city" value="${esc(v.local_city??'')}" style="margin-top:4px"></label>
+        <label style="font-size:13px">Industri lokal<input type="text" class="input input-sm" name="local_industry" value="${esc(v.local_industry??'')}" style="margin-top:4px"></label>
+        <label style="font-size:13px">Nama DUDI mitra<input type="text" class="input input-sm" name="local_dudi_partners" value="${esc(v.local_dudi_partners??'')}" style="margin-top:4px"></label>
+        <label style="font-size:13px">Produk/jasa lokal<input type="text" class="input input-sm" name="local_products" value="${esc(v.local_products??'')}" style="margin-top:4px"></label>
+      </div>
+    </div>
+
+    <div class="pm-q"><p class="pm-label">10. Aktivitas yang Dihindari <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></p>
+      ${[['ROLE_PLAY','Role play'],['DEBAT','Debat'],['PRESENTASI_INDIVIDU','Presentasi individu'],
+         ['TUGAS_RUMAH','Tugas rumah'],['OUTDOOR','Praktik outdoor']].map(val_lbl =>
+        `<label class="pm-radio-row"><input type="checkbox" name="avoided_activities" value="${val_lbl[0]}" ${chk(v.avoided_activities, val_lbl[0])}> ${val_lbl[1]}</label>`
+      ).join('')}
+      <label class="pm-radio-row"><input type="checkbox" name="avoided_activities" value="LAINNYA" id="pm-avoided-lain-chk" ${chk(v.avoided_activities,'LAINNYA')}> Lainnya</label>
+      <div id="pm-avoided-lain-detail" style="display:${(v.avoided_activities??[]).includes('LAINNYA')?'block':'none'};margin:4px 0 0 24px">
+        <input type="text" class="input input-sm" name="avoided_detail" placeholder="Jelaskan" value="${esc(v.avoided_detail??'')}" style="max-width:280px">
+      </div>
+    </div>
+
+    <div class="pm-q"><p class="pm-label">11. Preferensi Integrasi <span style="font-weight:400;color:var(--color-text-muted)">(opsional)</span></p>
+      ${[['NUMERASI','Numerasi'],['LITERASI','Literasi'],['AI_TEKNOLOGI','AI/Teknologi'],
+         ['KEWIRAUSAHAAN','Kewirausahaan'],['BUDAYA_LOKAL','Budaya lokal'],
+         ['PROFIL_LULUSAN','Profil Lulusan 8 Dimensi']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="checkbox" name="integration_prefs" value="${val}" ${chk(v.integration_prefs,val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q">
+      <p class="pm-label">12. Urutan penyampaian materi</p>
+      <p class="pm-hint">Bagaimana Anda biasanya menyusun urutan topik dalam satu semester?</p>
+      ${(()=>{
+        const seqPref = (v.integration_prefs ?? []).find(x => x.startsWith('SEQUENCE:'))?.replace('SEQUENCE:','') ?? 'RESEPTIF_PRODUKTIF';
+        return [
+          ['RESEPTIF_PRODUKTIF', 'Reseptif dulu, lalu produktif (menyimak/membaca → berbicara/menulis)'],
+          ['TEMATIK',            'Tematik (kelompokkan berdasarkan tema, tidak terikat urutan keterampilan)'],
+          ['SPIRAL',             'Spiral (setiap topik diulang dengan tingkat kesulitan naik)'],
+          ['BUKU_TEKS',          'Ikuti urutan buku teks atau silabus resmi'],
+        ].map(([val, lbl]) =>
+          `<label class="pm-radio-row"><input type="radio" name="sequence_preference" value="${val}" ${seqPref === val ? 'checked' : ''}> ${esc(lbl)}</label>`
+        ).join('');
+      })()}
+    </div>
+
+    `;
+}
+
+function collectProfilMengajar(form) {
+    const radio = name => form.querySelector(`input[name="${name}"]:checked`)?.value ?? null;
+    const checks = name => [...form.querySelectorAll(`input[name="${name}"]:checked`)].map(el => el.value);
+    const txt = name => form.querySelector(`input[name="${name}"]`)?.value.trim() || null;
+
+    const intent = radio('instructional_intent');
+    // Ambil dari input kondisional yang terlihat, fallback ke textarea intent_detail
+    const visibleCond = form.querySelector(`.pm-cond-intent:not([style*="display:none"]):not([style*="display: none"]) .pm-cond-input`);
+    const condVal = visibleCond?.value.trim() || null;
+    const txtareaVal = form.querySelector('textarea[name="intent_detail"]')?.value.trim() || null;
+    const intent_detail = condVal || txtareaVal || null;
+
+    return {
+        instructional_intent: intent,
+        intent_detail,
+        assessment_philosophy: radio('assessment_philosophy'),
+        teaching_style: radio('teaching_style'),
+        learning_model: radio('learning_model'),
+        delivery_style: radio('delivery_style'),
+        schedule_pattern: radio('schedule_pattern'),
+        project_duration: radio('project_duration'),
+        depth_level: radio('depth_level'),
+        local_city: txt('local_city'),
+        local_industry: txt('local_industry'),
+        local_dudi_partners: txt('local_dudi_partners'),
+        local_products: txt('local_products'),
+        avoided_activities: checks('avoided_activities'),
+        avoided_detail: txt('avoided_detail'),
+        integration_prefs: (() => {
+            const seqPref = form.querySelector('[name="sequence_preference"]:checked')?.value;
+            const base = checks('integration_prefs').filter(v => !v.startsWith('SEQUENCE:'));
+            if (seqPref) base.push(`SEQUENCE:${seqPref}`);
+            return base;
+        })(),
+    };
+}
+
+async function openProfilMengajarModal() {
+    let overlay = document.getElementById('profil-mengajar-modal');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'profil-mengajar-modal';
+        overlay.className = 'modal-overlay';
+        overlay.style.cssText = 'align-items:center';
+        overlay.innerHTML = `
+          <div class="sip-modal-panel" style="max-width:600px">
+            <div class="sip-modal-scroll"><div id="pm-body"></div></div>
+            <div class="sip-modal-footer">
+              <button class="btn btn-secondary" id="pm-batal-btn">Batal</button>
+              <button class="btn btn-primary" id="pm-simpan-btn">💾 Simpan Profil</button>
+            </div>
+          </div>`;
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+        document.body.appendChild(overlay);
+    }
+    overlay.style.display = 'flex';
+    document.getElementById('pm-body').innerHTML = '<p class="hint">Memuat profil…</p>';
+
+    let profile = null;
+    try {
+        profile = await getTeacherProfile(currentUser.school_id);
+    } catch (e) { /* biarkan kosong */ }
+
+    const body = document.getElementById('pm-body');
+    body.innerHTML = buildProfilMengajarHTML(profile);
+
+    // Kondisional: tujuan — sembunyikan semua lalu tampilkan yang sesuai
+    body.querySelectorAll('input[name="instructional_intent"]').forEach(r => {
+        r.addEventListener('change', () => {
+            body.querySelectorAll('.pm-cond-intent').forEach(el => el.style.display = 'none');
+            const active = body.querySelector(`#pm-cond-${r.value}`);
+            if (active) active.style.display = '';
+        });
+    });
+    // Kondisional: avoided lainnya
+    body.querySelector('#pm-avoided-lain-chk').addEventListener('change', e => {
+        body.querySelector('#pm-avoided-lain-detail').style.display = e.target.checked ? '' : 'none';
+    });
+
+    overlay.querySelector('#pm-batal-btn').addEventListener('click', () => { overlay.style.display = 'none'; });
+    overlay.querySelector('#pm-simpan-btn').addEventListener('click', async () => {
+        const btn = overlay.querySelector('#pm-simpan-btn');
+        btn.disabled = true; btn.textContent = '…';
+        try {
+            await saveTeacherProfile(currentUser.school_id, collectProfilMengajar(body));
+            overlay.style.display = 'none';
+        } catch (err) {
+            alert(`Gagal menyimpan: ${fe(err)}`);
+        } finally {
+            btn.disabled = false; btn.textContent = '💾 Simpan Profil';
+        }
+    });
+}
+
+// ─── Modal: Konteks Kelas ─────────────────────────────────────
+function buildKonteksKelasHTML(ctx, subjName, ay) {
+    const v = ctx ?? {};
+    const chk = (arr, val) => (arr ?? []).includes(val) ? 'checked' : '';
+    const sel = (field, val) => v[field] === val ? 'checked' : '';
+    return `
+    <h2 style="margin:0 0 2px;font-size:18px">Konteks Kelas</h2>
+    <p style="margin:0 0 2px;font-size:13px;color:var(--color-text-muted)">Mata pelajaran: <strong>${esc(subjName)}</strong></p>
+    <p style="margin:0 0 20px;font-size:13px;color:var(--color-text-muted)">Tahun ajaran: <strong>${esc(ay)}</strong></p>
+
+    <div class="pm-q"><p class="pm-label">1. Latar Belakang Siswa</p>
+      ${[['PETANI','Anak petani'],['PEDAGANG','Pedagang'],['PENGRAJIN','Pengrajin'],['CAMPURAN','Campuran']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="student_background" value="${val}" ${sel('student_background',val)}> ${lbl}</label>`
+      ).join('')}
+      <div style="margin-top:8px;max-width:280px">
+        <label style="font-size:13px">Bahasa sehari-hari <span style="color:var(--color-text-muted)">(opsional)</span>
+          <input type="text" class="input input-sm" name="daily_language" value="${esc(v.daily_language??'')}" style="margin-top:4px">
+        </label>
+      </div>
+    </div>
+
+    <div class="pm-q"><p class="pm-label">2. Akses Teknologi Siswa</p>
+      ${[['SMARTPHONE','Smartphone saja'],['LAPTOP','Laptop/komputer tersedia'],['TANPA_INTERNET','Tidak ada internet']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="tech_access" value="${val}" ${sel('tech_access',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">3. Karakteristik Kelas</p>
+      ${[['PASIF','Pasif'],['AKTIF_BERTANYA','Aktif bertanya'],['SULIT_KELOMPOK','Sulit bekerja kelompok'],
+         ['DISIPLIN_TINGGI','Disiplin tinggi'],['CEPAT_BOSAN','Cepat bosan'],['SANGAT_HETEROGEN','Sangat heterogen']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="checkbox" name="class_characteristics" value="${val}" ${chk(v.class_characteristics,val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">4. Tingkat Kemandirian Siswa</p>
+      ${[['SANGAT_MANDIRI','Sangat mandiri (bisa bekerja tanpa arahan terus)'],
+         ['PERLU_ARAHAN','Perlu arahan (butuh panduan setiap tahap)'],
+         ['SANGAT_BERGANTUNG','Sangat bergantung (perlu scaffolding penuh)']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="student_autonomy" value="${val}" ${sel('student_autonomy',val)}> ${lbl}</label>`
+      ).join('')}
+    </div>
+
+    <div class="pm-q"><p class="pm-label">5. Kendala di Kelas</p>
+      ${[['INTERNET_MATI','Internet sering mati'],['LAB_BERGANTIAN','Lab dipakai bergantian'],
+         ['HP_DILARANG','HP tidak boleh dibawa'],['PRAKTIK_SEMINGGU_SEKALI','Praktik hanya seminggu sekali'],
+         ['WAKTU_MAKS_2JP','Waktu praktik maksimal 2 JP']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="checkbox" name="learning_constraints" value="${val}" ${chk(v.learning_constraints,val)}> ${lbl}</label>`
+      ).join('')}
+      <label class="pm-radio-row"><input type="checkbox" name="learning_constraints" value="LAINNYA" id="kk-kendala-lain-chk" ${chk(v.learning_constraints,'LAINNYA')}> Lainnya</label>
+      <div id="kk-kendala-lain-detail" style="display:${(v.learning_constraints??[]).includes('LAINNYA')?'block':'none'};margin:4px 0 0 24px">
+        <input type="text" class="input input-sm" name="constraints_detail" placeholder="Jelaskan" value="${esc(v.constraints_detail??'')}" style="max-width:280px">
+      </div>
+    </div>
+
+    <div class="pm-q"><p class="pm-label">6. Sumber Belajar yang Tersedia</p>
+      ${[['BUKU_PAKET','Buku paket resmi'],['MODUL_SEKOLAH','Modul sekolah'],
+         ['INTERNET_STABIL','Internet stabil'],['VIDEO_PEMBELAJARAN','Video pembelajaran'],
+         ['AUDIO','Audio (rekaman, podcast, lagu)'],
+         ['LABORATORIUM','Laboratorium'],['TEACHING_FACTORY','Teaching Factory']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="checkbox" name="resources_available" value="${val}" ${chk(v.resources_available,val)}> ${lbl}</label>`
+      ).join('')}
+      <label class="pm-radio-row"><input type="checkbox" name="resources_available" value="DUDI_AKTIF" id="kk-dudi-chk" ${chk(v.resources_available,'DUDI_AKTIF')}> DUDI aktif</label>
+      <div id="kk-dudi-detail" style="display:${(v.resources_available??[]).includes('DUDI_AKTIF')?'block':'none'};margin:4px 0 0 24px">
+        <input type="text" class="input input-sm" name="dudi_name" placeholder="Nama DUDI" value="${esc(v.dudi_name??'')}" style="max-width:280px">
+      </div>
+      <label class="pm-radio-row"><input type="checkbox" name="resources_available" value="NARASUMBER" id="kk-narasumber-chk" ${chk(v.resources_available,'NARASUMBER')}> Narasumber industri</label>
+      <div id="kk-narasumber-detail" style="display:${(v.resources_available??[]).includes('NARASUMBER')?'block':'none'};margin:4px 0 0 24px">
+        <input type="text" class="input input-sm" name="narasumber_detail" placeholder="Detail" value="${esc(v.narasumber_detail??'')}" style="max-width:280px">
+      </div>
+    </div>
+
+    <div class="pm-q"><p class="pm-label">7. Output Nyata yang Diharapkan</p>
+      ${[['LAPORAN','Laporan tertulis'],['PRESENTASI','Presentasi'],['PRODUK_FISIK','Produk fisik'],
+         ['WEB_APLIKASI','Website/Aplikasi'],['VIDEO','Video'],
+         ['KONFIGURASI','Konfigurasi jaringan/sistem'],['PROTOTYPE','Prototype'],
+         ['POSTER','Poster'],['SIMULASI','Simulasi']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="radio" name="expected_output" value="${val}" ${sel('expected_output',val)}> ${lbl}</label>`
+      ).join('')}
+      <label class="pm-radio-row"><input type="radio" name="expected_output" value="LAINNYA" ${sel('expected_output','LAINNYA')}> Lainnya</label>
+      <div id="kk-output-lain-detail" style="display:${v.expected_output==='LAINNYA'?'block':'none'};margin:4px 0 0 24px">
+        <input type="text" class="input input-sm" name="output_detail" placeholder="Jelaskan" value="${esc(v.output_detail??'')}" style="max-width:280px">
+      </div>
+    </div>
+
+    <div class="pm-q"><p class="pm-label">8. Media & Alat yang Tersedia</p>
+      ${[['PROYEKTOR','Proyektor/TV'],['SPEAKER','Speaker'],
+         ['LAPTOP_SISWA','Laptop/komputer siswa'],['TABLET','Tablet'],
+         ['KARTU','Kartu/flashcard'],['INTERNET_STABIL','Akses internet stabil'],
+         ['PAPAN_TULIS','Papan tulis']].map(([val,lbl]) =>
+        `<label class="pm-radio-row"><input type="checkbox" name="media_available" value="${val}" ${chk(v.media_available,val)}> ${lbl}</label>`
+      ).join('')}
+      <label class="pm-radio-row"><input type="checkbox" name="media_available" value="LAINNYA" id="kk-media-lain-chk" ${chk(v.media_available,'LAINNYA')}> Lainnya</label>
+      <div id="kk-media-lain-detail" style="display:${(v.media_available??[]).includes('LAINNYA')?'block':'none'};margin:4px 0 0 24px">
+        <input type="text" class="input input-sm" name="media_detail" placeholder="Jelaskan" value="${esc(v.media_detail??'')}" style="max-width:280px">
+      </div>
+    </div>
+
+    `;
+}
+
+function collectKonteksKelas(form, subjectId, ay) {
+    const radio = name => form.querySelector(`input[name="${name}"]:checked`)?.value ?? null;
+    const checks = name => [...form.querySelectorAll(`input[name="${name}"]:checked`)].map(el => el.value);
+    const txt = name => form.querySelector(`input[name="${name}"]`)?.value.trim() || null;
+    const output = radio('expected_output');
+    return {
+        subject_id: subjectId,
+        academic_year: ay,
+        class_id: null,
+        student_background: radio('student_background'),
+        tech_access: radio('tech_access'),
+        daily_language: txt('daily_language'),
+        class_characteristics: checks('class_characteristics'),
+        student_autonomy: radio('student_autonomy'),
+        learning_constraints: checks('learning_constraints'),
+        constraints_detail: txt('constraints_detail'),
+        resources_available: checks('resources_available'),
+        dudi_name: txt('dudi_name'),
+        narasumber_detail: txt('narasumber_detail'),
+        expected_output: output,
+        output_detail: output === 'LAINNYA' ? txt('output_detail') : null,
+        media_available: checks('media_available'),
+        media_detail: txt('media_detail'),
+    };
+}
+
+async function openKonteksKelasModal() {
+    const ay = config?.current_academic_year ?? getCurrentAcademicYear();
+
+    // Ambil mapel dari teaching_assignments — join ke public.subjects untuk nama
+    // teaching_contexts.subject_id FK ke public.subjects (bukan core.subjects)
+    let mySubjects = [];
+    try {
+        const { data: assignments, error } = await supabase
+            .from('teaching_assignments')
+            .select('subject_id, subject:subjects(subject_id, name, code)')
+            .eq('school_id', currentUser.school_id)
+            .eq('user_id', currentUser.user_id)
+            .eq('academic_year', ay)
+            .eq('is_active', true);
+        if (!error && assignments?.length) {
+            const seen = new Set();
+            for (const a of assignments) {
+                const s = a.subject;
+                if (s && !seen.has(s.subject_id)) {
+                    seen.add(s.subject_id);
+                    mySubjects.push({ subject_id: s.subject_id, name: s.name, code: s.code });
+                }
+            }
+            mySubjects.sort((a, b) => a.name.localeCompare(b.name, 'id'));
+        }
+    } catch (e) { /* */ }
+
+    if (!mySubjects.length) {
+        alert('Belum ada mata pelajaran yang diajar. Hubungi administrator untuk mengatur jadwal mengajar.');
+        return;
+    }
+
+    let overlay = document.getElementById('konteks-kelas-modal');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'konteks-kelas-modal';
+        overlay.className = 'modal-overlay';
+        overlay.style.cssText = 'align-items:center';
+        overlay.innerHTML = `
+          <div class="sip-modal-panel" style="max-width:600px">
+            <div class="sip-modal-scroll"><div id="kk-body"></div></div>
+            <div class="sip-modal-footer" id="kk-footer" style="display:none">
+              <button class="btn btn-secondary" id="kk-batal-btn">Batal</button>
+              <button class="btn btn-primary" id="kk-simpan-btn">💾 Simpan Konteks</button>
+            </div>
+          </div>`;
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+        document.body.appendChild(overlay);
+    }
+
+    const openForSubject = async (subj) => {
+        overlay.style.display = 'flex';
+        document.getElementById('kk-footer').style.display = 'none';
+        document.getElementById('kk-body').innerHTML = '<p class="hint">Memuat konteks…</p>';
+        let ctx = null;
+        try { ctx = await getTeachingContext(currentUser.school_id, subj.subject_id, ay); } catch (e) { /* */ }
+
+        const body = document.getElementById('kk-body');
+        body.innerHTML = buildKonteksKelasHTML(ctx, subj.name, ay);
+
+        // Kondisional: kendala lainnya
+        body.querySelector('#kk-kendala-lain-chk').addEventListener('change', e => {
+            body.querySelector('#kk-kendala-lain-detail').style.display = e.target.checked ? '' : 'none';
+        });
+        // Kondisional: DUDI
+        body.querySelector('#kk-dudi-chk').addEventListener('change', e => {
+            body.querySelector('#kk-dudi-detail').style.display = e.target.checked ? '' : 'none';
+        });
+        // Kondisional: narasumber
+        body.querySelector('#kk-narasumber-chk').addEventListener('change', e => {
+            body.querySelector('#kk-narasumber-detail').style.display = e.target.checked ? '' : 'none';
+        });
+        // Kondisional: output lainnya
+        body.querySelectorAll('input[name="expected_output"]').forEach(r => {
+            r.addEventListener('change', () => {
+                body.querySelector('#kk-output-lain-detail').style.display =
+                    body.querySelector('input[name="expected_output"][value="LAINNYA"]:checked') ? '' : 'none';
+            });
+        });
+        // Kondisional: media lainnya
+        body.querySelector('#kk-media-lain-chk').addEventListener('change', e => {
+            body.querySelector('#kk-media-lain-detail').style.display = e.target.checked ? '' : 'none';
+        });
+
+        // Tampilkan footer dan wire tombol
+        const footer = document.getElementById('kk-footer');
+        footer.style.display = '';
+        const batalBtn  = overlay.querySelector('#kk-batal-btn');
+        const simpanBtn = overlay.querySelector('#kk-simpan-btn');
+        batalBtn.replaceWith(batalBtn.cloneNode(true));
+        simpanBtn.replaceWith(simpanBtn.cloneNode(true));
+        overlay.querySelector('#kk-batal-btn').addEventListener('click', () => { overlay.style.display = 'none'; });
+        overlay.querySelector('#kk-simpan-btn').addEventListener('click', async () => {
+            const btn = overlay.querySelector('#kk-simpan-btn');
+            btn.disabled = true; btn.textContent = '…';
+            try {
+                await saveTeachingContext(currentUser.school_id, collectKonteksKelas(body, subj.subject_id, ay));
+                overlay.style.display = 'none';
+            } catch (err) {
+                alert(`Gagal menyimpan: ${fe(err)}`);
+            } finally {
+                btn.disabled = false; btn.textContent = '💾 Simpan Konteks';
+            }
+        });
+    };
+
+    if (mySubjects.length === 1) {
+        await openForSubject(mySubjects[0]);
+    } else {
+        // Tampilkan dropdown pilih mapel
+        overlay.style.display = 'flex';
+        document.getElementById('kk-body').innerHTML = `
+            <h2 style="margin:0 0 16px;font-size:18px">Pilih Mata Pelajaran</h2>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              ${mySubjects.map(s => `
+                <button class="btn btn-secondary kk-subj-btn" data-subj-id="${esc(s.subject_id)}" style="text-align:left">${esc(s.name)}</button>
+              `).join('')}
+            </div>
+            <div style="margin-top:16px;text-align:right">
+              <button class="btn btn-secondary" id="kk-pick-batal">Batal</button>
+            </div>`;
+        document.getElementById('kk-pick-batal').addEventListener('click', () => { overlay.style.display = 'none'; });
+        document.getElementById('kk-body').querySelectorAll('.kk-subj-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const subj = mySubjects.find(s => s.subject_id === btn.dataset.subjId);
+                if (subj) await openForSubject(subj);
+            });
+        });
+    }
+}
+
+// ─── Modal: Konfirmasi Generate ───────────────────────────────
+const PROFIL_LABEL = {
+    instructional_intent: { label: 'Tujuan', map: { PKL:'Persiapan PKL', DUNIA_KERJA:'Persiapan Dunia Kerja', SERTIFIKASI:'Persiapan Sertifikasi', LKS:'Persiapan LKS', KONSEP_DASAR:'Penguatan Konsep Dasar', KEWIRAUSAHAAN:'Projek Kewirausahaan', UMKM:'UMKM Lokal', LITERASI:'Penguatan Literasi', NUMERASI:'Penguatan Numerasi', KOMUNIKASI:'Komunikasi dan Interaksi', PENGEMBANGAN_KARAKTER:'Pengembangan Karakter', PERSIAPAN_AN:'Persiapan Asesmen Nasional', LAINNYA:'Lainnya' } },
+    assessment_philosophy: { label: 'Cara penilaian', map: { PRAKTIK:'Praktik', PORTOFOLIO:'Portofolio', PRESENTASI:'Presentasi', OBSERVASI:'Observasi', TES_TERTULIS:'Tes Tertulis', KOMBINASI:'Kombinasi' } },
+    teaching_style: { label: 'Gaya mengajar', map: { GURU_DOMINAN:'Guru dominan', SISWA_DOMINAN:'Siswa dominan', SEIMBANG:'Seimbang' } },
+    learning_model: { label: 'Model', map: { PBL_PROJECT:'Project-Based Learning', PBL_PROBLEM:'Problem-Based Learning', DISCOVERY:'Discovery Learning', CERAMAH_LATIHAN:'Ceramah + Latihan' } },
+};
+const KONTEKS_LABEL = {
+    student_autonomy: { label: 'Kemandirian siswa', map: { SANGAT_MANDIRI:'Sangat mandiri', PERLU_ARAHAN:'Perlu arahan', SANGAT_BERGANTUNG:'Sangat bergantung' } },
+    expected_output: { label: 'Output nyata', map: { LAPORAN:'Laporan tertulis', PRESENTASI:'Presentasi', PRODUK_FISIK:'Produk fisik', WEB_APLIKASI:'Website/Aplikasi', VIDEO:'Video', KONFIGURASI:'Konfigurasi', PROTOTYPE:'Prototype', POSTER:'Poster', SIMULASI:'Simulasi', LAINNYA:'Lainnya' } },
+};
+const MEDIA_LABEL = { PROYEKTOR:'Proyektor/TV', SPEAKER:'Speaker', LAPTOP_SISWA:'Laptop siswa', TABLET:'Tablet', KARTU:'Kartu', INTERNET_STABIL:'Internet stabil', PAPAN_TULIS:'Papan tulis', LAINNYA:'Lainnya' };
+
+async function openConfirmGenerateModal(coreSubjectId, phaseId, subjName, ay) {
+    let overlay = document.getElementById('confirm-generate-modal');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'confirm-generate-modal';
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `<div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:520px;margin:auto;position:relative"><div id="cg-body"></div></div>`;
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+        document.body.appendChild(overlay);
+    }
+    overlay.style.display = 'flex';
+    document.getElementById('cg-body').innerHTML = '<p class="hint">Memuat…</p>';
+
+    let profil = null, ctx = null;
+    try { [profil, ctx] = await Promise.all([
+        getTeacherProfile(currentUser.school_id),
+        getTeachingContext(currentUser.school_id, coreSubjectId, ay),
+    ]); } catch (e) { /* */ }
+
+    const row = (label, val) => val
+        ? `<div style="display:flex;gap:8px;font-size:13px;padding:3px 0"><span style="color:var(--color-success,#16a34a);flex-shrink:0">✓</span><span style="color:var(--color-text-muted);min-width:130px">${label}</span><span>${esc(val)}</span></div>`
+        : '';
+
+    let profilSection = '';
+    if (profil) {
+        const localCtx = [profil.local_city, profil.local_industry].filter(Boolean).join(' — ') || null;
+        profilSection = `
+        <div style="background:var(--color-bg-alt);border-radius:var(--radius);padding:12px;margin-bottom:12px">
+          <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase">Profil Mengajar</p>
+          ${Object.entries(PROFIL_LABEL).map(([k, {label, map}]) => row(label, map[profil[k]] ?? null)).join('')}
+          ${localCtx ? row('Konteks lokal', localCtx) : ''}
+          <button class="btn btn-secondary btn-sm" style="margin-top:10px;font-size:12px" id="cg-ubah-profil">⚙ Ubah Profil</button>
+        </div>`;
+    } else {
+        profilSection = `
+        <div style="background:var(--color-bg-alt);border-radius:var(--radius);padding:12px;margin-bottom:12px">
+          <p style="margin:0 0 6px;font-size:13px">⚠️ Profil Mengajar belum diisi. AI akan menggunakan nilai default.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" id="cg-isi-profil">Isi Sekarang</button>
+            <button class="btn btn-secondary btn-sm" id="cg-lanjut-tanpa-profil">Lanjutkan Tanpa Profil</button>
+          </div>
+        </div>`;
+    }
+
+    let ctxSection = '';
+    if (ctx) {
+        const mediaList = (ctx.media_available ?? []).map(m => MEDIA_LABEL[m] ?? m).join(', ') || null;
+        ctxSection = `
+        <div style="background:var(--color-bg-alt);border-radius:var(--radius);padding:12px;margin-bottom:12px">
+          <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase">Konteks Kelas</p>
+          ${Object.entries(KONTEKS_LABEL).map(([k, {label, map}]) => row(label, map[ctx[k]] ?? null)).join('')}
+          ${mediaList ? row('Media tersedia', mediaList) : ''}
+          <button class="btn btn-secondary btn-sm" style="margin-top:10px;font-size:12px" id="cg-ubah-konteks">⚙ Ubah Konteks</button>
+        </div>`;
+    }
+
+    document.getElementById('cg-body').innerHTML = `
+        <h2 style="margin:0 0 16px;font-size:18px">Konfirmasi Generate ATP</h2>
+        <p style="margin:0 0 12px;font-size:13px;color:var(--color-text-muted)">Mapel: <strong>${esc(subjName)}</strong> · ${esc(ay)}</p>
+        ${profilSection}
+        ${ctxSection}
+        <div style="margin-bottom:12px;padding:12px;background:var(--color-bg-alt);border-radius:var(--radius)">
+          <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase">Parameter JP — Satu Tahun Penuh</p>
+          <div style="margin-bottom:8px">
+            <p style="margin:0 0 6px;font-size:12px;color:var(--color-text-muted);font-weight:600">Semester 1</p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">JP/minggu
+                <input type="number" id="cg-jp-s1" value="4" min="1" max="10"
+                  style="width:70px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
+              </label>
+              <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">Minggu efektif
+                <input type="number" id="cg-weeks-s1" value="18" min="1" max="26"
+                  style="width:70px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
+              </label>
+            </div>
+          </div>
+          <div style="margin-bottom:8px">
+            <p style="margin:0 0 6px;font-size:12px;color:var(--color-text-muted);font-weight:600">Semester 2</p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">JP/minggu
+                <input type="number" id="cg-jp-s2" value="4" min="1" max="10"
+                  style="width:70px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
+              </label>
+              <label style="font-size:13px;display:flex;flex-direction:column;gap:4px">Minggu efektif
+                <input type="number" id="cg-weeks-s2" value="16" min="1" max="26"
+                  style="width:70px;padding:4px 8px;border:1px solid var(--color-border);border-radius:4px;font-size:14px;background:var(--color-surface)">
+              </label>
+            </div>
+          </div>
+          <p style="margin:8px 0 0;font-size:12px;color:var(--color-text-muted)">Total JP: <span id="cg-total-jp-preview">136</span> JP</p>
+        </div>
+        <div id="cg-generate-msg" style="display:none;font-size:13px;margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:16px;border-top:1px solid var(--color-border)">
+          <button class="btn btn-secondary" id="cg-batal-btn">Batal</button>
+          <button class="btn btn-primary" id="cg-generate-btn">✨ Generate</button>
+        </div>`;
+
+    const body = document.getElementById('cg-body');
+    body.querySelector('#cg-batal-btn').addEventListener('click', () => { overlay.style.display = 'none'; });
+    body.querySelector('#cg-ubah-profil')?.addEventListener('click', () => { overlay.style.display = 'none'; openProfilMengajarModal(); });
+    body.querySelector('#cg-ubah-konteks')?.addEventListener('click', () => { overlay.style.display = 'none'; openKonteksKelasModal(); });
+    body.querySelector('#cg-isi-profil')?.addEventListener('click', () => { overlay.style.display = 'none'; openProfilMengajarModal(); });
+    body.querySelector('#cg-lanjut-tanpa-profil')?.addEventListener('click', () => {
+        body.querySelector('#cg-generate-btn')?.removeAttribute('disabled');
+    });
+
+    // Update total JP preview saat input berubah
+    const updateTotalJP = () => {
+        const jp1 = parseInt(document.getElementById('cg-jp-s1')?.value ?? '4', 10) || 0;
+        const wk1 = parseInt(document.getElementById('cg-weeks-s1')?.value ?? '18', 10) || 0;
+        const jp2 = parseInt(document.getElementById('cg-jp-s2')?.value ?? '4', 10) || 0;
+        const wk2 = parseInt(document.getElementById('cg-weeks-s2')?.value ?? '16', 10) || 0;
+        const el = document.getElementById('cg-total-jp-preview');
+        if (el) el.textContent = String(jp1 * wk1 + jp2 * wk2);
+    };
+    body.querySelector('#cg-jp-s1')?.addEventListener('input', updateTotalJP);
+    body.querySelector('#cg-weeks-s1')?.addEventListener('input', updateTotalJP);
+    body.querySelector('#cg-jp-s2')?.addEventListener('input', updateTotalJP);
+    body.querySelector('#cg-weeks-s2')?.addEventListener('input', updateTotalJP);
+
+    body.querySelector('#cg-generate-btn')?.addEventListener('click', async () => {
+        const btn   = body.querySelector('#cg-generate-btn');
+        const msgEl = document.getElementById('cg-generate-msg');
+        const jpPerWeekSem1  = parseInt(document.getElementById('cg-jp-s1')?.value ?? '4', 10);
+        const weeksSem1      = parseInt(document.getElementById('cg-weeks-s1')?.value ?? '18', 10);
+        const jpPerWeekSem2  = parseInt(document.getElementById('cg-jp-s2')?.value ?? '4', 10);
+        const weeksSem2      = parseInt(document.getElementById('cg-weeks-s2')?.value ?? '16', 10);
+
+        btn.disabled    = true;
+        btn.textContent = '⏳ Generating…';
+        msgEl.style.display = 'none';
+
+        try {
+            overlay.style.display = 'none';
+            await generateATP({
+                coreSubjectId,
+                phaseId,
+                subjectName: subjName,
+                academicYear: ay,
+                jpPerWeekSem1, weeksSem1,
+                jpPerWeekSem2, weeksSem2,
+            });
+        } catch (e) {
+            overlay.style.display = 'flex';
+            msgEl.textContent   = `✗ ${e.message ?? 'Gagal menghubungi AI'}`;
+            msgEl.style.color   = 'var(--color-danger)';
+            msgEl.style.display = '';
+            btn.disabled    = false;
+            btn.textContent = '✨ Generate';
+        }
+    });
+}
+
+async function generateATP({ coreSubjectId, phaseId, subjectName, academicYear, jpPerWeekSem1, weeksSem1, jpPerWeekSem2, weeksSem2 }) {
+    // Tampilkan loading overlay
+    let loadingEl = document.getElementById('atp-loading-overlay');
+    if (!loadingEl) {
+        loadingEl = document.createElement('div');
+        loadingEl.id = 'atp-loading-overlay';
+        loadingEl.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
+        loadingEl.innerHTML = `<div style="background:var(--color-surface);border-radius:12px;padding:32px 40px;text-align:center;max-width:320px">
+            <div style="font-size:32px;margin-bottom:12px">✨</div>
+            <p style="margin:0 0 6px;font-weight:600">Claude sedang menyusun ATP…</p>
+            <p style="margin:0;font-size:13px;color:var(--color-text-muted)">Mohon tunggu, proses ini memerlukan 10–30 detik</p>
+        </div>`;
+        document.body.appendChild(loadingEl);
+    }
+    loadingEl.style.display = 'flex';
+
+    try {
+        const { data, error } = await supabase.functions.invoke('generate-atp-v2', {
+            body: {
+                school_id:        currentUser.school_id,
+                core_subject_id:  coreSubjectId,
+                phase_id:         phaseId,
+                academic_year:    academicYear,
+                jp_per_week_sem1: jpPerWeekSem1,
+                weeks_sem1:       weeksSem1,
+                jp_per_week_sem2: jpPerWeekSem2,
+                weeks_sem2:       weeksSem2,
+            },
+        });
+
+        loadingEl.style.display = 'none';
+
+        if (error) throw new Error(error.message ?? 'Edge Function error');
+
+        const result = data?.data ?? data;
+        if (!result?.tujuan_pembelajaran?.length) throw new Error('Respons AI kosong atau format tidak valid');
+
+        openATPReviewModal(result, data?.metadata ?? {}, {
+            coreSubjectId, phaseId, subjectName, academicYear,
+        });
+    } catch (e) {
+        loadingEl.style.display = 'none';
+        throw e;
+    }
+}
+
+function openATPReviewModal(result, metadata, params) {
+    let overlay = document.getElementById('atp-review-modal');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'atp-review-modal';
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `<div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:760px;margin:auto;position:relative;max-height:90vh;display:flex;flex-direction:column">
+            <h2 style="margin:0 0 4px;font-size:18px">Hasil Generate ATP</h2>
+            <p id="atp-review-meta" style="margin:0 0 16px;font-size:12px;color:var(--color-text-muted)"></p>
+            <div id="atp-review-body" style="overflow-y:auto;flex:1"></div>
+            <div id="atp-review-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:16px;border-top:1px solid var(--color-border);flex-shrink:0"></div>
+        </div>`;
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+        document.body.appendChild(overlay);
+    }
+
+    const tps     = result.tujuan_pembelajaran ?? [];
+    const catatan = result.catatan ?? '';
+
+    const updateMeta = () => {
+        document.getElementById('atp-review-meta').textContent =
+            `${params.subjectName} · ${params.academicYear} · Total ${result.total_jp} JP`;
+    };
+
+    const viewRowHTML = (tp, i) => `
+        <td style="padding:8px;vertical-align:top;color:var(--color-text-muted)">${esc(String(tp.nomor ?? ''))}</td>
+        <td style="padding:8px;vertical-align:top">${esc(tp.deskripsi ?? '')}</td>
+        <td style="padding:8px;vertical-align:top;color:var(--color-text-muted);font-size:12px">${esc(tp.elemen_cp ?? '')}</td>
+        <td style="padding:8px;vertical-align:top;text-align:center;font-weight:600">${esc(String(tp.jp ?? ''))}</td>
+        <td style="padding:8px;vertical-align:top;font-size:12px">${esc(tp.materi_pokok ?? '')}</td>
+        <td style="padding:4px;vertical-align:top;width:36px">
+            <button class="tp-edit-btn btn btn-secondary btn-sm" data-i="${i}" style="padding:2px 8px;font-size:11px">✏</button>
+        </td>`;
+
+    const editRowHTML = (tp, i) => `
+        <td style="padding:4px;vertical-align:top;color:var(--color-text-muted)">${esc(String(tp.nomor ?? ''))}</td>
+        <td style="padding:4px;vertical-align:top"><textarea class="input tp-deskripsi" rows="3" style="width:100%;font-size:12px;resize:vertical">${esc(tp.deskripsi ?? '')}</textarea></td>
+        <td style="padding:4px;vertical-align:top"><input class="input tp-elemen" style="width:100%;font-size:12px" value="${esc(tp.elemen_cp ?? '')}"></td>
+        <td style="padding:4px;vertical-align:top"><input class="input tp-jp" type="number" min="1" style="width:52px;font-size:12px" value="${esc(String(tp.jp ?? ''))}"></td>
+        <td style="padding:4px;vertical-align:top"><input class="input tp-materi" style="width:100%;font-size:12px" value="${esc(tp.materi_pokok ?? '')}"></td>
+        <td style="padding:4px;vertical-align:top">
+            <button class="tp-save-btn btn btn-primary btn-sm" data-i="${i}" style="padding:2px 8px;font-size:11px;display:block;margin-bottom:4px">✓</button>
+            <button class="tp-cancel-btn btn btn-secondary btn-sm" data-i="${i}" style="padding:2px 8px;font-size:11px;display:block">✕</button>
+        </td>`;
+
+    document.getElementById('atp-review-body').innerHTML = `
+        <div style="overflow-x:auto;margin-bottom:12px">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead>
+                    <tr style="background:var(--color-bg-alt)">
+                        <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:40px">No</th>
+                        <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border)">Deskripsi TP</th>
+                        <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:140px">Elemen CP</th>
+                        <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:50px">JP</th>
+                        <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border);width:160px">Materi Pokok</th>
+                        <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:36px">Edit</th>
+                    </tr>
+                </thead>
+                <tbody id="atp-tp-tbody">
+                    ${tps.map((tp, i) => `<tr data-tp-index="${i}" style="border-bottom:1px solid var(--color-border)">${viewRowHTML(tp, i)}</tr>`).join('')}
+                    <tr style="background:var(--color-bg-alt);font-weight:600">
+                        <td colspan="3" style="padding:8px;text-align:right">Total JP</td>
+                        <td id="atp-total-jp" style="padding:8px;text-align:center">${esc(String(result.total_jp ?? 0))}</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        ${catatan ? `<p style="font-size:12px;color:var(--color-text-muted);margin:0">📝 ${esc(catatan)}</p>` : ''}`;
+
+    updateMeta();
+
+    document.getElementById('atp-tp-tbody').addEventListener('click', e => {
+        const editBtn   = e.target.closest('.tp-edit-btn');
+        const saveBtn   = e.target.closest('.tp-save-btn');
+        const cancelBtn = e.target.closest('.tp-cancel-btn');
+
+        if (editBtn) {
+            const i   = Number(editBtn.dataset.i);
+            const row = document.querySelector(`#atp-tp-tbody tr[data-tp-index="${i}"]`);
+            row.innerHTML = editRowHTML(tps[i], i);
+        }
+
+        if (saveBtn) {
+            const i   = Number(saveBtn.dataset.i);
+            const row = document.querySelector(`#atp-tp-tbody tr[data-tp-index="${i}"]`);
+            tps[i].deskripsi    = row.querySelector('.tp-deskripsi').value.trim();
+            tps[i].elemen_cp    = row.querySelector('.tp-elemen').value.trim();
+            tps[i].jp           = Number(row.querySelector('.tp-jp').value) || tps[i].jp;
+            tps[i].materi_pokok = row.querySelector('.tp-materi').value.trim();
+            result.total_jp     = tps.reduce((s, t) => s + (Number(t.jp) || 0), 0);
+            document.getElementById('atp-total-jp').textContent = String(result.total_jp);
+            updateMeta();
+            row.innerHTML = viewRowHTML(tps[i], i);
+        }
+
+        if (cancelBtn) {
+            const i   = Number(cancelBtn.dataset.i);
+            const row = document.querySelector(`#atp-tp-tbody tr[data-tp-index="${i}"]`);
+            row.innerHTML = viewRowHTML(tps[i], i);
+        }
+    });
+
+    document.getElementById('atp-review-actions').innerHTML = `
+        <button class="btn btn-secondary" id="atp-regen-btn">🔄 Generate Ulang</button>
+        <button class="btn btn-primary" id="atp-save-btn">💾 Simpan sebagai Draft</button>`;
+
+    document.getElementById('atp-regen-btn').addEventListener('click', () => {
+        overlay.style.display = 'none';
+        openConfirmGenerateModal(params.coreSubjectId, params.phaseId, params.subjectName, params.academicYear);
+    });
+
+    document.getElementById('atp-save-btn').addEventListener('click', async () => {
+        const saveBtn = document.getElementById('atp-save-btn');
+        saveBtn.disabled    = true;
+        saveBtn.textContent = '💾 Menyimpan…';
+        try {
+            await createTeacherDocument({
+                schoolId:      currentUser.school_id,
+                academicYear:  params.academicYear,
+                documentType:  'ATP',
+                coreSubjectId: params.coreSubjectId,
+                phaseId:       params.phaseId,
+                programId:     null,
+                scopeType:     'SEMUA_KELAS',
+                semester:      null,
+                tpUrutan:      null,
+                contentJson:   {
+                    judul:               `ATP ${params.subjectName} ${params.academicYear}`,
+                    tujuan_pembelajaran: result.tujuan_pembelajaran,
+                    total_jp:            result.total_jp,
+                    catatan:             result.catatan ?? '',
+                    model_version:       metadata.model ?? 'claude-haiku-4-5',
+                    generated_at:        metadata.generated_at ?? new Date().toISOString(),
+                },
+            });
+            saveBtn.textContent = '✓ Tersimpan!';
+            setTimeout(async () => {
+                overlay.style.display = 'none';
+                await loadPerangkatAjarDashboard();
+            }, 900);
+        } catch (e) {
+            saveBtn.disabled    = false;
+            saveBtn.textContent = '💾 Simpan sebagai Draft';
+            alert(`Gagal menyimpan: ${e.message}`);
+        }
+    });
+
+    overlay.style.display = 'flex';
+}
+
+// ── Program Tahunan (Prota) ───────────────────────────────────
+
+function openConfirmProtaModal(coreSubjectId, phaseId, subjName, atpDocId, ay) {
+    document.getElementById('confirm-prota-modal')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'confirm-prota-modal';
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = 'align-items:center';
+    overlay.innerHTML = `
+        <div class="modal-box" style="max-width:460px;width:100%">
+            <h2 style="margin:0 0 4px;font-size:18px">Generate Program Tahunan</h2>
+            <p style="margin:0 0 20px;font-size:13px;color:var(--color-text-muted)">${esc(subjName)} · ${esc(ay)}</p>
+
+            <div style="display:grid;gap:14px">
+                <label style="font-size:13px">
+                    Minggu Efektif Semester 1
+                    <input type="number" id="prota-weeks-sem1" class="input" value="18" min="10" max="24"
+                        style="margin-top:4px;width:100%">
+                </label>
+                <label style="font-size:13px">
+                    Minggu Efektif Semester 2
+                    <input type="number" id="prota-weeks-sem2" class="input" value="16" min="10" max="24"
+                        style="margin-top:4px;width:100%">
+                </label>
+            </div>
+
+            <p id="prota-confirm-msg" style="display:none;font-size:13px;margin-top:12px"></p>
+
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+                <button class="btn btn-secondary" id="prota-cancel-btn">Batal</button>
+                <button class="btn btn-primary" id="prota-generate-btn">✨ Generate</button>
+            </div>
+        </div>`;
+
+    document.body.appendChild(overlay);
+    overlay.style.display = 'flex';
+
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('prota-cancel-btn').addEventListener('click', () => overlay.remove());
+
+    document.getElementById('prota-generate-btn').addEventListener('click', async () => {
+        const msgEl    = document.getElementById('prota-confirm-msg');
+        const btn      = document.getElementById('prota-generate-btn');
+        const weeksSem1 = parseInt(document.getElementById('prota-weeks-sem1').value, 10);
+        const weeksSem2 = parseInt(document.getElementById('prota-weeks-sem2').value, 10);
+
+        if (!weeksSem1 || !weeksSem2 || weeksSem1 < 10 || weeksSem2 < 10) {
+            msgEl.style.color   = 'var(--color-danger)';
+            msgEl.textContent   = 'Minggu efektif harus antara 10–24.';
+            msgEl.style.display = '';
+            return;
+        }
+
+        btn.disabled    = true;
+        btn.textContent = 'Menghubungi AI…';
+        msgEl.style.display = 'none';
+        overlay.remove();
+
+        await generateProta({
+            coreSubjectId, phaseId, subjectName: subjName,
+            academicYear: ay, atpDocId, weeksSem1, weeksSem2,
+        });
+    });
+}
+
+async function generateProta({ coreSubjectId, phaseId, subjectName, academicYear, atpDocId, weeksSem1, weeksSem2 }) {
+    const loadingOverlay = document.createElement('div');
+    loadingOverlay.className = 'modal-overlay';
+    loadingOverlay.style.cssText = 'align-items:center;justify-content:center';
+    loadingOverlay.innerHTML = `
+        <div style="background:var(--color-bg);border-radius:var(--radius);padding:32px 40px;text-align:center;max-width:320px">
+            <div class="spinner" style="margin:0 auto 16px"></div>
+            <p style="margin:0;font-size:14px;font-weight:600">Claude sedang menyusun Program Tahunan…</p>
+            <p style="margin:8px 0 0;font-size:12px;color:var(--color-text-muted)">Mungkin butuh 15–30 detik</p>
+        </div>`;
+    document.body.appendChild(loadingOverlay);
+    loadingOverlay.style.display = 'flex';
+
+    try {
+        const { data, error } = await supabase.functions.invoke('generate-prota', {
+            body: {
+                school_id:       currentUser.school_id,
+                academic_year:   academicYear,
+                core_subject_id: coreSubjectId,
+                phase_id:        phaseId,
+                atp_doc_id:      atpDocId,
+                weeks_sem1:      weeksSem1,
+                weeks_sem2:      weeksSem2,
+            },
+        });
+        loadingOverlay.remove();
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error ?? 'Gagal generate Prota');
+        openProtaReviewModal(data.data, data.metadata, { coreSubjectId, phaseId, subjectName, academicYear, atpDocId, weeksSem1, weeksSem2 });
+    } catch (err) {
+        loadingOverlay.remove();
+        alert(`Gagal generate Prota: ${err.message ?? err}`);
+    }
+}
+
+function openProtaReviewModal(result, metadata, params) {
+    document.getElementById('prota-review-modal')?.remove();
+
+    const renderDistribusi = (distribusi) => distribusi.map(row => {
+        const isPas = row.keterangan === 'PAS' || row.keterangan === 'PAT' || row.keterangan === 'CADANGAN';
+        return `<tr style="border-bottom:1px solid var(--color-border);${isPas ? 'background:var(--color-bg-alt);font-style:italic;color:var(--color-text-muted)' : ''}">
+            <td style="padding:7px 8px;text-align:center;white-space:nowrap">${row.minggu}</td>
+            <td style="padding:7px 8px">${esc(row.materi ?? '')}</td>
+            <td style="padding:7px 8px;text-align:center">${row.jp > 0 ? row.jp : '—'}</td>
+            <td style="padding:7px 8px;text-align:center;font-size:11px;color:var(--color-text-muted)">${esc(row.keterangan ?? '')}</td>
+        </tr>`;
+    }).join('');
+
+    const tableHeader = `<thead><tr style="background:var(--color-bg-alt)">
+        <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:60px">Minggu</th>
+        <th style="padding:8px;text-align:left;border-bottom:2px solid var(--color-border)">Materi / TP</th>
+        <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:50px">JP</th>
+        <th style="padding:8px;text-align:center;border-bottom:2px solid var(--color-border);width:90px">Keterangan</th>
+    </tr></thead>`;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'prota-review-modal';
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = 'align-items:flex-start;padding:24px 16px;overflow-y:auto';
+    overlay.innerHTML = `
+        <div class="modal-box" style="max-width:700px;width:100%">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;gap:8px">
+                <div>
+                    <h2 style="margin:0 0 4px;font-size:18px">Hasil Generate Program Tahunan</h2>
+                    <p style="margin:0;font-size:13px;color:var(--color-text-muted)">${esc(params.subjectName)} · ${esc(params.academicYear)}</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="prota-close-btn" style="flex-shrink:0">✕</button>
+            </div>
+
+            ${result.judul ? `<p style="margin:0 0 16px;font-size:14px;font-weight:600">${esc(result.judul)}</p>` : ''}
+
+            <h3 style="font-size:14px;margin:0 0 8px">Semester 1 — ${result.semester_1?.minggu_efektif ?? params.weeksSem1} minggu efektif</h3>
+            <div style="overflow-x:auto;margin-bottom:20px">
+                <table style="width:100%;border-collapse:collapse;font-size:13px">
+                    ${tableHeader}
+                    <tbody>${renderDistribusi(result.semester_1?.distribusi ?? [])}</tbody>
+                </table>
+            </div>
+
+            <h3 style="font-size:14px;margin:0 0 8px">Semester 2 — ${result.semester_2?.minggu_efektif ?? params.weeksSem2} minggu efektif</h3>
+            <div style="overflow-x:auto;margin-bottom:20px">
+                <table style="width:100%;border-collapse:collapse;font-size:13px">
+                    ${tableHeader}
+                    <tbody>${renderDistribusi(result.semester_2?.distribusi ?? [])}</tbody>
+                </table>
+            </div>
+
+            ${result.catatan ? `<p style="margin:0 0 16px;font-size:12px;color:var(--color-text-muted);background:var(--color-bg-alt);padding:10px 12px;border-radius:6px">${esc(result.catatan)}</p>` : ''}
+
+            <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap" id="prota-review-actions">
+                <button class="btn btn-secondary" id="prota-regen-btn">🔄 Generate Ulang</button>
+                <button class="btn btn-primary" id="prota-save-btn">💾 Simpan sebagai Draft</button>
+            </div>
+            <p id="prota-save-msg" style="display:none;font-size:13px;margin-top:8px;text-align:right"></p>
+        </div>`;
+
+    document.body.appendChild(overlay);
+    overlay.style.display = 'flex';
+
+    document.getElementById('prota-close-btn').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+    document.getElementById('prota-regen-btn').addEventListener('click', () => {
+        overlay.remove();
+        openConfirmProtaModal(params.coreSubjectId, params.phaseId, params.subjectName, params.atpDocId, params.academicYear);
+    });
+
+    document.getElementById('prota-save-btn').addEventListener('click', async () => {
+        const saveBtn = document.getElementById('prota-save-btn');
+        const msgEl   = document.getElementById('prota-save-msg');
+        saveBtn.disabled    = true;
+        saveBtn.textContent = '💾 Menyimpan…';
+        try {
+            await createTeacherDocument({
+                schoolId:      currentUser.school_id,
+                academicYear:  params.academicYear,
+                documentType:  'PROGRAM_TAHUNAN',
+                coreSubjectId: params.coreSubjectId,
+                phaseId:       params.phaseId,
+                programId:     null,
+                scopeType:     'SEMUA_KELAS',
+                semester:      null,
+                tpUrutan:      null,
+                contentJson:   {
+                    judul:        result.judul,
+                    semester_1:   result.semester_1,
+                    semester_2:   result.semester_2,
+                    catatan:      result.catatan ?? '',
+                    model_version: metadata?.model ?? 'claude-haiku-4-5',
+                    generated_at:  metadata?.generated_at ?? new Date().toISOString(),
+                    atp_doc_id:    metadata?.atp_doc_id ?? params.atpDocId,
+                },
+            });
+            saveBtn.textContent     = '✓ Tersimpan!';
+            msgEl.style.color       = 'var(--color-success,#16a34a)';
+            msgEl.textContent       = '✓ Program Tahunan berhasil disimpan sebagai Draft.';
+            msgEl.style.display     = '';
+            setTimeout(async () => {
+                overlay.remove();
+                await loadPerangkatAjarDashboard();
+            }, 900);
+        } catch (err) {
+            saveBtn.disabled    = false;
+            saveBtn.textContent = '💾 Simpan sebagai Draft';
+            msgEl.style.color   = 'var(--color-danger)';
+            msgEl.textContent   = `✗ ${fe(err)}`;
+            msgEl.style.display = '';
+        }
+    });
+}
+
+// ── ATP Picker & Upload ──────────────────────────────────────
+
+function openGenerateATPPicker(coreSubjects, phases, onSubmit) {
+    document.getElementById('generate-atp-picker-modal')?.remove();
+
+    const subjectOptions = coreSubjects.map(s =>
+        `<option value="${esc(s.subject_id)}">${esc(s.name)}</option>`
+    ).join('');
+    const phaseOptions = phases.map(p =>
+        `<option value="${esc(p.phase_id)}">${esc(p.name)}</option>`
+    ).join('');
+
+    const picker = document.createElement('div');
+    picker.id = 'generate-atp-picker-modal';
+    picker.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000';
+    picker.innerHTML = `
+        <div style="background:var(--color-bg);border-radius:12px;padding:24px;width:min(400px,90vw);max-height:90vh;overflow-y:auto">
+            <h3 style="margin:0 0 16px">Pilih Mata Pelajaran</h3>
+            ${coreSubjects.length === 0 ? '<p style="color:var(--color-danger)">Tidak ada mata pelajaran tersedia.</p>' : ''}
+            <div class="field" style="margin-bottom:12px">
+                <label for="atp-picker-subject">Mata Pelajaran</label>
+                <select id="atp-picker-subject" class="input">${subjectOptions}</select>
+            </div>
+            <div class="field" style="margin-bottom:16px">
+                <label for="atp-picker-phase">Fase</label>
+                <select id="atp-picker-phase" class="input">${phaseOptions}</select>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+                <button id="atp-picker-cancel" class="btn btn-secondary">Batal</button>
+                <button id="atp-picker-submit" class="btn btn-primary" ${coreSubjects.length === 0 ? 'disabled' : ''}>Lanjut →</button>
+            </div>
+        </div>`;
+
+    document.body.appendChild(picker);
+
+    const close = () => picker.remove();
+    document.getElementById('atp-picker-cancel').onclick = close;
+    picker.addEventListener('click', e => { if (e.target === picker) close(); });
+
+    document.getElementById('atp-picker-submit').onclick = () => {
+        const subjId  = document.getElementById('atp-picker-subject').value;
+        const phaseId = document.getElementById('atp-picker-phase').value;
+        const subjName = coreSubjects.find(s => s.subject_id === subjId)?.name ?? '';
+        close();
+        onSubmit(subjId, phaseId, subjName);
+    };
+}
+
+async function uploadATPFlow(coreSubjects, phases, ay) {
+    const fileInput = document.createElement('input');
+    fileInput.type   = 'file';
+    fileInput.accept = '.pdf,.docx';
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+
+    fileInput.onchange = () => {
+        const file = fileInput.files?.[0];
+        fileInput.remove();
+        if (!file) return;
+
+        if (file.size > 10 * 1024 * 1024) {
+            alert('Ukuran file melebihi batas 10MB. Harap pilih file yang lebih kecil.');
+            return;
+        }
+        const isPdf  = file.name.toLowerCase().endsWith('.pdf');
+        const isDocx = file.name.toLowerCase().endsWith('.docx');
+        if (!isPdf && !isDocx) {
+            alert('Format file tidak didukung. Gunakan PDF atau DOCX.');
+            return;
+        }
+
+        const fileType = isPdf ? 'pdf' : 'docx';
+        const fileName = file.name;
+
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onerror = () => { alert('Gagal membaca file. Coba lagi.'); };
+        reader.onload  = () => {
+            const base64 = reader.result.split(',')[1];
+
+            openGenerateATPPicker(coreSubjects, phases, async (subjId, phaseId, subjName, semester) => {
+                const loadingEl = document.createElement('div');
+                loadingEl.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:2000';
+                loadingEl.innerHTML = `
+                    <div style="background:var(--color-bg);border-radius:12px;padding:32px 24px;text-align:center;max-width:360px">
+                        <div style="font-size:36px;margin-bottom:12px">📄</div>
+                        <p style="margin:0 0 4px;font-weight:600">Claude sedang membaca dokumen ATP Anda…</p>
+                        <p style="margin:0;font-size:13px;color:var(--color-text-muted)">estimasi 15–30 detik</p>
+                    </div>`;
+                document.body.appendChild(loadingEl);
+
+                try {
+                    const { data, error } = await supabase.functions.invoke('parse-atp', {
+                        body: {
+                            school_id:       currentUser.school_id,
+                            file_base64:     base64,
+                            file_type:       fileType,
+                            file_name:       fileName,
+                            core_subject_id: subjId,
+                            phase_id:        phaseId,
+                        },
+                    });
+                    loadingEl.remove();
+                    if (error) throw new Error(error.message ?? 'Edge Function error');
+                    if (!data?.success) throw new Error(data?.error ?? 'Gagal membaca dokumen');
+                    openATPReviewModal(data.data, data.metadata ?? {}, {
+                        coreSubjectId: subjId,
+                        phaseId,
+                        subjectName:   subjName,
+                        academicYear:  ay,
+                        semester,
+                    });
+                } catch (e) {
+                    loadingEl.remove();
+                    alert('Gagal membaca dokumen: ' + (e?.message ?? 'Error tidak diketahui'));
+                }
+            });
+        };
+    };
+
+    fileInput.click();
+}
+
+// ═══════════════════════════════════════════════════════
+// TAB PENILAIAN — logika sub-tab di dalam tab Jurnal
+// ═══════════════════════════════════════════════════════
+
+let _penilaianInit = false;
+let _penilaianCtx  = { kelasId: null, subjectId: null, year: null, semester: null };
+let _penilaianTpList = [];
+
+
+async function initPenilaianTab() {
+    if (_penilaianInit) { await loadPenilaianContext(); return; }
+    _penilaianInit = true;
+
+    // ── Switching sub-tab jurnal (Catatan ↔ Penilaian) ──
+    document.querySelectorAll('.jurnal-sub-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const sub = btn.dataset.jurnalSub;
+            document.querySelectorAll('.jurnal-sub-btn').forEach(b => {
+                const active = b.dataset.jurnalSub === sub;
+                b.style.fontWeight   = active ? '600' : '400';
+                b.style.borderBottom = active
+                    ? '2px solid var(--color-primary)'
+                    : '2px solid transparent';
+                b.style.color = active
+                    ? 'var(--color-primary)'
+                    : 'var(--color-text-muted)';
+            });
+            document.getElementById('jurnal-sub-catatan').style.display =
+                sub === 'catatan' ? '' : 'none';
+            document.getElementById('jurnal-sub-penilaian').style.display =
+                sub === 'penilaian' ? '' : 'none';
+            if (sub === 'penilaian') await loadPenilaianContext();
+        });
+    });
+
+    // ── Switching sub-sub-tab penilaian (Setup | Input | Hasil) ──
+    document.querySelectorAll('.penilaian-sub-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const sub = btn.dataset.penilaianSub;
+            document.querySelectorAll('.penilaian-sub-btn').forEach(b => {
+                const active = b.dataset.penilaianSub === sub;
+                b.style.background = active
+                    ? 'var(--color-primary)'
+                    : 'var(--color-surface-alt)';
+                b.style.color = active ? '#fff' : 'var(--color-text)';
+            });
+            ['setup', 'input', 'hasil'].forEach(s => {
+                document.getElementById(`penilaian-sub-${s}`).style.display =
+                    s === sub ? '' : 'none';
+            });
+            if (sub === 'input') await initPenilaianInputTab();
+            if (sub === 'hasil') await initPenilaianHasilTab();
+        });
+    });
+
+    // ── Context selectors ──
+    const selKelas = document.getElementById('penilaian-kelas-select');
+    const selMapel = document.getElementById('penilaian-mapel-select');
+    const selYear  = document.getElementById('penilaian-year-select');
+    const selSem   = document.getElementById('penilaian-semester-select');
+
+    // Populate tahun ajaran (tahun lalu, tahun ini, tahun depan)
+    const yr = new Date().getFullYear();
+    [yr - 1, yr, yr + 1].forEach(y => {
+        const opt = document.createElement('option');
+        opt.value = `${y}/${y + 1}`;
+        opt.textContent = `${y}/${y + 1}`;
+        if (y === yr) opt.selected = true;
+        selYear.appendChild(opt);
+    });
+    _penilaianCtx.year     = selYear.value;
+    _penilaianCtx.semester = parseInt(selSem.value);
+
+    // Populate kelas dari teaching assignments guru
+    await loadPenilaianKelas(selKelas);
+
+    selKelas.addEventListener('change', async () => {
+        _penilaianCtx.kelasId = selKelas.value || null;
+        await loadPenilaianMapel(selMapel, selKelas.value);
+        _penilaianCtx.subjectId = null;
+        await onPenilaianContextChange();
+    });
+    selMapel.addEventListener('change', async () => {
+        _penilaianCtx.subjectId = selMapel.value || null;
+        await onPenilaianContextChange();
+    });
+    selYear.addEventListener('change', async () => {
+        _penilaianCtx.year = selYear.value || null;
+        await onPenilaianContextChange();
+    });
+    selSem.addEventListener('change', async () => {
+        _penilaianCtx.semester = parseInt(selSem.value) || null;
+        await onPenilaianContextChange();
+    });
+
+    // ── Setup TP: tombol tambah ──
+    document.getElementById('penilaian-add-tp').addEventListener('click', () => {
+        openTpForm(null);
+    });
+
+    // ── Setup TP: download template Excel ──
+    document.getElementById('penilaian-download-template').addEventListener('click', () => {
+        downloadCpTpTemplate();
+    });
+
+    // ── Setup TP: upload CP & TP via Excel ──
+    document.getElementById('penilaian-upload-btn').addEventListener('click', () => {
+        document.getElementById('penilaian-upload-input').click();
+    });
+    document.getElementById('penilaian-upload-input').addEventListener('change', async e => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        await parseCpTpExcel(file);
+    });
+    document.getElementById('upload-cancel-btn').addEventListener('click', () => {
+        document.getElementById('penilaian-upload-modal').style.display = 'none';
+    });
+    document.getElementById('upload-modal-backdrop').addEventListener('click', () => {
+        document.getElementById('penilaian-upload-modal').style.display = 'none';
+    });
+
+    // ── Setup TP: tombol batal di form ──
+    document.getElementById('penilaian-cancel-tp').addEventListener('click', () => {
+        document.getElementById('penilaian-tp-form-card').style.display = 'none';
+        document.getElementById('penilaian-cp-panel').style.display        = 'none';
+        document.getElementById('penilaian-cp-elemen-picker').style.display = 'none';
+    });
+
+    // ── Setup TP: berlaku_untuk toggle ──
+    document.getElementById('penilaian-tp-berlaku').addEventListener('change', e => {
+        document.getElementById('penilaian-tp-kelas-list').style.display =
+            e.target.value === 'KELAS_TERTENTU' ? '' : 'none';
+    });
+
+    // ── Setup TP: tambah baris KKTP ──
+    document.getElementById('penilaian-add-kktp').addEventListener('click', () => {
+        addKktpRow();
+    });
+
+    // ── Setup TP: simpan ──
+    document.getElementById('penilaian-save-tp').addEventListener('click', async () => {
+        await saveTp();
+    });
+
+    // ── Grading settings: formatif toggle ──
+    document.getElementById('penilaian-formatif-included')
+        .addEventListener('change', e => {
+            document.getElementById('penilaian-formatif-options').style.display =
+                e.target.checked ? '' : 'none';
+        });
+
+    // ── Grading settings: metode toggle ──
+    document.getElementById('penilaian-metode-formatif')
+        .addEventListener('change', e => {
+            document.getElementById('penilaian-bobot-row').style.display =
+                e.target.value === 'BOBOT' ? 'flex' : 'none';
+        });
+
+    // ── Grading settings: simpan ──
+    document.getElementById('penilaian-save-settings')
+        .addEventListener('click', async () => {
+            await saveGradingSettings();
+        });
+
+    // ── Input Nilai: tombol simpan ──
+    document.getElementById('penilaian-save-nilai')
+        .addEventListener('click', async () => {
+            await saveInputNilai();
+        });
+}
+
+async function loadPenilaianContext() {
+    const { kelasId, subjectId, year, semester } = _penilaianCtx;
+    if (kelasId && subjectId && year && semester) {
+        await loadTpList();
+        await loadGradingSettings();
+    }
+}
+
+async function loadPenilaianKelas(selEl) {
+    selEl.innerHTML = '<option value="">— Pilih Kelas —</option>';
+    try {
+        const { data, error } = await supabase
+            .from('teaching_assignments')
+            .select('class_id, classes(name)')
+            .eq('school_id', currentUser.school_id)
+            .eq('user_id', currentUser.user_id)
+            .eq('is_active', true)
+            .order('class_id');
+        if (error) throw error;
+        const seen = new Set();
+        (data || []).forEach(row => {
+            if (seen.has(row.class_id)) return;
+            seen.add(row.class_id);
+            const opt = document.createElement('option');
+            opt.value = row.class_id;
+            opt.textContent = row.classes?.name || row.class_id;
+            selEl.appendChild(opt);
+        });
+    } catch (e) {
+        console.error('loadPenilaianKelas:', e);
+    }
+}
+
+async function loadPenilaianMapel(selEl, kelasId) {
+    selEl.innerHTML = '<option value="">— Pilih Mapel —</option>';
+    if (!kelasId) return;
+    try {
+        const { data, error } = await supabase
+            .from('teaching_assignments')
+            .select('subject_id, subjects(name)')
+            .eq('school_id', currentUser.school_id)
+            .eq('class_id', kelasId)
+            .eq('user_id', currentUser.user_id)
+            .eq('is_active', true);
+        if (error) throw error;
+        const seen = new Set();
+        (data || []).forEach(row => {
+            if (seen.has(row.subject_id)) return;
+            seen.add(row.subject_id);
+            const opt = document.createElement('option');
+            opt.value = row.subject_id;
+            opt.textContent = row.subjects?.name || row.subject_id;
+            selEl.appendChild(opt);
+        });
+    } catch (e) {
+        console.error('loadPenilaianMapel:', e);
+    }
+}
+
+async function onPenilaianContextChange() {
+    const { kelasId, subjectId, year, semester } = _penilaianCtx;
+    if (!kelasId || !subjectId || !year || !semester) {
+        document.getElementById('penilaian-tp-list').innerHTML =
+            '<p class="hint">Pilih kelas dan mapel untuk melihat TP.</p>';
+        return;
+    }
+    await loadTpList();
+    await loadGradingSettings();
+}
+
+async function loadTpList() {
+    const { subjectId, year, semester } = _penilaianCtx;
+    const listEl = document.getElementById('penilaian-tp-list');
+    listEl.innerHTML = '<p class="hint">Memuat…</p>';
+    try {
+        const { data, error } = await supabase
+            .from('learning_objectives')
+            .select('*')
+            .eq('school_id', currentUser.school_id)
+            .eq('subject_id', subjectId)
+            .eq('academic_year', year)
+            .eq('semester', semester)
+            .eq('is_active', true)
+            .order('urutan');
+        if (error) throw error;
+        _penilaianTpList = data || [];
+        renderTpList(listEl);
+    } catch (e) {
+        listEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat TP: ${esc(e.message)}</p>`;
+    }
+}
+
+function renderTpList(listEl) {
+    if (!_penilaianTpList.length) {
+        listEl.innerHTML = '<p class="hint">Belum ada TP. Klik "+ Tambah TP" untuk mulai.</p>';
+        return;
+    }
+    listEl.innerHTML = _penilaianTpList.map(tp => `
+        <div class="tp-row" style="display:flex; justify-content:space-between;
+             align-items:flex-start; padding:10px 0;
+             border-bottom:1px solid var(--color-border)">
+            <div>
+                <strong>${esc(tp.kode_tp)}</strong>
+                <span style="margin-left:8px; color:var(--color-text-muted);
+                             font-size:13px">${esc(tp.deskripsi_tp)}</span>
+            </div>
+            <div style="display:flex; gap:6px; flex-shrink:0">
+                <button class="btn btn-ghost btn-sm"
+                        onclick="openTpForm('${esc(tp.learning_objective_id)}')">
+                    Edit
+                </button>
+                <button class="btn btn-ghost btn-sm"
+                        style="color:var(--color-danger)"
+                        onclick="deleteTp('${esc(tp.learning_objective_id)}')">
+                    Hapus
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function openTpForm(loId) {
+    const card  = document.getElementById('penilaian-tp-form-card');
+    const title = document.getElementById('penilaian-tp-form-title');
+    document.getElementById('penilaian-tp-id').value        = loId || '';
+    document.getElementById('penilaian-tp-kode').value      = '';
+    document.getElementById('penilaian-tp-deskripsi').value = '';
+    document.getElementById('penilaian-tp-urutan').value    = _penilaianTpList.length + 1;
+    document.getElementById('penilaian-tp-berlaku').value   = 'SEMUA_KELAS';
+    document.getElementById('penilaian-tp-kelas-list').style.display = 'none';
+    document.getElementById('penilaian-kktp-rows').innerHTML = '';
+
+    let preselectedElementId = null;
+    if (loId) {
+        title.textContent = 'Edit Tujuan Pembelajaran';
+        const tp = _penilaianTpList.find(t => t.learning_objective_id === loId);
+        if (tp) {
+            document.getElementById('penilaian-tp-kode').value      = tp.kode_tp;
+            document.getElementById('penilaian-tp-deskripsi').value  = tp.deskripsi_tp;
+            document.getElementById('penilaian-tp-urutan').value     = tp.urutan;
+            document.getElementById('penilaian-tp-berlaku').value    = tp.berlaku_untuk;
+            if (tp.berlaku_untuk === 'KELAS_TERTENTU') {
+                document.getElementById('penilaian-tp-kelas-list').style.display = '';
+            }
+            preselectedElementId = tp.element_id || null;
+        }
+        await loadKktpRows(loId);
+    } else {
+        title.textContent = 'Tambah Tujuan Pembelajaran';
+        addKktpRow();
+    }
+
+    await populateTpKelasCheckboxes(loId);
+    card.style.display = '';
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Muat panel CP secara async (tidak memblokir tampilan form)
+    loadCpPanel(loId, preselectedElementId);
+}
+
+async function loadCpPanel(loId, preselectedElementId) {
+    const panel   = document.getElementById('penilaian-cp-panel');
+    const loading = document.getElementById('cp-panel-loading');
+    const found   = document.getElementById('cp-panel-found');
+    const notFound= document.getElementById('cp-panel-not-found');
+    const picker  = document.getElementById('penilaian-cp-elemen-picker');
+    const warning = document.getElementById('penilaian-duplikat-warning');
+
+    // Reset state
+    panel.style.display   = '';
+    loading.style.display = '';
+    found.style.display   = 'none';
+    notFound.style.display= 'none';
+    picker.style.display  = 'none';
+    warning.style.display = 'none';
+    document.getElementById('penilaian-tp-element-id').innerHTML =
+        '<option value="">— Tidak dikaitkan ke elemen CP —</option>';
+
+    try {
+        const { kelasId, subjectId } = _penilaianCtx;
+        if (!kelasId || !subjectId) {
+            panel.style.display = 'none';
+            return;
+        }
+
+        const ctx = await getClassProgramContext(kelasId);
+        const cp  = await getCpForSubject(subjectId, ctx.program_code, ctx.grade_level);
+
+        loading.style.display = 'none';
+
+        if (!cp || !cp.found) {
+            notFound.style.display = '';
+            return;
+        }
+
+        // Isi header
+        const badge = document.getElementById('cp-panel-badge');
+        badge.textContent = cp.confidence;
+        badge.style.background = cp.confidence === 'HIGH'
+            ? 'var(--color-primary)'
+            : cp.confidence === 'MEDIUM' ? '#f59e0b' : '#ef4444';
+        document.getElementById('cp-panel-subject-name').textContent = cp.core_subject_name || '';
+        document.getElementById('cp-panel-bskap').textContent = cp.bskap_ref ? `(${cp.bskap_ref})` : '';
+        document.getElementById('cp-panel-umum').textContent  = cp.cp_umum || '';
+
+        // Render daftar elemen (collapsed per elemen)
+        const elemenList = document.getElementById('cp-panel-elemen-list');
+        elemenList.innerHTML = '';
+        (cp.elemen || []).forEach(el => {
+            const item = document.createElement('div');
+            item.style.cssText = 'border-top:1px solid var(--color-border); padding:6px 0';
+            item.innerHTML = `
+                <div style="display:flex; align-items:center; gap:6px; cursor:pointer"
+                     onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display?'':'block'">
+                    <span style="font-size:12px; color:var(--color-text-muted)">▶</span>
+                    <span style="font-size:13px; font-weight:600">${esc(el.nama_elemen)}</span>
+                </div>
+                <p style="display:none; font-size:12px; color:var(--color-text-muted); margin:4px 0 0 18px; line-height:1.5">${esc(el.deskripsi_cp || '')}</p>
+            `;
+            elemenList.appendChild(item);
+        });
+
+        found.style.display = '';
+
+        // Isi dropdown picker
+        const sel = document.getElementById('penilaian-tp-element-id');
+        (cp.elemen || []).forEach(el => {
+            const opt = document.createElement('option');
+            opt.value       = el.element_id;
+            opt.textContent = `${el.element_order}. ${el.nama_elemen}`;
+            sel.appendChild(opt);
+        });
+        if (preselectedElementId) sel.value = preselectedElementId;
+
+        picker.style.display = '';
+
+        // Event: cek duplikat saat elemen dipilih
+        sel.onchange = async () => {
+            warning.style.display = 'none';
+            if (!sel.value) return;
+            try {
+                const dupes = await checkElementDuplicate(
+                    sel.value, currentUser.school_id, loId || null
+                );
+                if (dupes.length > 0) {
+                    const lines = dupes.map(d =>
+                        `• ${esc(d.guru_nama)} — ${esc(d.kelas_nama)} — ${esc(d.kode_tp)}`
+                    ).join('<br>');
+                    warning.innerHTML = `⚠️ Elemen ini sudah digunakan di TP lain:<br>${lines}`;
+                    warning.style.display = '';
+                }
+            } catch (e) {
+                console.error('checkElementDuplicate:', e);
+            }
+        };
+
+        // Jika mode Edit dan sudah ada element_id, langsung cek duplikat
+        if (preselectedElementId && sel.value) sel.dispatchEvent(new Event('change'));
+
+    } catch (e) {
+        console.error('loadCpPanel:', e);
+        loading.style.display = 'none';
+        notFound.style.display = '';
+    }
+}
+
+async function populateTpKelasCheckboxes(loId) {
+    const container = document.getElementById('penilaian-tp-kelas-checkboxes');
+    container.innerHTML = '';
+    try {
+        const { data } = await supabase
+            .from('teaching_assignments')
+            .select('class_id, classes(name)')
+            .eq('school_id', currentUser.school_id)
+            .eq('subject_id', _penilaianCtx.subjectId)
+            .eq('user_id', currentUser.user_id)
+            .eq('is_active', true);
+
+        let selectedIds = new Set();
+        if (loId) {
+            const { data: loc } = await supabase
+                .from('learning_objective_classes')
+                .select('class_id')
+                .eq('learning_objective_id', loId);
+            (loc || []).forEach(r => selectedIds.add(r.class_id));
+        }
+
+        (data || []).forEach(row => {
+            const label = document.createElement('label');
+            label.style.cssText = 'display:flex; align-items:center; gap:6px; cursor:pointer';
+            label.innerHTML = `
+                <input type="checkbox" value="${esc(row.class_id)}"
+                       ${selectedIds.has(row.class_id) ? 'checked' : ''}>
+                ${esc(row.classes?.name || row.class_id)}
+            `;
+            container.appendChild(label);
+        });
+    } catch (e) {
+        console.error('populateTpKelasCheckboxes:', e);
+    }
+}
+
+async function loadKktpRows(loId) {
+    const container = document.getElementById('penilaian-kktp-rows');
+    container.innerHTML = '';
+    try {
+        const { data } = await supabase
+            .from('assessment_criteria')
+            .select('*')
+            .eq('learning_objective_id', loId)
+            .eq('school_id', currentUser.school_id)
+            .order('batas_bawah');
+        (data || []).forEach(c => addKktpRow(c));
+    } catch (e) {
+        console.error('loadKktpRows:', e);
+    }
+}
+
+function addKktpRow(criterion = null) {
+    const container = document.getElementById('penilaian-kktp-rows');
+    const row = document.createElement('div');
+    row.className = 'kktp-row';
+    row.dataset.criterionId = criterion?.criterion_id || '';
+    row.style.cssText = 'display:flex; gap:8px; align-items:center; margin-bottom:8px';
+    row.innerHTML = `
+        <input type="number" class="input kktp-bawah" placeholder="Batas bawah"
+               min="0" max="100" step="0.01" value="${criterion?.batas_bawah ?? ''}"
+               style="width:100px">
+        <span style="color:var(--color-text-muted)">–</span>
+        <input type="number" class="input kktp-atas" placeholder="Batas atas"
+               min="0" max="100" step="0.01" value="${criterion?.batas_atas ?? ''}"
+               style="width:100px">
+        <input type="text" class="input kktp-predikat" placeholder="Predikat"
+               value="${esc(criterion?.predikat || '')}" style="flex:1">
+        <input type="text" class="input kktp-keterangan" placeholder="Keterangan (opsional)"
+               value="${esc(criterion?.keterangan || '')}" style="flex:2">
+        <button type="button" class="btn btn-ghost btn-sm"
+                style="color:var(--color-danger); flex-shrink:0"
+                onclick="this.closest('.kktp-row').remove()">×</button>
+    `;
+    container.appendChild(row);
+}
+
+async function saveTp() {
+    const loId     = document.getElementById('penilaian-tp-id').value || null;
+    const kode     = document.getElementById('penilaian-tp-kode').value.trim();
+    const desk     = document.getElementById('penilaian-tp-deskripsi').value.trim();
+    const urutan   = parseInt(document.getElementById('penilaian-tp-urutan').value) || 1;
+    const berlaku  = document.getElementById('penilaian-tp-berlaku').value;
+    const elementIdRaw = document.getElementById('penilaian-tp-element-id')?.value || '';
+    const elementId    = elementIdRaw || null;
+    const { subjectId, year, semester } = _penilaianCtx;
+
+    if (!kode || !desk) {
+        showPenilaianMsg('settings', 'Kode TP dan deskripsi wajib diisi.', 'error');
+        return;
+    }
+    if (!subjectId || !year || !semester) {
+        showPenilaianMsg('settings', 'Pilih kelas, mapel, dan semester terlebih dahulu.', 'error');
+        return;
+    }
+
+    try {
+        let savedLoId = loId;
+        if (loId) {
+            const { error } = await supabase
+                .from('learning_objectives')
+                .update({ kode_tp: kode, deskripsi_tp: desk, urutan, berlaku_untuk: berlaku, element_id: elementId })
+                .eq('learning_objective_id', loId)
+                .eq('school_id', currentUser.school_id);
+            if (error) throw error;
+        } else {
+            const { data, error } = await supabase
+                .from('learning_objectives')
+                .insert({
+                    school_id:       currentUser.school_id,
+                    teacher_user_id: currentUser.user_id,
+                    subject_id:      subjectId,
+                    academic_year:   year,
+                    semester,
+                    kode_tp:         kode,
+                    deskripsi_tp:    desk,
+                    urutan,
+                    berlaku_untuk:   berlaku,
+                    element_id:      elementId
+                })
+                .select('learning_objective_id')
+                .single();
+            if (error) throw error;
+            savedLoId = data.learning_objective_id;
+        }
+
+        if (berlaku === 'KELAS_TERTENTU') {
+            await supabase
+                .from('learning_objective_classes')
+                .delete()
+                .eq('learning_objective_id', savedLoId);
+            const checked = [...document.querySelectorAll(
+                '#penilaian-tp-kelas-checkboxes input:checked'
+            )];
+            if (checked.length) {
+                const { error } = await supabase
+                    .from('learning_objective_classes')
+                    .insert(checked.map(cb => ({
+                        learning_objective_id: savedLoId,
+                        class_id:   cb.value,
+                        school_id:  currentUser.school_id
+                    })));
+                if (error) throw error;
+            }
+        } else {
+            await supabase
+                .from('learning_objective_classes')
+                .delete()
+                .eq('learning_objective_id', savedLoId);
+        }
+
+        // Hapus KKTP lama, insert baru
+        await supabase
+            .from('assessment_criteria')
+            .delete()
+            .eq('learning_objective_id', savedLoId)
+            .eq('school_id', currentUser.school_id);
+        const criteria = [...document.querySelectorAll('.kktp-row')].map(row => ({
+            learning_objective_id: savedLoId,
+            school_id:   currentUser.school_id,
+            batas_bawah: parseFloat(row.querySelector('.kktp-bawah').value),
+            batas_atas:  parseFloat(row.querySelector('.kktp-atas').value),
+            predikat:    row.querySelector('.kktp-predikat').value.trim(),
+            keterangan:  row.querySelector('.kktp-keterangan').value.trim() || null
+        })).filter(c => !isNaN(c.batas_bawah) && !isNaN(c.batas_atas) && c.predikat);
+        if (criteria.length) {
+            const { error } = await supabase
+                .from('assessment_criteria')
+                .insert(criteria);
+            if (error) throw error;
+        }
+
+        document.getElementById('penilaian-tp-form-card').style.display = 'none';
+        document.getElementById('penilaian-cp-panel').style.display        = 'none';
+        document.getElementById('penilaian-cp-elemen-picker').style.display = 'none';
+        await loadTpList();
+
+    } catch (e) {
+        showPenilaianMsg('settings', `Gagal menyimpan TP: ${esc(e.message)}`, 'error');
+    }
+}
+
+async function deleteTp(loId) {
+    if (!confirm('Hapus TP ini? KKTP dan nilai yang terkait akan ikut terhapus.')) return;
+    try {
+        const { error } = await supabase
+            .from('learning_objectives')
+            .update({ is_active: false })
+            .eq('learning_objective_id', loId)
+            .eq('school_id', currentUser.school_id);
+        if (error) throw error;
+        await loadTpList();
+    } catch (e) {
+        alert(`Gagal hapus TP: ${esc(e.message)}`);
+    }
+}
+
+// ── Download Template Excel CP & TP ──────────────────────────────────────────
+
+function downloadCpTpTemplate() {
+    const wb = XLSX.utils.book_new();
+
+    const wsCP = XLSX.utils.aoa_to_sheet([
+        ['Elemen CP', 'Deskripsi CP'],
+        ['Elemen 1', 'Peserta didik mampu memahami...'],
+        ['Elemen 2', 'Peserta didik mampu menerapkan...'],
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsCP, 'Capaian Pembelajaran');
+
+    const wsTP = XLSX.utils.aoa_to_sheet([
+        ['Kode TP', 'Deskripsi TP', 'Urutan', 'KKTP Batas Bawah', 'KKTP Batas Atas', 'KKTP Predikat', 'KKTP Keterangan'],
+        ['TP 1.1', 'Peserta didik mampu...', 1, 0,  74,  'Perlu Bimbingan', ''],
+        ['TP 1.1', '',                        '',  75, 100, 'Sudah Tercapai',  ''],
+        ['TP 1.2', 'Peserta didik mampu...', 2, 0,  74,  'Perlu Bimbingan', ''],
+        ['TP 1.2', '',                        '',  75, 100, 'Sudah Tercapai',  ''],
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsTP, 'Tujuan Pembelajaran');
+
+    XLSX.writeFile(wb, 'Template_CP_TP.xlsx');
+}
+
+// ── Parse Excel Upload CP & TP ───────────────────────────────────────────────
+
+async function parseCpTpExcel(file) {
+    const errEl   = document.getElementById('upload-preview-error');
+    const confirmBtn = document.getElementById('upload-confirm-btn');
+    errEl.style.display = 'none';
+    confirmBtn.disabled = false;
+
+    const buf  = await file.arrayBuffer();
+    const wb   = XLSX.read(buf, { type: 'array' });
+
+    const sheetCP = wb.Sheets['Capaian Pembelajaran'];
+    const sheetTP = wb.Sheets['Tujuan Pembelajaran'];
+
+    const errors = [];
+
+    if (!sheetCP) errors.push('Sheet "Capaian Pembelajaran" tidak ditemukan.');
+    if (!sheetTP) errors.push('Sheet "Tujuan Pembelajaran" tidak ditemukan.');
+
+    if (errors.length) {
+        errEl.textContent = errors.join(' ');
+        errEl.style.display = '';
+        confirmBtn.disabled = true;
+        document.getElementById('penilaian-upload-modal').style.display = '';
+        return;
+    }
+
+    // Parse CP (skip baris header, index 0)
+    const rawCP = XLSX.utils.sheet_to_json(sheetCP, { header: 1, defval: '' });
+    const cpRows = rawCP.slice(1)
+        .filter(r => String(r[0] ?? '').trim())
+        .map(r => ({
+            elemen:      String(r[0] ?? '').trim(),
+            deskripsi_cp: String(r[1] ?? '').trim(),
+        }));
+
+    if (!cpRows.length) errors.push('Sheet "Capaian Pembelajaran" tidak punya data (selain header).');
+
+    // Parse TP (skip baris header, index 0)
+    const rawTP = XLSX.utils.sheet_to_json(sheetTP, { header: 1, defval: '' });
+    const tpRowsRaw = rawTP.slice(1).filter(r => r.some(c => String(c ?? '').trim() !== ''));
+
+    if (!tpRowsRaw.length) errors.push('Sheet "Tujuan Pembelajaran" tidak punya data (selain header).');
+
+    // Group by kode_tp
+    const tpMap = new Map();
+    let currentKode = null;
+    tpRowsRaw.forEach((r, ri) => {
+        const kode   = String(r[0] ?? '').trim();
+        const desk   = String(r[1] ?? '').trim();
+        const urutan = r[2] !== '' ? parseInt(r[2]) : null;
+        const bawah  = r[3] !== '' ? parseFloat(r[3]) : NaN;
+        const atas   = r[4] !== '' ? parseFloat(r[4]) : NaN;
+        const pred   = String(r[5] ?? '').trim();
+        const ket    = String(r[6] ?? '').trim();
+
+        if (kode) currentKode = kode;
+        if (!currentKode) return;
+
+        if (!tpMap.has(currentKode)) {
+            if (!desk) errors.push(`Baris ${ri + 2}: TP "${currentKode}" tidak punya deskripsi.`);
+            tpMap.set(currentKode, {
+                kode_tp:     currentKode,
+                deskripsi_tp: desk,
+                urutan:      isNaN(urutan) ? (tpMap.size + 1) : urutan,
+                kktp:        [],
+            });
+        }
+
+        if (!isNaN(bawah) && !isNaN(atas) && pred) {
+            if (bawah < 0 || bawah > 100 || atas < 0 || atas > 100)
+                errors.push(`Baris ${ri + 2}: KKTP "${pred}" — batas harus 0–100.`);
+            tpMap.get(currentKode).kktp.push({ batas_bawah: bawah, batas_atas: atas, predikat: pred, keterangan: ket || null });
+        }
+    });
+
+    const tpGroups = [...tpMap.values()];
+
+    // Render preview CP
+    const previewCP = document.getElementById('upload-preview-cp');
+    if (cpRows.length) {
+        previewCP.innerHTML = `
+            <table style="width:100%; border-collapse:collapse; font-size:13px">
+                <thead><tr style="background:var(--color-surface-alt,#f3f4f6)">
+                    <th style="padding:6px 8px; text-align:left; border:1px solid var(--color-border)">Elemen CP</th>
+                    <th style="padding:6px 8px; text-align:left; border:1px solid var(--color-border)">Deskripsi CP</th>
+                </tr></thead>
+                <tbody>${cpRows.map(r => `
+                    <tr>
+                        <td style="padding:6px 8px; border:1px solid var(--color-border); vertical-align:top; white-space:nowrap">${esc(r.elemen)}</td>
+                        <td style="padding:6px 8px; border:1px solid var(--color-border)">${esc(r.deskripsi_cp)}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+    } else {
+        previewCP.innerHTML = '<p class="hint">Tidak ada data CP.</p>';
+    }
+
+    // Render preview TP
+    const previewTP = document.getElementById('upload-preview-tp');
+    if (tpGroups.length) {
+        previewTP.innerHTML = tpGroups.map(tp => `
+            <div style="margin-bottom:12px; border:1px solid var(--color-border); border-radius:6px; overflow:hidden">
+                <div style="background:var(--color-surface-alt,#f3f4f6); padding:8px 10px; font-size:13px">
+                    <strong>${esc(tp.kode_tp)}</strong> — Urutan ${tp.urutan}<br>
+                    <span style="color:var(--color-text-muted)">${esc(tp.deskripsi_tp)}</span>
+                </div>
+                ${tp.kktp.length ? `
+                <table style="width:100%; border-collapse:collapse; font-size:12px">
+                    <thead><tr style="background:var(--color-surface-alt,#f3f4f6)">
+                        <th style="padding:4px 8px; border:1px solid var(--color-border)">Batas Bawah</th>
+                        <th style="padding:4px 8px; border:1px solid var(--color-border)">Batas Atas</th>
+                        <th style="padding:4px 8px; border:1px solid var(--color-border)">Predikat</th>
+                        <th style="padding:4px 8px; border:1px solid var(--color-border)">Keterangan</th>
+                    </tr></thead>
+                    <tbody>${tp.kktp.map(k => `
+                        <tr>
+                            <td style="padding:4px 8px; border:1px solid var(--color-border); text-align:center">${k.batas_bawah}</td>
+                            <td style="padding:4px 8px; border:1px solid var(--color-border); text-align:center">${k.batas_atas}</td>
+                            <td style="padding:4px 8px; border:1px solid var(--color-border)">${esc(k.predikat)}</td>
+                            <td style="padding:4px 8px; border:1px solid var(--color-border)">${esc(k.keterangan || '')}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>` : '<p class="hint" style="margin:6px 10px">Tidak ada KKTP.</p>'}
+            </div>`).join('');
+    } else {
+        previewTP.innerHTML = '<p class="hint">Tidak ada data TP.</p>';
+    }
+
+    if (errors.length) {
+        errEl.innerHTML = errors.map(e => `• ${esc(e)}`).join('<br>');
+        errEl.style.display = '';
+        confirmBtn.disabled = true;
+    }
+
+    // Pasang handler konfirmasi (replace agar tidak accumulate)
+    const newBtn = confirmBtn.cloneNode(true);
+    confirmBtn.replaceWith(newBtn);
+    if (!errors.length) {
+        newBtn.disabled = false;
+        newBtn.addEventListener('click', () => saveUploadedCpTp(cpRows, tpGroups));
+    }
+
+    document.getElementById('penilaian-upload-modal').style.display = '';
+}
+
+// ── Simpan hasil upload CP & TP ──────────────────────────────────────────────
+
+async function saveUploadedCpTp(cpRows, tpGroups) {
+    const errEl     = document.getElementById('upload-preview-error');
+    const confirmBtn = document.getElementById('upload-confirm-btn');
+    errEl.style.display = 'none';
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Menyimpan…';
+
+    const { subjectId, year, semester } = _penilaianCtx;
+    let fase = 'E';
+    if (_penilaianCtx.kelasId) {
+        try {
+            const ctx = await getClassProgramContext(_penilaianCtx.kelasId);
+            fase = ctx.grade_level === 10 ? 'E' : 'F';
+        } catch (_) { /* fallback E */ }
+    }
+
+    try {
+        // Langkah 1 — Simpan CP (upsert per elemen)
+        if (cpRows.length) {
+            const cpPayload = cpRows.map(r => ({
+                school_id:    currentUser.school_id,
+                subject_id:   subjectId,
+                program_id:   null,
+                fase,
+                elemen:       r.elemen,
+                deskripsi_cp: r.deskripsi_cp,
+                generated_by: 'MANUAL',
+                created_by:   currentUser.user_id,
+            }));
+            const { error } = await supabase
+                .from('capaian_pembelajaran')
+                .upsert(cpPayload, {
+                    onConflict:        'school_id,subject_id,program_id,fase,elemen',
+                    ignoreDuplicates:  false,
+                });
+            if (error) throw new Error(`Simpan CP: ${error.message}`);
+        }
+
+        // Langkah 2 — Simpan TP + KKTP
+        let savedTp = 0;
+        for (const tp of tpGroups) {
+            const { data, error: errLo } = await supabase
+                .from('learning_objectives')
+                .insert({
+                    school_id:       currentUser.school_id,
+                    teacher_user_id: currentUser.user_id,
+                    subject_id:      subjectId,
+                    academic_year:   year,
+                    semester,
+                    kode_tp:         tp.kode_tp,
+                    deskripsi_tp:    tp.deskripsi_tp,
+                    urutan:          tp.urutan,
+                    berlaku_untuk:   'SEMUA_KELAS',
+                    element_id:      null,
+                })
+                .select('learning_objective_id')
+                .single();
+            if (errLo) throw new Error(`Simpan TP "${tp.kode_tp}": ${errLo.message}`);
+
+            if (tp.kktp.length) {
+                const { error: errKk } = await supabase
+                    .from('assessment_criteria')
+                    .insert(tp.kktp.map(k => ({
+                        learning_objective_id: data.learning_objective_id,
+                        school_id:   currentUser.school_id,
+                        batas_bawah: k.batas_bawah,
+                        batas_atas:  k.batas_atas,
+                        predikat:    k.predikat,
+                        keterangan:  k.keterangan,
+                    })));
+                if (errKk) throw new Error(`Simpan KKTP "${tp.kode_tp}": ${errKk.message}`);
+            }
+            savedTp++;
+        }
+
+        document.getElementById('penilaian-upload-modal').style.display = 'none';
+        showPenilaianMsg('settings',
+            `${cpRows.length} CP dan ${savedTp} TP berhasil disimpan.`, 'success');
+        await loadTpList();
+
+    } catch (e) {
+        errEl.textContent = e.message;
+        errEl.style.display = '';
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Simpan ke Sistem';
+    }
+}
+
+async function loadGradingSettings() {
+    const { kelasId, subjectId, year, semester } = _penilaianCtx;
+    if (!kelasId || !subjectId || !year || !semester) return;
+    try {
+        const { data } = await supabase
+            .from('grading_settings')
+            .select('*')
+            .eq('school_id', currentUser.school_id)
+            .eq('subject_id', subjectId)
+            .eq('class_id', kelasId)
+            .eq('academic_year', year)
+            .eq('semester', semester)
+            .maybeSingle();
+        if (!data) return;
+        document.getElementById('penilaian-formatif-included').checked =
+            data.is_formatif_included;
+        document.getElementById('penilaian-formatif-options').style.display =
+            data.is_formatif_included ? '' : 'none';
+        if (data.metode_formatif) {
+            document.getElementById('penilaian-metode-formatif').value =
+                data.metode_formatif;
+        }
+        document.getElementById('penilaian-bobot-row').style.display =
+            data.metode_formatif === 'BOBOT' ? 'flex' : 'none';
+        if (data.bobot_formatif != null)
+            document.getElementById('penilaian-bobot-formatif').value = data.bobot_formatif;
+        if (data.bobot_sumatif != null)
+            document.getElementById('penilaian-bobot-sumatif').value = data.bobot_sumatif;
+    } catch { /* belum ada settings — ok */ }
+}
+
+async function saveGradingSettings() {
+    const { kelasId, subjectId, year, semester } = _penilaianCtx;
+    if (!kelasId || !subjectId || !year || !semester) {
+        showPenilaianMsg('settings', 'Pilih kelas, mapel, dan semester terlebih dahulu.', 'error');
+        return;
+    }
+    const isFor    = document.getElementById('penilaian-formatif-included').checked;
+    const metode   = isFor
+        ? document.getElementById('penilaian-metode-formatif').value
+        : null;
+    const bobotFor = isFor && metode === 'BOBOT'
+        ? parseInt(document.getElementById('penilaian-bobot-formatif').value)
+        : null;
+    const bobotSum = isFor && metode === 'BOBOT'
+        ? parseInt(document.getElementById('penilaian-bobot-sumatif').value)
+        : null;
+
+    if (isFor && metode === 'BOBOT') {
+        if (isNaN(bobotFor) || isNaN(bobotSum) || bobotFor + bobotSum !== 100) {
+            showPenilaianMsg('settings',
+                'Bobot formatif + bobot sumatif harus = 100%.', 'error');
+            return;
+        }
+    }
+
+    try {
+        const { error } = await supabase
+            .from('grading_settings')
+            .upsert({
+                school_id:            currentUser.school_id,
+                teacher_user_id:      currentUser.user_id,
+                subject_id:           subjectId,
+                class_id:             kelasId,
+                academic_year:        year,
+                semester,
+                is_formatif_included: isFor,
+                metode_formatif:      metode,
+                bobot_formatif:       bobotFor,
+                bobot_sumatif:        bobotSum,
+                updated_at:           new Date().toISOString()
+            }, {
+                onConflict: 'school_id,teacher_user_id,subject_id,class_id,academic_year,semester'
+            });
+        if (error) throw error;
+        showPenilaianMsg('settings', 'Pengaturan berhasil disimpan.', 'success');
+    } catch (e) {
+        showPenilaianMsg('settings', `Gagal menyimpan: ${esc(e.message)}`, 'error');
+    }
+}
+
+function showPenilaianMsg(area, text, type) {
+    const el = document.getElementById(`penilaian-${area}-msg`);
+    if (!el) return;
+    el.textContent = text;
+    el.style.display = '';
+    el.style.color = type === 'error'
+        ? 'var(--color-danger)'
+        : 'var(--color-success, #16a34a)';
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+// ── Sub-tab Input Nilai ──────────────────────────────────────
+
+let _penilaianInputInit = false;
+
+async function initPenilaianInputTab() {
+    // Populate dropdown TP dari _penilaianTpList
+    const selTp = document.getElementById('penilaian-input-tp-select');
+    selTp.innerHTML = '<option value="">— Pilih TP —</option>';
+    _penilaianTpList.forEach(tp => {
+        const opt = document.createElement('option');
+        opt.value = tp.learning_objective_id;
+        opt.textContent = `${tp.kode_tp} — ${tp.deskripsi_tp.substring(0, 50)}`;
+        selTp.appendChild(opt);
+    });
+
+    // Set tanggal default hari ini
+    const tanggalEl = document.getElementById('penilaian-input-tanggal');
+    if (!tanggalEl.value) tanggalEl.value = localDateStr();
+
+    if (!_penilaianInputInit) {
+        _penilaianInputInit = true;
+
+        selTp.addEventListener('change', async () => {
+            if (selTp.value) {
+                await loadInputGrid(selTp.value);
+            } else {
+                document.getElementById('penilaian-input-grid').innerHTML =
+                    '<p class="hint">Pilih TP untuk menampilkan daftar siswa.</p>';
+                document.getElementById('penilaian-save-nilai').style.display = 'none';
+            }
+        });
+
+        document.getElementById('penilaian-input-tipe').addEventListener('change', async () => {
+            if (selTp.value) await loadInputGrid(selTp.value);
+        });
+    }
+
+    document.getElementById('penilaian-input-grid').innerHTML =
+        '<p class="hint">Pilih TP untuk menampilkan daftar siswa.</p>';
+    document.getElementById('penilaian-save-nilai').style.display = 'none';
+}
+
+async function loadInputGrid(loId) {
+    const gridEl = document.getElementById('penilaian-input-grid');
+    gridEl.innerHTML = '<p class="hint">Memuat siswa…</p>';
+    const { kelasId, year } = _penilaianCtx;
+    if (!kelasId) {
+        gridEl.innerHTML = '<p class="hint">Pilih kelas terlebih dahulu.</p>';
+        return;
+    }
+    try {
+        // Ambil daftar siswa aktif di kelas via class_enrollments
+        const students = await getEnrolledStudents(kelasId, year);
+
+        if (!students?.length) {
+            gridEl.innerHTML = '<p class="hint">Tidak ada siswa aktif di kelas ini.</p>';
+            document.getElementById('penilaian-save-nilai').style.display = 'none';
+            return;
+        }
+
+        // Ambil riwayat nilai untuk TP ini, tipe ini, kelas ini
+        const tipe = document.getElementById('penilaian-input-tipe').value;
+        const { data: existing, error: aErr } = await supabase
+            .from('tp_assessments')
+            .select('assessment_id, student_id, nilai_angka, judul, tanggal')
+            .eq('school_id', currentUser.school_id)
+            .eq('learning_objective_id', loId)
+            .eq('class_id', kelasId)
+            .eq('tipe', tipe)
+            .eq('is_void', false)
+            .order('tanggal', { ascending: false });
+        if (aErr) throw aErr;
+
+        // Group riwayat per student_id
+        const riwayat = {};
+        (existing || []).forEach(a => {
+            if (!riwayat[a.student_id]) riwayat[a.student_id] = [];
+            riwayat[a.student_id].push(a);
+        });
+
+        gridEl.innerHTML = `
+            <div style="overflow-x:auto">
+            <table style="width:100%; border-collapse:collapse; font-size:13px">
+              <thead>
+                <tr style="border-bottom:2px solid var(--color-border)">
+                  <th style="text-align:left; padding:8px 4px; width:36px">No</th>
+                  <th style="text-align:left; padding:8px 4px">Nama Siswa</th>
+                  <th style="text-align:left; padding:8px 4px; width:80px">NIS</th>
+                  <th style="text-align:center; padding:8px 4px; width:110px">Nilai Baru</th>
+                  <th style="text-align:left; padding:8px 4px">Riwayat</th>
+                </tr>
+              </thead>
+              <tbody id="penilaian-input-tbody">
+                ${students.map((s, i) => `
+                  <tr style="border-bottom:1px solid var(--color-border)"
+                      data-student-id="${esc(s.student_id)}">
+                    <td style="padding:8px 4px; color:var(--color-text-muted)">${i + 1}</td>
+                    <td style="padding:8px 4px">${esc(s.full_name)}</td>
+                    <td style="padding:8px 4px; color:var(--color-text-muted)">${esc(s.nis || '')}</td>
+                    <td style="padding:8px 4px; text-align:center">
+                      <input type="number" class="input nilai-input"
+                             min="0" max="100" step="0.01" placeholder="0–100"
+                             style="width:84px; text-align:center">
+                    </td>
+                    <td style="padding:8px 4px">
+                      ${renderRiwayatNilai(riwayat[s.student_id] || [])}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            </div>
+        `;
+        document.getElementById('penilaian-save-nilai').style.display = '';
+
+    } catch (e) {
+        gridEl.innerHTML =
+            `<p class="hint" style="color:var(--color-danger)">Gagal memuat siswa: ${esc(e.message)}</p>`;
+    }
+}
+
+function renderRiwayatNilai(entries) {
+    if (!entries.length) return '<span style="color:var(--color-text-muted)">—</span>';
+    return entries.map(a => `
+        <span style="display:inline-flex; align-items:center; gap:4px;
+                     background:var(--color-surface-alt); border-radius:4px;
+                     padding:2px 6px; margin:2px; font-size:12px">
+            <strong>${a.nilai_angka != null ? a.nilai_angka : '—'}</strong>
+            ${a.judul ? `<span style="color:var(--color-text-muted)">${esc(a.judul)}</span>` : ''}
+            <button type="button"
+                    style="background:none; border:none; cursor:pointer;
+                           color:var(--color-danger); font-size:11px;
+                           padding:0 2px; line-height:1"
+                    onclick="voidNilai('${esc(a.assessment_id)}', this)">×</button>
+        </span>
+    `).join('');
+}
+
+async function voidNilai(assessmentId, btnEl) {
+    if (!confirm('Batalkan nilai ini?')) return;
+    try {
+        const { error } = await supabase
+            .from('tp_assessments')
+            .update({ is_void: true, void_reason: 'Dibatalkan oleh guru' })
+            .eq('assessment_id', assessmentId)
+            .eq('school_id', currentUser.school_id);
+        if (error) throw error;
+        btnEl.closest('span').remove();
+    } catch (e) {
+        alert(`Gagal membatalkan nilai: ${esc(e.message)}`);
+    }
+}
+
+async function saveInputNilai() {
+    const loId  = document.getElementById('penilaian-input-tp-select').value;
+    const tipe  = document.getElementById('penilaian-input-tipe').value;
+    const judul = document.getElementById('penilaian-input-judul').value.trim();
+    const tgl   = document.getElementById('penilaian-input-tanggal').value;
+
+    if (!loId) {
+        showPenilaianMsg('input', 'Pilih Tujuan Pembelajaran terlebih dahulu.', 'error');
+        return;
+    }
+    if (!tgl) {
+        showPenilaianMsg('input', 'Tanggal wajib diisi.', 'error');
+        return;
+    }
+
+    const rows = [...document.querySelectorAll('#penilaian-input-tbody tr')];
+    const { kelasId } = _penilaianCtx;
+
+    const toInsert = [];
+    rows.forEach(tr => {
+        const studentId = tr.dataset.studentId;
+        const val = tr.querySelector('.nilai-input')?.value.trim();
+        if (!val || isNaN(parseFloat(val))) return;
+        toInsert.push({
+            school_id:             currentUser.school_id,
+            learning_objective_id: loId,
+            student_id:            studentId,
+            teacher_user_id:       currentUser.user_id,
+            class_id:              kelasId,
+            tipe,
+            judul:                 judul || null,
+            nilai_angka:           parseFloat(val),
+            tanggal:               tgl
+        });
+    });
+
+    if (!toInsert.length) {
+        showPenilaianMsg('input', 'Tidak ada nilai yang diisi.', 'error');
+        return;
+    }
+
+    try {
+        const { error } = await supabase
+            .from('tp_assessments')
+            .insert(toInsert);
+        if (error) throw error;
+        showPenilaianMsg('input', `${toInsert.length} nilai berhasil disimpan.`, 'success');
+        rows.forEach(tr => {
+            const el = tr.querySelector('.nilai-input');
+            if (el) el.value = '';
+        });
+        await loadInputGrid(loId);
+    } catch (e) {
+        showPenilaianMsg('input', `Gagal menyimpan: ${esc(e.message)}`, 'error');
+    }
+}
+
+// ── Sub-tab Nilai Akhir ──────────────────────────────────────
+
+let _penilaianHasilInit = false;
+let _penilaianHasilData = null;
+
+async function initPenilaianHasilTab() {
+    if (!_penilaianHasilInit) {
+        _penilaianHasilInit = true;
+
+        document.getElementById('penilaian-hitung-btn')
+            .addEventListener('click', async () => {
+                await hitungNilaiAkhir();
+            });
+
+        document.getElementById('penilaian-publikasi-btn')
+            .addEventListener('click', async () => {
+                await publikasiNilai();
+            });
+    }
+    await loadHasilNilai();
+}
+
+async function loadHasilNilai() {
+    const { kelasId, subjectId, year, semester } = _penilaianCtx;
+    const gridEl = document.getElementById('penilaian-hasil-grid');
+    const warnEl = document.getElementById('penilaian-stale-warning');
+    const pubBtn = document.getElementById('penilaian-publikasi-btn');
+
+    warnEl.style.display = 'none';
+    pubBtn.style.display = 'none';
+
+    if (!kelasId || !subjectId || !year || !semester) {
+        gridEl.innerHTML = '<p class="hint">Pilih kelas, mapel, dan semester terlebih dahulu.</p>';
+        return;
+    }
+
+    gridEl.innerHTML = '<p class="hint">Memuat…</p>';
+
+    try {
+        const { data, error } = await supabase.rpc('fn_get_grade_summary', {
+            p_subject_id:    subjectId,
+            p_class_id:      kelasId,
+            p_academic_year: year,
+            p_semester:      semester
+        });
+        if (error) throw error;
+
+        _penilaianHasilData = data;
+        const students = data?.students || [];
+
+        if (!students.length) {
+            gridEl.innerHTML =
+                '<p class="hint">Belum ada nilai akhir. ' +
+                'Klik "Hitung Nilai Akhir" untuk menghitung.</p>';
+            return;
+        }
+
+        // Ambil nama siswa dari tabel students
+        const studentIds = students.map(s => s.student_id);
+        const { data: siswaRows } = await supabase
+            .from('students')
+            .select('student_id, nama_lengkap')
+            .in('student_id', studentIds)
+            .eq('school_id', currentUser.school_id);
+        const namaMap = {};
+        (siswaRows || []).forEach(r => { namaMap[r.student_id] = r.nama_lengkap; });
+
+        const isPublished = students.every(s => s.grade_summary?.published_at != null);
+        pubBtn.style.display  = isPublished ? 'none' : '';
+        pubBtn.textContent    = isPublished ? 'Sudah Dipublikasi' : 'Publikasi ke Siswa & Orang Tua';
+        pubBtn.disabled       = isPublished;
+
+        renderHasilGrid(students, namaMap);
+
+    } catch (e) {
+        gridEl.innerHTML =
+            `<p class="hint" style="color:var(--color-danger)">Gagal memuat nilai akhir: ${esc(e.message)}</p>`;
+    }
+}
+
+function renderHasilGrid(students, namaMap) {
+    const gridEl = document.getElementById('penilaian-hasil-grid');
+    if (!students.length) {
+        gridEl.innerHTML = '<p class="hint">Belum ada nilai akhir yang dihitung.</p>';
+        return;
+    }
+
+    gridEl.innerHTML = `
+        <table style="width:100%; border-collapse:collapse; font-size:13px">
+          <thead>
+            <tr style="border-bottom:2px solid var(--color-border)">
+              <th style="text-align:left; padding:8px 4px; width:40px">No</th>
+              <th style="text-align:left; padding:8px 4px">Nama Siswa</th>
+              <th style="text-align:center; padding:8px 4px; width:80px">Nilai Akhir</th>
+              <th style="text-align:center; padding:8px 4px; width:80px">Predikat</th>
+              <th style="text-align:left; padding:8px 4px">Deskripsi Naratif</th>
+              <th style="text-align:center; padding:8px 4px; width:100px">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${students.map((s, i) => {
+                const gs  = s.grade_summary || {};
+                const pub = gs.published_at
+                    ? `<span style="color:var(--color-success);font-size:11px">✓ Dipublikasi</span>`
+                    : `<span style="color:var(--color-text-muted);font-size:11px">Belum</span>`;
+                return `
+                  <tr style="border-bottom:1px solid var(--color-border)"
+                      data-grade-summary-id="${esc(gs.grade_summary_id || '')}">
+                    <td style="padding:8px 4px; color:var(--color-text-muted)">${i + 1}</td>
+                    <td style="padding:8px 4px">${esc(namaMap[s.student_id] || s.student_id)}</td>
+                    <td style="padding:8px 4px; text-align:center; font-weight:600">
+                      ${gs.nilai_akhir != null ? Number(gs.nilai_akhir).toFixed(1) : '—'}
+                    </td>
+                    <td style="padding:8px 4px; text-align:center">${esc(gs.predikat || '—')}</td>
+                    <td style="padding:8px 4px">
+                      <textarea class="input naratif-input" rows="2"
+                                placeholder="Deskripsi untuk rapor…"
+                                style="width:100%; font-size:12px; resize:vertical"
+                                data-grade-summary-id="${esc(gs.grade_summary_id || '')}"
+                      >${esc(gs.deskripsi_naratif || '')}</textarea>
+                      <button type="button"
+                              class="btn btn-ghost btn-sm simpan-naratif-btn"
+                              style="margin-top:4px; font-size:11px"
+                              data-grade-summary-id="${esc(gs.grade_summary_id || '')}">
+                        Simpan deskripsi
+                      </button>
+                    </td>
+                    <td style="padding:8px 4px; text-align:center">${pub}</td>
+                  </tr>
+                `;
+            }).join('')}
+          </tbody>
+        </table>
+    `;
+
+    gridEl.querySelectorAll('.simpan-naratif-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const gsId     = btn.dataset.gradeSummaryId;
+            const textarea = gridEl.querySelector(
+                `.naratif-input[data-grade-summary-id="${gsId}"]`
+            );
+            if (!gsId || !textarea) return;
+            await simpanNaratif(gsId, textarea.value);
+        });
+    });
+}
+
+async function simpanNaratif(gradeSummaryId, naratif) {
+    try {
+        const { error } = await supabase
+            .from('grade_summaries')
+            .update({ deskripsi_naratif: naratif, updated_at: new Date().toISOString() })
+            .eq('grade_summary_id', gradeSummaryId)
+            .eq('school_id', currentUser.school_id);
+        if (error) throw error;
+        showPenilaianMsg('hasil', 'Deskripsi berhasil disimpan.', 'success');
+    } catch (e) {
+        showPenilaianMsg('hasil', `Gagal: ${esc(e.message)}`, 'error');
+    }
+}
+
+async function hitungNilaiAkhir() {
+    const { kelasId, subjectId, year, semester } = _penilaianCtx;
+    if (!kelasId || !subjectId || !year || !semester) {
+        showPenilaianMsg('hasil', 'Pilih kelas, mapel, dan semester terlebih dahulu.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('penilaian-hitung-btn');
+    btn.disabled    = true;
+    btn.textContent = 'Menghitung…';
+
+    try {
+        const { data, error } = await supabase.rpc('fn_calculate_grade_summary', {
+            p_subject_id:    subjectId,
+            p_class_id:      kelasId,
+            p_academic_year: year,
+            p_semester:      semester
+        });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Kalkulasi gagal');
+
+        showPenilaianMsg('hasil',
+            `Nilai akhir berhasil dihitung untuk ${data.updated} siswa.`, 'success');
+        await loadHasilNilai();
+    } catch (e) {
+        showPenilaianMsg('hasil', `Gagal menghitung: ${esc(e.message)}`, 'error');
+    } finally {
+        btn.disabled    = false;
+        btn.textContent = 'Hitung Nilai Akhir';
+    }
+}
+
+async function publikasiNilai() {
+    if (!confirm(
+        'Publikasi nilai ke siswa dan orang tua?\n\n' +
+        'Setelah publikasi, pengaturan kalkulasi akan dikunci dan ' +
+        'tidak bisa diubah lagi tanpa membuka kunci secara manual.'
+    )) return;
+
+    const { kelasId, subjectId, year, semester } = _penilaianCtx;
+    const btn = document.getElementById('penilaian-publikasi-btn');
+    btn.disabled    = true;
+    btn.textContent = 'Mempublikasi…';
+
+    try {
+        const now = new Date().toISOString();
+
+        const { error: gsErr } = await supabase
+            .from('grade_summaries')
+            .update({ published_at: now, updated_at: now })
+            .eq('school_id', currentUser.school_id)
+            .eq('subject_id', subjectId)
+            .eq('class_id', kelasId)
+            .eq('academic_year', year)
+            .eq('semester', semester)
+            .is('published_at', null);
+        if (gsErr) throw gsErr;
+
+        const { error: lockErr } = await supabase
+            .from('grading_settings')
+            .update({ is_published: true, published_at: now, locked_at: now, updated_at: now })
+            .eq('school_id', currentUser.school_id)
+            .eq('teacher_user_id', currentUser.user_id)
+            .eq('subject_id', subjectId)
+            .eq('class_id', kelasId)
+            .eq('academic_year', year)
+            .eq('semester', semester);
+        if (lockErr) throw lockErr;
+
+        showPenilaianMsg('hasil',
+            'Nilai berhasil dipublikasi. Siswa dan orang tua kini bisa melihat nilai.', 'success');
+        await loadHasilNilai();
+    } catch (e) {
+        showPenilaianMsg('hasil', `Gagal publikasi: ${esc(e.message)}`, 'error');
+        btn.disabled    = false;
+        btn.textContent = 'Publikasi ke Siswa & Orang Tua';
+    }
+}
+
+
 // ─── Start ───────────────────────────────────────────────────
 init().catch(err => {
     console.error('[init]', err);
