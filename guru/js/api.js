@@ -381,7 +381,7 @@ export async function getStudentAttendanceSessions(studentId, dateStart, dateEnd
     let q = supabase
         .from('attendance')
         .select(`
-            attendance_id, status, is_void,
+            attendance_id, status, is_void, notes,
             schedule:teaching_schedules!inner (
                 session_date, session_start, session_end, subject_label,
                 teacher:users ( full_name )

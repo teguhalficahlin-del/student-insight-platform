@@ -386,7 +386,7 @@ async function loadAttendance() {
     const end     = document.getElementById('att-date-end').value;
     const tbody   = document.getElementById('att-body');
     const emptyEl = document.getElementById('att-empty');
-    tbody.innerHTML = '<tr><td colspan="5" class="hint">Memuat…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="hint">Memuat…</td></tr>';
     emptyEl.style.display = 'none';
 
     try {
@@ -431,9 +431,10 @@ async function loadAttendance() {
                     ${STATUS_LABEL_MAP[block.summary_status] ?? block.summary_status}
                     <span class="att-slot-count">${block.slots.length} sesi</span>
                 </span></td>
+                <td>${esc(block.slots[0]?.notes || '—')}</td>
             </tr>`).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="5" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     } finally {
         if (filterBtn) { filterBtn.disabled = false; filterBtn.textContent = prevLabel; }
     }

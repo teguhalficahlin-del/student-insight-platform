@@ -552,6 +552,9 @@ function renderGuruRekapPage() {
                             color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
                             ${STATUS_LABEL[s.status] ?? esc(s.status)}
                         </span>
+                        <span style="font-size:11px;color:var(--color-text-muted);min-width:100px;text-align:right">
+                            ${s.status === 'IZIN' && s.notes ? esc(s.notes) : '—'}
+                        </span>
                     </div>`).join('');
             } catch(err) {
                 body.innerHTML = `<div class="alert alert-danger" style="margin:8px 16px">${esc(fe(err))}</div>`;
@@ -1277,13 +1280,14 @@ async function initWaliTab() {
 
             for (const { student, sessions } of allSessions) {
                 const sheetData = [
-                    ['Tanggal', 'Jam', 'Mata Pelajaran', 'Guru', 'Status'],
+                    ['Tanggal', 'Jam', 'Mata Pelajaran', 'Guru', 'Status', 'Keterangan'],
                     ...sessions.map(s => [
                         s.schedule?.session_date ?? '',
                         s.schedule?.session_start ? fmtTime(s.schedule.session_start) : '',
                         s.schedule?.subject_label ?? '',
                         s.schedule?.teacher?.full_name ?? '',
                         s.status ?? '',
+                        s.status === 'IZIN' ? (s.notes ?? '') : '',
                     ])
                 ];
                 const sheetName = student.full_name.slice(0, 31);
