@@ -4708,6 +4708,17 @@ async function addRecipientGroup(groupDef, btnEl = null) {
     document.getElementById('forum-filter-kelas-wrap').style.display   = 'none';
     document.getElementById('forum-filter-hari-wrap').style.display    = 'none';
 
+    // Toggle: klik kedua pada grup yang sudah aktif → batalkan pilihan
+    if (groupDef.mode === 'semua' && _forumGroupLabels.has(groupDef.group)) {
+        _forumGroupUids.get(groupDef.group)?.forEach(uid => _forumRecipients.delete(uid));
+        _forumGroupLabels.delete(groupDef.group);
+        _forumGroupUids.delete(groupDef.group);
+        if (btnEl) btnEl.className = 'btn btn-secondary';
+        _forumGroupBtns.delete(groupDef.group);
+        renderRecipientChips();
+        return;
+    }
+
     let programId = groupDef.programId ?? null;
     let classId   = null;
     let dayOfWeek = null;
