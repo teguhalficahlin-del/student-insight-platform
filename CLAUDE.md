@@ -29,7 +29,7 @@ Fitur utama: absensi, BK (kasus siswa), jadwal, forum, perangkat ajar (AI pipeli
 
 | Key | Value |
 |-----|-------|
-| HEAD (29 Jul 2026) | `7ddaae1` |
+| HEAD (29 Jul 2026) | `661ffc8` |
 | SMKN 1 Ujungbatu `school_id` | `244e389c-de7d-4d70-ac95-346d33a5d02c` |
 | SMKN 1 Ujungbatu slug | `smkn1ujungbatu` |
 | SMK Uji E7 `school_id` | `4c084682-aca3-45c3-8882-24309e4c33a1` |
@@ -207,13 +207,18 @@ pakai `--project-ref xovvuuwexoweoqyltepq`.
 
 ---
 
-## 9. STATUS PROYEK (per HEAD 7ddaae1, 29 Jul 2026)
+## 9. STATUS PROYEK (per HEAD 661ffc8, 29 Jul 2026)
 
 ### Selesai
 - Audit keamanan Fase 1–3 ✅ (test suite 93/93)
 - Sprint 1 Foundation Schema ✅ (18 Jul 2026)
 - Forum Sekolah ✅ — semua portal (guru, student, parent, tu, admin)
   fitur: inbox + buat posting + komentar + attachment + panel penerima dua-level
+- Forum Sekolah bug fixes ✅ (29 Jul 2026) — 11 bug diperbaiki dari audit:
+  DB: SEMUA_GURU scope fix + tambah branch SEMUA_GURU_WALI di fn_get_forum_recipient_candidates
+  UI: Guru Wali di semua panel, Kaprodi panel lengkap, Semua Siswa di branch else,
+      TU tidak bisa broadcast ke sesama TU, school_id eksplisit di getParentForumRecipients,
+      tab Terkirim ortu via helper API (bukan inline query)
 
 ### Blocker Go-Live (PRIORITAS TINGGI)
 1. **Jadwal import SMK Uji E7** — blocker Go-Live tenant E1/E2/E4/E7
