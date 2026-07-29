@@ -551,6 +551,9 @@ function openForumModal(postId = null) {
     document.getElementById('forum-input-file').value  = '';
     document.getElementById('forum-file-name').textContent = '';
     document.getElementById('forum-post-error').style.display = 'none';
+    document.getElementById('forum-filter-jurusan-wrap').style.display = 'none';
+    document.getElementById('forum-filter-kelas-wrap').style.display   = 'none';
+    document.getElementById('forum-filter-hari-wrap').style.display    = 'none';
     buildRecipientGroupButtons();
     document.getElementById('modal-forum-post').style.display = 'flex';
 }
@@ -618,6 +621,9 @@ function buildRecipientGroupButtons() {
 async function addRecipientGroup(groupDef) {
     const errEl = document.getElementById('forum-post-error');
     errEl.style.display = 'none';
+    document.getElementById('forum-filter-jurusan-wrap').style.display = 'none';
+    document.getElementById('forum-filter-kelas-wrap').style.display   = 'none';
+    document.getElementById('forum-filter-hari-wrap').style.display    = 'none';
 
     let programId = groupDef.programId ?? null;
     let classId   = null;
