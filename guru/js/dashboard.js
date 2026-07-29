@@ -4563,48 +4563,61 @@ function buildRecipientGroupButtons() {
     let groups = [];
 
     if (isKepsek || isWaka || isAdmin) {
+        // Bug #7: tambah Guru Wali
         groups = [
-            { label: 'Guru',        group: 'SEMUA_GURU',       hasIndividual: true, pickerGroup: 'GURU_MAPEL'  },
-            { label: 'Waka',        group: 'SEMUA_WAKA',       hasIndividual: true, needsJabatan: true },
-            { label: 'Kaprodi',     group: 'SEMUA_KAPRODI',    hasIndividual: true, needsJurusan: true },
-            { label: 'Wali Kelas',  group: 'SEMUA_WALI_KELAS', hasIndividual: true, needsJurusan: true },
-            { label: 'Guru BK',     group: 'SEMUA_BK',         hasIndividual: true  },
-            { label: 'Guru Piket',  group: 'GURU_PIKET',       hasIndividual: true, needsHari: true },
-            { label: 'Semua Siswa', group: 'SEMUA_SISWA',      hasIndividual: false },
-            { label: 'Siswa Kelas', group: 'SISWA_KELAS',      hasIndividual: true, needsKelas: true },
-            { label: 'Siswa Jurusan', group: 'SISWA_JURUSAN',  hasIndividual: true, needsJurusan: true },
-            { label: 'Semua Ortu',  group: 'SEMUA_ORTU',       hasIndividual: false },
-            { label: 'Ortu Kelas',  group: 'ORTU_KELAS',       hasIndividual: true, needsKelas: true },
-            { label: 'Ortu Jurusan', group: 'ORTU_JURUSAN',    hasIndividual: true, needsJurusan: true },
-            { label: 'TU / Admin',  group: 'SEMUA_TU',         hasIndividual: true  },
+            { label: 'Guru',          group: 'SEMUA_GURU',       hasIndividual: true, pickerGroup: 'GURU_MAPEL' },
+            { label: 'Waka',          group: 'SEMUA_WAKA',       hasIndividual: true, needsJabatan: true },
+            { label: 'Kaprodi',       group: 'SEMUA_KAPRODI',    hasIndividual: true, needsJurusan: true },
+            { label: 'Wali Kelas',    group: 'SEMUA_WALI_KELAS', hasIndividual: true, needsJurusan: true },
+            { label: 'Guru Wali',     group: 'SEMUA_GURU_WALI',  hasIndividual: true  },
+            { label: 'Guru BK',       group: 'SEMUA_BK',         hasIndividual: true  },
+            { label: 'Guru Piket',    group: 'GURU_PIKET',       hasIndividual: true, needsHari: true },
+            { label: 'Semua Siswa',   group: 'SEMUA_SISWA',      hasIndividual: false },
+            { label: 'Siswa Kelas',   group: 'SISWA_KELAS',      hasIndividual: true, needsKelas: true },
+            { label: 'Siswa Jurusan', group: 'SISWA_JURUSAN',    hasIndividual: true, needsJurusan: true },
+            { label: 'Semua Ortu',    group: 'SEMUA_ORTU',       hasIndividual: false },
+            { label: 'Ortu Kelas',    group: 'ORTU_KELAS',       hasIndividual: true, needsKelas: true },
+            { label: 'Ortu Jurusan',  group: 'ORTU_JURUSAN',     hasIndividual: true, needsJurusan: true },
+            { label: 'TU / Admin',    group: 'SEMUA_TU',         hasIndividual: true  },
             ...(isKepsek ? [] : [{ label: 'Kepsek', group: 'KEPSEK', hasIndividual: false, labelSemua: 'Kepsek' }]),
         ];
     } else if (isKaprodi) {
+        // Bug #3: Guru Jurusan pakai GURU_MAPEL (bukan SEMUA_GURU) agar filter programId efektif
+        // Bug #4: tambah grup Kaprodi (sesama kaprodi)
+        // Bug #7: tambah Guru Wali dan Siswa Kelas, Ortu Kelas
         groups = [
-            { label: 'Guru Jurusan',     group: 'SEMUA_GURU',         hasIndividual: true, pickerGroup: 'GURU_MAPEL', programId: scope.kaprodi_program_id },
-            { label: 'Wali Kls Jurusan', group: 'WALI_KELAS_JURUSAN', hasIndividual: true, needsJurusan: true },
-            { label: 'Guru BK',          group: 'SEMUA_BK',           hasIndividual: true  },
+            { label: 'Guru Jurusan',     group: 'GURU_MAPEL',          hasIndividual: true, programId: scope.kaprodi_program_id },
+            { label: 'Wali Kls Jurusan', group: 'WALI_KELAS_JURUSAN',  hasIndividual: true, needsJurusan: true },
+            { label: 'Guru Wali',        group: 'SEMUA_GURU_WALI',     hasIndividual: true  },
+            { label: 'Guru BK',          group: 'SEMUA_BK',            hasIndividual: true  },
+            { label: 'Kaprodi',          group: 'SEMUA_KAPRODI',       hasIndividual: true, needsJurusan: true },
             { label: 'Siswa Jurusan',    group: 'SISWA_JURUSAN',       hasIndividual: true, needsJurusan: true },
+            { label: 'Siswa Kelas',      group: 'SISWA_KELAS',         hasIndividual: true, needsKelas: true },
             { label: 'Ortu Jurusan',     group: 'ORTU_JURUSAN',        hasIndividual: true, needsJurusan: true },
+            { label: 'Ortu Kelas',       group: 'ORTU_KELAS',          hasIndividual: true, needsKelas: true },
             { label: 'Kepsek',           group: 'KEPSEK',              hasIndividual: false, labelSemua: 'Kepsek' },
             { label: 'Waka',             group: 'SEMUA_WAKA',          hasIndividual: true, needsJabatan: true },
             { label: 'TU / Admin',       group: 'SEMUA_TU',            hasIndividual: true  },
         ];
     } else {
+        // Bug #5: tambah Semua Siswa
+        // Bug #7: tambah Guru Wali
         groups = [
-            { label: 'Kepsek',      group: 'KEPSEK',           hasIndividual: false, labelSemua: 'Kepsek' },
-            { label: 'Waka',        group: 'SEMUA_WAKA',       hasIndividual: true, needsJabatan: true },
-            { label: 'Kaprodi',     group: 'SEMUA_KAPRODI',    hasIndividual: true, needsJurusan: true },
-            { label: 'Guru',        group: 'SEMUA_GURU',       hasIndividual: true, pickerGroup: 'GURU_MAPEL'  },
-            { label: 'Wali Kelas',  group: 'SEMUA_WALI_KELAS', hasIndividual: true, needsJurusan: true },
-            { label: 'Guru BK',     group: 'SEMUA_BK',         hasIndividual: true  },
-            { label: 'Siswa Kelas', group: 'SISWA_KELAS',      hasIndividual: true, needsKelas: true },
-            { label: 'Siswa Jurusan', group: 'SISWA_JURUSAN',  hasIndividual: true, needsJurusan: true },
-            { label: 'Ortu Kelas',    group: 'ORTU_KELAS',    hasIndividual: true, needsKelas: true },
-            { label: 'Ortu Jurusan',  group: 'ORTU_JURUSAN',  hasIndividual: true, needsJurusan: true },
-            { label: 'Semua Ortu',    group: 'SEMUA_ORTU',    hasIndividual: false },
-            { label: 'Guru Piket',    group: 'GURU_PIKET',    hasIndividual: true, needsHari: true },
-            { label: 'TU / Admin',    group: 'SEMUA_TU',      hasIndividual: true  },
+            { label: 'Kepsek',        group: 'KEPSEK',           hasIndividual: false, labelSemua: 'Kepsek' },
+            { label: 'Waka',          group: 'SEMUA_WAKA',       hasIndividual: true, needsJabatan: true },
+            { label: 'Kaprodi',       group: 'SEMUA_KAPRODI',    hasIndividual: true, needsJurusan: true },
+            { label: 'Guru',          group: 'SEMUA_GURU',       hasIndividual: true, pickerGroup: 'GURU_MAPEL' },
+            { label: 'Wali Kelas',    group: 'SEMUA_WALI_KELAS', hasIndividual: true, needsJurusan: true },
+            { label: 'Guru Wali',     group: 'SEMUA_GURU_WALI',  hasIndividual: true  },
+            { label: 'Guru BK',       group: 'SEMUA_BK',         hasIndividual: true  },
+            { label: 'Guru Piket',    group: 'GURU_PIKET',       hasIndividual: true, needsHari: true },
+            { label: 'Semua Siswa',   group: 'SEMUA_SISWA',      hasIndividual: false },
+            { label: 'Siswa Kelas',   group: 'SISWA_KELAS',      hasIndividual: true, needsKelas: true },
+            { label: 'Siswa Jurusan', group: 'SISWA_JURUSAN',    hasIndividual: true, needsJurusan: true },
+            { label: 'Semua Ortu',    group: 'SEMUA_ORTU',       hasIndividual: false },
+            { label: 'Ortu Kelas',    group: 'ORTU_KELAS',       hasIndividual: true, needsKelas: true },
+            { label: 'Ortu Jurusan',  group: 'ORTU_JURUSAN',     hasIndividual: true, needsJurusan: true },
+            { label: 'TU / Admin',    group: 'SEMUA_TU',         hasIndividual: true  },
         ];
     }
 

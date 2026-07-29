@@ -378,6 +378,29 @@ export async function getForumSekolahPosts(schoolId, userId, limit = 20, offset 
 }
 
 /**
+ * Ambil posting yang dibuat ortu (tab Terkirim).
+ * Bug #9 fix: ganti inline query di portal.js dengan fungsi helper ini.
+ */
+export async function getForumSekolahSentPosts(schoolId, callerId, limit = 20, offset = 0) {
+    const { data, error } = await supabase
+        .from('forum_posts')
+        .select(`
+            post_id, title, body, created_at, is_edited,
+            author_user_id,
+            acknowledgements:forum_post_acknowledgements(user_id),
+            audience:forum_post_audience(user_id)
+        `)
+        .eq('scope_type', 'SEKOLAH')
+        .eq('school_id', schoolId)
+        .eq('author_user_id', callerId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+    if (error) throw error;
+    return data ?? [];
+}
+
+/**
  * Tandai posting sudah dibaca. Idempoten.
  */
 export async function addForumSekolahAck(postId, userId, schoolId) {
@@ -393,8 +416,9 @@ export async function addForumSekolahAck(postId, userId, schoolId) {
 /**
  * Resolve penerima otomatis untuk posting ortu berdasarkan anak yang dipilih.
  * Penerima: Wali Kelas + Guru BK + Guru Wali + Guru yang mengajar hari ini.
+ * Bug #8 fix: tambah filter school_id eksplisit di semua query.
  */
-export async function getParentForumRecipients(classId) {
+export async function getParentForumRecipients(classId, schoolId) {
     const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
 
     const [waliRes, bkRes, guruWaliRes, jadwalRes] = await Promise.all([
@@ -402,6 +426,7 @@ export async function getParentForumRecipients(classId) {
         supabase.from('users')
             .select('user_id')
             .eq('wali_kelas_class_id', classId)
+            .eq('school_id', schoolId)
             .eq('is_active', true)
             .maybeSingle(),
 
@@ -409,11 +434,13 @@ export async function getParentForumRecipients(classId) {
         supabase.from('bk_class_assignments')
             .select('bk_user_id')
             .eq('class_id', classId)
+            .eq('school_id', schoolId)
             .eq('is_active', true),
 
         // Guru Wali yang menangani siswa di kelas ini
         supabase.from('guru_wali_assignments')
             .select('guru_user_id')
+            .eq('school_id', schoolId)
             .eq('is_active', true)
             .in('student_id',
                 supabase.from('class_enrollments')
@@ -426,6 +453,7 @@ export async function getParentForumRecipients(classId) {
         supabase.from('teaching_schedules')
             .select('scheduled_teacher_id')
             .eq('class_id', classId)
+            .eq('school_id', schoolId)
             .eq('session_date', today),
     ]);
 
@@ -444,7 +472,7 @@ export async function getParentForumRecipients(classId) {
  * Buat posting Forum Sekolah dari ortu ke guru terkait anak.
  */
 export async function createParentForumPost(title, body, classId, academicYear, schoolId) {
-    const recipientIds = await getParentForumRecipients(classId);
+    const recipientIds = await getParentForumRecipients(classId, schoolId);
 
     if (recipientIds.length === 0) {
         throw new Error('Tidak ada guru yang dapat ditemukan untuk anak ini hari ini.');

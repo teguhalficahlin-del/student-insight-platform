@@ -24,7 +24,7 @@ import {
     getRecentNotifications,
     markNotificationsRead,
     getMyChildren,
-    getForumSekolahPosts, addForumSekolahAck, createParentForumPost,
+    getForumSekolahPosts, getForumSekolahSentPosts, addForumSekolahAck, createParentForumPost,
     getChildLateArrivals,
     getChildExits,
 } from './api.js';
@@ -838,23 +838,8 @@ async function loadForumPosts(loadMore = false) {
             posts = await getForumSekolahPosts(
                 currentUser.school_id, currentUser.user_id, LIMIT, _forumOffset);
         } else {
-            // Terkirim: posting yang dibuat ortu ini
-            const { data, error } = await supabase
-                .from('forum_posts')
-                .select(`
-                    post_id, title, body, created_at, is_edited,
-                    author_user_id,
-                    acknowledgements:forum_post_acknowledgements(user_id),
-                    audience:forum_post_audience(user_id)
-                `)
-                .eq('scope_type', 'SEKOLAH')
-                .eq('school_id', currentUser.school_id)
-                .eq('author_user_id', currentUser.user_id)
-                .is('deleted_at', null)
-                .order('created_at', { ascending: false })
-                .range(_forumOffset, _forumOffset + LIMIT - 1);
-            if (error) throw error;
-            posts = data ?? [];
+            posts = await getForumSekolahSentPosts(
+                currentUser.school_id, currentUser.user_id, LIMIT, _forumOffset);
         }
 
         loadingEl.style.display = 'none';

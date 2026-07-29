@@ -573,12 +573,16 @@ function buildRecipientGroupButtons() {
     const container = document.getElementById('forum-recipient-group-btns');
     container.innerHTML = '';
 
+    // Bug #6: TU tidak boleh broadcast ke sesama TU — hapus "Semua TU/Admin",
+    //          hanya "TU/Admin tertentu" (hasIndividual: true, labelSemua kosong trick: tidak ada btnAll)
+    // Bug #7: tambah Guru Wali
     const groups = [
         { label: 'Kepsek',        group: 'KEPSEK',           hasIndividual: false, labelSemua: 'Kepsek' },
         { label: 'Waka',          group: 'SEMUA_WAKA',       hasIndividual: true, needsJabatan: true },
         { label: 'Kaprodi',       group: 'SEMUA_KAPRODI',    hasIndividual: true, needsJurusan: true },
-        { label: 'Guru',          group: 'SEMUA_GURU',       hasIndividual: true, pickerGroup: 'GURU_MAPEL'  },
+        { label: 'Guru',          group: 'SEMUA_GURU',       hasIndividual: true, pickerGroup: 'GURU_MAPEL' },
         { label: 'Wali Kelas',    group: 'SEMUA_WALI_KELAS', hasIndividual: true, needsJurusan: true },
+        { label: 'Guru Wali',     group: 'SEMUA_GURU_WALI',  hasIndividual: true  },
         { label: 'Guru BK',       group: 'SEMUA_BK',         hasIndividual: true  },
         { label: 'Guru Piket',    group: 'GURU_PIKET',       hasIndividual: true, needsHari: true },
         { label: 'Semua Siswa',   group: 'SEMUA_SISWA',      hasIndividual: false },
@@ -587,27 +591,31 @@ function buildRecipientGroupButtons() {
         { label: 'Semua Ortu',    group: 'SEMUA_ORTU',       hasIndividual: false },
         { label: 'Ortu Kelas',    group: 'ORTU_KELAS',       hasIndividual: true, needsKelas: true },
         { label: 'Ortu Jurusan',  group: 'ORTU_JURUSAN',     hasIndividual: true, needsJurusan: true },
-        { label: 'TU / Admin',    group: 'SEMUA_TU',         hasIndividual: true  },
+        { label: 'TU / Admin',    group: 'SEMUA_TU',         hasIndividual: true, skipSemua: true },
     ];
 
     groups.forEach(g => {
         const wrap = document.createElement('div');
         wrap.style.cssText = 'display:flex;gap:2px;margin-bottom:6px;width:100%';
 
-        const btnAll = document.createElement('button');
-        btnAll.className = 'btn btn-secondary';
-        btnAll.style.cssText = g.hasIndividual
-            ? 'border-radius:6px 0 0 6px;padding-right:8px'
-            : '';
-        btnAll.textContent = g.labelSemua ?? `Semua ${g.label}`;
-        btnAll.addEventListener('click', () => addRecipientGroup({ ...g, mode: 'semua' }));
-        wrap.appendChild(btnAll);
+        // skipSemua: true → jangan tampilkan tombol "Semua X" (hanya picker)
+        if (!g.skipSemua) {
+            const btnAll = document.createElement('button');
+            btnAll.className = 'btn btn-secondary';
+            btnAll.style.cssText = g.hasIndividual
+                ? 'border-radius:6px 0 0 6px;padding-right:8px'
+                : '';
+            btnAll.textContent = g.labelSemua ?? `Semua ${g.label}`;
+            btnAll.addEventListener('click', () => addRecipientGroup({ ...g, mode: 'semua' }));
+            wrap.appendChild(btnAll);
+        }
 
         if (g.hasIndividual) {
             const btnPick = document.createElement('button');
             btnPick.className = 'btn btn-secondary';
-            btnPick.style.cssText = 'border-radius:0 6px 6px 0;padding-left:6px;' +
-                'border-left:1px solid var(--color-border)';
+            btnPick.style.cssText = g.skipSemua
+                ? 'border-radius:6px;'
+                : 'border-radius:0 6px 6px 0;padding-left:6px;border-left:1px solid var(--color-border)';
             btnPick.textContent = `${g.label} tertentu`;
             btnPick.addEventListener('click', () => addRecipientGroup({ ...g, mode: 'tertentu' }));
             wrap.appendChild(btnPick);
