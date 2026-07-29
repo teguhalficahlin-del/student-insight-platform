@@ -13,7 +13,7 @@ import {
     getMyPklPlacement, getMyPklAttendance,
     getMyCases,
     getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
-    getMyForumClass, getForumPosts, addForumAck,
+    getForumSekolahPosts, addForumSekolahAck,
     getMyLateArrivals,
     getMyExits,
 } from './api.js';
@@ -803,171 +803,126 @@ init().catch(err => {
     }
 });
 
-// ─── TAB FORUM ───────────────────────────────────────────────
+// ─── Forum Sekolah ────────────────────────────────────────────
 
-let forumClassId  = null;
-let forumAcadYear = null;
-let forumOffset   = 0;
-let forumHasMore  = false;
-let forumInitDone = false;
+let _forumOffset   = 0;
+let _forumHasMore  = false;
+let _forumInitDone = false;
 
 async function initForumTab() {
-    if (forumInitDone) { await loadForumPosts(); return; }
-    forumInitDone = true;
-
-    const loadingEl = document.getElementById('forum-loading');
-    loadingEl.textContent = 'Memuat forum…';
-
-    let cls;
-    try {
-        cls = await getMyForumClass(currentUser.user_id);
-    } catch (e) {
-        loadingEl.textContent = 'Gagal memuat data kelas.';
-        return;
-    }
-
-    if (!cls) {
-        loadingEl.textContent = 'Kamu belum terdaftar di kelas manapun.';
-        return;
-    }
-
-    forumClassId  = cls.class_id;
-    forumAcadYear = cls.academic_year;
+    if (_forumInitDone) { await loadForumPosts(); return; }
+    _forumInitDone = true;
 
     document.getElementById('btn-load-more-forum')
         .addEventListener('click', () => loadForumPosts(true));
+
+    // Modal detail
+    document.getElementById('btn-forum-detail-close')
+        .addEventListener('click', closeForumDetail);
+    document.getElementById('modal-forum-detail')
+        .addEventListener('click', e => {
+            if (e.target === e.currentTarget) closeForumDetail();
+        });
 
     await loadForumPosts();
 }
 
 async function loadForumPosts(loadMore = false) {
-    if (!forumClassId) return;
-
-    const loadingEl  = document.getElementById('forum-loading');
-    const listEl     = document.getElementById('forum-posts-list');
-    const moreBtn    = document.getElementById('btn-load-more-forum');
+    const loadingEl = document.getElementById('forum-loading');
+    const listEl    = document.getElementById('forum-posts-list');
+    const moreBtn   = document.getElementById('btn-load-more-forum');
+    const LIMIT     = 20;
 
     if (!loadMore) {
-        forumOffset = 0;
+        _forumOffset = 0;
         listEl.innerHTML = '';
     }
     loadingEl.style.display = '';
     loadingEl.textContent   = 'Memuat…';
 
-    let posts;
     try {
-        posts = await getForumPosts(
-            forumClassId, forumAcadYear,
-            currentUser.user_id, currentUser.school_id,
-            20, forumOffset
-        );
+        const posts = await getForumSekolahPosts(
+            currentUser.school_id, currentUser.user_id, LIMIT, _forumOffset);
+
+        loadingEl.style.display = 'none';
+
+        if (!posts.length && _forumOffset === 0) {
+            loadingEl.style.display = '';
+            loadingEl.textContent   = 'Belum ada pengumuman untukmu.';
+            moreBtn.style.display   = 'none';
+            return;
+        }
+
+        posts.forEach(p => listEl.appendChild(renderForumCard(p)));
+        _forumOffset += posts.length;
+        _forumHasMore = posts.length === LIMIT;
+        moreBtn.style.display = _forumHasMore ? '' : 'none';
     } catch (e) {
-        loadingEl.textContent = 'Gagal memuat posting forum.';
-        return;
-    }
-
-    loadingEl.style.display = 'none';
-
-    if (posts.length === 0 && forumOffset === 0) {
         loadingEl.style.display = '';
-        loadingEl.textContent   = 'Belum ada posting forum untuk kelasmu.';
-        moreBtn.style.display   = 'none';
-        return;
+        loadingEl.textContent   = 'Gagal memuat forum.';
     }
-
-    posts.forEach(p => listEl.appendChild(renderForumCard(p)));
-
-    forumOffset  += posts.length;
-    forumHasMore  = posts.length === 20;
-    moreBtn.style.display = forumHasMore ? '' : 'none';
 }
 
-function renderForumCard(p) {
+function renderForumCard(post) {
     const card = document.createElement('div');
     card.className = 'section-card';
-    card.style.marginBottom = '12px';
+    card.style.cssText = 'margin-bottom:12px;cursor:pointer';
 
-    // Badge kategori
-    let badgeHtml = '';
-    if (p.category) {
-        const color = p.category.polarity === 'positive'
-            ? 'color:var(--color-success);background:rgba(74,222,128,0.15)'
-            : p.category.polarity === 'concern'
-            ? 'color:var(--color-danger);background:rgba(248,113,113,0.15)'
-            : 'color:#e2e8f0;background:rgba(148,163,184,0.25)';
-        badgeHtml = `<span style="font-size:0.75rem;padding:2px 8px;border-radius:99px;${color}">${esc(p.category.label_sekolah)}</span>`;
-    }
-
-    // Chip nama siswa yang menjadi subjek
-    let subjectsHtml = '';
-    if (p.subjects?.length) {
-        const chips = p.subjects
-            .filter(s => s.student)
-            .map(s => `<span style="font-size:0.75rem;background:var(--color-surface);color:var(--color-text);border-radius:99px;padding:2px 8px">${esc(s.student.full_name)}</span>`)
-            .join(' ');
-        if (chips) subjectsHtml = `<div style="margin:6px 0;display:flex;flex-wrap:wrap;gap:4px">${chips}</div>`;
-    }
-
-    // Acknowledgement
-    const alreadyAck = (p.acknowledgements ?? []).some(a => a.user_id === currentUser.user_id);
-    const ackBtnId   = `ack-${p.post_id}`;
-    const ackHtml    = alreadyAck
-        ? `<button class="btn btn-secondary" disabled style="font-size:0.8rem;padding:4px 12px">✓ Sudah dibaca</button>`
-        : `<button id="${ackBtnId}" class="btn btn-primary" style="font-size:0.8rem;padding:4px 12px">Tandai sudah baca</button>`;
-
-    // Komentar
-    const comments     = p.comments ?? [];
-    const commentsHtml = comments.length
-        ? comments.map(c => `
-            <div style="padding:6px 0;border-top:1px solid var(--color-border,#e5e7eb);font-size:0.85rem">
-                <span style="font-weight:600">${esc(c.author?.full_name ?? '—')}</span>
-                <span style="color:var(--color-text-muted,#6b7280)"> · ${fmtRelative(c.created_at)}</span>
-                <p style="margin:3px 0 0">${esc(c.body)}</p>
-            </div>`).join('')
-        : '';
-
-    // Waktu relatif
-    const timeAgo = fmtRelative(p.created_at);
-
-    // Pin indicator
-    const pinHtml = p.is_pinned
-        ? `<span style="font-size:0.75rem;color:var(--color-warning,#d97706)">📌 Disematkan · </span>`
-        : '';
+    const time    = new Date(post.created_at).toLocaleString('id-ID',
+        { dateStyle: 'medium', timeStyle: 'short' });
+    const author  = esc(post.author?.full_name ?? '—');
+    const ackCnt  = post.acknowledgements?.length ?? 0;
+    const hasFile = !!post.attachment_url;
+    const edited  = post.is_edited
+        ? '<span class="hint" style="font-size:11px"> (diedit)</span>' : '';
 
     card.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:6px">
-            <div>
-                ${pinHtml}
-                <span style="font-weight:600">${esc(p.author?.full_name ?? '—')}</span>
-                <span style="font-size:0.8rem;color:var(--color-text-muted,#6b7280)"> · ${timeAgo}</span>
-            </div>
-            ${badgeHtml}
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <strong>${esc(post.title)}${edited}</strong>
+            <span class="hint" style="white-space:nowrap;font-size:12px">${time}</span>
         </div>
-        ${subjectsHtml}
-        ${p.title && p.title !== p.body ? `<div style="font-weight:600;margin-bottom:4px">${esc(p.title)}</div>` : ''}
-        <div style="white-space:pre-wrap;font-size:0.9rem">${esc(p.body ?? '')}</div>
-        <div style="margin-top:10px">
-            ${ackHtml}
-        </div>
-        ${commentsHtml}
-    `;
+        <p class="hint" style="margin:4px 0 8px">${author}</p>
+        <p style="margin:0 0 8px;font-size:14px;white-space:pre-wrap">${
+            esc(post.body).substring(0, 160)}${post.body.length > 160 ? '…' : ''}</p>
+        <div style="display:flex;gap:12px;font-size:12px;color:var(--color-muted)">
+            ${hasFile ? '<span>📎 Lampiran</span>' : ''}
+            <span>✓ ${ackCnt} dibaca</span>
+        </div>`;
 
-    if (!alreadyAck) {
-        card.querySelector(`#${ackBtnId}`)?.addEventListener('click', async function () {
-            this.disabled = true;
-            this.textContent = '…';
-            try {
-                await addForumAck(p.post_id, currentUser.user_id, currentUser.school_id);
-                this.textContent = '✓ Sudah dibaca';
-                this.className = 'btn btn-secondary';
-            } catch {
-                this.disabled = false;
-                this.textContent = 'Tandai sudah baca';
-            }
-        });
+    card.addEventListener('click', () => openForumDetail(post));
+    return card;
+}
+
+function openForumDetail(post) {
+    const modal = document.getElementById('modal-forum-detail');
+    modal.style.display = 'flex';
+
+    document.getElementById('detail-forum-title').textContent = post.title;
+    document.getElementById('detail-forum-body').textContent  = post.body;
+
+    const time   = new Date(post.created_at).toLocaleString('id-ID',
+        { dateStyle: 'long', timeStyle: 'short' });
+    const author = post.author?.full_name ?? '—';
+    const edited = post.is_edited ? ' • diedit' : '';
+    document.getElementById('detail-forum-meta').textContent =
+        `${author} · ${time}${edited}`;
+
+    const attEl = document.getElementById('detail-forum-attachment');
+    if (post.attachment_url) {
+        attEl.innerHTML = `<a href="${post.attachment_url}" target="_blank"
+            class="btn btn-secondary" style="font-size:13px">
+            📎 ${esc(post.attachment_name ?? 'Unduh Lampiran')}</a>`;
+    } else {
+        attEl.innerHTML = '';
     }
 
-    return card;
+    // Acknowledge otomatis saat dibuka
+    addForumSekolahAck(post.post_id, currentUser.user_id, currentUser.school_id)
+        .catch(() => {});
+}
+
+function closeForumDetail() {
+    document.getElementById('modal-forum-detail').style.display = 'none';
 }
 
 function fmtRelative(isoStr) {
