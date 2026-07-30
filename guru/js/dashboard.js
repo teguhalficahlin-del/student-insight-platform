@@ -8007,6 +8007,11 @@ async function deleteTp(loId) {
     }
 }
 
+// Expose ke global scope — dipanggil via onclick di HTML dinamis (renderTpList),
+// tidak bisa diakses langsung dari ES module tanpa assignment eksplisit.
+window.openTpForm = openTpForm;
+window.deleteTp   = deleteTp;
+
 // ── Download Template Excel CP & TP ──────────────────────────────────────────
 
 function downloadCpTpTemplate() {
