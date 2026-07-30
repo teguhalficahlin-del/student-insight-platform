@@ -1,7 +1,7 @@
 /**
  * @file bulk-import-parents/index.ts
  * @edge-function bulk-import-parents
- * @version 1.1.0
+ * @version 1.2.0
  *
  * Bulk-provisions ORTU (parent) accounts and links them to students
  * via student_parents. Idempotent: re-importing the same NIK skips
@@ -41,15 +41,16 @@
  *          users.full_name (no Auth/password change).
  *  10.  Batch upsert student_parents (ON CONFLICT DO NOTHING) for all
  *       valid rows.
- *  11.  Response: { total, success, updated, skipped, failed, errors[] }
+ *  11.  Response: { total, success, updated, restored, skipped, failed, errors[] }
  *
  * RESPONSE FIELD MEANING (mutually exclusive partition of `total`):
- *   success — row processed with a NEWLY created ORTU account
- *   updated — row processed against an existing ORTU account whose
- *             full_name was refreshed from this row's nama_ortu
- *   skipped — (reserved; currently unused — every existing-NIK row is
- *             now counted as `updated` instead of silently skipped)
- *   failed  — row could not be processed (validation/resolution error)
+ *   success  — row processed with a NEWLY created ORTU account
+ *   updated  — row processed against an existing active ORTU account whose
+ *              full_name was refreshed from this row's nama_ortu
+ *   restored — row processed by restoring a soft-deleted ORTU account
+ *              (deleted_at cleared, is_active set true, full_name updated)
+ *   skipped  — (reserved; currently unused)
+ *   failed   — row could not be processed (validation/resolution error)
  */
 
 import { handleCors, corsHeaders }     from '../_shared/cors.ts';
@@ -78,7 +79,7 @@ interface ImportError {
     message: string;
 }
 
-type RowOutcome = 'success' | 'updated';
+type RowOutcome = 'success' | 'updated' | 'restored';
 
 // ─────────────────────────────────────────────────────────────
 // MAIN HANDLER
@@ -203,6 +204,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         // ── 9a. Create ORTU accounts for new (non-existing) NIKs ──
         const rowOutcome = new Map<number, RowOutcome>(); // rowNumber -> outcome
         const failedNiks = new Set<string>();
+        const restoredNiks = new Set<string>(); // NIK soft-deleted yang berhasil di-restore
 
         const newNikToName = new Map<string, string>();
         for (const row of validRows) {
@@ -268,7 +270,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 }
 
                 nikToUserId.set(nik, deletedUser.user_id);
-                existingNikSet.add(nik); // agar step 10 assign 'updated' bukan 'success'
+                restoredNiks.add(nik);
+                existingNikSet.add(nik); // agar step 10 masuk cabang existingNikSet
                 continue;
             }
 
@@ -331,7 +334,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
             }
 
             const parentUserId = nikToUserId.get(row.nik)!;
-            rowOutcome.set(row.rowNumber, existingNikSet.has(row.nik) ? 'updated' : 'success');
+            rowOutcome.set(
+                row.rowNumber,
+                restoredNiks.has(row.nik) ? 'restored'
+                : existingNikSet.has(row.nik) ? 'updated'
+                : 'success',
+            );
             linkRows.push({ student_id: row.student_id!, parent_user_id: parentUserId });
         }
 
@@ -347,21 +355,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }
 
         // ── 11. Response ────────────────────────────────────────
-        let success = 0;
-        let updated = 0;
+        let success  = 0;
+        let updated  = 0;
+        let restored = 0;
         for (const outcome of rowOutcome.values()) {
-            if (outcome === 'success') success++;
+            if (outcome === 'success')  success++;
+            else if (outcome === 'restored') restored++;
             else updated++;
         }
 
         return ok({
-            total:   rows.length,
+            total:    rows.length,
             success,
             updated,
-            skipped: 0,
-            failed:  rows.length - success - updated,
+            restored, // akun soft-deleted yang dipulihkan saat import ulang
+            skipped:  0,
+            failed:   rows.length - success - updated - restored,
             errors,
-            created: createdAccounts, // temp_password per akun baru — tampilkan sekali ke admin
+            created:  createdAccounts, // temp_password per akun baru — tampilkan sekali ke admin
         });
 
     } catch (err) {

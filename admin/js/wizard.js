@@ -2011,7 +2011,7 @@ const IMPORT_STEP_INFO = {
     6: { title: 'Siswa',
          desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
     7: { title: 'Orang Tua',
-         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
+         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.<br><strong>Import ulang aman</strong> — sistem akan memperbarui nama dan memulihkan akun yang pernah dihapus. Tidak perlu menghapus data lama sebelum import ulang.' },
     8: { title: 'DUDI',
          desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
     12: {
@@ -2183,12 +2183,13 @@ function wireImportBlock(step, { importFn, onDone } = {}) {
 
 /** Render ringkasan + tabel error/konflik hasil impor. */
 function renderImportResult(el, result) {
-    const { total = 0, success = 0, updated = 0, failed = 0, errors = [], conflicts = [] } = result ?? {};
+    const { total = 0, success = 0, updated = 0, restored = 0, failed = 0, errors = [], conflicts = [] } = result ?? {};
     const problems = [...errors, ...conflicts];
     const allGood  = failed === 0 && problems.length === 0;
 
     const summary = `Total ${total} baris — berhasil ${success}` +
-        (updated ? `, diperbarui ${updated}` : '') +
+        (updated   ? `, diperbarui ${updated}`   : '') +
+        (restored  ? `, dipulihkan ${restored}`  : '') +
         `, gagal ${failed}` +
         (conflicts.length ? `, konflik ${conflicts.length}` : '') + '.';
 
