@@ -7813,6 +7813,7 @@ async function loadCpPanel(loId, preselectedElementId) {
 async function populateTpKelasCheckboxes(loId) {
     const container = document.getElementById('penilaian-tp-kelas-checkboxes');
     container.innerHTML = '';
+    if (!_penilaianCtx.subjectId) return;
     try {
         const { data } = await supabase
             .from('teaching_assignments')
