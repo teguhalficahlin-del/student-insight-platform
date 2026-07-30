@@ -8255,18 +8255,16 @@ async function saveUploadedCpTp(cpRows, tpGroups) {
         }
 
         document.getElementById('penilaian-upload-modal').style.display = 'none';
-        showPenilaianMsg('settings',
-            `${cpRows.length} CP dan ${savedTp} TP berhasil disimpan.`, 'success');
         await loadTpList();
 
-        // TP dari upload Excel tidak terhubung ke elemen CP (element_id = null by design).
-        // Tampilkan peringatan permanen agar guru tahu cara menghubungkannya.
+        // Tidak lewat showPenilaianMsg karena showPenilaianMsg menjadwal
+        // setTimeout hide 4 detik — peringatan ini harus permanen.
         const _uploadMsg = document.getElementById('penilaian-settings-msg');
         if (_uploadMsg) {
             _uploadMsg.style.display = '';
             _uploadMsg.style.color   = 'var(--color-warning, #b45309)';
             _uploadMsg.innerHTML =
-                `✓ ${savedTp} TP berhasil diupload. ` +
+                `✓ ${cpRows.length} CP dan ${savedTp} TP berhasil diupload. ` +
                 `<strong>TP belum terhubung ke Elemen CP.</strong> ` +
                 `Klik <em>Edit</em> pada setiap TP → pilih Elemen CP yang dicakup.`;
         }
