@@ -5016,10 +5016,17 @@ function renderDrillTree() {
 
     _forumPrograms.forEach(prog => {
         const expanded = _drillExpanded.has(prog.program_id);
-        const jurAll   = _drillJurusanAll.has(prog.program_id);
-        const klsCnt   = _forumClasses.filter(c => c.program_id === prog.program_id && _drillKelasAll.has(c.class_id)).length;
-        const indCnt   = [..._drillIndividu.values()].filter(c => c._programId === prog.program_id).length;
-        const selCount = (jurAll ? 1 : 0) + klsCnt + indCnt;
+        const jurAll     = _drillJurusanAll.has(prog.program_id);
+        const jurClasses = _forumClasses.filter(c => c.program_id === prog.program_id);
+        const indCnt     = [..._drillIndividu.values()].filter(c => c._programId === prog.program_id).length;
+        let selCount;
+        if (jurAll) {
+            selCount = jurClasses.reduce((s, c) => s + (_drillKelasData.get(c.class_id)?.length ?? 0), 0);
+        } else {
+            const klsTotalCnt = jurClasses.reduce((s, c) =>
+                _drillKelasAll.has(c.class_id) ? s + (_drillKelasData.get(c.class_id)?.length ?? 0) : s, 0);
+            selCount = klsTotalCnt + indCnt;
+        }
 
         const node = document.createElement('div');
         node.style.cssText = 'border-bottom:1px solid var(--color-border)';
@@ -5078,7 +5085,7 @@ function renderDrillTree() {
                 const klsAll      = _drillKelasAll.has(cls.class_id);
                 const klsData     = _drillKelasData.get(cls.class_id);
                 const iCnt        = [..._drillIndividu.values()].filter(c => c._classId === cls.class_id).length;
-                const klsSelCnt   = (klsAll ? 1 : 0) + iCnt;
+                const klsSelCnt   = (jurAll || klsAll) ? (klsData?.length ?? 0) : iCnt;
 
                 const klsNode = document.createElement('div');
                 klsNode.style.cssText = 'margin-left:4px';
@@ -5109,8 +5116,9 @@ function renderDrillTree() {
                         const klsAllRow = document.createElement('label');
                         klsAllRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer';
                         const klsAllCb = document.createElement('input');
-                        klsAllCb.type    = 'checkbox';
-                        klsAllCb.checked = klsAll;
+                        klsAllCb.type     = 'checkbox';
+                        klsAllCb.checked  = klsAll || jurAll;
+                        klsAllCb.disabled = jurAll;
                         klsAllCb.addEventListener('change', () => {
                             if (klsAllCb.checked) {
                                 _drillKelasAll.add(cls.class_id);
@@ -5136,11 +5144,13 @@ function renderDrillTree() {
                             const row = document.createElement('label');
                             row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer';
                             const cb = document.createElement('input');
-                            cb.type    = 'checkbox';
-                            cb.checked = _drillIndividu.has(c.user_id);
+                            cb.type     = 'checkbox';
+                            cb.checked  = jurAll || klsAll || _drillIndividu.has(c.user_id);
+                            cb.disabled = jurAll || klsAll;
                             cb.addEventListener('change', () => {
                                 if (cb.checked) _drillIndividu.set(c.user_id, c);
                                 else _drillIndividu.delete(c.user_id);
+                                renderDrillTree();
                             });
                             row.append(cb, document.createTextNode(c.full_name));
                             klsSub.appendChild(row);
