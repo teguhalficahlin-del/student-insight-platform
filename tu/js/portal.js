@@ -418,7 +418,9 @@ let _drillType       = null;        // 'SISWA' | 'ORTU'
 let _drillExpanded   = new Set();   // program_id yang ter-expand
 let _drillJurusanAll = new Set();   // program_id pilih semua
 let _drillKelasAll   = new Set();   // class_id pilih semua
-let _drillIndividu   = new Map();   // user_id → candidate
+let _drillIndividu      = new Map();   // user_id → candidate
+let _drillKelasExpanded = new Set();   // class_id yang ter-expand
+let _drillKelasData     = new Map();   // class_id → candidates[] (cache)
 
 async function initForumSection() {
     if (_forumInitDone) { await loadForumPosts(); return; }
@@ -933,7 +935,10 @@ function _initPickerWiring(modal) {
             else closeRecipientPicker();
         }
     });
-    document.getElementById('picker-search').addEventListener('input', renderPickerList);
+    document.getElementById('picker-search').addEventListener('input', () => {
+        if (modal.dataset.drillMode === '1') renderDrillTree();
+        else renderPickerList();
+    });
     document.getElementById('picker-filter-jabatan').addEventListener('change', loadPickerCandidates);
     document.getElementById('picker-filter-jurusan').addEventListener('change', loadPickerCandidates);
     document.getElementById('picker-filter-kelas').addEventListener('change', loadPickerCandidates);
@@ -956,6 +961,8 @@ function openDrillDownPicker(drillType) {
     _drillJurusanAll.clear();
     _drillKelasAll.clear();
     _drillIndividu.clear();
+    _drillKelasExpanded.clear();
+    _drillKelasData.clear();
 
     const modal = document.getElementById('modal-forum-picker');
     modal.dataset.drillMode = '1';
@@ -977,7 +984,8 @@ function openDrillDownPicker(drillType) {
 }
 
 function renderDrillTree() {
-    const tree = document.getElementById('picker-tree');
+    const tree       = document.getElementById('picker-tree');
+    const searchText = (document.getElementById('picker-search')?.value ?? '').toLowerCase().trim();
     tree.style.display = 'block';
     tree.innerHTML = '';
 
@@ -1017,57 +1025,114 @@ function renderDrillTree() {
 
         if (expanded) {
             const sub = document.createElement('div');
-            sub.style.cssText = 'padding-left:20px;padding-bottom:8px';
+            sub.style.cssText = 'padding-left:16px;padding-bottom:8px';
 
-            const allBtn = document.createElement('button');
-            allBtn.className = jurAll ? 'btn btn-primary' : 'btn btn-secondary';
-            allBtn.style.cssText = 'margin:4px 0;font-size:12px';
-            allBtn.textContent = jurAll ? `✓ Semua ${prog.name}` : `Semua ${prog.name}`;
-            allBtn.addEventListener('click', () => {
-                if (_drillJurusanAll.has(prog.program_id)) {
-                    _drillJurusanAll.delete(prog.program_id);
-                } else {
+            // Checkbox "Semua [jurusan]"
+            const jurRow = document.createElement('label');
+            jurRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 4px;cursor:pointer';
+            const jurCb = document.createElement('input');
+            jurCb.type    = 'checkbox';
+            jurCb.checked = jurAll;
+            jurCb.addEventListener('change', () => {
+                if (jurCb.checked) {
                     _drillJurusanAll.add(prog.program_id);
                     _forumClasses.filter(c => c.program_id === prog.program_id)
                         .forEach(c => _drillKelasAll.delete(c.class_id));
                     for (const [uid, c] of _drillIndividu.entries()) {
                         if (c._programId === prog.program_id) _drillIndividu.delete(uid);
                     }
+                } else {
+                    _drillJurusanAll.delete(prog.program_id);
                 }
                 renderDrillTree();
             });
-            sub.appendChild(allBtn);
+            const jurLbl = document.createElement('span');
+            jurLbl.style.cssText = 'font-size:13px';
+            jurLbl.textContent = `Semua ${prog.name}`;
+            jurRow.append(jurCb, jurLbl);
+            sub.appendChild(jurRow);
 
+            // Kelas — masing-masing collapsed by default
             _forumClasses.filter(c => c.program_id === prog.program_id).forEach(cls => {
-                const klsAll = _drillKelasAll.has(cls.class_id);
-                const iCnt   = [..._drillIndividu.values()].filter(c => c._classId === cls.class_id).length;
-                const row    = document.createElement('div');
-                row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 0';
+                const klsExpanded = _drillKelasExpanded.has(cls.class_id);
+                const klsAll      = _drillKelasAll.has(cls.class_id);
+                const klsData     = _drillKelasData.get(cls.class_id);
+                const iCnt        = [..._drillIndividu.values()].filter(c => c._classId === cls.class_id).length;
+                const klsSelCnt   = (klsAll ? 1 : 0) + iCnt;
 
-                const klsBtn = document.createElement('button');
-                klsBtn.className = klsAll ? 'btn btn-primary' : 'btn btn-secondary';
-                klsBtn.style.cssText = 'font-size:11px;padding:3px 8px;flex:1';
-                klsBtn.textContent = klsAll ? `✓ ${cls.name}` : cls.name;
-                klsBtn.addEventListener('click', () => {
-                    if (_drillKelasAll.has(cls.class_id)) {
-                        _drillKelasAll.delete(cls.class_id);
+                const klsNode = document.createElement('div');
+                klsNode.style.cssText = 'margin-left:4px';
+
+                const klsHdr = document.createElement('div');
+                klsHdr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 6px;cursor:pointer;user-select:none;border-radius:4px';
+                const klsArrow = document.createElement('span');
+                klsArrow.style.cssText = 'font-size:9px;color:var(--color-muted);min-width:10px';
+                klsArrow.textContent = klsExpanded ? '▼' : '▶';
+                const klsLbl = document.createElement('span');
+                klsLbl.style.cssText = 'flex:1;font-size:13px';
+                klsLbl.textContent = cls.name;
+                const klsBadge = document.createElement('span');
+                klsBadge.style.cssText = 'font-size:11px;color:var(--color-primary)';
+                klsBadge.textContent = klsSelCnt > 0 ? `${klsSelCnt} dipilih` : '';
+                klsHdr.append(klsArrow, klsLbl, klsBadge);
+                klsHdr.addEventListener('click', () => _toggleDrillKelas(cls.class_id, cls.name, prog.program_id));
+                klsNode.appendChild(klsHdr);
+
+                if (klsExpanded) {
+                    const klsSub = document.createElement('div');
+                    klsSub.style.cssText = 'padding-left:20px;padding-bottom:4px';
+
+                    if (!klsData) {
+                        klsSub.innerHTML = '<span style="font-size:12px;color:var(--color-muted)">Memuat…</span>';
                     } else {
-                        _drillKelasAll.add(cls.class_id);
-                        for (const [uid, c] of _drillIndividu.entries()) {
-                            if (c._classId === cls.class_id) _drillIndividu.delete(uid);
+                        // Checkbox "Semua [kelas]"
+                        const klsAllRow = document.createElement('label');
+                        klsAllRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer';
+                        const klsAllCb = document.createElement('input');
+                        klsAllCb.type    = 'checkbox';
+                        klsAllCb.checked = klsAll;
+                        klsAllCb.addEventListener('change', () => {
+                            if (klsAllCb.checked) {
+                                _drillKelasAll.add(cls.class_id);
+                                for (const [uid, c] of _drillIndividu.entries()) {
+                                    if (c._classId === cls.class_id) _drillIndividu.delete(uid);
+                                }
+                            } else {
+                                _drillKelasAll.delete(cls.class_id);
+                            }
+                            renderDrillTree();
+                        });
+                        const klsAllLbl = document.createElement('span');
+                        klsAllLbl.style.cssText = 'font-size:12px;font-weight:500';
+                        klsAllLbl.textContent = `Semua ${cls.name}`;
+                        klsAllRow.append(klsAllCb, klsAllLbl);
+                        klsSub.appendChild(klsAllRow);
+
+                        // Individu — filter by search
+                        const filtered = searchText
+                            ? klsData.filter(c => c.full_name.toLowerCase().includes(searchText))
+                            : klsData;
+                        filtered.forEach(c => {
+                            const row = document.createElement('label');
+                            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer';
+                            const cb = document.createElement('input');
+                            cb.type    = 'checkbox';
+                            cb.checked = _drillIndividu.has(c.user_id);
+                            cb.addEventListener('change', () => {
+                                if (cb.checked) _drillIndividu.set(c.user_id, c);
+                                else _drillIndividu.delete(c.user_id);
+                            });
+                            row.append(cb, document.createTextNode(c.full_name));
+                            klsSub.appendChild(row);
+                        });
+                        if (filtered.length === 0 && searchText) {
+                            klsSub.insertAdjacentHTML('beforeend',
+                                '<p style="font-size:12px;color:var(--color-muted);padding:4px 0">Tidak ada hasil pencarian</p>');
                         }
                     }
-                    renderDrillTree();
-                });
-
-                const pickBtn = document.createElement('button');
-                pickBtn.className = 'btn btn-secondary';
-                pickBtn.style.cssText = 'font-size:11px;padding:3px 8px';
-                pickBtn.textContent = iCnt > 0 ? `${iCnt} individu` : 'Individu…';
-                pickBtn.addEventListener('click', () => loadDrillIndividu(cls.class_id, cls.name, prog.program_id));
-
-                row.append(klsBtn, pickBtn);
-                sub.appendChild(row);
+                    klsNode.appendChild(klsSub);
+                }
+                sub.appendChild(klsNode);
             });
 
             node.appendChild(sub);
@@ -1076,65 +1141,27 @@ function renderDrillTree() {
     });
 }
 
-async function loadDrillIndividu(classId, className, programId) {
-    const tree    = document.getElementById('picker-tree');
-    const listEl  = document.getElementById('picker-list');
-    const loadEl  = document.getElementById('picker-loading');
-    const errEl   = document.getElementById('picker-error');
-    const titleEl = document.getElementById('picker-title');
-
-    tree.style.display   = 'none';
-    listEl.style.display = 'none';
-    loadEl.style.display = 'block';
-    errEl.style.display  = 'none';
-    titleEl.textContent  = `Pilih individu di ${className}`;
-
-    try {
+async function _toggleDrillKelas(classId, className, programId) {
+    if (_drillKelasExpanded.has(classId)) {
+        _drillKelasExpanded.delete(classId);
+        renderDrillTree();
+        return;
+    }
+    _drillKelasExpanded.add(classId);
+    renderDrillTree(); // tampil "Memuat…" dulu
+    if (!_drillKelasData.has(classId)) {
         const targetGroup = _drillType === 'SISWA_DRILL' ? 'SISWA_PER_KELAS' : 'ORTU_PER_KELAS';
-        const candidates  = await getForumRecipientCandidates(targetGroup, {
-            classId,
-            academicYear: schoolConfig?.current_academic_year,
-        });
-
-        loadEl.style.display = 'none';
-        listEl.style.display = 'block';
-        listEl.innerHTML     = '';
-
-        if (candidates.length === 0) {
-            listEl.insertAdjacentHTML('beforeend',
-                '<p style="text-align:center;color:var(--color-muted);padding:12px">Tidak ada data</p>');
-        }
-
-        candidates.forEach(c => {
-            const selected = _drillIndividu.has(c.user_id);
-            const item = document.createElement('label');
-            item.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer';
-            const cb = document.createElement('input');
-            cb.type    = 'checkbox';
-            cb.checked = selected;
-            cb.addEventListener('change', () => {
-                if (cb.checked) { c._classId = classId; c._programId = programId; _drillIndividu.set(c.user_id, c); }
-                else _drillIndividu.delete(c.user_id);
+        try {
+            const candidates = await getForumRecipientCandidates(targetGroup, {
+                classId,
+                academicYear: schoolConfig?.current_academic_year,
             });
-            item.append(cb, document.createTextNode(c.full_name));
-            listEl.appendChild(item);
-        });
-
-        const backBtn = document.createElement('button');
-        backBtn.className = 'btn btn-secondary';
-        backBtn.style.cssText = 'margin-top:10px;width:100%';
-        backBtn.textContent = '← Kembali ke Daftar Jurusan';
-        backBtn.addEventListener('click', () => {
-            listEl.style.display = 'none';
-            tree.style.display   = 'block';
-            titleEl.textContent  = _drillType === 'SISWA_DRILL' ? 'Pilih Siswa Tertentu' : 'Pilih Orang Tua Tertentu';
-        });
-        listEl.appendChild(backBtn);
-    } catch (err) {
-        loadEl.style.display = 'none';
-        errEl.textContent    = fe(err);
-        errEl.style.display  = 'block';
-        tree.style.display   = 'block';
+            candidates.forEach(c => { c._classId = classId; c._programId = programId; });
+            _drillKelasData.set(classId, candidates);
+        } catch (_) {
+            _drillKelasData.set(classId, []);
+        }
+        renderDrillTree();
     }
 }
 
