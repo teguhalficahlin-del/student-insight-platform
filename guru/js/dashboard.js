@@ -4373,6 +4373,13 @@ let _drillKelasData     = new Map();   // class_id → candidates[] (cache)
 let _drillJurusanCount  = new Map();   // program_id → fetched total count
 let _drillKelasCount    = new Map();   // class_id   → fetched total count
 
+// Piket drill-down state
+let _drillPiketExpanded  = new Set();  // dayOfWeek yang ter-expand
+let _drillPiketHariAll   = new Set();  // dayOfWeek semua dipilih
+let _drillPiketIndividu  = new Map();  // user_id → candidate
+let _drillPiketHariData  = new Map();  // dayOfWeek → candidates[] (cache)
+let _drillPiketHariCount = new Map();  // dayOfWeek → fetched count
+
 // ─── Init ─────────────────────────────────────────────────────
 async function initForumTab() {
     if (_forumTabInit) { await loadForumPosts(); return; }
@@ -4612,7 +4619,7 @@ function buildRecipientGroupButtons() {
             { label: 'Wali Kelas',    group: 'SEMUA_WALI_KELAS', hasIndividual: true, labelSemua: 'Semua Wali Kelas'    },
             { label: 'Guru Wali',     group: 'SEMUA_GURU_WALI',  hasIndividual: true  },
             { label: 'Guru BK',       group: 'SEMUA_BK',         hasIndividual: true  },
-            { label: 'Guru Piket',    group: 'GURU_PIKET',       hasIndividual: true },
+            { label: 'Guru Piket',    group: 'GURU_PIKET',       hasIndividual: true, isDrillDownPiket: true },
             { label: 'Semua Siswa',   group: 'SEMUA_SISWA',      hasIndividual: false, labelSemua: 'Semua Siswa' },
             { label: 'Semua Ortu',    group: 'SEMUA_ORTU',       hasIndividual: false, labelSemua: 'Semua Ortu'  },
             { label: 'Siswa tertentu', group: 'SISWA_DRILL', isDrillDown: true, labelSemua: 'Siswa tertentu' },
@@ -4647,7 +4654,7 @@ function buildRecipientGroupButtons() {
             { label: 'Wali Kelas',    group: 'SEMUA_WALI_KELAS', hasIndividual: true, labelSemua: 'Semua Wali Kelas'    },
             { label: 'Guru Wali',     group: 'SEMUA_GURU_WALI',  hasIndividual: true  },
             { label: 'Guru BK',       group: 'SEMUA_BK',         hasIndividual: true  },
-            { label: 'Guru Piket',    group: 'GURU_PIKET',       hasIndividual: true },
+            { label: 'Guru Piket',    group: 'GURU_PIKET',       hasIndividual: true, isDrillDownPiket: true },
             { label: 'Semua Siswa',   group: 'SEMUA_SISWA',      hasIndividual: false, labelSemua: 'Semua Siswa' },
             { label: 'Semua Ortu',    group: 'SEMUA_ORTU',       hasIndividual: false, labelSemua: 'Semua Ortu'  },
             { label: 'Siswa tertentu', group: 'SISWA_DRILL', isDrillDown: true, labelSemua: 'Siswa tertentu' },
@@ -4724,6 +4731,10 @@ async function addRecipientGroup(groupDef, btnEl = null) {
 
     if (groupDef.isDrillDown) {
         openDrillDownPicker(groupDef.group, btnEl);
+        return;
+    }
+    if (groupDef.isDrillDownPiket && groupDef.mode === 'tertentu') {
+        openDrillDownPiketPicker();
         return;
     }
 
@@ -4949,16 +4960,19 @@ function _initPickerWiring(modal) {
     modal.dataset.wired = '1';
     document.getElementById('btn-picker-batal').addEventListener('click', () => {
         if (modal.dataset.drillMode === '1') closeDrillDownPicker();
+        else if (modal.dataset.drillMode === 'piket') closeDrillDownPiketPicker();
         else closeRecipientPicker();
     });
     modal.addEventListener('click', e => {
         if (e.target === e.currentTarget) {
             if (modal.dataset.drillMode === '1') closeDrillDownPicker();
+            else if (modal.dataset.drillMode === 'piket') closeDrillDownPiketPicker();
             else closeRecipientPicker();
         }
     });
     document.getElementById('picker-search').addEventListener('input', () => {
         if (modal.dataset.drillMode === '1') renderDrillTree();
+        else if (modal.dataset.drillMode === 'piket') renderPiketTree();
         else renderPickerList();
     });
     document.getElementById('picker-filter-jabatan').addEventListener('change', loadPickerCandidates);
@@ -4968,6 +4982,8 @@ function _initPickerWiring(modal) {
     document.getElementById('btn-picker-tambahkan').addEventListener('click', () => {
         if (modal.dataset.drillMode === '1') {
             submitDrillDown();
+        } else if (modal.dataset.drillMode === 'piket') {
+            submitDrillDownPiket();
         } else {
             _pickerSelected.forEach((c, uid) => _forumRecipients.set(uid, c));
             renderRecipientChips();
@@ -5284,6 +5300,199 @@ function closeDrillDownPicker() {
     document.getElementById('picker-list').innerHTML     = '';
     _drillType = null;
     _drillExpanded.clear();
+}
+
+// ─── Drill-down Picker Piket ──────────────────────────────────
+const _PIKET_HARI = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+
+function openDrillDownPiketPicker() {
+    _drillPiketExpanded.clear();
+    _drillPiketHariAll.clear();
+    _drillPiketIndividu.clear();
+    _drillPiketHariData.clear();
+    _drillPiketHariCount.clear();
+
+    const modal = document.getElementById('modal-forum-picker');
+    modal.dataset.drillMode = 'piket';
+    modal.style.display = 'flex';
+
+    document.getElementById('picker-title').textContent = 'Pilih Guru Piket Tertentu';
+    document.getElementById('picker-search').value = '';
+    document.getElementById('picker-list').style.display = 'none';
+    document.getElementById('picker-loading').style.display = 'none';
+    document.getElementById('picker-error').style.display = 'none';
+    ['picker-filter-jabatan-wrap','picker-filter-jurusan-wrap',
+     'picker-filter-kelas-wrap','picker-filter-hari-wrap'].forEach(id => {
+        document.getElementById(id).style.display = 'none';
+    });
+    _initPickerWiring(modal);
+    renderPiketTree();
+}
+
+function renderPiketTree() {
+    const tree = document.getElementById('picker-tree');
+    tree.style.display = 'block';
+    tree.innerHTML = '';
+
+    _PIKET_HARI.forEach((hariNama, idx) => {
+        const day      = idx + 1;
+        const expanded = _drillPiketExpanded.has(day);
+        const hariAll  = _drillPiketHariAll.has(day);
+        const hariData = _drillPiketHariData.get(day);
+        const iCnt     = [..._drillPiketIndividu.values()].filter(c => c._dayOfWeek === day).length;
+        const selCount = hariAll
+            ? (_drillPiketHariCount.has(day) ? _drillPiketHariCount.get(day) : (hariData?.length ?? 0))
+            : iCnt;
+
+        const node = document.createElement('div');
+        node.style.cssText = 'border-bottom:1px solid var(--color-border)';
+
+        const hdr = document.createElement('div');
+        hdr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;user-select:none';
+        const arrow = document.createElement('span');
+        arrow.style.cssText = 'font-size:10px;color:var(--color-muted);min-width:12px';
+        arrow.textContent = expanded ? '▼' : '▶';
+        const lbl = document.createElement('span');
+        lbl.style.cssText = 'flex:1;font-weight:500';
+        lbl.textContent = hariNama;
+        const badge = document.createElement('span');
+        badge.style.cssText = 'font-size:11px;color:var(--color-primary);font-weight:500';
+        badge.textContent = selCount > 0 ? `${selCount} dipilih` : '';
+        hdr.append(arrow, lbl, badge);
+        hdr.addEventListener('click', () => _togglePiketHari(day));
+        node.appendChild(hdr);
+
+        if (expanded) {
+            const sub = document.createElement('div');
+            sub.style.cssText = 'padding-left:20px;padding-bottom:8px';
+
+            if (!hariData) {
+                sub.innerHTML = '<span style="font-size:12px;color:var(--color-muted)">Memuat…</span>';
+            } else {
+                // Checkbox "Semua Guru Piket [Hari]"
+                const allRow = document.createElement('label');
+                allRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer';
+                const allCb = document.createElement('input');
+                allCb.type    = 'checkbox';
+                allCb.checked = hariAll;
+                allCb.addEventListener('change', async () => {
+                    if (allCb.checked) {
+                        _drillPiketHariAll.add(day);
+                        for (const [uid, c] of _drillPiketIndividu.entries()) {
+                            if (c._dayOfWeek === day) _drillPiketIndividu.delete(uid);
+                        }
+                        renderPiketTree();
+                        if (!_drillPiketHariCount.has(day)) {
+                            try {
+                                const list = await getForumRecipientCandidates('GURU_PIKET', {
+                                    dayOfWeek: day, academicYear: config.current_academic_year,
+                                });
+                                list.forEach(c => { c._dayOfWeek = day; });
+                                _drillPiketHariCount.set(day, list.length);
+                                if (!_drillPiketHariData.has(day)) _drillPiketHariData.set(day, list);
+                            } catch (_) {
+                                _drillPiketHariCount.set(day, 0);
+                            }
+                            renderPiketTree();
+                        }
+                    } else {
+                        _drillPiketHariAll.delete(day);
+                        renderPiketTree();
+                    }
+                });
+                const allLbl = document.createElement('span');
+                allLbl.style.cssText = 'font-size:13px;font-weight:500';
+                allLbl.textContent = `Semua Guru Piket ${hariNama}`;
+                allRow.append(allCb, allLbl);
+                sub.appendChild(allRow);
+
+                // Individu
+                hariData.forEach(c => {
+                    const row = document.createElement('label');
+                    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer';
+                    const cb = document.createElement('input');
+                    cb.type     = 'checkbox';
+                    cb.checked  = hariAll || _drillPiketIndividu.has(c.user_id);
+                    cb.disabled = hariAll;
+                    cb.addEventListener('change', () => {
+                        if (cb.checked) _drillPiketIndividu.set(c.user_id, c);
+                        else _drillPiketIndividu.delete(c.user_id);
+                        renderPiketTree();
+                    });
+                    row.append(cb, document.createTextNode(c.full_name));
+                    sub.appendChild(row);
+                });
+            }
+            node.appendChild(sub);
+        }
+        tree.appendChild(node);
+    });
+}
+
+async function _togglePiketHari(day) {
+    if (_drillPiketExpanded.has(day)) {
+        _drillPiketExpanded.delete(day);
+        renderPiketTree();
+        return;
+    }
+    _drillPiketExpanded.add(day);
+    renderPiketTree();
+    if (!_drillPiketHariData.has(day)) {
+        try {
+            const list = await getForumRecipientCandidates('GURU_PIKET', {
+                dayOfWeek: day, academicYear: config.current_academic_year,
+            });
+            list.forEach(c => { c._dayOfWeek = day; });
+            _drillPiketHariData.set(day, list);
+        } catch (_) {
+            _drillPiketHariData.set(day, []);
+        }
+        renderPiketTree();
+    }
+}
+
+async function submitDrillDownPiket() {
+    const loadEl = document.getElementById('picker-loading');
+    const errEl  = document.getElementById('picker-error');
+    loadEl.style.display = 'block';
+    errEl.style.display  = 'none';
+
+    try {
+        for (const day of _drillPiketHariAll) {
+            let list = _drillPiketHariData.get(day);
+            if (!list) {
+                list = await getForumRecipientCandidates('GURU_PIKET', {
+                    dayOfWeek: day, academicYear: config.current_academic_year,
+                });
+                list.forEach(c => { c._dayOfWeek = day; });
+            }
+            const key = `GURU_PIKET_${day}`;
+            list.forEach(c => _forumRecipients.set(c.user_id, c));
+            _forumGroupLabels.set(key, `Guru Piket ${_PIKET_HARI[day - 1]} dipilih`);
+            _forumGroupUids.set(key, new Set(list.map(c => c.user_id)));
+        }
+        if (_drillPiketIndividu.size > 0) {
+            const key = `GURU_PIKET_INDIVIDU_${Date.now()}`;
+            _drillPiketIndividu.forEach((c, uid) => _forumRecipients.set(uid, c));
+            _forumGroupLabels.set(key, 'Guru Piket pilihan');
+            _forumGroupUids.set(key, new Set(_drillPiketIndividu.keys()));
+        }
+        renderRecipientChips();
+        closeDrillDownPiketPicker();
+    } catch (err) {
+        loadEl.style.display = 'none';
+        errEl.textContent    = fe(err);
+        errEl.style.display  = 'block';
+    }
+}
+
+function closeDrillDownPiketPicker() {
+    const modal = document.getElementById('modal-forum-picker');
+    modal.style.display = 'none';
+    delete modal.dataset.drillMode;
+    document.getElementById('picker-tree').style.display = 'none';
+    document.getElementById('picker-list').innerHTML     = '';
+    _drillPiketExpanded.clear();
 }
 
 // ─── Chips Penerima ───────────────────────────────────────────
