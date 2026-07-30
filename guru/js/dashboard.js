@@ -7993,11 +7993,50 @@ async function saveTp() {
 }
 
 async function deleteTp(loId) {
-    if (!confirm('Hapus TP ini? KKTP dan nilai yang terkait akan ikut terhapus.')) return;
     try {
+        // Cek apakah ada nilai siswa sebelum hapus
+        const { data: nilaiList, error: errCek } = await supabase
+            .from('tp_assessments')
+            .select('assessment_id, student_id, tipe, judul, nilai_angka, nilai_kualitatif, tanggal, is_void, students(nis, full_name)')
+            .eq('learning_objective_id', loId)
+            .eq('school_id', currentUser.school_id)
+            .order('tanggal');
+        if (errCek) throw errCek;
+
+        if (nilaiList && nilaiList.length > 0) {
+            if (!confirm(
+                `TP ini memiliki ${nilaiList.length} nilai siswa.\n` +
+                `File Excel nilai akan diunduh otomatis sebelum TP dihapus.\n\n` +
+                `Lanjutkan?`
+            )) return;
+
+            // Unduh Excel dulu, baru hapus
+            const tp = _penilaianTpList.find(t => t.learning_objective_id === loId);
+            const kode = tp?.kode_tp || loId;
+            const wb  = XLSX.utils.book_new();
+            const rows = [['NIS', 'Nama Siswa', 'Tipe', 'Judul', 'Nilai Angka', 'Nilai Kualitatif', 'Tanggal', 'Void']];
+            nilaiList.forEach(n => {
+                rows.push([
+                    n.students?.nis        || '',
+                    n.students?.full_name  || '',
+                    n.tipe                 || '',
+                    n.judul                || '',
+                    n.nilai_angka          ?? '',
+                    n.nilai_kualitatif     || '',
+                    n.tanggal              || '',
+                    n.is_void ? 'Ya' : 'Tidak',
+                ]);
+            });
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Nilai');
+            XLSX.writeFile(wb, `backup_nilai_${kode}.xlsx`);
+        } else {
+            if (!confirm('Hapus TP ini? KKTP dan data terkait akan ikut terhapus.')) return;
+        }
+
+        // Hard delete — CASCADE menghapus assessment_criteria, learning_objective_classes, tp_assessments
         const { error } = await supabase
             .from('learning_objectives')
-            .update({ is_active: false })
+            .delete()
             .eq('learning_objective_id', loId)
             .eq('school_id', currentUser.school_id);
         if (error) throw error;
