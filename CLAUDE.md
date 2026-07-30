@@ -29,7 +29,7 @@ Fitur utama: absensi, BK (kasus siswa), jadwal, forum, perangkat ajar (AI pipeli
 
 | Key | Value |
 |-----|-------|
-| HEAD (30 Jul 2026) | `959e1b4` |
+| HEAD (31 Jul 2026) | `6e52656` |
 | SMKN 1 Ujungbatu `school_id` | `244e389c-de7d-4d70-ac95-346d33a5d02c` |
 | SMKN 1 Ujungbatu slug | `smkn1ujungbatu` |
 | SMK Uji E7 `school_id` | `4c084682-aca3-45c3-8882-24309e4c33a1` |
@@ -207,7 +207,7 @@ pakai `--project-ref xovvuuwexoweoqyltepq`.
 
 ---
 
-## 9. STATUS PROYEK (per HEAD 959e1b4, 30 Jul 2026)
+## 9. STATUS PROYEK (per HEAD 6e52656, 31 Jul 2026)
 
 ### Selesai
 - Audit keamanan Fase 1–3 ✅ (test suite 93/93)
