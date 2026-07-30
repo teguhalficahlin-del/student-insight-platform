@@ -4370,6 +4370,8 @@ let _drillKelasAll   = new Set();   // class_id pilih semua
 let _drillIndividu      = new Map();   // user_id → candidate
 let _drillKelasExpanded = new Set();   // class_id yang ter-expand
 let _drillKelasData     = new Map();   // class_id → candidates[] (cache)
+let _drillJurusanCount  = new Map();   // program_id → fetched total count
+let _drillKelasCount    = new Map();   // class_id   → fetched total count
 
 // ─── Init ─────────────────────────────────────────────────────
 async function initForumTab() {
@@ -4983,6 +4985,8 @@ function openDrillDownPicker(drillType) {
     _drillIndividu.clear();
     _drillKelasExpanded.clear();
     _drillKelasData.clear();
+    _drillJurusanCount.clear();
+    _drillKelasCount.clear();
 
     const modal = document.getElementById('modal-forum-picker');
     modal.dataset.drillMode = '1';
@@ -5021,10 +5025,16 @@ function renderDrillTree() {
         const indCnt     = [..._drillIndividu.values()].filter(c => c._programId === prog.program_id).length;
         let selCount;
         if (jurAll) {
-            selCount = jurClasses.reduce((s, c) => s + (_drillKelasData.get(c.class_id)?.length ?? 0), 0);
+            selCount = _drillJurusanCount.has(prog.program_id)
+                ? _drillJurusanCount.get(prog.program_id)
+                : jurClasses.reduce((s, c) => s + (_drillKelasData.get(c.class_id)?.length ?? 0), 0);
         } else {
-            const klsTotalCnt = jurClasses.reduce((s, c) =>
-                _drillKelasAll.has(c.class_id) ? s + (_drillKelasData.get(c.class_id)?.length ?? 0) : s, 0);
+            const klsTotalCnt = jurClasses.reduce((s, c) => {
+                if (!_drillKelasAll.has(c.class_id)) return s;
+                return s + (_drillKelasCount.has(c.class_id)
+                    ? _drillKelasCount.get(c.class_id)
+                    : (_drillKelasData.get(c.class_id)?.length ?? 0));
+            }, 0);
             selCount = klsTotalCnt + indCnt;
         }
 
@@ -5060,7 +5070,7 @@ function renderDrillTree() {
             const jurCb = document.createElement('input');
             jurCb.type    = 'checkbox';
             jurCb.checked = jurAll;
-            jurCb.addEventListener('change', () => {
+            jurCb.addEventListener('change', async () => {
                 if (jurCb.checked) {
                     _drillJurusanAll.add(prog.program_id);
                     _forumClasses.filter(c => c.program_id === prog.program_id)
@@ -5068,10 +5078,23 @@ function renderDrillTree() {
                     for (const [uid, c] of _drillIndividu.entries()) {
                         if (c._programId === prog.program_id) _drillIndividu.delete(uid);
                     }
+                    renderDrillTree();
+                    if (!_drillJurusanCount.has(prog.program_id)) {
+                        try {
+                            const tJur = _drillType === 'SISWA_DRILL' ? 'SISWA_PER_JURUSAN' : 'ORTU_PER_JURUSAN';
+                            const list = await getForumRecipientCandidates(tJur, {
+                                programId: prog.program_id, academicYear: config.current_academic_year,
+                            });
+                            _drillJurusanCount.set(prog.program_id, list.length);
+                        } catch (_) {
+                            _drillJurusanCount.set(prog.program_id, 0);
+                        }
+                        renderDrillTree();
+                    }
                 } else {
                     _drillJurusanAll.delete(prog.program_id);
+                    renderDrillTree();
                 }
-                renderDrillTree();
             });
             const jurLbl = document.createElement('span');
             jurLbl.style.cssText = 'font-size:13px';
@@ -5085,7 +5108,11 @@ function renderDrillTree() {
                 const klsAll      = _drillKelasAll.has(cls.class_id);
                 const klsData     = _drillKelasData.get(cls.class_id);
                 const iCnt        = [..._drillIndividu.values()].filter(c => c._classId === cls.class_id).length;
-                const klsSelCnt   = (jurAll || klsAll) ? (klsData?.length ?? 0) : iCnt;
+                const klsSelCnt   = (jurAll || klsAll)
+                    ? (_drillKelasCount.has(cls.class_id)
+                        ? _drillKelasCount.get(cls.class_id)
+                        : (klsData?.length ?? 0))
+                    : iCnt;
 
                 const klsNode = document.createElement('div');
                 klsNode.style.cssText = 'margin-left:4px';
@@ -5119,16 +5146,29 @@ function renderDrillTree() {
                         klsAllCb.type     = 'checkbox';
                         klsAllCb.checked  = klsAll || jurAll;
                         klsAllCb.disabled = jurAll;
-                        klsAllCb.addEventListener('change', () => {
+                        klsAllCb.addEventListener('change', async () => {
                             if (klsAllCb.checked) {
                                 _drillKelasAll.add(cls.class_id);
                                 for (const [uid, c] of _drillIndividu.entries()) {
                                     if (c._classId === cls.class_id) _drillIndividu.delete(uid);
                                 }
+                                renderDrillTree();
+                                if (!_drillKelasCount.has(cls.class_id) && !_drillKelasData.has(cls.class_id)) {
+                                    try {
+                                        const tKls = _drillType === 'SISWA_DRILL' ? 'SISWA_PER_KELAS' : 'ORTU_PER_KELAS';
+                                        const list = await getForumRecipientCandidates(tKls, {
+                                            classId: cls.class_id, academicYear: config.current_academic_year,
+                                        });
+                                        _drillKelasCount.set(cls.class_id, list.length);
+                                    } catch (_) {
+                                        _drillKelasCount.set(cls.class_id, 0);
+                                    }
+                                    renderDrillTree();
+                                }
                             } else {
                                 _drillKelasAll.delete(cls.class_id);
+                                renderDrillTree();
                             }
-                            renderDrillTree();
                         });
                         const klsAllLbl = document.createElement('span');
                         klsAllLbl.style.cssText = 'font-size:12px;font-weight:500';
