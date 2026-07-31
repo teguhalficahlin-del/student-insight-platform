@@ -432,8 +432,8 @@ let _drillPiketHariData  = new Map();  // dayOfWeek → candidates[] (cache)
 let _drillPiketHariCount = new Map();  // dayOfWeek → fetched count
 
 let _drillWaliExpanded = new Set();    // grade_level yang ter-expand
-let _drillWaliKlsExp   = new Set();    // class_id yang ter-expand
-let _drillWaliSelected = new Map();    // user_id → candidate
+let _drillWaliGradeAll = new Set();    // grade_level yang semua dipilih
+let _drillWaliSelected = new Map();    // user_id → candidate (individu)
 let _waliKelasCache    = null;         // Map<class_name, candidate> (cache per buka)
 
 async function initForumSection() {
@@ -1495,7 +1495,7 @@ function closeDrillDownPiketPicker() {
 // ─── Drill-down Picker Wali Kelas ─────────────────────────────
 function openDrillDownWaliKelasPicker() {
     _drillWaliExpanded.clear();
-    _drillWaliKlsExp.clear();
+    _drillWaliGradeAll.clear();
     _drillWaliSelected.clear();
     _waliKelasCache = null;
 
@@ -1546,12 +1546,14 @@ function renderWaliKelasTree() {
     ];
 
     grades.forEach(({ level, label }) => {
-        const classes = _forumClasses.filter(c => c.grade_level === level);
+        const classes    = _forumClasses.filter(c => c.grade_level === level);
         if (!classes.length) return;
-
-        const expanded = _drillWaliExpanded.has(level);
-        const selCnt = [..._drillWaliSelected.values()]
-            .filter(c => classes.some(cls => cls.name === c.extra_info)).length;
+        const gradeWali  = classes.map(cls => _waliKelasCache.get(cls.name)).filter(Boolean);
+        const expanded   = _drillWaliExpanded.has(level);
+        const gradeAll   = _drillWaliGradeAll.has(level);
+        const selCnt     = gradeAll
+            ? gradeWali.length
+            : gradeWali.filter(c => _drillWaliSelected.has(c.user_id)).length;
 
         const node = document.createElement('div');
         node.style.cssText = 'border-bottom:1px solid var(--color-border)';
@@ -1579,58 +1581,51 @@ function renderWaliKelasTree() {
             const sub = document.createElement('div');
             sub.style.cssText = 'padding-left:16px;padding-bottom:8px';
 
-            classes.forEach(cls => {
-                const klsExpanded = _drillWaliKlsExp.has(cls.class_id);
-                const wali = _waliKelasCache.get(cls.name);
-                const isSelected = wali && _drillWaliSelected.has(wali.user_id);
-
-                const klsNode = document.createElement('div');
-                klsNode.style.cssText = 'margin-left:4px';
-
-                const klsHdr = document.createElement('div');
-                klsHdr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 6px;cursor:pointer;user-select:none;border-radius:4px';
-                const klsArrow = document.createElement('span');
-                klsArrow.style.cssText = 'font-size:9px;color:var(--color-muted);min-width:10px';
-                klsArrow.textContent = klsExpanded ? '▼' : '▶';
-                const klsLbl = document.createElement('span');
-                klsLbl.style.cssText = 'flex:1;font-size:13px';
-                klsLbl.textContent = cls.name;
-                const klsBadge = document.createElement('span');
-                klsBadge.style.cssText = 'font-size:11px;color:var(--color-primary)';
-                klsBadge.textContent = isSelected ? '1 dipilih' : '';
-                klsHdr.append(klsArrow, klsLbl, klsBadge);
-                klsHdr.addEventListener('click', () => {
-                    if (_drillWaliKlsExp.has(cls.class_id)) _drillWaliKlsExp.delete(cls.class_id);
-                    else _drillWaliKlsExp.add(cls.class_id);
-                    renderWaliKelasTree();
-                });
-                klsNode.appendChild(klsHdr);
-
-                if (klsExpanded) {
-                    const klsSub = document.createElement('div');
-                    klsSub.style.cssText = 'padding-left:20px;padding-bottom:4px';
-
-                    if (!wali) {
-                        klsSub.insertAdjacentHTML('beforeend',
-                            '<p style="font-size:12px;color:var(--color-muted);padding:4px 0">Belum ada Wali Kelas.</p>');
-                    } else {
-                        const row = document.createElement('label');
-                        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer';
-                        const cb = document.createElement('input');
-                        cb.type    = 'checkbox';
-                        cb.checked = _drillWaliSelected.has(wali.user_id);
-                        cb.addEventListener('change', () => {
-                            if (cb.checked) _drillWaliSelected.set(wali.user_id, wali);
-                            else _drillWaliSelected.delete(wali.user_id);
-                            renderWaliKelasTree();
-                        });
-                        row.append(cb, document.createTextNode(wali.full_name));
-                        klsSub.appendChild(row);
-                    }
-                    klsNode.appendChild(klsSub);
+            // Checkbox "Semua Wali Kelas [label]"
+            const allRow = document.createElement('label');
+            allRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 4px;cursor:pointer';
+            const allCb = document.createElement('input');
+            allCb.type    = 'checkbox';
+            allCb.checked = gradeAll;
+            allCb.addEventListener('change', () => {
+                if (allCb.checked) {
+                    _drillWaliGradeAll.add(level);
+                    gradeWali.forEach(c => _drillWaliSelected.delete(c.user_id));
+                } else {
+                    _drillWaliGradeAll.delete(level);
                 }
-                sub.appendChild(klsNode);
+                renderWaliKelasTree();
             });
+            const allLbl = document.createElement('span');
+            allLbl.style.cssText = 'font-size:13px;font-weight:500';
+            allLbl.textContent = `Semua Wali Kelas ${label}`;
+            allRow.append(allCb, allLbl);
+            sub.appendChild(allRow);
+
+            if (!gradeWali.length) {
+                sub.insertAdjacentHTML('beforeend',
+                    '<p style="font-size:12px;color:var(--color-muted);padding:4px">Belum ada Wali Kelas.</p>');
+            } else {
+                gradeWali.forEach(wali => {
+                    const row = document.createElement('label');
+                    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 4px;cursor:pointer';
+                    const cb = document.createElement('input');
+                    cb.type     = 'checkbox';
+                    cb.checked  = gradeAll || _drillWaliSelected.has(wali.user_id);
+                    cb.disabled = gradeAll;
+                    cb.addEventListener('change', () => {
+                        if (cb.checked) _drillWaliSelected.set(wali.user_id, wali);
+                        else _drillWaliSelected.delete(wali.user_id);
+                        renderWaliKelasTree();
+                    });
+                    const nameEl = document.createElement('div');
+                    nameEl.innerHTML =
+                        `<div style="font-size:13px">${esc(wali.full_name)}</div>` +
+                        `<div style="font-size:11px;color:var(--color-muted)">${esc(wali.extra_info ?? '')}</div>`;
+                    row.append(cb, nameEl);
+                    sub.appendChild(row);
+                });
+            }
             node.appendChild(sub);
         }
         tree.appendChild(node);
@@ -1638,14 +1633,21 @@ function renderWaliKelasTree() {
 }
 
 async function submitWaliKelasDrillDown() {
-    if (_drillWaliSelected.size === 0) {
+    const toAdd = new Map(_drillWaliSelected);
+    _drillWaliGradeAll.forEach(level => {
+        _forumClasses.filter(c => c.grade_level === level).forEach(cls => {
+            const wali = _waliKelasCache?.get(cls.name);
+            if (wali) toAdd.set(wali.user_id, wali);
+        });
+    });
+    if (toAdd.size === 0) {
         closeDrillDownWaliKelasPicker();
         return;
     }
     const key = `WALI_KELAS_INDIVIDU_${Date.now()}`;
-    _drillWaliSelected.forEach((c, uid) => _forumRecipients.set(uid, c));
+    toAdd.forEach((c, uid) => _forumRecipients.set(uid, c));
     _forumGroupLabels.set(key, 'Wali Kelas pilihan');
-    _forumGroupUids.set(key, new Set(_drillWaliSelected.keys()));
+    _forumGroupUids.set(key, new Set(toAdd.keys()));
     renderRecipientChips();
     closeDrillDownWaliKelasPicker();
 }
@@ -1657,7 +1659,7 @@ function closeDrillDownWaliKelasPicker() {
     document.getElementById('picker-tree').style.display = 'none';
     document.getElementById('picker-list').innerHTML = '';
     _drillWaliExpanded.clear();
-    _drillWaliKlsExp.clear();
+    _drillWaliGradeAll.clear();
 }
 
 // ─── Chips Penerima ───────────────────────────────────────────
