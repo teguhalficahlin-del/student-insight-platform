@@ -162,6 +162,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const isAssignedTeacher = schedule.scheduled_teacher_id === user.user_id;
         let   isValidSubstitute = false;
 
+        // FUNGSIONAL-2: validate session_date matches DB — reject stale offline payloads
+        if (schedule.session_date !== payload.session_date) {
+            return badRequest(
+                `session_date tidak cocok: payload ${payload.session_date}, jadwal ${schedule.session_date}`
+            );
+        }
+
         if (!isAssignedTeacher) {
             // Check substitute_schedules
             const { data: substitute } = await admin
