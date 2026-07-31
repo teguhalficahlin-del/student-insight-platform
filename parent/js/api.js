@@ -479,7 +479,7 @@ export async function createParentForumPost(title, body, classId, academicYear, 
     }
 
     const { data, error } = await supabase.rpc('fn_create_forum_post', {
-        p_class_id:            null,
+        p_class_id:            classId,
         p_academic_year:       academicYear,
         p_content:             body,
         p_category_code:       null,
