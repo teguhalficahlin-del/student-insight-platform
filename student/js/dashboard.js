@@ -940,13 +940,14 @@ let _nilaiTabInit = false;
 async function initNilaiTab() {
     if (!_nilaiTabInit) {
         _nilaiTabInit = true;
-        const yr = new Date().getFullYear();
+        const activeYear = config?.current_academic_year ?? null;
+        const activeStartYr = activeYear ? parseInt(activeYear) : new Date().getFullYear();
         const selYear = document.getElementById('nilai-year-select');
-        [yr - 1, yr, yr + 1].forEach(y => {
+        [activeStartYr - 1, activeStartYr, activeStartYr + 1].forEach(y => {
             const opt = document.createElement('option');
             opt.value = `${y}/${y + 1}`;
             opt.textContent = `${y}/${y + 1}`;
-            if (y === yr) opt.selected = true;
+            if (`${y}/${y + 1}` === activeYear) opt.selected = true;
             selYear.appendChild(opt);
         });
         selYear.addEventListener('change', () => loadNilaiGrid());
