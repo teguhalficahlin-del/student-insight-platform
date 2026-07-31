@@ -872,7 +872,7 @@ export async function getCase(caseId) {
         .from('cases')
         .select(`
             case_id, title, description, status, track, current_handler_role, is_locked,
-            created_at, initiated_by_role, audience,
+            created_at, initiated_by_role, audience, created_by_user_id,
             student:students(student_id, user_id, full_name, nis),
             created_by:users!cases_created_by_user_id_fkey(full_name)
         `)
