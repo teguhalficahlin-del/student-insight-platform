@@ -4380,6 +4380,11 @@ let _drillPiketIndividu  = new Map();  // user_id → candidate
 let _drillPiketHariData  = new Map();  // dayOfWeek → candidates[] (cache)
 let _drillPiketHariCount = new Map();  // dayOfWeek → fetched count
 
+let _drillWaliExpanded = new Set();    // grade_level yang ter-expand
+let _drillWaliKlsExp   = new Set();    // class_id yang ter-expand
+let _drillWaliSelected = new Map();    // user_id → candidate
+let _waliKelasCache    = null;         // Map<class_name, candidate> (cache per buka)
+
 // ─── Init ─────────────────────────────────────────────────────
 async function initForumTab() {
     if (_forumTabInit) { await loadForumPosts(); return; }
@@ -4616,7 +4621,7 @@ function buildRecipientGroupButtons() {
             { label: 'Guru',          group: 'SEMUA_GURU',       hasIndividual: true, pickerGroup: 'GURU_MAPEL' },
             { label: 'Waka',          group: 'SEMUA_WAKA',       hasIndividual: true, needsJabatan: true },
             { label: 'Kaprodi',       group: 'SEMUA_KAPRODI',    hasIndividual: true },
-            { label: 'Wali Kelas',    group: 'SEMUA_WALI_KELAS', hasIndividual: true, labelSemua: 'Semua Wali Kelas'    },
+            { label: 'Wali Kelas',    group: 'SEMUA_WALI_KELAS', hasIndividual: true, isDrillDownWaliKelas: true, labelSemua: 'Semua Wali Kelas'    },
             { label: 'Guru Wali',     group: 'SEMUA_GURU_WALI',  hasIndividual: true  },
             { label: 'Guru BK',       group: 'SEMUA_BK',         hasIndividual: true  },
             { label: 'Guru Piket',    group: 'GURU_PIKET',       hasIndividual: true, isDrillDownPiket: true },
@@ -4651,7 +4656,7 @@ function buildRecipientGroupButtons() {
             { label: 'Waka',          group: 'SEMUA_WAKA',       hasIndividual: true, needsJabatan: true },
             { label: 'Kaprodi',       group: 'SEMUA_KAPRODI',    hasIndividual: true },
             { label: 'Guru',          group: 'SEMUA_GURU',       hasIndividual: true, pickerGroup: 'GURU_MAPEL' },
-            { label: 'Wali Kelas',    group: 'SEMUA_WALI_KELAS', hasIndividual: true, labelSemua: 'Semua Wali Kelas'    },
+            { label: 'Wali Kelas',    group: 'SEMUA_WALI_KELAS', hasIndividual: true, isDrillDownWaliKelas: true, labelSemua: 'Semua Wali Kelas'    },
             { label: 'Guru Wali',     group: 'SEMUA_GURU_WALI',  hasIndividual: true  },
             { label: 'Guru BK',       group: 'SEMUA_BK',         hasIndividual: true  },
             { label: 'Guru Piket',    group: 'GURU_PIKET',       hasIndividual: true, isDrillDownPiket: true },
@@ -4735,6 +4740,10 @@ async function addRecipientGroup(groupDef, btnEl = null) {
     }
     if (groupDef.isDrillDownPiket && groupDef.mode === 'tertentu') {
         openDrillDownPiketPicker();
+        return;
+    }
+    if (groupDef.isDrillDownWaliKelas && groupDef.mode === 'tertentu') {
+        openDrillDownWaliKelasPicker();
         return;
     }
 
@@ -4826,6 +4835,9 @@ async function openRecipientPicker(groupDef) {
 
     titleEl.textContent = `Pilih ${groupDef.label} tertentu`;
     listEl.innerHTML    = '';
+    listEl.style.display = 'block';
+    document.getElementById('picker-tree').style.display = 'none';
+    delete modal.dataset.drillMode;
     searchEl.value      = '';
     errEl.style.display = 'none';
 
@@ -4961,18 +4973,21 @@ function _initPickerWiring(modal) {
     document.getElementById('btn-picker-batal').addEventListener('click', () => {
         if (modal.dataset.drillMode === '1') closeDrillDownPicker();
         else if (modal.dataset.drillMode === 'piket') closeDrillDownPiketPicker();
+        else if (modal.dataset.drillMode === 'wali') closeDrillDownWaliKelasPicker();
         else closeRecipientPicker();
     });
     modal.addEventListener('click', e => {
         if (e.target === e.currentTarget) {
             if (modal.dataset.drillMode === '1') closeDrillDownPicker();
             else if (modal.dataset.drillMode === 'piket') closeDrillDownPiketPicker();
+            else if (modal.dataset.drillMode === 'wali') closeDrillDownWaliKelasPicker();
             else closeRecipientPicker();
         }
     });
     document.getElementById('picker-search').addEventListener('input', () => {
         if (modal.dataset.drillMode === '1') renderDrillTree();
         else if (modal.dataset.drillMode === 'piket') renderPiketTree();
+        else if (modal.dataset.drillMode === 'wali') renderWaliKelasTree();
         else renderPickerList();
     });
     document.getElementById('picker-filter-jabatan').addEventListener('change', loadPickerCandidates);
@@ -4984,6 +4999,8 @@ function _initPickerWiring(modal) {
             submitDrillDown();
         } else if (modal.dataset.drillMode === 'piket') {
             submitDrillDownPiket();
+        } else if (modal.dataset.drillMode === 'wali') {
+            submitWaliKelasDrillDown();
         } else {
             _pickerSelected.forEach((c, uid) => _forumRecipients.set(uid, c));
             renderRecipientChips();
@@ -5493,6 +5510,174 @@ function closeDrillDownPiketPicker() {
     document.getElementById('picker-tree').style.display = 'none';
     document.getElementById('picker-list').innerHTML     = '';
     _drillPiketExpanded.clear();
+}
+
+// ─── Drill-down Picker Wali Kelas ─────────────────────────────
+function openDrillDownWaliKelasPicker() {
+    _drillWaliExpanded.clear();
+    _drillWaliKlsExp.clear();
+    _drillWaliSelected.clear();
+    _waliKelasCache = null;
+
+    const modal = document.getElementById('modal-forum-picker');
+    modal.dataset.drillMode = 'wali';
+    modal.style.display = 'flex';
+
+    document.getElementById('picker-title').textContent = 'Pilih Wali Kelas Tertentu';
+    document.getElementById('picker-search').value = '';
+    document.getElementById('picker-list').style.display = 'none';
+    document.getElementById('picker-loading').style.display = 'block';
+    document.getElementById('picker-error').style.display = 'none';
+    ['picker-filter-jabatan-wrap','picker-filter-jurusan-wrap',
+     'picker-filter-kelas-wrap','picker-filter-hari-wrap'].forEach(id => {
+        document.getElementById(id).style.display = 'none';
+    });
+
+    _initPickerWiring(modal);
+
+    getForumRecipientCandidates('SEMUA_WALI_KELAS', {
+        academicYear: config.current_academic_year,
+    }).then(list => {
+        _waliKelasCache = new Map();
+        list.forEach(c => { if (c.extra_info) _waliKelasCache.set(c.extra_info, c); });
+        document.getElementById('picker-loading').style.display = 'none';
+        renderWaliKelasTree();
+    }).catch(err => {
+        document.getElementById('picker-loading').style.display = 'none';
+        document.getElementById('picker-error').textContent = fe(err);
+        document.getElementById('picker-error').style.display = 'block';
+    });
+}
+
+function renderWaliKelasTree() {
+    const tree = document.getElementById('picker-tree');
+    tree.style.display = 'block';
+    tree.innerHTML = '';
+
+    if (!_waliKelasCache) {
+        tree.textContent = 'Memuat…';
+        return;
+    }
+
+    const grades = [
+        { level: 10, label: 'X' },
+        { level: 11, label: 'XI' },
+        { level: 12, label: 'XII' },
+    ];
+
+    grades.forEach(({ level, label }) => {
+        const classes = _forumClasses.filter(c => c.grade_level === level);
+        if (!classes.length) return;
+
+        const expanded = _drillWaliExpanded.has(level);
+        const selCnt = [..._drillWaliSelected.values()]
+            .filter(c => classes.some(cls => cls.name === c.extra_info)).length;
+
+        const node = document.createElement('div');
+        node.style.cssText = 'border-bottom:1px solid var(--color-border)';
+
+        const hdr = document.createElement('div');
+        hdr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;user-select:none';
+        const arrow = document.createElement('span');
+        arrow.style.cssText = 'font-size:10px;color:var(--color-muted);min-width:12px';
+        arrow.textContent = expanded ? '▼' : '▶';
+        const lbl = document.createElement('span');
+        lbl.style.cssText = 'flex:1;font-weight:500';
+        lbl.textContent = `Kelas ${label}`;
+        const badge = document.createElement('span');
+        badge.style.cssText = 'font-size:11px;color:var(--color-primary);font-weight:500';
+        badge.textContent = selCnt > 0 ? `${selCnt} dipilih` : '';
+        hdr.append(arrow, lbl, badge);
+        hdr.addEventListener('click', () => {
+            if (_drillWaliExpanded.has(level)) _drillWaliExpanded.delete(level);
+            else _drillWaliExpanded.add(level);
+            renderWaliKelasTree();
+        });
+        node.appendChild(hdr);
+
+        if (expanded) {
+            const sub = document.createElement('div');
+            sub.style.cssText = 'padding-left:16px;padding-bottom:8px';
+
+            classes.forEach(cls => {
+                const klsExpanded = _drillWaliKlsExp.has(cls.class_id);
+                const wali = _waliKelasCache.get(cls.name);
+                const isSelected = wali && _drillWaliSelected.has(wali.user_id);
+
+                const klsNode = document.createElement('div');
+                klsNode.style.cssText = 'margin-left:4px';
+
+                const klsHdr = document.createElement('div');
+                klsHdr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 6px;cursor:pointer;user-select:none;border-radius:4px';
+                const klsArrow = document.createElement('span');
+                klsArrow.style.cssText = 'font-size:9px;color:var(--color-muted);min-width:10px';
+                klsArrow.textContent = klsExpanded ? '▼' : '▶';
+                const klsLbl = document.createElement('span');
+                klsLbl.style.cssText = 'flex:1;font-size:13px';
+                klsLbl.textContent = cls.name;
+                const klsBadge = document.createElement('span');
+                klsBadge.style.cssText = 'font-size:11px;color:var(--color-primary)';
+                klsBadge.textContent = isSelected ? '1 dipilih' : '';
+                klsHdr.append(klsArrow, klsLbl, klsBadge);
+                klsHdr.addEventListener('click', () => {
+                    if (_drillWaliKlsExp.has(cls.class_id)) _drillWaliKlsExp.delete(cls.class_id);
+                    else _drillWaliKlsExp.add(cls.class_id);
+                    renderWaliKelasTree();
+                });
+                klsNode.appendChild(klsHdr);
+
+                if (klsExpanded) {
+                    const klsSub = document.createElement('div');
+                    klsSub.style.cssText = 'padding-left:20px;padding-bottom:4px';
+
+                    if (!wali) {
+                        klsSub.insertAdjacentHTML('beforeend',
+                            '<p style="font-size:12px;color:var(--color-muted);padding:4px 0">Belum ada Wali Kelas.</p>');
+                    } else {
+                        const row = document.createElement('label');
+                        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer';
+                        const cb = document.createElement('input');
+                        cb.type    = 'checkbox';
+                        cb.checked = _drillWaliSelected.has(wali.user_id);
+                        cb.addEventListener('change', () => {
+                            if (cb.checked) _drillWaliSelected.set(wali.user_id, wali);
+                            else _drillWaliSelected.delete(wali.user_id);
+                            renderWaliKelasTree();
+                        });
+                        row.append(cb, document.createTextNode(wali.full_name));
+                        klsSub.appendChild(row);
+                    }
+                    klsNode.appendChild(klsSub);
+                }
+                sub.appendChild(klsNode);
+            });
+            node.appendChild(sub);
+        }
+        tree.appendChild(node);
+    });
+}
+
+async function submitWaliKelasDrillDown() {
+    if (_drillWaliSelected.size === 0) {
+        closeDrillDownWaliKelasPicker();
+        return;
+    }
+    const key = `WALI_KELAS_INDIVIDU_${Date.now()}`;
+    _drillWaliSelected.forEach((c, uid) => _forumRecipients.set(uid, c));
+    _forumGroupLabels.set(key, 'Wali Kelas pilihan');
+    _forumGroupUids.set(key, new Set(_drillWaliSelected.keys()));
+    renderRecipientChips();
+    closeDrillDownWaliKelasPicker();
+}
+
+function closeDrillDownWaliKelasPicker() {
+    const modal = document.getElementById('modal-forum-picker');
+    modal.style.display = 'none';
+    delete modal.dataset.drillMode;
+    document.getElementById('picker-tree').style.display = 'none';
+    document.getElementById('picker-list').innerHTML = '';
+    _drillWaliExpanded.clear();
+    _drillWaliKlsExp.clear();
 }
 
 // ─── Chips Penerima ───────────────────────────────────────────
