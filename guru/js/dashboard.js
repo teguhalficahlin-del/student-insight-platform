@@ -9135,22 +9135,12 @@ async function loadHasilNilai() {
             return;
         }
 
-        // Ambil nama siswa dari tabel students
-        const studentIds = students.map(s => s.student_id);
-        const { data: siswaRows } = await supabase
-            .from('students')
-            .select('student_id, nama_lengkap')
-            .in('student_id', studentIds)
-            .eq('school_id', currentUser.school_id);
-        const namaMap = {};
-        (siswaRows || []).forEach(r => { namaMap[r.student_id] = r.nama_lengkap; });
-
         const isPublished = students.every(s => s.grade_summary?.published_at != null);
         pubBtn.style.display  = isPublished ? 'none' : '';
         pubBtn.textContent    = isPublished ? 'Sudah Dipublikasi' : 'Publikasi ke Siswa & Orang Tua';
         pubBtn.disabled       = isPublished;
 
-        renderHasilGrid(students, namaMap);
+        renderHasilGrid(students);
 
     } catch (e) {
         gridEl.innerHTML =
@@ -9158,7 +9148,7 @@ async function loadHasilNilai() {
     }
 }
 
-function renderHasilGrid(students, namaMap) {
+function renderHasilGrid(students) {
     const gridEl = document.getElementById('penilaian-hasil-grid');
     if (!students.length) {
         gridEl.innerHTML = '<p class="hint">Belum ada nilai akhir yang dihitung.</p>';
@@ -9187,7 +9177,7 @@ function renderHasilGrid(students, namaMap) {
                   <tr style="border-bottom:1px solid var(--color-border)"
                       data-grade-summary-id="${esc(gs.grade_summary_id || '')}">
                     <td style="padding:8px 4px; color:var(--color-text-muted)">${i + 1}</td>
-                    <td style="padding:8px 4px">${esc(namaMap[s.student_id] || s.student_id)}</td>
+                    <td style="padding:8px 4px">${esc(s.full_name || s.student_id)}</td>
                     <td style="padding:8px 4px; text-align:center; font-weight:600">
                       ${gs.nilai_akhir != null ? Number(gs.nilai_akhir).toFixed(1) : '—'}
                     </td>
