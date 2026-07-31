@@ -648,13 +648,20 @@ function buildRecipientGroupButtons() {
     groups.forEach(g => {
         if (rendered.has(g.group)) return;
 
-        if (g.isDrillDown) {
-            const btn = document.createElement('button');
-            btn.className = 'btn btn-secondary';
-            btn.textContent = g.labelSemua ?? g.label;
-            btn.addEventListener('click', () => addRecipientGroup(g, btn));
-            container.appendChild(btn);
-            return;
+        if (g.isDrillDown || g.isDrillDownPiket || g.isDrillDownWaliKelas) {
+            const isPickOnly = g.isDrillDown;
+            if (isPickOnly) {
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'display:flex;width:100%;gap:4px;margin-bottom:6px';
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-secondary';
+                btn.style.cssText = 'flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:clamp(11px,2.5vw,14px)';
+                btn.textContent = g.labelSemua ?? g.label;
+                btn.addEventListener('click', () => addRecipientGroup(g, btn));
+                wrap.appendChild(btn);
+                container.appendChild(wrap);
+                return;
+            }
         }
 
         // SEMUA_SISWA + SEMUA_ORTU → satu baris berdampingan
@@ -663,10 +670,11 @@ function buildRecipientGroupButtons() {
             if (ortu) {
                 rendered.add('SEMUA_ORTU');
                 const wrap = document.createElement('div');
-                wrap.style.cssText = 'display:flex;gap:8px;margin-bottom:6px;width:auto;flex-wrap:wrap';
+                wrap.style.cssText = 'display:flex;width:100%;gap:4px;margin-bottom:6px';
                 [g, ortu].forEach(entry => {
                     const btn = document.createElement('button');
                     btn.className = 'btn btn-secondary';
+                    btn.style.cssText = 'flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:clamp(11px,2.5vw,14px)';
                     btn.textContent = entry.labelSemua ?? `Semua ${entry.label}`;
                     btn.addEventListener('click', () => addRecipientGroup({ ...entry, mode: 'semua' }, btn));
                     wrap.appendChild(btn);
@@ -677,15 +685,15 @@ function buildRecipientGroupButtons() {
         }
 
         const wrap = document.createElement('div');
-        wrap.style.cssText = `display:flex;gap:2px;margin-bottom:6px;width:${g.hasIndividual ? '100%' : 'auto'}`;
+        wrap.style.cssText = 'display:flex;width:100%;gap:4px;margin-bottom:6px';
 
         // skipSemua: true → jangan tampilkan tombol "Semua X" (hanya picker)
         if (!g.skipSemua) {
             const btnAll = document.createElement('button');
             btnAll.className = 'btn btn-secondary';
             btnAll.style.cssText = g.hasIndividual
-                ? 'border-radius:6px 0 0 6px;padding-right:8px'
-                : '';
+                ? 'flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:clamp(11px,2.5vw,14px);border-radius:6px 0 0 6px'
+                : 'width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:clamp(11px,2.5vw,14px)';
             btnAll.textContent = g.labelSemua ?? `Semua ${g.label}`;
             btnAll.addEventListener('click', () => addRecipientGroup({ ...g, mode: 'semua' }, btnAll));
             wrap.appendChild(btnAll);
@@ -695,8 +703,8 @@ function buildRecipientGroupButtons() {
             const btnPick = document.createElement('button');
             btnPick.className = 'btn btn-secondary';
             btnPick.style.cssText = g.skipSemua
-                ? 'border-radius:6px;'
-                : 'border-radius:0 6px 6px 0;padding-left:6px;border-left:1px solid var(--color-border)';
+                ? 'width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:clamp(11px,2.5vw,14px);border-radius:6px'
+                : 'flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:clamp(11px,2.5vw,14px);border-radius:0 6px 6px 0;border-left:1px solid var(--color-border)';
             btnPick.textContent = `${g.label} tertentu`;
             btnPick.addEventListener('click', () => addRecipientGroup({ ...g, mode: 'tertentu' }, btnPick));
             wrap.appendChild(btnPick);
