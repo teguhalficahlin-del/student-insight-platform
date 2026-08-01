@@ -8416,12 +8416,7 @@ async function saveTp() {
                 .eq('learning_objective_id', savedLoId);
         }
 
-        // Hapus KKTP lama, insert baru
-        await supabase
-            .from('assessment_criteria')
-            .delete()
-            .eq('learning_objective_id', savedLoId)
-            .eq('school_id', currentUser.school_id);
+        // Validasi KKTP sebelum menyentuh DB
         const allRows = [...document.querySelectorAll('.kktp-row')].map(row => ({
             learning_objective_id: savedLoId,
             school_id:   currentUser.school_id,
@@ -8435,6 +8430,25 @@ async function saveTp() {
         if (skipped > 0) {
             showPenilaianMsg('tp', `${skipped} baris KKTP tidak lengkap (batas bawah, batas atas, dan predikat wajib diisi) — baris tersebut tidak disimpan.`, 'error');
         }
+        const terbalik = criteria.find(c => c.batas_bawah >= c.batas_atas);
+        if (terbalik) {
+            showPenilaianMsg('tp', `Rentang KKTP "${esc(terbalik.predikat)}" tidak valid: batas bawah harus lebih kecil dari batas atas.`, 'error');
+            return;
+        }
+        const sorted = [...criteria].sort((a, b) => a.batas_bawah - b.batas_bawah);
+        for (let i = 0; i < sorted.length - 1; i++) {
+            if (sorted[i + 1].batas_bawah < sorted[i].batas_atas) {
+                showPenilaianMsg('tp', `Rentang KKTP "${esc(sorted[i].predikat)}" dan "${esc(sorted[i + 1].predikat)}" tumpang tindih.`, 'error');
+                return;
+            }
+        }
+
+        // Hapus KKTP lama, insert baru
+        await supabase
+            .from('assessment_criteria')
+            .delete()
+            .eq('learning_objective_id', savedLoId)
+            .eq('school_id', currentUser.school_id);
         if (criteria.length) {
             const { error } = await supabase
                 .from('assessment_criteria')
