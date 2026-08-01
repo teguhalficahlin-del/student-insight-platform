@@ -75,7 +75,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const audErr = validateAudienceForRole(user.role_type, audience);
         if (audErr) return badRequest(audErr);
 
-        const { error: rpcError } = await admin.rpc('fn_sync_case', {
+        const { error: rpcError } = await admin.rpc('fn_sync_coaching_case', {
             p_idempotency_key:    idempotencyKey,
             p_case_id:            body['case_id']            as string,
             p_student_id:         body['student_id']         as string,

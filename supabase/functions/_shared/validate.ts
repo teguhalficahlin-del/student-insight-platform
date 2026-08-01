@@ -265,11 +265,14 @@ export const CASE_CREATE_SCHEMA: FieldDef[] = [
     ['case_id',            V.uuid,                   true],
     ['student_id',         V.uuid,                   true],
     ['created_by_user_id', V.uuid,                   true],
-    ['initiated_by_role',  V.enum(ROLE_TYPE),        true],
     ['track',              V.enum(CASE_TRACK),       true],
     ['title',              V.str(5, 200),            true],
     ['description',        V.str(20, 5000),          true],
-    // Optional — default PRIVATE jika tidak dikirim
+    // Optional — kolom initiated_by_role & audience sudah dihapus dari
+    // coaching_cases (mig 20260802060000). Field-nya masih diterima agar
+    // client lama tetap valid, tapi diabaikan fn_sync_coaching_case.
+    // Tetap divalidasi tipenya kalau dikirim.
+    ['initiated_by_role',  V.enum(ROLE_TYPE),        false],
     ['audience',           V.enum(CASE_AUDIENCE),    false],
 ];
 
