@@ -386,25 +386,12 @@ async function getCloseSummary(period) {
 
 /** Closes the active period and advances school_config.current_semester. */
 export async function closeSemester(period, config) {
-    const userRow = await getCurrentUserRow();
-
-    const { error: closeErr } = await supabase
-        .from('academic_periods')
-        .update({
-            status:            'CLOSED',
-            closed_at:         new Date().toISOString(),
-            closed_by_user_id: userRow.user_id,
-        })
-        .eq('id', period.id);
-    if (closeErr) throw closeErr;
-
-    if (period.semester === '1') {
-        const { error: configErr } = await supabase
-            .from('school_config')
-            .update({ current_semester: '2' })
-            .eq('config_id', config.config_id);
-        if (configErr) throw configErr;
-    }
+    const { error } = await supabase.rpc('fn_close_semester', {
+        p_period_id: period.id,
+        p_config_id: config.config_id,
+        p_semester:  period.semester,
+    });
+    if (error) throw error;
     // semester === '2': school_config dibiarkan — Wizard Tutup Tahun Ajaran
     // yang akan advance current_academic_year dan current_semester.
 }
