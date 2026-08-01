@@ -2038,8 +2038,25 @@ async function renderAcademicYearPanel() {
     `;
 
     document.getElementById('cancel-year-btn').addEventListener('click', async () => {
-        const yr = cfg?.current_academic_year ?? '';
-        if (!confirm(`Batalkan pembukaan tahun ajaran ${yr}?\n\nKenaikan kelas tahun ini akan dihapus dan tahun ajaran dikembalikan ke sebelumnya. Tindakan ini tidak bisa di-undo.`)) return;
+        const yr  = cfg?.current_academic_year ?? '';
+        const sem = cfg?.current_semester ?? '?';
+        const preview = [
+            `RINGKASAN DAMPAK PEMBATALAN`,
+            ``,
+            `Tahun ajaran yang dibatalkan : ${yr}`,
+            `Semester saat ini            : ${sem}`,
+            ``,
+            `Yang akan terjadi:`,
+            `• Seluruh enrollment kenaikan kelas tahun ${yr} akan DIHAPUS`,
+            `• Enrollment tahun sebelumnya akan DIPULIHKAN`,
+            `• Tahun ajaran aktif dikembalikan ke sebelum ${yr}`,
+            `• Status kelulusan siswa (LULUS) tidak berubah`,
+            ``,
+            `Tindakan ini TIDAK BISA di-undo.`,
+            ``,
+            `Lanjutkan pembatalan tahun ajaran ${yr}?`,
+        ].join('\n');
+        if (!confirm(preview)) return;
         const typed = prompt(`Untuk konfirmasi, ketik: BATALKAN`);
         if (typed === null) return;
         if (typed.trim().toUpperCase() !== 'BATALKAN') { alert('Konfirmasi tidak cocok. Dibatalkan.'); return; }
