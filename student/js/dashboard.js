@@ -672,7 +672,7 @@ function renderCases(cases) {
                 <span class="badge ${isClosed ? 'badge-izin' : 'badge-hadir'}" style="font-size:0.75rem">${statusLabel}</span>
             </div>
             <div style="font-size:0.8rem;color:var(--color-text-muted,#9ca3af);margin-top:4px">
-                Ditindaklanjuti oleh: ${esc(ROLE_LABEL_SHORT[c.current_handler_role] ?? c.current_handler_role ?? '—')} · ${fmt(c.created_at)}
+                Ditindaklanjuti oleh: ${esc(c.handler?.full_name ?? '—')} · ${fmt(c.created_at)}
             </div>
             ${descHtml}
             ${eventsHtml}
