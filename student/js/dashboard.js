@@ -407,6 +407,17 @@ async function loadAttendance() {
         document.getElementById('att-sakit').textContent = card.SAKIT;
         document.getElementById('att-alpha').textContent = card.ALPA;
         document.getElementById('att-pct').textContent   = totalSlots > 0 ? pct + '%' : '—';
+        if (!document.getElementById('att-granularity-note')) {
+            const statsRow = document.getElementById('att-stats');
+            if (statsRow) {
+                const note = document.createElement('p');
+                note.id = 'att-granularity-note';
+                note.className = 'hint';
+                note.style.cssText = 'margin-top:4px;font-size:11px;';
+                note.textContent = 'Hadir/Izin/Sakit/Alpa dihitung per pertemuan; % Hadir dihitung per jam pelajaran.';
+                statsRow.insertAdjacentElement('afterend', note);
+            }
+        }
 
         if (rows.length === 0) {
             tbody.innerHTML = '';
