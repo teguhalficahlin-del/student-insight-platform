@@ -34,6 +34,7 @@ import {
     getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
     registerLoginDevice,
     getForumRecipientCandidates, getForumSekolahPosts, getForumSekolahSentPosts,
+    getForumSekolahPostById, getForumSekolahSentPostById,
     getForumSekolahComments, createForumSekolahPost, updateForumSekolahPost,
     deleteForumSekolahPost, addForumSekolahComment, deleteForumSekolahComment,
     addForumSekolahAcknowledgement,
@@ -5834,11 +5835,9 @@ async function openForumDetail(postId) {
     document.getElementById('forum-comment-input').value = '';
 
     try {
-        const posts = _forumMode === 'masuk'
-            ? await getForumSekolahPosts(currentUser.school_id, currentUser.user_id, 100, 0)
-            : await getForumSekolahSentPosts(currentUser.school_id, currentUser.user_id, 100, 0);
-        const post = posts.find(p => p.post_id === postId);
-        if (!post) throw new Error('Posting tidak ditemukan.');
+        const post = _forumMode === 'masuk'
+            ? await getForumSekolahPostById(postId, currentUser.school_id, currentUser.user_id)
+            : await getForumSekolahSentPostById(postId, currentUser.school_id, currentUser.user_id);
 
         document.getElementById('detail-forum-title').textContent = post.title;
         document.getElementById('detail-forum-body').textContent  = post.body;

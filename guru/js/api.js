@@ -1154,6 +1154,55 @@ export async function getForumSekolahPosts(schoolId, callerId, limit = 20, offse
 }
 
 /**
+ * Ambil satu posting masuk berdasarkan post_id (untuk openForumDetail).
+ */
+export async function getForumSekolahPostById(postId, schoolId, callerId) {
+    const { data, error } = await supabase
+        .from('forum_posts')
+        .select(`
+            post_id, title, body, attachment_url, attachment_name,
+            is_edited, edited_at, deleted_at, created_at, updated_at,
+            author_user_id,
+            author:users!forum_posts_author_user_id_fkey(user_id, full_name, role_type),
+            comments:forum_post_comments(comment_id),
+            acknowledgements:forum_post_acknowledgements(user_id),
+            audience:forum_post_audience!inner(user_id)
+        `)
+        .eq('post_id', postId)
+        .eq('scope_type', 'SEKOLAH')
+        .eq('school_id', schoolId)
+        .is('deleted_at', null)
+        .eq('forum_post_audience.user_id', callerId)
+        .single();
+    if (error) throw error;
+    const { audience: _a, ...rest } = data;
+    return rest;
+}
+
+/**
+ * Ambil satu posting terkirim berdasarkan post_id (untuk openForumDetail tab Terkirim).
+ */
+export async function getForumSekolahSentPostById(postId, schoolId, callerId) {
+    const { data, error } = await supabase
+        .from('forum_posts')
+        .select(`
+            post_id, title, body, attachment_url, attachment_name,
+            is_edited, edited_at, deleted_at, created_at, updated_at,
+            author_user_id,
+            comments:forum_post_comments(comment_id),
+            acknowledgements:forum_post_acknowledgements(user_id),
+            audience:forum_post_audience(user_id)
+        `)
+        .eq('post_id', postId)
+        .eq('scope_type', 'SEKOLAH')
+        .eq('school_id', schoolId)
+        .eq('author_user_id', callerId)
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+/**
  * Ambil posting yang dibuat oleh caller (tab Terkirim).
  */
 export async function getForumSekolahSentPosts(schoolId, callerId, limit = 20, offset = 0) {
