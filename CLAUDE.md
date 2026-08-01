@@ -100,6 +100,14 @@ dikonsultasikan ke Romo — bukan dieksekusi tanpa konfirmasi.
   akan diminta ulang
 - Kalau output panjang: **pecah jadi beberapa pesan** — jangan disingkat
 
+### 5a. Verbatim = teks di badan pesan, BUKAN tool output
+Output WAJIB muncul sebagai teks di badan pesan — bukan sebagai tool output
+collapsed/dropdown. Jika output muncul sebagai tool result yang bisa di-collapse
+di UI Claude Code, itu TIDAK memenuhi syarat verbatim. Cara yang benar: salin
+teks terminal ke dalam badan pesan sebagai teks biasa, bukan via tool display.
+Ini berlaku untuk semua output: `git show`, `git log`, `git push`, `git diff`,
+hasil query SQL, dan output bash apapun yang diminta Claude Chat untuk direview.
+
 ---
 
 ## 6. ATURAN WORKFLOW
@@ -142,6 +150,12 @@ Alasan urutan: mencegah jendela waktu kode production memanggil RPC yang belum a
 
 `supabase functions deploy` dan `supabase functions list` **tidak menerima** `--linked` —
 pakai `--project-ref xovvuuwexoweoqyltepq`.
+
+**PERINGATAN — `supabase db query` BUKAN dry-run:**
+JANGAN gunakan `supabase db query --linked -f file.sql` untuk test migration —
+perintah ini langsung eksekusi ke remote DB, bukan dry-run. Untuk test SQL yang
+aman gunakan `BEGIN; ... ROLLBACK;` di local DB saja, atau
+`supabase db push --linked --dry-run` untuk preview migration.
 
 ### 6e. Git
 - Tidak ada `git commit` tanpa diff verbatim direview

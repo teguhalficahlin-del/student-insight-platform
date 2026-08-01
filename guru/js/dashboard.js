@@ -26,13 +26,12 @@ import {
     getAttendanceRecapPerClass, getOpenCases,
     getPrograms, getStudentAttendanceSessions,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
-    getMyObservations, getStudentUserId, getStudentParents,
+    getMyObservations,
     getCases, getCase, getCoachingCaseEvents, createCase,
     addCoachingNote, escalateCoachingCase, changeCoachingCaseStatus, closeCoachingCase,
     shareCoachingCaseToStudent, unshareCoachingCaseFromStudent,
     shareCoachingCaseToParent, unshareCoachingCaseFromParent,
-    getCaseAudienceMembers, addCaseAudienceMember, removeCaseAudienceMember,
-    searchInternalUsers, getEscalationCandidates,
+    getEscalationCandidates,
     getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
     registerLoginDevice,
     getForumRecipientCandidates, getForumSekolahPosts, getForumSekolahSentPosts,
@@ -144,7 +143,6 @@ function markKasusAsSeen() {
 
 // ─── State ───────────────────────────────────────────────────
 let currentUser  = null;
-const _studentSubjectCache = new Map(); // studentId → { userId, parents }
 let config       = null;   // { current_academic_year, current_semester }
 let jabatan      = [];
 let isTeacher    = false;  // hanya GURU & WALI_KELAS yang mengajar
@@ -3029,11 +3027,6 @@ const CASE_STATUS_BADGE = {
     CLOSED:       'badge-closed',
 };
 const CASE_TRACK_LABEL = { SEKOLAH: 'Sekolah', PKL: 'PKL' };
-const ROLE_LABEL = {
-    GURU: 'Guru', BK: 'BK', WALI_KELAS: 'Wali Kelas',
-    KAPRODI: 'Ka. Prodi', KEPSEK: 'Kepala Sekolah',
-    DUDI: 'DUDI', WAKA_KESISWAAN: 'Waka Kesiswaan', WAKA_KURIKULUM: 'Waka Kurikulum',
-};
 // Rantai = PENUNTUN saja (referensi untuk peringatan), BUKAN batasan.
 // Eskalasi antar-internal bebas; server hanya mengunci: target wajib peran
 // internal kasus, & DUDI hanya → KAPRODI (mig 20260703250000).
@@ -3353,7 +3346,6 @@ function renderKasusEvents(events) {
 
 // 6 peran yang boleh jadi handler/eskalasi tujuan kasus internal
 const INTERNAL_CASE_ROLES = ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK'];
-const AUDIENCE_LABEL = { PRIVATE: '🔒 Privat', RESTRICTED: '👥 Orang Tertentu', PUBLIC: '🌐 Semua Internal' };
 
 async function renderKasusActions(kasus) {
     const actionsEl     = document.getElementById('kasus-actions');
@@ -3568,195 +3560,6 @@ async function renderKasusActions(kasus) {
             newCloseBtn.disabled = false; newCloseBtn.textContent = 'Tutup Kasus';
         }
     });
-}
-
-function renderAudiencePanel(kasus, currentAudience) {
-    const msgEl      = document.getElementById('kasus-audience-msg');
-    const restricted = document.getElementById('kasus-aud-restricted-panel');
-
-    // Highlight tombol aktif
-    ['PRIVATE','RESTRICTED','PUBLIC'].forEach(a => {
-        const btn = document.getElementById(`kasus-aud-${a.toLowerCase()}-btn`);
-        if (!btn) return;
-        btn.className = `btn btn-sm${a === currentAudience ? ' btn-primary' : ' btn-secondary'}`;
-    });
-
-    restricted.style.display = currentAudience === 'RESTRICTED' ? 'block' : 'none';
-    if (currentAudience === 'RESTRICTED') loadAudienceMembers(kasus);
-
-    ['PRIVATE','RESTRICTED','PUBLIC'].forEach(a => {
-        const btn = replaceEl(`kasus-aud-${a.toLowerCase()}-btn`);
-        btn.addEventListener('click', async () => {
-            if (a === currentAudience) return;
-            msgEl.style.color = ''; msgEl.textContent = 'Menyimpan…';
-            try {
-                await updateCaseAudience({ caseId: kasus.case_id, audience: a });
-                await logCaseAudienceChange({
-                    caseId: kasus.case_id,
-                    previousAudience: currentAudience,
-                    newAudience: a,
-                    authorUserId: currentUser.user_id,
-                    authorRole: currentUser.role_type,
-                });
-                msgEl.style.color = 'var(--color-success)';
-                msgEl.textContent = `Audiens diubah ke: ${AUDIENCE_LABEL[a]}.`;
-                await refreshKasusDetail();
-            } catch (err) {
-                msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
-            }
-        });
-    });
-}
-
-async function fetchStudentSubject(studentId, knownUserId = null) {
-    if (_studentSubjectCache.has(studentId)) return _studentSubjectCache.get(studentId);
-    const [userId, parents] = await Promise.all([
-        knownUserId != null ? Promise.resolve(knownUserId) : getStudentUserId(studentId),
-        getStudentParents(studentId),
-    ]);
-    const result = { userId, parents };
-    _studentSubjectCache.set(studentId, result);
-    return result;
-}
-
-async function loadAudienceMembers(kasus) {
-    const restrictedPanel = document.getElementById('kasus-aud-restricted-panel');
-    const listEl  = document.getElementById('kasus-aud-members-list');
-    const searchEl = document.getElementById('kasus-aud-member-search');
-    const dropEl   = document.getElementById('kasus-aud-member-list');
-    const msgEl    = document.getElementById('kasus-audience-msg');
-    listEl.textContent = 'Memuat anggota…';
-
-    // Pastikan container toggle subjek ada (inject sekali, innerHTML-nya ditimpa tiap panggil)
-    let subjectPanel = document.getElementById('kasus-aud-subject-panel');
-    if (!subjectPanel) {
-        subjectPanel = document.createElement('div');
-        subjectPanel.id = 'kasus-aud-subject-panel';
-        restrictedPanel.insertBefore(subjectPanel, restrictedPanel.firstChild);
-    }
-
-    try {
-        const studentId   = kasus.student?.student_id ?? null;
-        const knownUserId = kasus.student?.user_id ?? null;
-
-        const [members, subject] = await Promise.all([
-            getCaseAudienceMembers(kasus.case_id),
-            studentId ? fetchStudentSubject(studentId, knownUserId) : Promise.resolve(null),
-        ]);
-        const memberSet = new Set(members.map(m => m.user_id));
-        const subjectUidSet = new Set();
-
-        // ── Toggle siswa & ortu ──
-        if (subject) {
-            const rows = [];
-            if (subject.userId) {
-                rows.push({ uid: subject.userId, label: esc(kasus.student?.full_name ?? 'Siswa'), role: 'Siswa' });
-            }
-            subject.parents.forEach(p => {
-                rows.push({ uid: p.parent_user_id, label: esc(p.users?.full_name ?? p.parent_user_id), role: 'Ortu' });
-            });
-            rows.forEach(r => subjectUidSet.add(r.uid));
-            if (rows.length) {
-                subjectPanel.innerHTML = `
-                    <div style="font-size:12px;font-weight:600;color:var(--color-text-muted);margin-bottom:6px">Siswa &amp; Orang Tua Terkait</div>
-                    ${rows.map(row => `
-                        <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;cursor:pointer">
-                            <input type="checkbox" data-uid="${row.uid}" ${memberSet.has(row.uid) ? 'checked' : ''}
-                                style="width:14px;height:14px;accent-color:var(--color-primary,#6366f1);cursor:pointer">
-                            ${row.label} <span style="color:var(--color-text-muted)">(${row.role})</span>
-                        </label>
-                    `).join('')}
-                    <div style="border-bottom:1px solid var(--color-border);margin:8px 0"></div>`;
-                subjectPanel.querySelectorAll('input[type=checkbox][data-uid]').forEach(cb => {
-                    cb.addEventListener('change', async () => {
-                        const uid = cb.dataset.uid;
-                        const nowChecked = cb.checked;
-                        cb.disabled = true;
-                        try {
-                            if (nowChecked) {
-                                await addCaseAudienceMember({ caseId: kasus.case_id, userId: uid, schoolId: currentUser.school_id, addedByUserId: currentUser.user_id });
-                            } else {
-                                await removeCaseAudienceMember({ caseId: kasus.case_id, userId: uid });
-                            }
-                            await loadAudienceMembers(kasus);
-                        } catch (err) {
-                            if (err?.code === '23505') {
-                                await loadAudienceMembers(kasus);
-                            } else {
-                                cb.checked = !nowChecked;
-                                cb.disabled = false;
-                                msgEl.style.color = 'var(--color-danger)';
-                                msgEl.textContent = fe(err, 's');
-                            }
-                        }
-                    });
-                });
-            } else {
-                subjectPanel.innerHTML = '';
-            }
-        } else {
-            subjectPanel.innerHTML = '';
-        }
-
-        // ── Chip staf (kecualikan siswa/ortu yang sudah tampil di subjectPanel) ──
-        const staffMembers = members.filter(m => !subjectUidSet.has(m.user_id));
-        if (!staffMembers.length) {
-            listEl.innerHTML = '<em style="color:var(--color-text-muted)">Belum ada staf yang ditambahkan.</em>';
-        } else {
-            listEl.innerHTML = staffMembers.map(m => {
-                const name = m.users?.full_name ?? m.user_id;
-                const role = ROLE_LABEL[m.users?.role_type] ?? m.users?.role_type ?? '';
-                return `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;padding:2px 8px;border:1px solid var(--color-border);border-radius:20px;font-size:12px">
-                    ${esc(name)} <span style="color:var(--color-text-muted)">(${esc(role)})</span>
-                    <button data-uid="${m.user_id}" style="background:none;border:none;cursor:pointer;color:var(--color-danger);font-size:14px;line-height:1;padding:0 2px" title="Hapus">×</button>
-                </span>`;
-            }).join('');
-            listEl.querySelectorAll('button[data-uid]').forEach(btn => {
-                btn.addEventListener('click', async () => {
-                    try {
-                        await removeCaseAudienceMember({ caseId: kasus.case_id, userId: btn.dataset.uid });
-                        await loadAudienceMembers(kasus);
-                    } catch (err) {
-                        msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
-                    }
-                });
-            });
-        }
-    } catch (err) {
-        listEl.textContent = 'Gagal memuat anggota.';
-    }
-
-    // Search + add
-    let _searchTimer;
-    searchEl.oninput = () => {
-        clearTimeout(_searchTimer);
-        const q = searchEl.value.trim();
-        if (q.length < 2) { dropEl.style.display = 'none'; return; }
-        _searchTimer = setTimeout(async () => {
-            try {
-                const rows = await searchInternalUsers(q);
-                if (!rows.length) { dropEl.style.display = 'none'; return; }
-                dropEl.innerHTML = rows.map(r =>
-                    `<div style="padding:8px 12px;cursor:pointer;font-size:13px" data-id="${r.user_id}" data-name="${esc(r.full_name)}">${esc(r.full_name)} — ${esc(ROLE_LABEL[r.role_type] ?? r.role_type)}</div>`
-                ).join('');
-                dropEl.style.display = 'block';
-                dropEl.querySelectorAll('div').forEach(el => {
-                    el.addEventListener('click', async () => {
-                        dropEl.style.display = 'none';
-                        searchEl.value = '';
-                        try {
-                            await addCaseAudienceMember({ caseId: kasus.case_id, userId: el.dataset.id, schoolId: currentUser.school_id, addedByUserId: currentUser.user_id });
-                            await loadAudienceMembers(kasus);
-                        } catch (err) {
-                            msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
-                        }
-                    });
-                    el.addEventListener('mouseenter', () => { el.style.background = 'var(--color-bg)'; });
-                    el.addEventListener('mouseleave', () => { el.style.background = ''; });
-                });
-            } catch(e) { console.error('[kasus-member-search]', e); dropEl.style.display = 'none'; }
-        }, 250);
-    };
 }
 
 function replaceEl(id) {
