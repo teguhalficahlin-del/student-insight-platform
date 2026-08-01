@@ -8353,11 +8353,11 @@ async function saveTp() {
     const { subjectId, year, semester } = _penilaianCtx;
 
     if (!kode || !desk) {
-        showPenilaianMsg('settings', 'Kode TP dan deskripsi wajib diisi.', 'error');
+        showPenilaianMsg('tp', 'Kode TP dan deskripsi wajib diisi.', 'error');
         return;
     }
     if (!subjectId || !year || !semester) {
-        showPenilaianMsg('settings', 'Pilih kelas, mapel, dan semester terlebih dahulu.', 'error');
+        showPenilaianMsg('tp', 'Pilih kelas, mapel, dan semester terlebih dahulu.', 'error');
         return;
     }
 
@@ -8443,7 +8443,7 @@ async function saveTp() {
         await loadTpList();
 
     } catch (e) {
-        showPenilaianMsg('settings', `Gagal menyimpan TP: ${esc(e.message)}`, 'error');
+        showPenilaianMsg('tp', `Gagal menyimpan TP: ${esc(e.message)}`, 'error');
     }
 }
 
