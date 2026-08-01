@@ -503,7 +503,7 @@ export async function getChildLateArrivals(studentId) {
             .eq('student_id', studentId)
             .order('late_date', { ascending: false })
             .order('arrival_time', { ascending: false });
-        if (error) { console.warn('[late] getChildLateArrivals error:', error.message); return []; }
+        if (error) { console.warn('[late] getChildLateArrivals error:', error.message); throw error; }
         return (data ?? []).map(r => ({
             late_id:      r.late_id,
             date:         r.late_date,
@@ -512,7 +512,7 @@ export async function getChildLateArrivals(studentId) {
         }));
     } catch (e) {
         console.warn('[late] getChildLateArrivals exception:', e);
-        return [];
+        throw e;
     }
 }
 
@@ -523,7 +523,7 @@ export async function getChildExits(studentId) {
             .select('exit_id, exit_date, exit_time, return_time, reason')
             .eq('student_id', studentId)
             .order('exit_date', { ascending: false });
-        if (error) { console.warn('[exits] getChildExits error:', error.message); return []; }
+        if (error) { console.warn('[exits] getChildExits error:', error.message); throw error; }
         return data ?? [];
-    } catch (e) { console.warn('[exits] getChildExits exception:', e); return []; }
+    } catch (e) { console.warn('[exits] getChildExits exception:', e); throw e; }
 }
