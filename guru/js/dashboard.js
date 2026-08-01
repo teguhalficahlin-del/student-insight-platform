@@ -8422,14 +8422,19 @@ async function saveTp() {
             .delete()
             .eq('learning_objective_id', savedLoId)
             .eq('school_id', currentUser.school_id);
-        const criteria = [...document.querySelectorAll('.kktp-row')].map(row => ({
+        const allRows = [...document.querySelectorAll('.kktp-row')].map(row => ({
             learning_objective_id: savedLoId,
             school_id:   currentUser.school_id,
             batas_bawah: parseFloat(row.querySelector('.kktp-bawah').value),
             batas_atas:  parseFloat(row.querySelector('.kktp-atas').value),
             predikat:    row.querySelector('.kktp-predikat').value.trim(),
             keterangan:  row.querySelector('.kktp-keterangan').value.trim() || null
-        })).filter(c => !isNaN(c.batas_bawah) && !isNaN(c.batas_atas) && c.predikat);
+        }));
+        const criteria = allRows.filter(c => !isNaN(c.batas_bawah) && !isNaN(c.batas_atas) && c.predikat);
+        const skipped = allRows.length - criteria.length;
+        if (skipped > 0) {
+            showPenilaianMsg('tp', `${skipped} baris KKTP tidak lengkap (batas bawah, batas atas, dan predikat wajib diisi) — baris tersebut tidak disimpan.`, 'error');
+        }
         if (criteria.length) {
             const { error } = await supabase
                 .from('assessment_criteria')
