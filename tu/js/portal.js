@@ -1735,6 +1735,7 @@ async function submitForumPost() {
         errEl.textContent = 'Pilih minimal satu penerima.'; errEl.style.display = 'block'; return;
     }
     btnEl.disabled = true; btnEl.textContent = 'Mengirim…';
+    let uploadedPath = null;
     try {
         let attachmentUrl = null, attachmentName = null;
         if (fileEl.files[0]) {
@@ -1747,6 +1748,7 @@ async function submitForumPost() {
             const { error: upErr } = await supabase.storage
                 .from('forum-attachments').upload(path, file, { upsert: false });
             if (upErr) throw upErr;
+            uploadedPath = path;
             const { data: urlData } = supabase.storage
                 .from('forum-attachments').getPublicUrl(path);
             attachmentUrl = urlData.publicUrl; attachmentName = file.name;
@@ -1771,6 +1773,10 @@ async function submitForumPost() {
         document.getElementById('forum-tab-terkirim').className = 'btn btn-primary';
         _forumOffset = 0; loadForumPosts();
     } catch (err) {
+        if (uploadedPath) {
+            supabase.storage.from('forum-attachments').remove([uploadedPath])
+                .catch(e => console.warn('[forum] cleanup orphan failed:', e));
+        }
         errEl.textContent = fe(err); errEl.style.display = 'block';
     } finally {
         btnEl.disabled = false; btnEl.textContent = 'Kirim';
