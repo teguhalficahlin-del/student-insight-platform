@@ -2,7 +2,11 @@
 # Konteks untuk Claude Code
 
 > Baca SELURUH dokumen ini sebelum mengerjakan apapun.
-> Dokumen ini adalah satu-satunya sumber kebenaran — CONTEXT.md deprecated.
+> WAJIB baca juga `AGENT_WORKING_RULES.md` di root repo — dokumen itu memuat aturan
+> kerja agen yang berlaku penuh, baik diminta eksplisit di prompt maupun tidak.
+> Pembagiannya: `AGENT_WORKING_RULES.md` = cara kerja agen; `CLAUDE.md` = konteks
+> proyek + aturan teknis. Kalau keduanya berbeda, `AGENT_WORKING_RULES.md` menang.
+> CONTEXT.md deprecated.
 
 ---
 
@@ -112,9 +116,14 @@ hasil query SQL, dan output bash apapun yang diminta Claude Chat untuk direview.
 
 ## 6. ATURAN WORKFLOW
 
-### 6a. Verifikasi pwd — LANGKAH PERTAMA
-Jalankan `pwd` dan pastikan output mengandung `"SIP SMK"`.
-Jika tidak → STOP, laporkan ke user.
+### 6a. Verifikasi pembuka — LANGKAH PERTAMA
+1. Jalankan `pwd` dan pastikan output mengandung `"SIP SMK"`.
+   Jika tidak → STOP, laporkan ke user.
+2. Sebutkan **eksplisit di awal respons** bahwa `AGENT_WORKING_RULES.md` dan
+   `CLAUDE.md` sudah dibaca — satu kalimat konfirmasi, bukan asumsi diam-diam.
+
+Kalau salah satu verifikasi ini belum dilakukan, JANGAN lanjut ke pekerjaan
+apapun — laporkan dulu bahwa verifikasi belum lengkap.
 
 ### 6b. Mode kerja
 
@@ -132,12 +141,15 @@ Claude Code investigasi cepat → apply → commit → STOP (tanpa push)
   BEGIN; /* isi migration */ ROLLBACK;  -- test dulu, tampilkan verbatim
   BEGIN; /* isi migration */ COMMIT;    -- baru permanent
   ```
-- Setiap `CREATE FUNCTION ... SECURITY DEFINER` wajib disertai **dua** REVOKE:
+- Setiap `CREATE FUNCTION ... SECURITY DEFINER` wajib disertai, **di migration yang
+  sama**, satu GRANT + dua REVOKE dengan urutan:
   ```sql
-  REVOKE EXECUTE ON FUNCTION nama_fungsi FROM PUBLIC;
-  REVOKE EXECUTE ON FUNCTION nama_fungsi FROM anon;
+  GRANT   EXECUTE ON FUNCTION nama_fungsi TO authenticated;  -- role yang dituju
+  REVOKE  EXECUTE ON FUNCTION nama_fungsi FROM anon;         -- wajib
+  REVOKE  EXECUTE ON FUNCTION nama_fungsi FROM PUBLIC;       -- defense-in-depth
   ```
-  `REVOKE FROM PUBLIC` saja **tidak cukup** — Supabase beri grant eksplisit ke `anon`.
+  `REVOKE FROM PUBLIC` saja **tidak cukup** — Supabase beri grant eksplisit ke `anon`
+  yang tidak ikut tercabut oleh revoke dari `PUBLIC`.
 
 ### 6d. Deploy — urutan wajib
 ```
@@ -169,6 +181,48 @@ aman gunakan `BEGIN; ... ROLLBACK;` di local DB saja, atau
 3. REVOKE dua lapis jika ada SECURITY DEFINER baru?
 4. Diff sudah ditampilkan verbatim?
 5. Risiko data loss?
+
+### 6g. Presisi kerja
+- **Jangan menulis ulang kode dari ingatan.** Definisi fungsi/kode existing yang akan
+  diedit atau dijadikan rujukan wajib dibaca langsung dari sumbernya — bukan
+  direkonstruksi dari deskripsi di prompt atau ingatan sesi sebelumnya.
+- **Verifikasi tipe data dan operator** sebelum menulis SQL yang memakai agregat atau
+  operator non-trivial. Contoh nyata: `MIN()`/`MAX()` **tidak berlaku** untuk tipe
+  `uuid` di PostgreSQL — pernah lolos ke migration dan baru ketahuan saat deploy gagal.
+- **Migration yang mengubah DATA EXISTING** (bukan sekadar perilaku untuk data baru):
+  investigasi SEMUA edge case dalam SATU putaran sebelum menulis migration final.
+  Checklist minimal:
+  - Ada baris "campuran" kondisi lama dan baru yang perlu ditangani beda?
+  - Ada risiko konflik nilai (beberapa baris seharusnya satu grup tapi datanya beda)?
+  - `EXPLAIN ANALYZE` — **wajib** untuk UPDATE/DELETE >1000 baris, mengingat
+    `statement_timeout` 2 menit di Supabase.
+  - Operator/fungsi yang dipakai valid untuk tipe kolom sebenarnya?
+
+  Jangan temukan edge case satu-satu secara reaktif setelah commit pertama.
+
+### 6h. Batasan perubahan
+- HANYA ubah file yang eksplisit disebut di `BATASAN KERAS` pada prompt yang diterima.
+- Perlakukan `BATASAN KERAS` sebagai pagar keras, bukan saran yang bisa dilonggarkan.
+- Kalau di tengah pekerjaan ternyata perlu menyentuh file di luar daftar → STOP,
+  laporkan kebutuhan itu, jangan langsung dikerjakan.
+
+### 6i. Efisiensi usage
+- Jangan investigasi ulang hal yang sudah dikonfirmasi di sesi yang sama — cek histori
+  commit/percakapan dulu sebelum menjalankan query yang sama lagi.
+- Jangan buka file yang tidak relevan dengan scope prompt.
+- Task kecil berisiko rendah: jangan over-investigate.
+- **Tapi** untuk migration yang menyentuh data produksi, kelengkapan verifikasi lebih
+  penting daripada kecepatan — jangan potong `EXPLAIN ANALYZE`, cek edge case, atau
+  verifikasi pasca-deploy demi hemat waktu/token.
+
+### 6j. Checklist akhir sebelum STOP — cantumkan di akhir setiap laporan
+- [ ] pwd terverifikasi mengandung "SIP SMK"
+- [ ] `AGENT_WORKING_RULES.md` + `CLAUDE.md` sudah dibaca — disebutkan eksplisit di awal
+- [ ] Semua perubahan sesuai `BATASAN KERAS` — tidak ada file di luar daftar tersentuh
+- [ ] Diff/output ditampilkan verbatim di badan teks — bukan ringkasan atau placeholder
+- [ ] Tidak ada push/deploy tanpa instruksi eksplisit terpisah
+- [ ] Setiap output yang diminta muncul sebagai teks biasa di badan pesan — bukan tool
+      output collapsed. Kalau ragu, paste ulang sebagai teks.
 
 ---
 

@@ -1329,27 +1329,8 @@
                         <button class="btn btn-primary btn-sm" id="kasus-escalate-btn">Teruskan</button>
                         <span id="kasus-escalate-msg" style="font-size:13px; margin-left:8px"></span>
                     </div>
-                    <!-- Audience management -->
-                    <div id="kasus-audience-block" style="margin-bottom:16px; display:none; padding:12px; border:1px solid var(--color-border); border-radius:var(--radius)">
-                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px">
-                            <strong style="font-size:13px">Siapa yang boleh melihat kasus ini?</strong>
-                            <span id="kasus-audience-badge" style="font-size:12px; padding:2px 8px; border-radius:20px; font-weight:600"></span>
-                        </div>
-                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px">
-                            <button class="btn btn-sm" id="kasus-aud-private-btn" title="Hanya pihak terlibat">🔒 Privat</button>
-                            <button class="btn btn-sm" id="kasus-aud-restricted-btn" title="Orang tertentu yang dipilih">👥 Orang Tertentu</button>
-                            <button class="btn btn-sm" id="kasus-aud-public-btn" title="Semua staf internal">🌐 Semua Internal</button>
-                        </div>
-                        <!-- Restricted: member list + add -->
-                        <div id="kasus-aud-restricted-panel" style="display:none">
-                            <div id="kasus-aud-members-list" style="font-size:13px; margin-bottom:8px"></div>
-                            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; position:relative">
-                                <input type="text" id="kasus-aud-member-search" class="input" placeholder="Ketik min. 2 huruf nama staf…" style="flex:1; min-width:160px" autocomplete="off">
-                                <div id="kasus-aud-member-list" style="display:none; border:1px solid var(--color-border); border-radius:var(--radius); background:var(--color-surface); max-height:120px; overflow-y:auto; position:absolute; z-index:100; min-width:200px; top:100%; left:0"></div>
-                            </div>
-                        </div>
-                        <span id="kasus-audience-msg" style="font-size:12px; display:block; margin-top:6px"></span>
-                    </div>
+                    <!-- Bagikan Kasus — isi diinjeksi renderKasusActions() lewat innerHTML -->
+                    <div id="kasus-audience-block" style="margin-bottom:16px; display:none; padding:12px; border:1px solid var(--color-border); border-radius:var(--radius)"></div>
                     <!-- Status change / close -->
                     <div id="kasus-status-block" style="display:none">
                         <label for="kasus-new-status">Ubah Status</label>
