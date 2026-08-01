@@ -1796,9 +1796,19 @@ async function openForumDetail(post) {
     document.getElementById('detail-forum-meta').textContent =
         `${author} · ${time}${post.is_edited ? ' • diedit' : ''}`;
     const attEl = document.getElementById('detail-forum-attachment');
-    attEl.innerHTML = post.attachment_url
-        ? `<a href="${post.attachment_url}" target="_blank" class="btn btn-secondary"
-              style="font-size:13px">📎 ${esc(post.attachment_name ?? 'Unduh')}</a>` : '';
+    if (post.attachment_url || post.attachment_path) {
+        let attachmentHref = post.attachment_url ?? null;
+        if (post.attachment_path) {
+            const { data: signed } = await supabase.storage
+                .from('forum-attachments')
+                .createSignedUrl(post.attachment_path, 172800);
+            if (signed?.signedUrl) attachmentHref = signed.signedUrl;
+        }
+        attEl.innerHTML = `<a href="${esc(attachmentHref)}" target="_blank" class="btn btn-secondary"
+              style="font-size:13px">📎 ${esc(post.attachment_name ?? 'Unduh')}</a>`;
+    } else {
+        attEl.innerHTML = '';
+    }
     document.getElementById('forum-author-actions').style.display =
         post.author_user_id === currentUser.user_id ? 'block' : 'none';
     document.getElementById('forum-comment-error').style.display = 'none';

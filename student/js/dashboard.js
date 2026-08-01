@@ -915,7 +915,7 @@ function renderForumCard(post) {
     return card;
 }
 
-function openForumDetail(post) {
+async function openForumDetail(post) {
     const modal = document.getElementById('modal-forum-detail');
     modal.style.display = 'flex';
 
@@ -930,8 +930,15 @@ function openForumDetail(post) {
         `${author} · ${time}${edited}`;
 
     const attEl = document.getElementById('detail-forum-attachment');
-    if (post.attachment_url) {
-        attEl.innerHTML = `<a href="${esc(post.attachment_url)}" target="_blank"
+    if (post.attachment_url || post.attachment_path) {
+        let attachmentHref = post.attachment_url ?? null;
+        if (post.attachment_path) {
+            const { data: signed } = await supabase.storage
+                .from('forum-attachments')
+                .createSignedUrl(post.attachment_path, 172800);
+            if (signed?.signedUrl) attachmentHref = signed.signedUrl;
+        }
+        attEl.innerHTML = `<a href="${esc(attachmentHref)}" target="_blank"
             class="btn btn-secondary" style="font-size:13px">
             📎 ${esc(post.attachment_name ?? 'Unduh Lampiran')}</a>`;
     } else {

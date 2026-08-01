@@ -5864,9 +5864,16 @@ async function openForumDetail(postId) {
         const edited = post.is_edited ? ' \u2022 diedit' : '';
         document.getElementById('detail-forum-meta').textContent = `${author} \u00B7 ${time}${edited}`;
 
-        if (post.attachment_url) {
+        if (post.attachment_url || post.attachment_path) {
+            let attachmentHref = post.attachment_url ?? null;
+            if (post.attachment_path) {
+                const { data: signed } = await supabase.storage
+                    .from('forum-attachments')
+                    .createSignedUrl(post.attachment_path, 172800);
+                if (signed?.signedUrl) attachmentHref = signed.signedUrl;
+            }
             document.getElementById('detail-forum-attachment').innerHTML =
-                `<a href="${post.attachment_url}" target="_blank" class="btn btn-secondary" style="font-size:13px">
+                `<a href="${esc(attachmentHref)}" target="_blank" class="btn btn-secondary" style="font-size:13px">
                     \uD83D\uDCCE ${esc(post.attachment_name ?? 'Unduh Lampiran')}
                 </a>`;
         }
