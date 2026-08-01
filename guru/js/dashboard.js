@@ -8028,6 +8028,7 @@ async function loadPenilaianKelas(selEl) {
         });
     } catch (e) {
         console.error('loadPenilaianKelas:', e);
+        showPenilaianMsg('settings', 'Gagal memuat daftar kelas. Coba muat ulang halaman.', 'error');
     }
 }
 
@@ -8054,6 +8055,7 @@ async function loadPenilaianMapel(selEl, kelasId) {
         });
     } catch (e) {
         console.error('loadPenilaianMapel:', e);
+        showPenilaianMsg('settings', 'Gagal memuat daftar mapel. Coba muat ulang halaman.', 'error');
     }
 }
 
@@ -8298,6 +8300,7 @@ async function populateTpKelasCheckboxes(loId) {
         });
     } catch (e) {
         console.error('populateTpKelasCheckboxes:', e);
+        showPenilaianMsg('tp', 'Gagal memuat daftar kelas untuk TP. Coba tutup dan buka kembali form.', 'error');
     }
 }
 
@@ -8314,6 +8317,7 @@ async function loadKktpRows(loId) {
         (data || []).forEach(c => addKktpRow(c));
     } catch (e) {
         console.error('loadKktpRows:', e);
+        showPenilaianMsg('tp', 'Gagal memuat kriteria KKTP. Coba tutup dan buka kembali form.', 'error');
     }
 }
 
