@@ -716,8 +716,8 @@ export async function getAttendanceSummaryByStudents(classId, academicYear, date
 
 export async function getOpenCases(schoolId) {
     let q = supabase
-        .from('cases')
-        .select('case_id, title, status, track, current_handler_role, created_at, student:students(full_name, nis)')
+        .from('coaching_cases')
+        .select('case_id, title, status, track, current_handler_user_id, created_at, student:students(full_name, nis), handler:users!coaching_cases_current_handler_user_id_fkey(full_name)')
         .neq('status', 'CLOSED')
         .order('created_at', { ascending: false })
         .limit(100);
@@ -814,12 +814,13 @@ export async function getStudentParents(studentId) {
 // ─── KASUS ───────────────────────────────────────────────────
 
 // Diganti oleh getUnreadNotifCount — tetap diekspor untuk kompatibilitas sementara
-export async function countNewCaseEvents(roleType, since) {
+export async function countNewCoachingCases(handlerUserId, since) {
     const { count, error } = await supabase
-        .from('case_events')
+        .from('coaching_cases')
         .select('case_id', { count: 'exact', head: true })
-        .eq('new_handler_role', roleType)
-        .gt('created_at', since);
+        .eq('current_handler_user_id', handlerUserId)
+        .gt('updated_at', since)
+        .neq('status', 'CLOSED');
     if (error) throw error;
     return count ?? 0;
 }
@@ -852,11 +853,12 @@ export async function markNotificationsRead(ids) {
 
 export async function getCases({ status = '', track = '', offset = 0, limit = 51 } = {}) {
     let req = supabase
-        .from('cases')
+        .from('coaching_cases')
         .select(`
-            case_id, title, status, track, current_handler_role, is_locked,
-            created_at, created_by_user_id,
-            student:students(student_id, full_name, nis)
+            case_id, title, status, track, current_handler_user_id,
+            created_at,
+            student:students(student_id, full_name, nis),
+            handler:users!coaching_cases_current_handler_user_id_fkey(full_name)
         `)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
@@ -869,12 +871,13 @@ export async function getCases({ status = '', track = '', offset = 0, limit = 51
 
 export async function getCase(caseId) {
     const { data, error } = await supabase
-        .from('cases')
+        .from('coaching_cases')
         .select(`
-            case_id, title, description, status, track, current_handler_role, is_locked,
-            created_at, initiated_by_role, audience, created_by_user_id,
+            case_id, title, description, status, track, current_handler_user_id,
+            created_at, closed_at, closed_by_user_id, created_by_user_id,
             student:students(student_id, user_id, full_name, nis),
-            created_by:users!cases_created_by_user_id_fkey(full_name)
+            created_by:users!coaching_cases_created_by_user_id_fkey(full_name),
+            handler:users!coaching_cases_current_handler_user_id_fkey(full_name)
         `)
         .eq('case_id', caseId)
         .single();
@@ -882,15 +885,13 @@ export async function getCase(caseId) {
     return data;
 }
 
-export async function getCaseEvents(caseId) {
+export async function getCoachingCaseEvents(caseId) {
     const { data, error } = await supabase
-        .from('case_events')
+        .from('coaching_case_events')
         .select(`
-            event_id, event_type, privacy_level,
-            previous_handler_role, new_handler_role,
+            event_id, event_type, is_visible_to_student,
             previous_status, new_status, payload, created_at,
-            author:users!case_events_author_user_id_fkey(full_name),
-            author_role_at_time
+            author:users!coaching_case_events_author_user_id_fkey(full_name)
         `)
         .eq('case_id', caseId)
         .order('created_at', { ascending: true });
@@ -915,14 +916,56 @@ export async function createCase({ studentId, title, description, track, audienc
     return { case_id: payload.case_id, _queued: r.status === 'queued' };
 }
 
-export async function updateCaseAudience({ caseId, audience }) {
-    const { data, error } = await supabase
-        .from('cases')
-        .update({ audience })
-        .eq('case_id', caseId)
-        .select('case_id');
+export async function shareCoachingCaseToStudent(caseId, authorUserId) {
+    const { error } = await supabase
+        .from('coaching_case_events')
+        .insert({
+            case_id:               caseId,
+            event_type:            'SHARED_TO_STUDENT',
+            author_user_id:        authorUserId,
+            is_visible_to_student: false,
+            payload:               {},
+        });
     if (error) throw error;
-    if (!data || data.length === 0) throw new Error('Tidak ada perubahan tersimpan — periksa izin Anda.');
+}
+
+export async function unshareCoachingCaseFromStudent(caseId, authorUserId) {
+    const { error } = await supabase
+        .from('coaching_case_events')
+        .insert({
+            case_id:               caseId,
+            event_type:            'UNSHARED_FROM_STUDENT',
+            author_user_id:        authorUserId,
+            is_visible_to_student: false,
+            payload:               {},
+        });
+    if (error) throw error;
+}
+
+export async function shareCoachingCaseToParent(caseId, authorUserId) {
+    const { error } = await supabase
+        .from('coaching_case_events')
+        .insert({
+            case_id:               caseId,
+            event_type:            'SHARED_TO_PARENT',
+            author_user_id:        authorUserId,
+            is_visible_to_student: false,
+            payload:               {},
+        });
+    if (error) throw error;
+}
+
+export async function unshareCoachingCaseFromParent(caseId, authorUserId) {
+    const { error } = await supabase
+        .from('coaching_case_events')
+        .insert({
+            case_id:               caseId,
+            event_type:            'UNSHARED_FROM_PARENT',
+            author_user_id:        authorUserId,
+            is_visible_to_student: false,
+            payload:               {},
+        });
+    if (error) throw error;
 }
 
 export async function getCaseAudienceMembers(caseId) {
@@ -963,110 +1006,65 @@ export async function searchInternalUsers(query) {
     return data ?? [];
 }
 
-export async function addCaseComment({ caseId, text, authorUserId, authorRole, privacyLevel = 'INTERNAL_SCHOOL' }) {
+export async function addCoachingNote({ caseId, text, authorUserId, isVisibleToStudent = false }) {
     const { error } = await supabase
-        .from('case_events')
-        .insert({
-            case_id:            caseId,
-            event_type:         'COMMENT_ADDED',
-            author_user_id:     authorUserId,
-            author_role_at_time: authorRole,
-            privacy_level:      privacyLevel,
-            payload:            { text },
-        });
-    if (error) throw error;
-}
-
-export async function escalateCase({ caseId, previousHandlerRole, newHandlerRole, note, authorUserId, authorRole, previousStatus }) {
-    // previousStatus wajib diisi oleh pemanggil; fetch dari server sebagai fallback
-    let prevSt = previousStatus;
-    if (!prevSt) {
-        const { data, error: fetchErr } = await supabase
-            .from('cases')
-            .select('status')
-            .eq('case_id', caseId)
-            .single();
-        if (fetchErr) throw fetchErr;
-        prevSt = data.status;
-    }
-
-    const { error } = await supabase
-        .from('case_events')
+        .from('coaching_case_events')
         .insert({
             case_id:               caseId,
-            event_type:            'DECISION_ESCALATE',
+            event_type:            'NOTE_ADDED',
             author_user_id:        authorUserId,
-            author_role_at_time:   authorRole,
-            previous_handler_role: previousHandlerRole,
-            new_handler_role:      newHandlerRole,
-            previous_status:       prevSt,
-            new_status:            prevSt,   // eskalasi tidak mengubah status kasus
-            payload:               note ? { text: note } : {},
-        });
-    if (error) throw error;
-
-    // Jika kasus PRIVATE, otomatis upgrade audience ke RESTRICTED
-    // agar handler baru bisa lihat kasus
-    const { data: caseData } = await supabase
-        .from('cases')
-        .select('audience')
-        .eq('case_id', caseId)
-        .single();
-
-    if (caseData?.audience === 'PRIVATE') {
-        await updateCaseAudience({ caseId, audience: 'RESTRICTED' });
-        await logCaseAudienceChange({
-            caseId,
-            previousAudience: 'PRIVATE',
-            newAudience: 'RESTRICTED',
-            authorUserId,
-            authorRole,
-        });
-    }
-}
-
-export async function changeCaseStatus({ caseId, previousStatus, newStatus, note, authorUserId, authorRole }) {
-    const { error } = await supabase
-        .from('case_events')
-        .insert({
-            case_id:             caseId,
-            event_type:          'STATUS_CHANGED',
-            author_user_id:      authorUserId,
-            author_role_at_time: authorRole,
-            previous_status:     previousStatus,
-            new_status:          newStatus,
-            payload:             note ? { text: note } : {},
+            is_visible_to_student: isVisibleToStudent,
+            payload:               { text },
         });
     if (error) throw error;
 }
 
-export async function closeCase({ caseId, note, authorUserId, authorRole, previousStatus }) {
+export async function escalateCoachingCase({ caseId, newHandlerUserId, note, authorUserId }) {
     const { error } = await supabase
-        .from('case_events')
+        .from('coaching_case_events')
         .insert({
-            case_id:             caseId,
-            event_type:          'DECISION_CLOSE',
-            author_user_id:      authorUserId,
-            author_role_at_time: authorRole,
-            previous_status:     previousStatus ?? null,
-            new_status:          'CLOSED',
-            payload:             note ? { text: note } : {},
+            case_id:               caseId,
+            event_type:            'ESCALATED',
+            author_user_id:        authorUserId,
+            is_visible_to_student: false,
+            payload:               {
+                new_handler_user_id: newHandlerUserId,
+                note:                note ?? '',
+            },
         });
     if (error) throw error;
 }
 
-export async function logCaseAudienceChange({ caseId, previousAudience, newAudience, authorUserId, authorRole }) {
+export async function changeCoachingCaseStatus({ caseId, previousStatus, newStatus, note, authorUserId }) {
     const { error } = await supabase
-        .from('case_events')
+        .from('coaching_case_events')
         .insert({
-            case_id:             caseId,
-            event_type:          'AUDIENCE_CHANGED',
-            author_user_id:      authorUserId,
-            author_role_at_time: authorRole,
-            payload:             { previous: previousAudience, next: newAudience },
+            case_id:               caseId,
+            event_type:            'STATUS_CHANGED',
+            author_user_id:        authorUserId,
+            is_visible_to_student: false,
+            previous_status:       previousStatus,
+            new_status:            newStatus,
+            payload:               note ? { old_status: previousStatus, new_status: newStatus, note } : { old_status: previousStatus, new_status: newStatus },
         });
-    if (error) console.warn('[kasus] audit audience change gagal:', error);
+    if (error) throw error;
 }
+
+export async function closeCoachingCase({ caseId, note, authorUserId, previousStatus }) {
+    const { error } = await supabase
+        .from('coaching_case_events')
+        .insert({
+            case_id:               caseId,
+            event_type:            'CLOSED',
+            author_user_id:        authorUserId,
+            is_visible_to_student: false,
+            previous_status:       previousStatus ?? null,
+            new_status:            'CLOSED',
+            payload:               note ? { summary: note } : {},
+        });
+    if (error) throw error;
+}
+
 
 // ─── KELOLA ADMIN (kepsek only) ───────────────────────────────
 
