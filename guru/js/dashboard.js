@@ -4027,30 +4027,36 @@ async function _piketRenderExitForm() {
         _exitDebounceTimer = setTimeout(async () => {
             const q = searchEl.value.trim();
             if (q.length < 2) { dropEl.style.display = 'none'; return; }
-            const results = await searchStudents(q, currentUser.school_id);
-            if (!results.length) { dropEl.style.display = 'none'; return; }
-            dropEl.innerHTML = results.slice(0, 8).map(s =>
-                `<div class="search-result-item" data-id="${esc(s.student_id)}"
-                      style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--color-border)">
-                    ${esc(s.full_name)} <span style="color:var(--color-text-muted);font-size:12px">${esc(s.nis)} — ${esc(s.class_name ?? '')}</span>
-                 </div>`).join('');
-            dropEl.style.display = 'block';
-            dropEl.querySelectorAll('.search-result-item').forEach(el => {
-                el.addEventListener('click', () => {
-                    _exitSelectedStudent = results.find(s => s.student_id === el.dataset.id);
-                    searchEl.value = '';
-                    dropEl.style.display = 'none';
-                    selectedEl.innerHTML = `<span class="badge badge-info">✓ ${esc(_exitSelectedStudent.full_name)} — ${esc(_exitSelectedStudent.class_name ?? '')}</span>
-                        <button type="button" style="margin-left:8px;background:none;border:none;cursor:pointer;color:var(--color-text-muted)" id="piket-exit-clear">×</button>`;
-                    selectedEl.style.display = 'block';
-                    submitBtn.disabled = false;
-                    document.getElementById('piket-exit-clear')?.addEventListener('click', () => {
-                        _exitSelectedStudent = null;
-                        selectedEl.style.display = 'none';
-                        submitBtn.disabled = true;
+            try {
+                const results = await searchStudents(q, currentUser.school_id);
+                if (!results.length) { dropEl.style.display = 'none'; return; }
+                dropEl.innerHTML = results.slice(0, 8).map(s =>
+                    `<div class="search-result-item" data-id="${esc(s.student_id)}"
+                          style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--color-border)">
+                        ${esc(s.full_name)} <span style="color:var(--color-text-muted);font-size:12px">${esc(s.nis)} — ${esc(s.class_name ?? '')}</span>
+                     </div>`).join('');
+                dropEl.style.display = 'block';
+                dropEl.querySelectorAll('.search-result-item').forEach(el => {
+                    el.addEventListener('click', () => {
+                        _exitSelectedStudent = results.find(s => s.student_id === el.dataset.id);
+                        searchEl.value = '';
+                        dropEl.style.display = 'none';
+                        selectedEl.innerHTML = `<span class="badge badge-info">✓ ${esc(_exitSelectedStudent.full_name)} — ${esc(_exitSelectedStudent.class_name ?? '')}</span>
+                            <button type="button" style="margin-left:8px;background:none;border:none;cursor:pointer;color:var(--color-text-muted)" id="piket-exit-clear">×</button>`;
+                        selectedEl.style.display = 'block';
+                        submitBtn.disabled = false;
+                        document.getElementById('piket-exit-clear')?.addEventListener('click', () => {
+                            _exitSelectedStudent = null;
+                            selectedEl.style.display = 'none';
+                            submitBtn.disabled = true;
+                        });
                     });
                 });
-            });
+            } catch (e) {
+                console.error('searchStudents (exit):', e);
+                dropEl.innerHTML = `<div style="padding:8px 12px;color:var(--color-danger,#dc2626)">Pencarian gagal. Coba lagi.</div>`;
+                dropEl.style.display = 'block';
+            }
         }, 300);
     });
 
