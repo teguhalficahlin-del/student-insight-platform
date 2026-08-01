@@ -3055,10 +3055,28 @@ const EVENT_TYPE_LABEL = {
 
 const KASUS_PAGE    = 50;
 let _kasusTabInit   = false;
-let _kasusAllCases  = [];
-let _kasusOffset    = 0;
-let _kasusHasMore   = false;
-let _kasusCurrentId = null;
+
+/**
+ * Konteks render kasus — satu objek per tab yang menampilkan daftar & detail kasus.
+ *
+ * `prefix`     menentukan id elemen HTML yang dipakai: `${prefix}-list-content`,
+ *              `${prefix}-detail-header`, dst. Tab "Pembinaan Siswa" memakai 'kasus'.
+ * `extraQuery` di-spread ke getCases() untuk filter khusus tab — mis. `studentIds`
+ *              (wali kelas / kaprodi) atau `statusNotClosed` (kepsek).
+ *
+ * State paginasi & seleksi ikut di dalam konteks, bukan variabel modul, supaya
+ * beberapa tab bisa menampilkan daftar kasus sekaligus tanpa saling menimpa.
+ */
+function makeKasusCtx(prefix, extraQuery = {}) {
+    return { prefix, extraQuery, allCases: [], offset: 0, hasMore: false, currentId: null };
+}
+
+// Konteks tab-kasus — dipakai sebagai default oleh seluruh fungsi di bawah,
+// sehingga pemanggil lama yang tidak mengirim ctx berperilaku persis seperti semula.
+const kasusCtxDefault = makeKasusCtx('kasus');
+
+/** getElementById ber-prefix konteks. */
+function kEl(ctx, suffix) { return document.getElementById(`${ctx.prefix}-${suffix}`); }
 
 async function initKasusTab() {
     markKasusAsSeen();
@@ -3091,7 +3109,9 @@ async function initKasusTab() {
     // New case button
     document.getElementById('kasus-new-btn').addEventListener('click', openKasusModal);
     document.getElementById('kasus-create-cancel-btn').addEventListener('click', closeKasusModal);
-    document.getElementById('kasus-back-btn').addEventListener('click', showKasusList);
+    // Bungkus arrow — showKasusList sekarang menerima ctx, sedangkan handler DOM
+    // akan mengoper objek Event sebagai argumen pertama.
+    document.getElementById('kasus-back-btn').addEventListener('click', () => showKasusList());
 
     // Create form
     const createForm  = document.getElementById('kasus-create-form');
@@ -3217,36 +3237,40 @@ function closeKasusModal() {
     document.getElementById('kasus-create-modal').style.display = 'none';
 }
 
-async function loadKasusList(append = false) {
-    const contentEl = document.getElementById('kasus-list-content');
+async function loadKasusList(append = false, ctx = kasusCtxDefault) {
+    const contentEl = kEl(ctx, 'list-content');
     if (!append) {
-        _kasusAllCases = [];
-        _kasusOffset   = 0;
+        ctx.allCases = [];
+        ctx.offset   = 0;
         contentEl.innerHTML = '<p class="hint">Memuat kasus…</p>';
     }
-    const status = document.getElementById('kasus-filter-status').value;
-    const track  = document.getElementById('kasus-filter-track').value;
+    // Tab jabatan boleh tidak menyediakan kontrol filter — anggap "tanpa filter".
+    const status = kEl(ctx, 'filter-status')?.value ?? '';
+    const track  = kEl(ctx, 'filter-track')?.value  ?? '';
     try {
-        const rows = await getCases({ status, track, offset: _kasusOffset, limit: KASUS_PAGE + 1 });
-        _kasusHasMore  = rows.length > KASUS_PAGE;
-        const page     = _kasusHasMore ? rows.slice(0, KASUS_PAGE) : rows;
-        _kasusAllCases = append ? [..._kasusAllCases, ...page] : page;
-        _kasusOffset   = _kasusAllCases.length;
-        renderKasusList();
+        const rows = await getCases({
+            ...ctx.extraQuery,
+            status, track, offset: ctx.offset, limit: KASUS_PAGE + 1,
+        });
+        ctx.hasMore  = rows.length > KASUS_PAGE;
+        const page   = ctx.hasMore ? rows.slice(0, KASUS_PAGE) : rows;
+        ctx.allCases = append ? [...ctx.allCases, ...page] : page;
+        ctx.offset   = ctx.allCases.length;
+        renderKasusList(ctx);
     } catch (err) {
         if (!append) contentEl.innerHTML = `<div class="status-err">${esc(fe(err))}</div>`;
     }
 }
 
-function renderKasusList() {
-    const contentEl = document.getElementById('kasus-list-content');
+function renderKasusList(ctx = kasusCtxDefault) {
+    const contentEl = kEl(ctx, 'list-content');
 
-    if (!_kasusAllCases.length) {
+    if (!ctx.allCases.length) {
         contentEl.innerHTML = '<p class="hint">Tidak ada kasus yang sesuai filter.</p>';
         return;
     }
 
-    contentEl.innerHTML = _kasusAllCases.map(r => `
+    contentEl.innerHTML = ctx.allCases.map(r => `
         <div class="kasus-row" data-id="${r.case_id}">
             <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px; flex-wrap:wrap">
                 <strong style="font-size:14px; flex:1">${esc(r.title)}</strong>
@@ -3259,50 +3283,50 @@ function renderKasusList() {
                 &middot; ${fmt(r.created_at)}
             </div>
         </div>
-    `).join('') + (_kasusHasMore
+    `).join('') + (ctx.hasMore
         ? `<div style="text-align:center;padding:12px">
-               <button class="btn btn-secondary btn-sm" id="kasus-load-more-btn">Muat lebih…</button>
+               <button class="btn btn-secondary btn-sm" id="${ctx.prefix}-load-more-btn">Muat lebih…</button>
            </div>`
         : '');
 
     contentEl.querySelectorAll('.kasus-row').forEach(el => {
-        el.addEventListener('click', () => openKasusDetail(el.dataset.id));
+        el.addEventListener('click', () => openKasusDetail(el.dataset.id, ctx));
     });
-    const moreBtn = document.getElementById('kasus-load-more-btn');
+    const moreBtn = kEl(ctx, 'load-more-btn');
     if (moreBtn) moreBtn.addEventListener('click', async () => {
         moreBtn.disabled = true;
         moreBtn.textContent = 'Memuat…';
-        await loadKasusList(true);
+        await loadKasusList(true, ctx);
     });
 }
 
-function showKasusList() {
-    document.getElementById('kasus-list-view').style.display = 'block';
-    document.getElementById('kasus-detail-view').style.display = 'none';
-    _kasusCurrentId = null;
+function showKasusList(ctx = kasusCtxDefault) {
+    kEl(ctx, 'list-view').style.display   = 'block';
+    kEl(ctx, 'detail-view').style.display = 'none';
+    ctx.currentId = null;
 }
 
-async function openKasusDetail(caseId) {
-    _kasusCurrentId = caseId;
-    document.getElementById('kasus-list-view').style.display = 'none';
-    document.getElementById('kasus-detail-view').style.display = 'block';
-    document.getElementById('kasus-detail-header').innerHTML = '<p class="hint">Memuat…</p>';
-    document.getElementById('kasus-events-list').innerHTML   = '<p class="hint">Memuat…</p>';
-    document.getElementById('kasus-actions').style.display  = 'none';
+async function openKasusDetail(caseId, ctx = kasusCtxDefault) {
+    ctx.currentId = caseId;
+    kEl(ctx, 'list-view').style.display   = 'none';
+    kEl(ctx, 'detail-view').style.display = 'block';
+    kEl(ctx, 'detail-header').innerHTML = '<p class="hint">Memuat…</p>';
+    kEl(ctx, 'events-list').innerHTML   = '<p class="hint">Memuat…</p>';
+    kEl(ctx, 'actions').style.display   = 'none';
 
     try {
         const [kasus, events] = await Promise.all([getCase(caseId), getCoachingCaseEvents(caseId)]);
-        renderKasusDetail(kasus);
-        renderKasusEvents(events);
-        await renderKasusActions(kasus);
+        renderKasusDetail(kasus, ctx);
+        renderKasusEvents(events, ctx);
+        await renderKasusActions(kasus, ctx);
     } catch (err) {
-        document.getElementById('kasus-detail-header').innerHTML =
+        kEl(ctx, 'detail-header').innerHTML =
             `<div class="status-err">${esc(fe(err))}</div>`;
     }
 }
 
-function renderKasusDetail(k) {
-    const el = document.getElementById('kasus-detail-header');
+function renderKasusDetail(k, ctx = kasusCtxDefault) {
+    const el = kEl(ctx, 'detail-header');
     el.innerHTML = `
         <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:12px">
             <h3 style="margin:0; flex:1">${esc(k.title)}</h3>
@@ -3317,8 +3341,8 @@ function renderKasusDetail(k) {
     `;
 }
 
-function renderKasusEvents(events) {
-    const el = document.getElementById('kasus-events-list');
+function renderKasusEvents(events, ctx = kasusCtxDefault) {
+    const el = kEl(ctx, 'events-list');
     if (!events.length) {
         el.innerHTML = '<p class="hint">Belum ada event.</p>';
         return;
@@ -3347,14 +3371,14 @@ function renderKasusEvents(events) {
 // 6 peran yang boleh jadi handler/eskalasi tujuan kasus internal
 const INTERNAL_CASE_ROLES = ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK'];
 
-async function renderKasusActions(kasus) {
-    const actionsEl     = document.getElementById('kasus-actions');
-    const escalateBlock = document.getElementById('kasus-escalate-block');
-    const statusBlock   = document.getElementById('kasus-status-block');
-    const audienceBlock = document.getElementById('kasus-audience-block');
-    const closeBtn      = document.getElementById('kasus-close-btn');
-    const escalateTo    = document.getElementById('kasus-escalate-to');
-    const statusSel     = document.getElementById('kasus-new-status');
+async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
+    const actionsEl     = kEl(ctx, 'actions');
+    const escalateBlock = kEl(ctx, 'escalate-block');
+    const statusBlock   = kEl(ctx, 'status-block');
+    const audienceBlock = kEl(ctx, 'audience-block');
+    const closeBtn      = kEl(ctx, 'close-btn');
+    const escalateTo    = kEl(ctx, 'escalate-to');
+    const statusSel     = kEl(ctx, 'new-status');
 
     if (kasus.status === 'CLOSED') {
         actionsEl.style.display = 'none';
@@ -3368,7 +3392,7 @@ async function renderKasusActions(kasus) {
     if (isInternal) {
         escalateTo.innerHTML = '<option value="">Memuat…</option>';
         escalateBlock.style.display = 'block';
-        const warnEl = document.getElementById('kasus-escalate-warn');
+        const warnEl = kEl(ctx, 'escalate-warn');
         if (warnEl) warnEl.style.display = 'none';
         try {
             const candidates = await getEscalationCandidates(kasus.case_id);
@@ -3408,20 +3432,20 @@ async function renderKasusActions(kasus) {
         audienceBlock.innerHTML = `
             <h4 style="margin:0 0 8px">Bagikan Kasus</h4>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
-                <button id="kasus-share-student-btn" class="btn btn-sm ${kasus.is_shared_to_student ? 'btn-primary' : 'btn-secondary'}">
+                <button id="${ctx.prefix}-share-student-btn" class="btn btn-sm ${kasus.is_shared_to_student ? 'btn-primary' : 'btn-secondary'}">
                     ${kasus.is_shared_to_student ? '✓ Siswa Punya Akses' : 'Bagikan ke Siswa'}
                 </button>
-                <button id="kasus-share-parent-btn" class="btn btn-sm ${kasus.is_shared_to_parent ? 'btn-primary' : 'btn-secondary'}">
+                <button id="${ctx.prefix}-share-parent-btn" class="btn btn-sm ${kasus.is_shared_to_parent ? 'btn-primary' : 'btn-secondary'}">
                     ${kasus.is_shared_to_parent ? '✓ Orang Tua Punya Akses' : 'Bagikan ke Orang Tua'}
                 </button>
             </div>
-            <p id="kasus-audience-msg" style="font-size:12px;margin:6px 0 0;min-height:16px"></p>
+            <p id="${ctx.prefix}-audience-msg" style="font-size:12px;margin:6px 0 0;min-height:16px"></p>
         `;
         audienceBlock.style.display = 'block';
 
-        const shareStudentBtn = document.getElementById('kasus-share-student-btn');
-        const shareParentBtn  = document.getElementById('kasus-share-parent-btn');
-        const audienceMsgEl   = document.getElementById('kasus-audience-msg');
+        const shareStudentBtn = kEl(ctx, 'share-student-btn');
+        const shareParentBtn  = kEl(ctx, 'share-parent-btn');
+        const audienceMsgEl   = kEl(ctx, 'audience-msg');
 
         shareStudentBtn.addEventListener('click', async () => {
             shareStudentBtn.disabled = true;
@@ -3433,7 +3457,7 @@ async function renderKasusActions(kasus) {
                     await shareCoachingCaseToStudent(kasus.case_id, currentUser.user_id);
                     audienceMsgEl.style.color = 'var(--color-success)'; audienceMsgEl.textContent = 'Dibagikan ke siswa.';
                 }
-                await refreshKasusDetail();
+                await refreshKasusDetail(ctx);
             } catch (err) {
                 audienceMsgEl.style.color = 'var(--color-danger)'; audienceMsgEl.textContent = fe(err, 's');
                 shareStudentBtn.disabled = false;
@@ -3450,7 +3474,7 @@ async function renderKasusActions(kasus) {
                     await shareCoachingCaseToParent(kasus.case_id, currentUser.user_id);
                     audienceMsgEl.style.color = 'var(--color-success)'; audienceMsgEl.textContent = 'Dibagikan ke orang tua.';
                 }
-                await refreshKasusDetail();
+                await refreshKasusDetail(ctx);
             } catch (err) {
                 audienceMsgEl.style.color = 'var(--color-danger)'; audienceMsgEl.textContent = fe(err, 's');
                 shareParentBtn.disabled = false;
@@ -3461,29 +3485,29 @@ async function renderKasusActions(kasus) {
     }
 
     // ── Wire buttons (replace listeners by cloning) ──
-    const newCommentBtn = replaceEl('kasus-comment-submit-btn');
-    const newEscBtn     = replaceEl('kasus-escalate-btn');
-    const newStatusBtn  = replaceEl('kasus-status-btn');
-    const newCloseBtn   = replaceEl('kasus-close-btn');
+    const newCommentBtn = replaceEl(`${ctx.prefix}-comment-submit-btn`);
+    const newEscBtn     = replaceEl(`${ctx.prefix}-escalate-btn`);
+    const newStatusBtn  = replaceEl(`${ctx.prefix}-status-btn`);
+    const newCloseBtn   = replaceEl(`${ctx.prefix}-close-btn`);
 
-    if (!document.getElementById('kasus-comment-visible-wrap')) {
+    if (!kEl(ctx, 'comment-visible-wrap')) {
         const wrap = document.createElement('div');
-        wrap.id = 'kasus-comment-visible-wrap';
+        wrap.id = `${ctx.prefix}-comment-visible-wrap`;
         wrap.style.cssText = 'margin:6px 0;font-size:13px';
-        wrap.innerHTML = '<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="kasus-comment-visible"> Tampilkan ke siswa &amp; orang tua</label>';
+        wrap.innerHTML = `<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="${ctx.prefix}-comment-visible"> Tampilkan ke siswa &amp; orang tua</label>`;
         newCommentBtn.parentNode.insertBefore(wrap, newCommentBtn);
     }
     newCommentBtn.addEventListener('click', async () => {
-        const text  = document.getElementById('kasus-comment-text').value.trim();
-        const msgEl = document.getElementById('kasus-comment-msg');
-        const isVisibleToStudent = document.getElementById('kasus-comment-visible')?.checked ?? false;
+        const text  = kEl(ctx, 'comment-text').value.trim();
+        const msgEl = kEl(ctx, 'comment-msg');
+        const isVisibleToStudent = kEl(ctx, 'comment-visible')?.checked ?? false;
         if (!text) { msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = 'Catatan tidak boleh kosong.'; return; }
         newCommentBtn.disabled = true; newCommentBtn.textContent = 'Mengirim…';
         try {
             await addCoachingNote({ caseId: kasus.case_id, text, authorUserId: currentUser.user_id, isVisibleToStudent });
-            document.getElementById('kasus-comment-text').value = '';
+            kEl(ctx, 'comment-text').value = '';
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Catatan dikirim.';
-            await refreshKasusDetail();
+            await refreshKasusDetail(ctx);
         } catch (err) {
             msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
         } finally {
@@ -3492,10 +3516,10 @@ async function renderKasusActions(kasus) {
     });
 
     newEscBtn.addEventListener('click', async () => {
-        const selEl = document.getElementById('kasus-escalate-to');
+        const selEl = kEl(ctx, 'escalate-to');
         const to    = selEl.value;
-        const note  = document.getElementById('kasus-escalate-note').value.trim();
-        const msgEl = document.getElementById('kasus-escalate-msg');
+        const note  = kEl(ctx, 'escalate-note').value.trim();
+        const msgEl = kEl(ctx, 'escalate-msg');
         if (!to) { msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = 'Pilih penerima eskalasi.'; return; }
         newEscBtn.disabled = true; newEscBtn.textContent = 'Meneruskan…';
         try {
@@ -3507,7 +3531,7 @@ async function renderKasusActions(kasus) {
             });
             const recipName = selEl.options[selEl.selectedIndex]?.text ?? to;
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = `Diteruskan ke ${esc(recipName)}.`;
-            await refreshKasusDetail();
+            await refreshKasusDetail(ctx);
         } catch (err) {
             msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
         } finally {
@@ -3516,14 +3540,14 @@ async function renderKasusActions(kasus) {
     });
 
     newStatusBtn.addEventListener('click', async () => {
-        const newSt = document.getElementById('kasus-new-status').value;
-        const note  = document.getElementById('kasus-status-note').value.trim();
-        const msgEl = document.getElementById('kasus-status-msg');
+        const newSt = kEl(ctx, 'new-status').value;
+        const note  = kEl(ctx, 'status-note').value.trim();
+        const msgEl = kEl(ctx, 'status-msg');
         newStatusBtn.disabled = true; newStatusBtn.textContent = 'Menyimpan…';
         try {
             await changeCoachingCaseStatus({ caseId: kasus.case_id, previousStatus: kasus.status, newStatus: newSt, note, authorUserId: currentUser.user_id });
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = `Status diubah ke ${CASE_STATUS_LABEL[newSt]}.`;
-            await refreshKasusDetail();
+            await refreshKasusDetail(ctx);
         } catch (err) {
             msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
         } finally {
@@ -3532,8 +3556,8 @@ async function renderKasusActions(kasus) {
     });
 
     newCloseBtn.addEventListener('click', async () => {
-        const note  = document.getElementById('kasus-status-note').value.trim();
-        const msgEl = document.getElementById('kasus-status-msg');
+        const note  = kEl(ctx, 'status-note').value.trim();
+        const msgEl = kEl(ctx, 'status-msg');
         if (newCloseBtn.dataset.confirming !== 'yes') {
             newCloseBtn.dataset.confirming = 'yes';
             msgEl.style.color   = 'var(--color-warning)';
@@ -3553,7 +3577,7 @@ async function renderKasusActions(kasus) {
         try {
             await closeCoachingCase({ caseId: kasus.case_id, note, authorUserId: currentUser.user_id, previousStatus: kasus.status });
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Kasus berhasil ditutup.';
-            await refreshKasusDetail();
+            await refreshKasusDetail(ctx);
         } catch (err) {
             msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
         } finally {
@@ -3570,16 +3594,16 @@ function replaceEl(id) {
     return neu;
 }
 
-async function refreshKasusDetail() {
-    if (!_kasusCurrentId) return;
+async function refreshKasusDetail(ctx = kasusCtxDefault) {
+    if (!ctx.currentId) return;
     try {
-        const [kasus, events] = await Promise.all([getCase(_kasusCurrentId), getCoachingCaseEvents(_kasusCurrentId)]);
-        renderKasusDetail(kasus);
-        renderKasusEvents(events);
-        await renderKasusActions(kasus);
-        const idx = _kasusAllCases.findIndex(c => c.case_id === _kasusCurrentId);
-        if (idx >= 0) _kasusAllCases[idx] = {
-            ..._kasusAllCases[idx],
+        const [kasus, events] = await Promise.all([getCase(ctx.currentId), getCoachingCaseEvents(ctx.currentId)]);
+        renderKasusDetail(kasus, ctx);
+        renderKasusEvents(events, ctx);
+        await renderKasusActions(kasus, ctx);
+        const idx = ctx.allCases.findIndex(c => c.case_id === ctx.currentId);
+        if (idx >= 0) ctx.allCases[idx] = {
+            ...ctx.allCases[idx],
             status:                  kasus.status,
             current_handler_user_id: kasus.current_handler_user_id,
             handler:                 kasus.handler,
