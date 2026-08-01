@@ -931,7 +931,7 @@ function openForumDetail(post) {
 
     const attEl = document.getElementById('detail-forum-attachment');
     if (post.attachment_url) {
-        attEl.innerHTML = `<a href="${post.attachment_url}" target="_blank"
+        attEl.innerHTML = `<a href="${esc(post.attachment_url)}" target="_blank"
             class="btn btn-secondary" style="font-size:13px">
             📎 ${esc(post.attachment_name ?? 'Unduh Lampiran')}</a>`;
     } else {
