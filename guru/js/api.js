@@ -1295,13 +1295,23 @@ export async function updateForumSekolahPost(postId, newTitle, newBody) {
 
 /**
  * Hapus posting secara soft delete (hanya author).
+ * File storage dihapus best-effort jika attachment_path tersimpan.
  */
 export async function deleteForumSekolahPost(postId) {
+    const { data: post } = await supabase
+        .from('forum_posts')
+        .select('attachment_path')
+        .eq('post_id', postId)
+        .single();
     const { error } = await supabase
         .from('forum_posts')
         .update({ deleted_at: new Date().toISOString() })
         .eq('post_id', postId);
     if (error) throw error;
+    if (post?.attachment_path) {
+        supabase.storage.from('forum-attachments').remove([post.attachment_path])
+            .catch(e => console.warn('[forum] hapus storage gagal:', e));
+    }
 }
 
 /**
