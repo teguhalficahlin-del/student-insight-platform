@@ -851,7 +851,23 @@ export async function markNotificationsRead(ids) {
     if (error) throw error;
 }
 
-export async function getCases({ status = '', track = '', offset = 0, limit = 51 } = {}) {
+/**
+ * Daftar kasus pembinaan.
+ * @param {string}   status          filter satu status persis (paling spesifik, menang atas statusNotClosed)
+ * @param {string}   track           SEKOLAH | PKL
+ * @param {string[]} studentIds      batasi ke siswa tertentu (wali kelas / kaprodi).
+ *                                   Array kosong = filter DILEWATI (semua kasus) — caller wajib
+ *                                   menangani sendiri kasus "tidak ada siswa" sebelum memanggil.
+ * @param {boolean}  statusNotClosed hanya kasus aktif (kepsek). Diabaikan jika `status` diisi.
+ */
+export async function getCases({
+    status = '',
+    track = '',
+    studentIds = null,
+    statusNotClosed = false,
+    offset = 0,
+    limit = 51
+} = {}) {
     let req = supabase
         .from('coaching_cases')
         .select(`
@@ -862,11 +878,36 @@ export async function getCases({ status = '', track = '', offset = 0, limit = 51
         `)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
-    if (status) req = req.eq('status', status);
+    if (status) {
+        req = req.eq('status', status);
+    } else if (statusNotClosed) {
+        req = req.neq('status', 'CLOSED');
+    }
+    if (studentIds && studentIds.length > 0) req = req.in('student_id', studentIds);
     if (track)  req = req.eq('track', track);
     const { data, error } = await req;
     if (error) throw error;
     return data ?? [];
+}
+
+/**
+ * Jumlah kasus per status — untuk rekap ringkas tab Waka Kesiswaan.
+ * Scope tenant mengandalkan RLS `coaching_cases`, sama seperti getCases().
+ * @returns {Promise<Object>} { OPEN: n, UNDER_REVIEW: n, INTERVENTION: n, MONITORING: n, CLOSED: n }
+ */
+export async function getCoachingCasesCount() {
+    const statuses = ['OPEN', 'UNDER_REVIEW', 'INTERVENTION', 'MONITORING', 'CLOSED'];
+    const results = await Promise.all(
+        statuses.map(async s => {
+            const { count, error } = await supabase
+                .from('coaching_cases')
+                .select('case_id', { count: 'exact', head: true })
+                .eq('status', s);
+            if (error) throw error;
+            return { status: s, count: count ?? 0 };
+        })
+    );
+    return Object.fromEntries(results.map(r => [r.status, r.count]));
 }
 
 export async function getCase(caseId) {
