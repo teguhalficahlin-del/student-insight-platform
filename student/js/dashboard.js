@@ -534,8 +534,19 @@ async function loadObservations() {
         casesHintEl.textContent = `Gagal memuat data kasus. ${fe(casesResult.reason)}`;
     }
 
-    renderLateArrivals(lateResult.status === 'fulfilled' ? lateResult.value : []);
-    renderExits(exitResult.status === 'fulfilled' ? exitResult.value : []);
+    if (lateResult.status === 'fulfilled') {
+        renderLateArrivals(lateResult.value);
+    } else {
+        const lateHintEl = document.getElementById('late-hint');
+        if (lateHintEl) { lateHintEl.style.display = 'block'; lateHintEl.textContent = `Gagal memuat riwayat keterlambatan. ${fe(lateResult.reason)}`; }
+    }
+
+    if (exitResult.status === 'fulfilled') {
+        renderExits(exitResult.value);
+    } else {
+        const exitsHintEl = document.getElementById('exits-hint');
+        if (exitsHintEl) { exitsHintEl.style.display = 'block'; exitsHintEl.textContent = `Gagal memuat riwayat izin keluar. ${fe(exitResult.reason)}`; }
+    }
 }
 
 function renderLateArrivals(rows) {
