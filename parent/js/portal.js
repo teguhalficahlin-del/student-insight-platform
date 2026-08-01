@@ -67,10 +67,11 @@ const btnObsFilter   = document.getElementById('btn-obs-filter');
 const notifBellBtn   = document.getElementById('notif-bell-btn');
 const notifDropdown  = document.getElementById('notif-dropdown');
 const sectionForum   = document.getElementById('section-forum');
+const sectionNilai   = document.getElementById('section-nilai');
 const tabNav         = document.getElementById('tab-nav');
 const tabBtns        = document.querySelectorAll('.tab-btn');
 const ALL_SECTIONS   = [sectionPkl, sectionSched, sectionAtt,
-                        sectionObs, sectionCases, sectionForum];
+                        sectionObs, sectionCases, sectionForum, sectionNilai];
 let _notifPollTimer  = null;
 
 let currentUser = null;
@@ -1010,12 +1011,15 @@ async function initNilaiTab(studentId) {
     const selYear = document.getElementById('nilai-year-select');
     if (!selYear.dataset.populated) {
         selYear.dataset.populated = '1';
-        const yr = new Date().getFullYear();
-        [yr - 1, yr, yr + 1].forEach(y => {
+        const { data: cfg } = await supabase.from('school_config')
+            .select('current_academic_year').single();
+        const activeYear    = cfg?.current_academic_year ?? null;
+        const activeStartYr = activeYear ? parseInt(activeYear) : new Date().getFullYear();
+        [activeStartYr - 1, activeStartYr, activeStartYr + 1].forEach(y => {
             const opt = document.createElement('option');
             opt.value = `${y}/${y + 1}`;
             opt.textContent = `${y}/${y + 1}`;
-            if (y === yr) opt.selected = true;
+            if (`${y}/${y + 1}` === activeYear) opt.selected = true;
             selYear.appendChild(opt);
         });
         selYear.addEventListener('change', () => loadNilaiGrid(_nilaiStudentId));
