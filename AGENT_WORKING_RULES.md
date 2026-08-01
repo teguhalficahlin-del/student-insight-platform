@@ -37,6 +37,7 @@ Kalau salah satu dari dua verifikasi ini belum dilakukan, JANGAN lanjut ke peker
 
 - Semua output perintah, definisi kode, dan **terutama diff perubahan** WAJIB ditampilkan verbatim di badan teks — bukan diringkas, bukan diganti placeholder seperti `[byte-identik]` atau `...`, bukan disingkat dengan alasan apapun (termasuk "terlalu panjang").
 - Kalau output memang panjang, **pecah jadi beberapa pesan berurutan** — jangan meringkas isinya demi muat satu pesan.
+- Output WAJIB muncul sebagai teks di badan pesan — bukan sebagai tool output collapsed/dropdown. Jika output muncul sebagai tool result yang bisa di-collapse di UI Claude Code, itu TIDAK memenuhi syarat verbatim. Cara yang benar: salin teks terminal ke dalam badan pesan sebagai teks biasa, bukan via tool display. Ini berlaku untuk semua output: git show, git log, git push, git diff, hasil query SQL, dan output bash apapun yang diminta Claude Chat untuk direview.
 - Klaim **"self-review lulus"** atau **"commit berhasil"** tanpa bukti verbatim yang menyertainya akan dianggap **tidak lengkap** dan diminta ulang. Ini berlaku untuk SEMUA jenis perubahan (SQL, JS, TypeScript, config) — tidak ada pengecualian untuk file yang "sudah jelas benar".
 
 ---
@@ -88,9 +89,11 @@ Cantumkan checklist ini (ringkas, boleh dalam bentuk daftar centang) di akhir se
 - [ ] Semua perubahan sesuai `BATASAN KERAS` — tidak ada file di luar daftar yang tersentuh
 - [ ] Diff/output ditampilkan verbatim di badan teks — bukan ringkasan atau placeholder
 - [ ] Tidak ada push/deploy yang dijalankan tanpa instruksi eksplisit terpisah untuk itu
+- [ ] Setiap output yang diminta (git show, diff, SQL, bash) muncul sebagai teks biasa di badan pesan — bukan tool output collapsed. Jika ragu, paste ulang sebagai teks.
 
 ---
 
 ## Changelog
 
+- **2 Agustus 2026** — Tambah aturan output-sebagai-teks-badan-pesan di Section 2 dan Section 7. Gap ini terjadi berulang kali: Claude Code menampilkan output sebagai tool output collapsed di UI-nya sendiri sehingga Claude Chat tidak bisa membaca isinya. Perbaikan struktural: output wajib di-paste sebagai teks biasa di badan pesan, bukan ditampilkan via tool display.
 - **27 Jul 2026** — Dokumen awal dibuat. Hasil evaluasi sesi kerja intensif hari yang sama: Prioritas Tinggi #2, #3, #4 selesai (migrasi 7 portal ke view, revoke privilege 24 fungsi, timeout 57014 recovery), plus audit alur data absensi yang menemukan dan memperbaiki bug `block_group_id` yang berdampak ke 86,8% sesi Juli 2026. Tiga insiden "laporan sukses tanpa bukti verbatim" dan satu kesalahan SQL (`MIN(uuid)`) jadi dasar penyusunan aturan #1, #2, dan #7 di atas.
