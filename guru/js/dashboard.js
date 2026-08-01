@@ -8068,6 +8068,9 @@ async function onPenilaianContextChange() {
     }
     await loadTpList();
     await loadGradingSettings();
+    if (document.getElementById('penilaian-sub-input')?.style.display !== 'none') {
+        await initPenilaianInputTab();
+    }
 }
 
 async function loadTpList() {
