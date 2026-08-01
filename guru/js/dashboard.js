@@ -3458,6 +3458,15 @@ function renderKasusActions(kasus) {
         const to    = document.getElementById('kasus-escalate-to').value;
         const note  = document.getElementById('kasus-escalate-note').value.trim();
         const msgEl = document.getElementById('kasus-escalate-msg');
+        if ((kasus.audience ?? 'PRIVATE') === 'PRIVATE') {
+            const ok = confirm(
+                'Kasus ini bersifat PRIVAT (🔒).\n\n' +
+                'Meneruskan ke pihak lain akan otomatis mengubah privasi menjadi ' +
+                '"Orang Tertentu" (👥 RESTRICTED) sehingga handler baru bisa melihat kasus ini.\n\n' +
+                'Lanjutkan?'
+            );
+            if (!ok) return;
+        }
         newEscBtn.disabled = true; newEscBtn.textContent = 'Meneruskan…';
         try {
             await escalateCase({
