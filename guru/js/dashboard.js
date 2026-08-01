@@ -5817,7 +5817,7 @@ async function submitForumPost() {
         } else {
             const recipientIds = [..._forumRecipients.keys()];
             await createForumSekolahPost(title, body, recipientIds,
-                config.current_academic_year, { attachmentUrl, attachmentName });
+                config.current_academic_year, { attachmentUrl, attachmentName, attachmentPath: path });
         }
 
         closeForumModal();

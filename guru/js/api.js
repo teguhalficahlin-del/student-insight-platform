@@ -1249,7 +1249,7 @@ export async function getForumSekolahComments(postId) {
  */
 export async function createForumSekolahPost(
     title, body, recipientUserIds, academicYear,
-    { attachmentUrl = null, attachmentName = null } = {}
+    { attachmentUrl = null, attachmentName = null, attachmentPath = null } = {}
 ) {
     const { data, error } = await supabase.rpc('fn_create_forum_post', {
         p_class_id:            null,
@@ -1269,7 +1269,8 @@ export async function createForumSekolahPost(
     if (attachmentUrl && data) {
         await supabase
             .from('forum_posts')
-            .update({ attachment_url: attachmentUrl, attachment_name: attachmentName })
+            .update({ attachment_url: attachmentUrl, attachment_name: attachmentName,
+                      attachment_path: attachmentPath })
             .eq('post_id', data);
     }
     return data;

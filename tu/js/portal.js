@@ -1761,7 +1761,8 @@ async function submitForumPost() {
                 schoolConfig?.current_academic_year ?? '');
             if (attachmentUrl) {
                 await supabase.from('forum_posts')
-                    .update({ attachment_url: attachmentUrl, attachment_name: attachmentName })
+                    .update({ attachment_url: attachmentUrl, attachment_name: attachmentName,
+                              attachment_path: uploadedPath })
                     .eq('author_user_id', currentUser.user_id)
                     .order('created_at', { ascending: false })
                     .limit(1);
