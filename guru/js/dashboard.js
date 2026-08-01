@@ -8742,12 +8742,12 @@ async function saveUploadedCpTp(cpRows, tpGroups) {
             if (error) throw new Error(`Simpan CP: ${error.message}`);
         }
 
-        // Langkah 2 — Simpan TP + KKTP
+        // Langkah 2 — Simpan TP + KKTP (upsert agar upload ulang tidak duplikat)
         let savedTp = 0;
         for (const tp of tpGroups) {
             const { data, error: errLo } = await supabase
                 .from('learning_objectives')
-                .insert({
+                .upsert({
                     school_id:       currentUser.school_id,
                     teacher_user_id: currentUser.user_id,
                     subject_id:      subjectId,
@@ -8758,10 +8758,20 @@ async function saveUploadedCpTp(cpRows, tpGroups) {
                     urutan:          tp.urutan,
                     berlaku_untuk:   'SEMUA_KELAS',
                     element_id:      null,
+                }, {
+                    onConflict:       'school_id,teacher_user_id,subject_id,academic_year,semester,kode_tp',
+                    ignoreDuplicates: false,
                 })
                 .select('learning_objective_id')
                 .single();
             if (errLo) throw new Error(`Simpan TP "${tp.kode_tp}": ${errLo.message}`);
+
+            // Hapus KKTP lama sebelum insert baru agar tidak duplikat saat upload ulang
+            await supabase
+                .from('assessment_criteria')
+                .delete()
+                .eq('learning_objective_id', data.learning_objective_id)
+                .eq('school_id', currentUser.school_id);
 
             if (tp.kktp.length) {
                 const { error: errKk } = await supabase
