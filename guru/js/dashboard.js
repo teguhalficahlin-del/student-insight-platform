@@ -27,10 +27,12 @@ import {
     getPrograms, getStudentAttendanceSessions,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
     getMyObservations, getStudentUserId, getStudentParents,
-    getCases, getCase, getCaseEvents, createCase,
-    addCaseComment, escalateCase, changeCaseStatus, closeCase,
-    updateCaseAudience, logCaseAudienceChange, getCaseAudienceMembers,
-    addCaseAudienceMember, removeCaseAudienceMember, searchInternalUsers,
+    getCases, getCase, getCoachingCaseEvents, createCase,
+    addCoachingNote, escalateCoachingCase, changeCoachingCaseStatus, closeCoachingCase,
+    shareCoachingCaseToStudent, unshareCoachingCaseFromStudent,
+    shareCoachingCaseToParent, unshareCoachingCaseFromParent,
+    getCaseAudienceMembers, addCaseAudienceMember, removeCaseAudienceMember,
+    searchInternalUsers, getEscalationCandidates,
     getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
     registerLoginDevice,
     getForumRecipientCandidates, getForumSekolahPosts, getForumSekolahSentPosts,
@@ -3046,18 +3048,16 @@ const STATUS_AFTER_CURRENT = {
     MONITORING:   [],
 };
 const EVENT_TYPE_LABEL = {
-    COMMENT_ADDED:          'Komentar',
-    STATUS_CHANGED:         'Status Berubah',
-    DECISION_ESCALATE:      'Eskalasi',
-    DECISION_CLOSE:         'Kasus Ditutup',
-    FINAL_DECISION_MADE:    'Keputusan Final',
-    STUDENT_UPDATE_ADDED:   'Update Siswa',
-    PARENT_MESSAGE_RECEIVED:'Pesan Orang Tua',
-    PARENT_MESSAGE_LINKED:  'Pesan Terhubung',
-    PARENT_REPLY_SENT:      'Balasan Terkirim',
-    CASE_LOCKED:            'Kasus Dikunci',
-    CASE_UNLOCKED:          'Kasus Dibuka Kunci',
-    AUDIENCE_CHANGED:       'Visibilitas Diubah',
+    OPENED:               'Kasus Dibuka',
+    NOTE_ADDED:           'Catatan',
+    CASE_EDITED:          'Kasus Diedit',
+    ESCALATED:            'Eskalasi',
+    STATUS_CHANGED:       'Status Berubah',
+    SHARED_TO_STUDENT:    'Dibagikan ke Siswa',
+    UNSHARED_FROM_STUDENT:'Akses Siswa Dicabut',
+    SHARED_TO_PARENT:     'Dibagikan ke Orang Tua',
+    UNSHARED_FROM_PARENT: 'Akses Orang Tua Dicabut',
+    CLOSED:               'Kasus Ditutup',
 };
 
 const KASUS_PAGE    = 50;
@@ -3262,7 +3262,7 @@ function renderKasusList() {
             <div style="font-size:12px; color:var(--color-text-muted); margin-top:4px">
                 ${esc(r.student?.full_name ?? 'Siswa tidak dapat ditampilkan')}${r.student?.nis ? ' (' + esc(r.student.nis) + ')' : ''}
                 &middot; ${esc(CASE_TRACK_LABEL[r.track] ?? r.track)}
-                &middot; Handler: ${esc(ROLE_LABEL[r.current_handler_role] ?? r.current_handler_role ?? '—')}
+                &middot; Handler: ${esc(r.handler?.full_name ?? '—')}
                 &middot; ${fmt(r.created_at)}
             </div>
         </div>
@@ -3298,10 +3298,10 @@ async function openKasusDetail(caseId) {
     document.getElementById('kasus-actions').style.display  = 'none';
 
     try {
-        const [kasus, events] = await Promise.all([getCase(caseId), getCaseEvents(caseId)]);
+        const [kasus, events] = await Promise.all([getCase(caseId), getCoachingCaseEvents(caseId)]);
         renderKasusDetail(kasus);
         renderKasusEvents(events);
-        renderKasusActions(kasus);
+        await renderKasusActions(kasus);
     } catch (err) {
         document.getElementById('kasus-detail-header').innerHTML =
             `<div class="status-err">${esc(fe(err))}</div>`;
@@ -3318,9 +3318,7 @@ function renderKasusDetail(k) {
         <div style="font-size:13px; color:var(--color-text-muted); margin-bottom:12px">
             Siswa: <strong>${esc(k.student?.full_name ?? '—')}</strong> (${esc(k.student?.nis ?? '—')})
             &middot; Track: <strong>${esc(CASE_TRACK_LABEL[k.track] ?? k.track)}</strong>
-            &middot; Dibuka oleh: ${esc(ROLE_LABEL[k.initiated_by_role] ?? k.initiated_by_role)}
-            &middot; Handler saat ini: <strong>${esc(ROLE_LABEL[k.current_handler_role] ?? k.current_handler_role ?? '—')}</strong>
-            ${k.is_locked ? '&middot; <span style="color:var(--color-warning)">🔒 Terkunci</span>' : ''}
+            &middot; Handler saat ini: <strong>${esc(k.handler?.full_name ?? '—')}</strong>
         </div>
         <p style="font-size:14px; color:var(--color-text); margin:0">${esc(k.description)}</p>
     `;
@@ -3334,20 +3332,18 @@ function renderKasusEvents(events) {
     }
     el.innerHTML = events.map(ev => {
         const label = EVENT_TYPE_LABEL[ev.event_type] ?? ev.event_type;
-        const text  = ev.payload?.text ?? '';
+        const text  = ev.payload?.note ?? ev.payload?.text ?? '';
         let detail  = '';
-        if (ev.event_type === 'DECISION_ESCALATE')
-            detail = `→ ${esc(ROLE_LABEL[ev.new_handler_role] ?? ev.new_handler_role)}`;
-        if (ev.event_type === 'STATUS_CHANGED' || ev.event_type === 'DECISION_CLOSE' || ev.event_type === 'FINAL_DECISION_MADE')
+        if (ev.event_type === 'ESCALATED' && ev.payload?.note)
+            detail = esc(ev.payload.note);
+        if (ev.event_type === 'STATUS_CHANGED' || ev.event_type === 'CLOSED')
             detail = `${esc(CASE_STATUS_LABEL[ev.previous_status] ?? ev.previous_status ?? '?')} → ${esc(CASE_STATUS_LABEL[ev.new_status] ?? ev.new_status ?? '?')}`;
-        if (ev.event_type === 'AUDIENCE_CHANGED')
-            detail = `${esc(AUDIENCE_LABEL[ev.payload?.previous] ?? ev.payload?.previous ?? '?')} → ${esc(AUDIENCE_LABEL[ev.payload?.next] ?? ev.payload?.next ?? '?')}`;
         return `
             <div class="case-event-item">
                 <div style="font-size:12px; color:var(--color-text-muted); margin-bottom:4px">
                     <strong>${esc(label)}</strong>
                     ${detail ? `<span style="margin-left:6px">${detail}</span>` : ''}
-                    &middot; ${esc(ev.author?.full_name ?? '—')} (${esc(ROLE_LABEL[ev.author_role_at_time] ?? ev.author_role_at_time)})
+                    &middot; ${esc(ev.author?.full_name ?? '—')}
                     &middot; ${fmt(ev.created_at)}
                 </div>
                 ${text ? `<p style="font-size:13px; margin:0; color:var(--color-text)">${esc(text)}</p>` : ''}
@@ -3359,7 +3355,7 @@ function renderKasusEvents(events) {
 const INTERNAL_CASE_ROLES = ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK'];
 const AUDIENCE_LABEL = { PRIVATE: '🔒 Privat', RESTRICTED: '👥 Orang Tertentu', PUBLIC: '🌐 Semua Internal' };
 
-function renderKasusActions(kasus) {
+async function renderKasusActions(kasus) {
     const actionsEl     = document.getElementById('kasus-actions');
     const escalateBlock = document.getElementById('kasus-escalate-block');
     const statusBlock   = document.getElementById('kasus-status-block');
@@ -3375,42 +3371,32 @@ function renderKasusActions(kasus) {
 
     actionsEl.style.display = 'block';
 
-    // ── Eskalasi BEBAS: semua internal boleh teruskan ke peran internal mana pun ──
+    // ── Eskalasi: kandidat dari fn_get_escalation_candidates ──
     const isInternal = INTERNAL_CASE_ROLES.includes(currentUser.role_type);
     if (isInternal) {
-        const chain = ESCALATION_CHAIN[kasus.track] ?? [];
-        const handlerIdx = chain.indexOf(kasus.current_handler_role);
-        const targets = INTERNAL_CASE_ROLES.filter(r => r !== kasus.current_handler_role);
-        escalateTo.innerHTML = targets.map(r => {
-            const isDownstream = handlerIdx >= 0 && chain.indexOf(r) < handlerIdx;
-            return `<option value="${r}" data-downstream="${isDownstream}">${esc(ROLE_LABEL[r] ?? r)}${isDownstream ? ' ↩ lebih rendah' : ''}</option>`;
-        }).join('');
-
-        // Peringatan tak-memblokir saat pilih ke bawah
-        const warnEl = document.getElementById('kasus-escalate-warn');
-        function updateEscWarn() {
-            const sel = escalateTo.options[escalateTo.selectedIndex];
-            if (sel && sel.dataset.downstream === 'true') {
-                warnEl.textContent = `Peran ${esc(ROLE_LABEL[sel.value] ?? sel.value)} ada di bawah handler saat ini dalam rantai referensi. Anda tetap bisa meneruskan — pastikan ini disengaja.`;
-                warnEl.style.display = 'block';
-            } else {
-                warnEl.style.display = 'none';
-            }
-        }
-        escalateTo.onchange = updateEscWarn;
-        updateEscWarn();
+        escalateTo.innerHTML = '<option value="">Memuat…</option>';
         escalateBlock.style.display = 'block';
+        const warnEl = document.getElementById('kasus-escalate-warn');
+        if (warnEl) warnEl.style.display = 'none';
+        try {
+            const candidates = await getEscalationCandidates(kasus.case_id);
+            if (!candidates.length) {
+                escalateTo.innerHTML = '<option value="">Tidak ada kandidat tersedia</option>';
+            } else {
+                escalateTo.innerHTML = candidates.map(c =>
+                    `<option value="${c.user_id}">${esc(c.full_name)} — ${esc(c.relation_label)}</option>`
+                ).join('');
+            }
+        } catch {
+            escalateTo.innerHTML = '<option value="">Gagal memuat kandidat</option>';
+        }
     } else {
         escalateBlock.style.display = 'none';
     }
 
     // ── Status change ──
     const nextStatuses = STATUS_AFTER_CURRENT[kasus.status] ?? [];
-    const isHandler = kasus.current_handler_role === currentUser.role_type
-        && (
-            currentUser.role_type !== 'GURU'
-            || kasus.created_by_user_id === currentUser.user_id
-        );
+    const isHandler = kasus.current_handler_user_id === currentUser.user_id;
     const canChangeStatus = isHandler || ['KEPSEK','BK','WAKA_KESISWAAN'].includes(currentUser.role_type);
     if (canChangeStatus && nextStatuses.length) {
         statusSel.innerHTML = nextStatuses.map(s =>
@@ -3425,16 +3411,59 @@ function renderKasusActions(kasus) {
     const canClose = currentUser.role_type === 'KEPSEK' || isHandler;
     closeBtn.style.display = canClose ? 'inline-flex' : 'none';
 
-    // ── Kelola Audiens (hanya internal) ──
+    // ── Bagikan Kasus (hanya internal) ──
     if (isInternal) {
-        const badge = document.getElementById('kasus-audience-badge');
-        const cur   = kasus.audience ?? 'PRIVATE';
-        badge.textContent = AUDIENCE_LABEL[cur] ?? cur;
-        badge.style.background = cur === 'PUBLIC' ? 'var(--color-success-bg, #d4edda)'
-            : cur === 'RESTRICTED' ? 'var(--color-primary-bg)'
-            : 'var(--color-bg)';
+        audienceBlock.innerHTML = `
+            <h4 style="margin:0 0 8px">Bagikan Kasus</h4>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <button id="kasus-share-student-btn" class="btn btn-sm ${kasus.is_shared_to_student ? 'btn-primary' : 'btn-secondary'}">
+                    ${kasus.is_shared_to_student ? '✓ Siswa Punya Akses' : 'Bagikan ke Siswa'}
+                </button>
+                <button id="kasus-share-parent-btn" class="btn btn-sm ${kasus.is_shared_to_parent ? 'btn-primary' : 'btn-secondary'}">
+                    ${kasus.is_shared_to_parent ? '✓ Orang Tua Punya Akses' : 'Bagikan ke Orang Tua'}
+                </button>
+            </div>
+            <p id="kasus-audience-msg" style="font-size:12px;margin:6px 0 0;min-height:16px"></p>
+        `;
         audienceBlock.style.display = 'block';
-        renderAudiencePanel(kasus, cur);
+
+        const shareStudentBtn = document.getElementById('kasus-share-student-btn');
+        const shareParentBtn  = document.getElementById('kasus-share-parent-btn');
+        const audienceMsgEl   = document.getElementById('kasus-audience-msg');
+
+        shareStudentBtn.addEventListener('click', async () => {
+            shareStudentBtn.disabled = true;
+            try {
+                if (kasus.is_shared_to_student) {
+                    await unshareCoachingCaseFromStudent(kasus.case_id, currentUser.user_id);
+                    audienceMsgEl.style.color = 'var(--color-success)'; audienceMsgEl.textContent = 'Akses siswa dicabut.';
+                } else {
+                    await shareCoachingCaseToStudent(kasus.case_id, currentUser.user_id);
+                    audienceMsgEl.style.color = 'var(--color-success)'; audienceMsgEl.textContent = 'Dibagikan ke siswa.';
+                }
+                await refreshKasusDetail();
+            } catch (err) {
+                audienceMsgEl.style.color = 'var(--color-danger)'; audienceMsgEl.textContent = fe(err, 's');
+                shareStudentBtn.disabled = false;
+            }
+        });
+
+        shareParentBtn.addEventListener('click', async () => {
+            shareParentBtn.disabled = true;
+            try {
+                if (kasus.is_shared_to_parent) {
+                    await unshareCoachingCaseFromParent(kasus.case_id, currentUser.user_id);
+                    audienceMsgEl.style.color = 'var(--color-success)'; audienceMsgEl.textContent = 'Akses orang tua dicabut.';
+                } else {
+                    await shareCoachingCaseToParent(kasus.case_id, currentUser.user_id);
+                    audienceMsgEl.style.color = 'var(--color-success)'; audienceMsgEl.textContent = 'Dibagikan ke orang tua.';
+                }
+                await refreshKasusDetail();
+            } catch (err) {
+                audienceMsgEl.style.color = 'var(--color-danger)'; audienceMsgEl.textContent = fe(err, 's');
+                shareParentBtn.disabled = false;
+            }
+        });
     } else {
         audienceBlock.style.display = 'none';
     }
@@ -3445,15 +3474,23 @@ function renderKasusActions(kasus) {
     const newStatusBtn  = replaceEl('kasus-status-btn');
     const newCloseBtn   = replaceEl('kasus-close-btn');
 
+    if (!document.getElementById('kasus-comment-visible-wrap')) {
+        const wrap = document.createElement('div');
+        wrap.id = 'kasus-comment-visible-wrap';
+        wrap.style.cssText = 'margin:6px 0;font-size:13px';
+        wrap.innerHTML = '<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="kasus-comment-visible"> Tampilkan ke siswa &amp; orang tua</label>';
+        newCommentBtn.parentNode.insertBefore(wrap, newCommentBtn);
+    }
     newCommentBtn.addEventListener('click', async () => {
         const text  = document.getElementById('kasus-comment-text').value.trim();
         const msgEl = document.getElementById('kasus-comment-msg');
-        if (!text) { msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = 'Komentar tidak boleh kosong.'; return; }
+        const isVisibleToStudent = document.getElementById('kasus-comment-visible')?.checked ?? false;
+        if (!text) { msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = 'Catatan tidak boleh kosong.'; return; }
         newCommentBtn.disabled = true; newCommentBtn.textContent = 'Mengirim…';
         try {
-            await addCaseComment({ caseId: kasus.case_id, text, authorUserId: currentUser.user_id, authorRole: currentUser.role_type });
+            await addCoachingNote({ caseId: kasus.case_id, text, authorUserId: currentUser.user_id, isVisibleToStudent });
             document.getElementById('kasus-comment-text').value = '';
-            msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Komentar dikirim.';
+            msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Catatan dikirim.';
             await refreshKasusDetail();
         } catch (err) {
             msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
@@ -3463,30 +3500,21 @@ function renderKasusActions(kasus) {
     });
 
     newEscBtn.addEventListener('click', async () => {
-        const to    = document.getElementById('kasus-escalate-to').value;
+        const selEl = document.getElementById('kasus-escalate-to');
+        const to    = selEl.value;
         const note  = document.getElementById('kasus-escalate-note').value.trim();
         const msgEl = document.getElementById('kasus-escalate-msg');
-        if ((kasus.audience ?? 'PRIVATE') === 'PRIVATE') {
-            const ok = confirm(
-                'Kasus ini bersifat PRIVAT (🔒).\n\n' +
-                'Meneruskan ke pihak lain akan otomatis mengubah privasi menjadi ' +
-                '"Orang Tertentu" (👥 RESTRICTED) sehingga handler baru bisa melihat kasus ini.\n\n' +
-                'Lanjutkan?'
-            );
-            if (!ok) return;
-        }
+        if (!to) { msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = 'Pilih penerima eskalasi.'; return; }
         newEscBtn.disabled = true; newEscBtn.textContent = 'Meneruskan…';
         try {
-            await escalateCase({
-                caseId: kasus.case_id,
-                previousHandlerRole: kasus.current_handler_role,
-                newHandlerRole: to,
+            await escalateCoachingCase({
+                caseId:           kasus.case_id,
+                newHandlerUserId: to,
                 note,
-                authorUserId:   currentUser.user_id,
-                authorRole:     currentUser.role_type,
-                previousStatus: kasus.status,
+                authorUserId:     currentUser.user_id,
             });
-            msgEl.style.color = 'var(--color-success)'; msgEl.textContent = `Diteruskan ke ${ROLE_LABEL[to] ?? to}.`;
+            const recipName = selEl.options[selEl.selectedIndex]?.text ?? to;
+            msgEl.style.color = 'var(--color-success)'; msgEl.textContent = `Diteruskan ke ${esc(recipName)}.`;
             await refreshKasusDetail();
         } catch (err) {
             msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
@@ -3501,7 +3529,7 @@ function renderKasusActions(kasus) {
         const msgEl = document.getElementById('kasus-status-msg');
         newStatusBtn.disabled = true; newStatusBtn.textContent = 'Menyimpan…';
         try {
-            await changeCaseStatus({ caseId: kasus.case_id, previousStatus: kasus.status, newStatus: newSt, note, authorUserId: currentUser.user_id, authorRole: currentUser.role_type });
+            await changeCoachingCaseStatus({ caseId: kasus.case_id, previousStatus: kasus.status, newStatus: newSt, note, authorUserId: currentUser.user_id });
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = `Status diubah ke ${CASE_STATUS_LABEL[newSt]}.`;
             await refreshKasusDetail();
         } catch (err) {
@@ -3531,7 +3559,7 @@ function renderKasusActions(kasus) {
         newCloseBtn.dataset.confirming = '';
         newCloseBtn.disabled = true; newCloseBtn.textContent = 'Menutup…';
         try {
-            await closeCase({ caseId: kasus.case_id, note, authorUserId: currentUser.user_id, authorRole: currentUser.role_type, previousStatus: kasus.status });
+            await closeCoachingCase({ caseId: kasus.case_id, note, authorUserId: currentUser.user_id, previousStatus: kasus.status });
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Kasus berhasil ditutup.';
             await refreshKasusDetail();
         } catch (err) {
@@ -3742,17 +3770,16 @@ function replaceEl(id) {
 async function refreshKasusDetail() {
     if (!_kasusCurrentId) return;
     try {
-        const [kasus, events] = await Promise.all([getCase(_kasusCurrentId), getCaseEvents(_kasusCurrentId)]);
+        const [kasus, events] = await Promise.all([getCase(_kasusCurrentId), getCoachingCaseEvents(_kasusCurrentId)]);
         renderKasusDetail(kasus);
         renderKasusEvents(events);
-        renderKasusActions(kasus);
-        // Update entri di list cache tanpa re-fetch seluruh halaman
+        await renderKasusActions(kasus);
         const idx = _kasusAllCases.findIndex(c => c.case_id === _kasusCurrentId);
         if (idx >= 0) _kasusAllCases[idx] = {
             ..._kasusAllCases[idx],
-            status:               kasus.status,
-            current_handler_role: kasus.current_handler_role,
-            is_locked:            kasus.is_locked,
+            status:                  kasus.status,
+            current_handler_user_id: kasus.current_handler_user_id,
+            handler:                 kasus.handler,
         };
     } catch (err) {
         console.error('[kasus] refresh error', err);

@@ -875,6 +875,7 @@ export async function getCase(caseId) {
         .select(`
             case_id, title, description, status, track, current_handler_user_id,
             created_at, closed_at, closed_by_user_id, created_by_user_id,
+            is_shared_to_student, is_shared_to_parent,
             student:students(student_id, user_id, full_name, nis),
             created_by:users!coaching_cases_created_by_user_id_fkey(full_name),
             handler:users!coaching_cases_current_handler_user_id_fkey(full_name)
@@ -883,6 +884,14 @@ export async function getCase(caseId) {
         .single();
     if (error) throw error;
     return data;
+}
+
+export async function getEscalationCandidates(caseId) {
+    const { data, error } = await supabase.rpc('fn_get_escalation_candidates', {
+        p_case_id: caseId,
+    });
+    if (error) throw error;
+    return data ?? [];
 }
 
 export async function getCoachingCaseEvents(caseId) {
