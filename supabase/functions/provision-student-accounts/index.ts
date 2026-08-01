@@ -11,7 +11,7 @@
  *
  * Untuk tiap siswa tanpa user_id:
  *   - email   = {nis}@siswa.internal   (toInternalEmail)
- *   - password= random 12-char (sama pola dgn bulk-import-users + admin Reset PW)
+ *   - password= {nis}!SMK              (sama pola dgn ORTU/DUDI)
  *   - users   : role_type=SISWA, login_identifier=nis, identifier_type=NIS
  *   - students.user_id := user_id baru
  *
@@ -51,13 +51,6 @@ interface ProvisionError {
 
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT      = 400;
-
-function generateTempPassword(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    const arr = new Uint8Array(12);
-    crypto.getRandomValues(arr);
-    return Array.from(arr, b => chars[b % chars.length]).join('');
-}
 
 Deno.serve(async (req: Request): Promise<Response> => {
 
@@ -146,7 +139,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                         continue;
                     }
 
-                    const tempPassword = generateTempPassword();
+                    const tempPassword = '12345678';
 
                     const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                         email:         internalEmail,
