@@ -2608,6 +2608,14 @@ async function initWakaHumasTab() {
         await Promise.all([loadWhRecap(), loadWhObs(), loadWhCases()]);
     } catch (err) {
         console.error('[waka_humas]', err);
+        _whTabInit = false;
+        const container = document.getElementById('tab-waka_humas');
+        if (container) {
+            const errEl = document.createElement('p');
+            errEl.style.cssText = 'color:var(--color-danger);padding:12px 0;';
+            errEl.textContent = 'Gagal memuat data Waka Humas. Silakan muat ulang halaman.';
+            container.prepend(errEl);
+        }
     }
 }
 
