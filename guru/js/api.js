@@ -1219,6 +1219,7 @@ export async function getForumSekolahSentPosts(schoolId, callerId, limit = 20, o
         .eq('scope_type', 'SEKOLAH')
         .eq('school_id', schoolId)
         .eq('author_user_id', callerId)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
     if (error) throw error;
