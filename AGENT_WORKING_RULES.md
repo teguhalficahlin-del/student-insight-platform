@@ -58,6 +58,7 @@ Kalau salah satu dari dua verifikasi ini belum dilakukan, JANGAN lanjut ke peker
 - **TIDAK ADA** `supabase db push` (real, bukan dry-run) tanpa instruksi eksplisit terpisah setelah hasil dry-run ditinjau — berlaku bahkan kalau prompt sebelumnya sudah menyinggung soal "lanjut deploy".
 - Urutan deploy yang benar: `supabase db push` (setelah dry-run direview) → `supabase functions deploy` (kalau ada edge function berubah) → `git push`. Alasan urutan ini: mencegah jendela waktu di mana kode production yang sudah live memanggil RPC/fungsi yang belum ada di database remote.
 - `supabase functions deploy` dan `supabase functions list` di CLI versi proyek ini **tidak menerima** `--linked` — pakai `--project-ref xovvuuwexoweoqyltepq`. `supabase db push` tetap pakai `--linked`.
+- **JANGAN gunakan `supabase db query --linked -f file.sql` untuk test migration** — perintah ini langsung eksekusi ke remote DB, bukan dry-run. Untuk test SQL yang aman gunakan `BEGIN; ... ROLLBACK;` di local DB saja, atau `supabase db push --linked --dry-run` untuk preview migration.
 
 ---
 
@@ -95,5 +96,6 @@ Cantumkan checklist ini (ringkas, boleh dalam bentuk daftar centang) di akhir se
 
 ## Changelog
 
+- **2 Agustus 2026 (insiden)** — `supabase db query --linked -f file.sql` digunakan untuk test migration drop tabel lama — ternyata langsung eksekusi ke remote DB bukan dry-run. Tabel cases, case_events, case_audience_members terdrop di production tanpa dry-run review. Data tidak hilang karena tabel sudah kosong (test data), tapi proses yang benar tidak diikuti. Standing rule ditambahkan di Section 4.
 - **2 Agustus 2026** — Tambah aturan output-sebagai-teks-badan-pesan di Section 2 dan Section 7. Gap ini terjadi berulang kali: Claude Code menampilkan output sebagai tool output collapsed di UI-nya sendiri sehingga Claude Chat tidak bisa membaca isinya. Perbaikan struktural: output wajib di-paste sebagai teks biasa di badan pesan, bukan ditampilkan via tool display.
 - **27 Jul 2026** — Dokumen awal dibuat. Hasil evaluasi sesi kerja intensif hari yang sama: Prioritas Tinggi #2, #3, #4 selesai (migrasi 7 portal ke view, revoke privilege 24 fungsi, timeout 57014 recovery), plus audit alur data absensi yang menemukan dan memperbaiki bug `block_group_id` yang berdampak ke 86,8% sesi Juli 2026. Tiga insiden "laporan sukses tanpa bukti verbatim" dan satu kesalahan SQL (`MIN(uuid)`) jadi dasar penyusunan aturan #1, #2, dan #7 di atas.
