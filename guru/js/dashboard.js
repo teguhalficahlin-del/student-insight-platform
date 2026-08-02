@@ -2931,7 +2931,7 @@ async function loadKepsekMonitoring(period, academicYear = null, dateStart = nul
         const s = d.summary ?? {};
 
         pctSiswa.textContent = s.pct_siswa != null ? s.pct_siswa + '%' : '—';
-        pctGuru.textContent  = s.pct_guru  != null ? s.pct_guru  + '%' : '—';
+        pctGuru.textContent  = (s.pct_guru != null && !isNaN(s.pct_guru)) ? s.pct_guru + '%' : '0%';
         const countLate  = document.getElementById('ks-count-late');
         const countExits = document.getElementById('ks-count-exits');
         if (countLate)  countLate.textContent  = s.count_late  != null ? s.count_late  + ' siswa' : '—';
