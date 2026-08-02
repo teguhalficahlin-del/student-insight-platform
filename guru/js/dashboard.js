@@ -2892,7 +2892,7 @@ async function initKepsekTab() {
 
 async function initKepsekKasusSection() {
     if (!_ksKasusCtx) {
-        _ksKasusCtx = makeKasusCtx('ks-kasus', { statusNotClosed: true });
+        _ksKasusCtx = makeKasusCtx('ks-kasus');
         document.getElementById('ks-kasus-back-btn')
             .addEventListener('click', () => showKasusList(_ksKasusCtx));
         wireKasusDownloadButtons(_ksKasusCtx);
