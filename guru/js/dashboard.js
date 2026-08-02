@@ -1337,6 +1337,8 @@ async function initWaliKasusSection() {
         document.getElementById('wali-kasus-back-btn')
             .addEventListener('click', () => showKasusList(_waliKasusCtx));
         wireKasusDownloadButtons(_waliKasusCtx);
+        document.getElementById('wali-kasus-filter-btn')
+            ?.addEventListener('click', () => loadKasusList(false, _waliKasusCtx));
         await loadKasusList(false, _waliKasusCtx);
     } catch (err) {
         msgEl.innerHTML = `<div class="status-err">${esc(fe(err))}</div>`;
@@ -1464,6 +1466,8 @@ async function initBkKasusSection() {
         document.getElementById('bk-kasus-back-btn')
             .addEventListener('click', () => showKasusList(_bkKasusCtx));
         wireKasusDownloadButtons(_bkKasusCtx);
+        document.getElementById('bk-kasus-filter-btn')
+            ?.addEventListener('click', () => loadKasusList(false, _bkKasusCtx));
     }
     await loadKasusList(false, _bkKasusCtx);
 }
@@ -1700,6 +1704,8 @@ async function initWakaKesiswaanKasusSection() {
         document.getElementById('wk-kasus-back-btn')
             .addEventListener('click', () => showKasusList(_wkKasusCtx));
         wireKasusDownloadButtons(_wkKasusCtx);
+        document.getElementById('wk-kasus-filter-btn')
+            ?.addEventListener('click', () => loadKasusList(false, _wkKasusCtx));
     }
     await loadKasusList(false, _wkKasusCtx);
     await renderWkCount().catch(() => {});
@@ -2079,6 +2085,8 @@ async function initKaprodiKasusSection() {
     document.getElementById('kp-kasus-back-btn')
         .addEventListener('click', () => showKasusList(_kpKasusCtx));
     wireKasusDownloadButtons(_kpKasusCtx);
+    document.getElementById('kp-kasus-filter-btn')
+        ?.addEventListener('click', () => loadKasusList(false, _kpKasusCtx));
     await loadKasusList(false, _kpKasusCtx);
 }
 
@@ -2884,6 +2892,8 @@ async function initKepsekKasusSection() {
         document.getElementById('ks-kasus-back-btn')
             .addEventListener('click', () => showKasusList(_ksKasusCtx));
         wireKasusDownloadButtons(_ksKasusCtx);
+        document.getElementById('ks-kasus-filter-btn')
+            ?.addEventListener('click', () => loadKasusList(false, _ksKasusCtx));
     }
     await loadKasusList(false, _ksKasusCtx);
 }
