@@ -966,11 +966,17 @@ export async function createCase({ studentId, title, description, track, audienc
     return { case_id: payload.case_id, _queued: r.status === 'queued' };
 }
 
-export async function shareCoachingCaseToStudent(caseId, authorUserId) {
+// coaching_case_events.school_id NOT NULL tanpa DEFAULT, dan tidak ada trigger
+// yang mengisinya (mig 20260802020000 + 20260802030000). RLS rls_cce_insert
+// hanya memvalidasi school_id = fn_current_school_id(), tidak mengisi.
+// Karena itu setiap fungsi di bawah wajib menerima schoolId dari pemanggil.
+
+export async function shareCoachingCaseToStudent(caseId, authorUserId, schoolId) {
     const { error } = await supabase
         .from('coaching_case_events')
         .insert({
             case_id:               caseId,
+            school_id:             schoolId,
             event_type:            'SHARED_TO_STUDENT',
             author_user_id:        authorUserId,
             is_visible_to_student: false,
@@ -979,11 +985,12 @@ export async function shareCoachingCaseToStudent(caseId, authorUserId) {
     if (error) throw error;
 }
 
-export async function unshareCoachingCaseFromStudent(caseId, authorUserId) {
+export async function unshareCoachingCaseFromStudent(caseId, authorUserId, schoolId) {
     const { error } = await supabase
         .from('coaching_case_events')
         .insert({
             case_id:               caseId,
+            school_id:             schoolId,
             event_type:            'UNSHARED_FROM_STUDENT',
             author_user_id:        authorUserId,
             is_visible_to_student: false,
@@ -992,11 +999,12 @@ export async function unshareCoachingCaseFromStudent(caseId, authorUserId) {
     if (error) throw error;
 }
 
-export async function shareCoachingCaseToParent(caseId, authorUserId) {
+export async function shareCoachingCaseToParent(caseId, authorUserId, schoolId) {
     const { error } = await supabase
         .from('coaching_case_events')
         .insert({
             case_id:               caseId,
+            school_id:             schoolId,
             event_type:            'SHARED_TO_PARENT',
             author_user_id:        authorUserId,
             is_visible_to_student: false,
@@ -1005,11 +1013,12 @@ export async function shareCoachingCaseToParent(caseId, authorUserId) {
     if (error) throw error;
 }
 
-export async function unshareCoachingCaseFromParent(caseId, authorUserId) {
+export async function unshareCoachingCaseFromParent(caseId, authorUserId, schoolId) {
     const { error } = await supabase
         .from('coaching_case_events')
         .insert({
             case_id:               caseId,
+            school_id:             schoolId,
             event_type:            'UNSHARED_FROM_PARENT',
             author_user_id:        authorUserId,
             is_visible_to_student: false,
@@ -1056,11 +1065,12 @@ export async function searchInternalUsers(query) {
     return data ?? [];
 }
 
-export async function addCoachingNote({ caseId, text, authorUserId, isVisibleToStudent = false }) {
+export async function addCoachingNote({ caseId, text, authorUserId, schoolId, isVisibleToStudent = false }) {
     const { error } = await supabase
         .from('coaching_case_events')
         .insert({
             case_id:               caseId,
+            school_id:             schoolId,
             event_type:            'NOTE_ADDED',
             author_user_id:        authorUserId,
             is_visible_to_student: isVisibleToStudent,
@@ -1069,11 +1079,12 @@ export async function addCoachingNote({ caseId, text, authorUserId, isVisibleToS
     if (error) throw error;
 }
 
-export async function escalateCoachingCase({ caseId, newHandlerUserId, note, authorUserId }) {
+export async function escalateCoachingCase({ caseId, newHandlerUserId, note, authorUserId, schoolId }) {
     const { error } = await supabase
         .from('coaching_case_events')
         .insert({
             case_id:               caseId,
+            school_id:             schoolId,
             event_type:            'ESCALATED',
             author_user_id:        authorUserId,
             is_visible_to_student: false,
@@ -1085,11 +1096,12 @@ export async function escalateCoachingCase({ caseId, newHandlerUserId, note, aut
     if (error) throw error;
 }
 
-export async function changeCoachingCaseStatus({ caseId, previousStatus, newStatus, note, authorUserId }) {
+export async function changeCoachingCaseStatus({ caseId, previousStatus, newStatus, note, authorUserId, schoolId }) {
     const { error } = await supabase
         .from('coaching_case_events')
         .insert({
             case_id:               caseId,
+            school_id:             schoolId,
             event_type:            'STATUS_CHANGED',
             author_user_id:        authorUserId,
             is_visible_to_student: false,
@@ -1100,11 +1112,12 @@ export async function changeCoachingCaseStatus({ caseId, previousStatus, newStat
     if (error) throw error;
 }
 
-export async function closeCoachingCase({ caseId, note, authorUserId, previousStatus }) {
+export async function closeCoachingCase({ caseId, note, authorUserId, previousStatus, schoolId }) {
     const { error } = await supabase
         .from('coaching_case_events')
         .insert({
             case_id:               caseId,
+            school_id:             schoolId,
             event_type:            'CLOSED',
             author_user_id:        authorUserId,
             is_visible_to_student: false,

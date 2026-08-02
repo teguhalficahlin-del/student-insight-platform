@@ -3353,8 +3353,10 @@ function renderKasusEvents(events, ctx = kasusCtxDefault) {
         let detail  = '';
         if (ev.event_type === 'ESCALATED' && ev.payload?.note)
             detail = esc(ev.payload.note);
+        // Status lama/baru hidup di payload JSONB — coaching_case_events tidak punya
+        // kolom previous_status/new_status (mig 20260802020000).
         if (ev.event_type === 'STATUS_CHANGED' || ev.event_type === 'CLOSED')
-            detail = `${esc(CASE_STATUS_LABEL[ev.previous_status] ?? ev.previous_status ?? '?')} → ${esc(CASE_STATUS_LABEL[ev.new_status] ?? ev.new_status ?? '?')}`;
+            detail = `${esc(CASE_STATUS_LABEL[ev.payload?.old_status] ?? ev.payload?.old_status ?? '?')} → ${esc(CASE_STATUS_LABEL[ev.payload?.new_status] ?? ev.payload?.new_status ?? '?')}`;
         return `
             <div class="case-event-item">
                 <div style="font-size:12px; color:var(--color-text-muted); margin-bottom:4px">
@@ -3451,10 +3453,10 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
             shareStudentBtn.disabled = true;
             try {
                 if (kasus.is_shared_to_student) {
-                    await unshareCoachingCaseFromStudent(kasus.case_id, currentUser.user_id);
+                    await unshareCoachingCaseFromStudent(kasus.case_id, currentUser.user_id, currentUser.school_id);
                     audienceMsgEl.style.color = 'var(--color-success)'; audienceMsgEl.textContent = 'Akses siswa dicabut.';
                 } else {
-                    await shareCoachingCaseToStudent(kasus.case_id, currentUser.user_id);
+                    await shareCoachingCaseToStudent(kasus.case_id, currentUser.user_id, currentUser.school_id);
                     audienceMsgEl.style.color = 'var(--color-success)'; audienceMsgEl.textContent = 'Dibagikan ke siswa.';
                 }
                 await refreshKasusDetail(ctx);
@@ -3468,10 +3470,10 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
             shareParentBtn.disabled = true;
             try {
                 if (kasus.is_shared_to_parent) {
-                    await unshareCoachingCaseFromParent(kasus.case_id, currentUser.user_id);
+                    await unshareCoachingCaseFromParent(kasus.case_id, currentUser.user_id, currentUser.school_id);
                     audienceMsgEl.style.color = 'var(--color-success)'; audienceMsgEl.textContent = 'Akses orang tua dicabut.';
                 } else {
-                    await shareCoachingCaseToParent(kasus.case_id, currentUser.user_id);
+                    await shareCoachingCaseToParent(kasus.case_id, currentUser.user_id, currentUser.school_id);
                     audienceMsgEl.style.color = 'var(--color-success)'; audienceMsgEl.textContent = 'Dibagikan ke orang tua.';
                 }
                 await refreshKasusDetail(ctx);
@@ -3504,7 +3506,7 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
         if (!text) { msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = 'Catatan tidak boleh kosong.'; return; }
         newCommentBtn.disabled = true; newCommentBtn.textContent = 'Mengirim…';
         try {
-            await addCoachingNote({ caseId: kasus.case_id, text, authorUserId: currentUser.user_id, isVisibleToStudent });
+            await addCoachingNote({ caseId: kasus.case_id, text, authorUserId: currentUser.user_id, schoolId: currentUser.school_id, isVisibleToStudent });
             kEl(ctx, 'comment-text').value = '';
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Catatan dikirim.';
             await refreshKasusDetail(ctx);
@@ -3528,6 +3530,7 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
                 newHandlerUserId: to,
                 note,
                 authorUserId:     currentUser.user_id,
+                schoolId:         currentUser.school_id,
             });
             const recipName = selEl.options[selEl.selectedIndex]?.text ?? to;
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = `Diteruskan ke ${esc(recipName)}.`;
@@ -3545,7 +3548,7 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
         const msgEl = kEl(ctx, 'status-msg');
         newStatusBtn.disabled = true; newStatusBtn.textContent = 'Menyimpan…';
         try {
-            await changeCoachingCaseStatus({ caseId: kasus.case_id, previousStatus: kasus.status, newStatus: newSt, note, authorUserId: currentUser.user_id });
+            await changeCoachingCaseStatus({ caseId: kasus.case_id, previousStatus: kasus.status, newStatus: newSt, note, authorUserId: currentUser.user_id, schoolId: currentUser.school_id });
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = `Status diubah ke ${CASE_STATUS_LABEL[newSt]}.`;
             await refreshKasusDetail(ctx);
         } catch (err) {
@@ -3575,7 +3578,7 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
         newCloseBtn.dataset.confirming = '';
         newCloseBtn.disabled = true; newCloseBtn.textContent = 'Menutup…';
         try {
-            await closeCoachingCase({ caseId: kasus.case_id, note, authorUserId: currentUser.user_id, previousStatus: kasus.status });
+            await closeCoachingCase({ caseId: kasus.case_id, note, authorUserId: currentUser.user_id, previousStatus: kasus.status, schoolId: currentUser.school_id });
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Kasus berhasil ditutup.';
             await refreshKasusDetail(ctx);
         } catch (err) {
