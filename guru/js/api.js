@@ -642,17 +642,21 @@ export async function getWakaKurStats(dateStart, dateEnd) {
     };
 }
 
-// Hanya untuk Panel 1 (hari ini) — satu hari, baris sedikit, aman tanpa RPC.
+// Panel 1 tabel "Sesi Belum Diisi Hari Ini" — via RPC SECURITY DEFINER untuk
+// tenant isolation (RLS waka hanya cek role, tidak filter school_id).
+// Hasil di-map ke shape {teacher,subject,class} agar loadWkKur1 tidak perlu diubah.
 export async function getPendingAttendanceSessions(date) {
-    const { data, error } = await supabase
-        .from('teaching_schedules')
-        .select('session_start, session_end, class:classes(name), teacher:users(full_name), subject:subjects(name)')
-        .eq('teacher_indicator', 'PENDING_EVALUATION')
-        .eq('meeting_status', 'NORMAL')
-        .eq('session_date', date)
-        .order('session_start', { ascending: true });
+    const { data, error } = await supabase.rpc('fn_pending_attendance_sessions', {
+        p_date: date ?? null,
+    });
     if (error) throw error;
-    return data ?? [];
+    return (data ?? []).map(r => ({
+        session_start: r.session_start,
+        session_end:   r.session_end,
+        teacher: { full_name: r.teacher_name },
+        subject: { name: r.subject_name },
+        class:   { name: r.class_name },
+    }));
 }
 
 export async function getPendingSessionsByTeacher(dateStart, dateEnd) {
