@@ -2629,23 +2629,21 @@ async function loadWkKur2() {
         }
 
         const THRESHOLD = 10;
+        groups.sort((a, b) => a.teacher_name.localeCompare(b.teacher_name, 'id'));
         let html = '';
         groups.forEach((row, idx) => {
-            const count    = Number(row.jumlah);
-            const alert    = count >= THRESHOLD;
-            const detailId = `wk-kur2-detail-${idx}`;
-            const color    = alert ? 'var(--color-danger,#ef4444)' : '';
-            const badge    = alert
-                ? `<span style="font-size:11px;background:var(--color-danger,#ef4444);color:#fff;border-radius:4px;padding:1px 6px;margin-left:6px">≥${THRESHOLD}×</span>`
-                : '';
+            const count      = Number(row.jumlah);
+            const alert      = count >= THRESHOLD;
+            const detailId   = `wk-kur2-detail-${idx}`;
+            const color      = alert ? 'var(--color-danger,#ef4444)' : '';
+            const countBadge = `<span style="font-size:11px;background:${alert ? 'var(--color-danger,#ef4444)' : 'var(--color-surface-raised,rgba(0,0,0,.12))'};${alert ? 'color:#fff;' : ''}border-radius:4px;padding:1px 6px;margin-left:4px">${count} sesi</span>`;
             html += `<tr style="cursor:pointer" data-detail-id="${detailId}" data-teacher-id="${row.teacher_id}" data-start="${esc(dateStart||'')}" data-end="${esc(dateEnd||'')}">
                 <td style="text-align:center">${idx + 1}</td>
-                <td style="color:${color};font-weight:${alert?'600':'400'}">${esc(row.teacher_name)}${badge}</td>
-                <td style="text-align:center;color:${color};font-weight:${alert?'600':'400'}">${count} sesi</td>
+                <td style="color:${color};font-weight:${alert?'600':'400'}">${esc(row.teacher_name)}${countBadge}</td>
                 <td style="text-align:center;font-size:18px;color:var(--color-text-muted)">&#8250;</td>
             </tr>
             <tr id="${detailId}" style="display:none" data-loaded="0">
-                <td colspan="4" style="padding:0">
+                <td colspan="3" style="padding:0">
                     <table style="width:100%;border-collapse:collapse;background:var(--color-surface-raised,rgba(0,0,0,.15))">
                         <thead><tr style="font-size:11px;color:var(--color-text-muted)">
                             <th style="padding:6px 12px;text-align:left">Tanggal</th>
