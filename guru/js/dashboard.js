@@ -2633,13 +2633,11 @@ async function loadWkKur2() {
         let html = '';
         groups.forEach((row, idx) => {
             const count      = Number(row.jumlah);
-            const alert      = count >= THRESHOLD;
             const detailId   = `wk-kur2-detail-${idx}`;
-            const color      = alert ? 'var(--color-danger,#ef4444)' : '';
             const countBadge = `<span style="font-size:11px;background:var(--color-surface-raised,rgba(0,0,0,.12));border-radius:4px;padding:1px 6px;margin-left:4px">${count} sesi</span>`;
             html += `<tr style="cursor:pointer" data-detail-id="${detailId}" data-teacher-id="${row.teacher_id}" data-start="${esc(dateStart||'')}" data-end="${esc(dateEnd||'')}">
                 <td style="text-align:center">${idx + 1}</td>
-                <td style="color:${color};font-weight:${alert?'600':'400'}">${esc(row.teacher_name)}${countBadge}</td>
+                <td>${esc(row.teacher_name)}${countBadge}</td>
                 <td style="text-align:center;font-size:18px;color:var(--color-text-muted)">&#8250;</td>
             </tr>
             <tr id="${detailId}" style="display:none" data-loaded="0">
