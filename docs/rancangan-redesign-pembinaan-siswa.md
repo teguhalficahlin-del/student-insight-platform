@@ -573,17 +573,16 @@ GRANT  EXECUTE ON FUNCTION fn_admin_delete_coaching_case(uuid, text) TO service_
 --     6. Kepsek       → users.is_kepsek = TRUE
 --
 --   Track PKL:
---     1. DUDI Supervisor → pkl_placements.dudi_user_id (placement aktif siswa)
---     2. Wali Kelas      → sama dengan SEKOLAH (kelas asal siswa)
---     3. Kaprodi         → sama dengan SEKOLAH
---     4. Waka Humas      → users.is_waka_humas = TRUE
---     5. Kepsek          → sama dengan SEKOLAH
+--     1. DUDI Supervisor     → pkl_placements.dudi_user_id (placement aktif siswa)
+--     2. Guru Pembimbing PKL → pkl_placements.guru_pembimbing_user_id (placement aktif siswa)
+--     3. Wali Kelas          → sama dengan SEKOLAH (kelas asal siswa)
+--     4. Kaprodi             → sama dengan SEKOLAH
+--     5. Waka Humas          → users.is_waka_humas = TRUE
+--     6. Kepsek              → sama dengan SEKOLAH
 --
--- CATATAN SCHEMA GAP: "Guru Pembimbing PKL" (guru internal yang mendampingi
--- siswa selama PKL) BELUM ADA kolomnya di pkl_placements. Perlu ditambahkan
--- kolom `guru_pembimbing_user_id UUID REFERENCES users(user_id)` ke
--- pkl_placements sebelum kategori ini bisa diimplementasi.
--- Untuk sementara kategori ini dikosongkan dari hasil RPC.
+-- CATATAN SCHEMA: "Guru Wali Personal" tidak ada sebagai entitas terpisah di schema.
+-- Wali kelas dari kelas siswa (users.wali_kelas_class_id = class_enrollments aktif)
+-- sudah mencakup konsep wali personal — tidak perlu entri terpisah.
 --
 -- Deduplikasi: user yang muncul di beberapa kategori hanya muncul sekali,
 -- dengan relation_label dari kategori prioritas tertinggi (angka terkecil).
@@ -755,14 +754,25 @@ BEGIN
               AND  pp.is_active  = TRUE
               AND  u.school_id   = v_school_id
               AND  u.is_active   = TRUE
-            -- CATATAN: kategori "Guru Pembimbing PKL" dikosongkan sementara
-            -- karena pkl_placements belum punya kolom guru_pembimbing_user_id.
 
             UNION ALL
 
-            -- 2. Wali Kelas (dari kelas asal siswa, sebelum/selama PKL)
+            -- 2. Guru Pembimbing PKL (guru internal pendamping PKL)
             SELECT u.user_id, u.full_name::TEXT, u.role_type,
-                   'Wali Kelas'::TEXT, 2
+                   'Guru Pembimbing PKL'::TEXT, 2
+            FROM   pkl_placements pp
+            JOIN   users u ON u.user_id = pp.guru_pembimbing_user_id
+            WHERE  pp.student_id              = v_student_id
+              AND  pp.is_active               = TRUE
+              AND  u.school_id                = v_school_id
+              AND  u.is_active                = TRUE
+              AND  pp.guru_pembimbing_user_id IS NOT NULL
+
+            UNION ALL
+
+            -- 3. Wali Kelas (dari kelas asal siswa, sebelum/selama PKL)
+            SELECT u.user_id, u.full_name::TEXT, u.role_type,
+                   'Wali Kelas'::TEXT, 3
             FROM   users u
             WHERE  u.school_id           = v_school_id
               AND  u.is_active           = TRUE
@@ -771,9 +781,9 @@ BEGIN
 
             UNION ALL
 
-            -- 3. Kaprodi program studi siswa
+            -- 4. Kaprodi program studi siswa
             SELECT u.user_id, u.full_name::TEXT, u.role_type,
-                   'Kaprodi'::TEXT, 3
+                   'Kaprodi'::TEXT, 4
             FROM   users u
             WHERE  u.school_id          = v_school_id
               AND  u.is_active          = TRUE
@@ -782,9 +792,9 @@ BEGIN
 
             UNION ALL
 
-            -- 4. Waka Humas (koordinator PKL di level sekolah)
+            -- 5. Waka Humas (koordinator PKL di level sekolah)
             SELECT u.user_id, u.full_name::TEXT, u.role_type,
-                   'Waka Humas'::TEXT, 4
+                   'Waka Humas'::TEXT, 5
             FROM   users u
             WHERE  u.school_id     = v_school_id
               AND  u.is_active     = TRUE
@@ -792,9 +802,9 @@ BEGIN
 
             UNION ALL
 
-            -- 5. Kepsek
+            -- 6. Kepsek
             SELECT u.user_id, u.full_name::TEXT, u.role_type,
-                   'Kepala Sekolah'::TEXT, 5
+                   'Kepala Sekolah'::TEXT, 6
             FROM   users u
             WHERE  u.school_id = v_school_id
               AND  u.is_active = TRUE
@@ -1170,6 +1180,13 @@ Section "Pembinaan Siswa Program Studi" — filter default: siswa di program stu
 
 Aksi sama dengan tab Guru.
 
+**Update form penetapan PKL:** Form `kp-placement-form` perlu ditambah field:
+- Dropdown **Guru Pembimbing** (daftar guru aktif di sekolah, di-filter per program studi)
+- Field ini wajib diisi saat membuat penempatan PKL baru
+- `createPlacement()` perlu mengirim tambahan field `supervisorUserId` yang dipetakan ke
+  `fn_create_placement(p_student_id, p_dudi_user_id, p_start_date, p_end_date, p_supervisor_user_id)`
+  — fungsi ini perlu diupdate bersamaan dengan migration kolom
+
 ---
 
 ### 4.5 Portal Waka Kesiswaan — Section di Tab Waka Kesiswaan (`initWakaKesiswaanTab`)
@@ -1201,6 +1218,7 @@ Muncul di tab "Pembinaan" (tab baru) atau di section observasi — hanya jika ad
 - Judul kasus
 - Status (label ramah: "Sedang ditangani" / "Selesai")
 - Nama guru/staf yang menangani (nama saja, tanpa jabatan internal)
+- Untuk kasus track PKL: nama guru pembimbing PKL (dari `pkl_placements.guru_pembimbing_user_id`)
 - Tanggal dibuat
 
 **Timeline yang tampil:** hanya event dengan `is_visible_to_student = TRUE`:
@@ -1219,6 +1237,7 @@ Tab per anak. Section "Catatan Pembinaan" muncul jika ada kasus dengan `is_share
 **Field yang tampil per kasus:**
 - Judul kasus
 - Status (label ramah)
+- Untuk kasus track PKL: nama guru pembimbing PKL (dari `pkl_placements.guru_pembimbing_user_id`)
 - Tanggal terbaru ada catatan yang dibagikan
 
 **Timeline yang tampil:** sama seperti siswa — hanya event `is_visible_to_student = TRUE`
@@ -1231,6 +1250,24 @@ Tab per anak. Section "Catatan Pembinaan" muncul jika ada kasus dengan `is_share
 ## 5. Migration Plan
 
 ### 5.1 Urutan Migration SQL
+
+Migration **pertama** yang harus dijalankan sebelum `coaching-cases-schema`:
+
+```sql
+-- Migration: YYYYMMDDHHMMSS_add-pkl-supervisor-column.sql
+-- Harus dijalankan SEBELUM coaching-cases-schema karena
+-- fn_get_escalation_candidates mereferensikan kolom ini.
+
+ALTER TABLE pkl_placements
+    ADD COLUMN IF NOT EXISTS guru_pembimbing_user_id UUID
+        REFERENCES users(user_id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_pkl_placements_pembimbing
+    ON pkl_placements(guru_pembimbing_user_id)
+    WHERE guru_pembimbing_user_id IS NOT NULL;
+```
+
+Kemudian urutan coaching cases:
 
 ```
 YYYYMMDDHHMMSS_coaching-cases-schema.sql
