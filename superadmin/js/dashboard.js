@@ -124,6 +124,10 @@ async function loadSchools() {
                 <span class="school-summary-left">
                   ${s.primary_color ? `<span class="color-dot" style="background:${esc(s.primary_color)}"></span>` : ''}
                   <span class="school-summary-name">${esc(s.name)}</span>
+                  <span class="school-summary-meta" style="font-size:11px;color:#94a3b8;margin-top:2px;display:flex;gap:16px">
+                      <span>${esc(s.admin_name || '—')}</span>
+                      <span style="color:#60a5fa">${esc(s.admin_identifier || '—')}</span>
+                  </span>
                 </span>
                 <span class="school-summary-right">
                   <span class="badge ${s.is_active ? 'badge-active' : 'badge-inactive'}">${s.is_active ? 'Aktif' : 'Nonaktif'}</span>
