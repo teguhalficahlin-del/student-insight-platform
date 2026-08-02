@@ -3633,10 +3633,10 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
             });
             const recipName = selEl.options[selEl.selectedIndex]?.text ?? to;
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = `Diteruskan ke ${esc(recipName)}.`;
+            newEscBtn.disabled = false; newEscBtn.textContent = 'Teruskan';
             await refreshKasusDetail(ctx);
         } catch (err) {
             msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
-        } finally {
             newEscBtn.disabled = false; newEscBtn.textContent = 'Teruskan';
         }
     });
