@@ -2636,7 +2636,7 @@ async function loadWkKur2() {
             const alert      = count >= THRESHOLD;
             const detailId   = `wk-kur2-detail-${idx}`;
             const color      = alert ? 'var(--color-danger,#ef4444)' : '';
-            const countBadge = `<span style="font-size:11px;background:${alert ? 'var(--color-danger,#ef4444)' : 'var(--color-surface-raised,rgba(0,0,0,.12))'};${alert ? 'color:#fff;' : ''}border-radius:4px;padding:1px 6px;margin-left:4px">${count} sesi</span>`;
+            const countBadge = `<span style="font-size:11px;background:var(--color-surface-raised,rgba(0,0,0,.12));border-radius:4px;padding:1px 6px;margin-left:4px">${count} sesi</span>`;
             html += `<tr style="cursor:pointer" data-detail-id="${detailId}" data-teacher-id="${row.teacher_id}" data-start="${esc(dateStart||'')}" data-end="${esc(dateEnd||'')}">
                 <td style="text-align:center">${idx + 1}</td>
                 <td style="color:${color};font-weight:${alert?'600':'400'}">${esc(row.teacher_name)}${countBadge}</td>
