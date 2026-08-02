@@ -3068,7 +3068,7 @@ async function loadAdminList() {
         }
         el.innerHTML = `
             <table class="data-table" style="width:100%">
-                <thead><tr><th>Nama</th><th></th></tr></thead>
+                <thead><tr><th style="text-align:left">Nama</th><th></th></tr></thead>
                 <tbody>
                     ${admins.map(a => `
                         <tr>
