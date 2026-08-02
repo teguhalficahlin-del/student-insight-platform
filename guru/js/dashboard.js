@@ -1664,38 +1664,41 @@ async function initWakaKesiswaanTab() {
     await initWakaKesiswaanKasusSection();
 }
 
+async function renderWkCount() {
+    const rekapEl = document.getElementById('wk-kasus-count-rekap');
+    if (!rekapEl) return;
+    const counts = await getCoachingCasesCount();
+    const lbl    = 'font-size:11px;color:var(--color-text-muted);margin-top:2px';
+    rekapEl.style.display = '';
+    rekapEl.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+            <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+                <div style="font-size:20px;font-weight:500;color:var(--color-primary)">${counts.OPEN ?? 0}</div>
+                <div style="${lbl}">Terbuka</div>
+            </div>
+            <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+                <div style="font-size:20px;font-weight:500;color:var(--color-warning,#f59e0b)">${counts.UNDER_REVIEW ?? 0}</div>
+                <div style="${lbl}">Ditinjau</div>
+            </div>
+            <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+                <div style="font-size:20px;font-weight:500;color:var(--color-danger)">${counts.INTERVENTION ?? 0}</div>
+                <div style="${lbl}">Intervensi</div>
+            </div>
+            <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+                <div style="font-size:20px;font-weight:500;color:var(--color-success)">${counts.MONITORING ?? 0}</div>
+                <div style="${lbl}">Monitoring</div>
+            </div>
+        </div>`;
+}
+
 async function initWakaKesiswaanKasusSection() {
     if (!_wkKasusCtx) {
         _wkKasusCtx = makeKasusCtx('wk-kasus', {});
         document.getElementById('wk-kasus-back-btn')
             .addEventListener('click', () => showKasusList(_wkKasusCtx));
-        try {
-            const counts  = await getCoachingCasesCount();
-            const rekapEl = document.getElementById('wk-kasus-count-rekap');
-            const lbl     = 'font-size:11px;color:var(--color-text-muted);margin-top:2px';
-            rekapEl.style.display = '';
-            rekapEl.innerHTML = `
-                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
-                    <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
-                        <div style="font-size:20px;font-weight:500;color:var(--color-primary)">${counts.OPEN ?? 0}</div>
-                        <div style="${lbl}">Terbuka</div>
-                    </div>
-                    <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
-                        <div style="font-size:20px;font-weight:500;color:var(--color-warning,#f59e0b)">${counts.UNDER_REVIEW ?? 0}</div>
-                        <div style="${lbl}">Ditinjau</div>
-                    </div>
-                    <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
-                        <div style="font-size:20px;font-weight:500;color:var(--color-danger)">${counts.INTERVENTION ?? 0}</div>
-                        <div style="${lbl}">Intervensi</div>
-                    </div>
-                    <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
-                        <div style="font-size:20px;font-weight:500;color:var(--color-success)">${counts.MONITORING ?? 0}</div>
-                        <div style="${lbl}">Monitoring</div>
-                    </div>
-                </div>`;
-        } catch (_) { /* rekap count non-blocking */ }
     }
     await loadKasusList(false, _wkKasusCtx);
+    await renderWkCount().catch(() => {});
 }
 
 function buildAttStatCards(rows) {
@@ -3716,6 +3719,7 @@ async function refreshKasusDetail(ctx = kasusCtxDefault) {
             current_handler_user_id: kasus.current_handler_user_id,
             handler:                 kasus.handler,
         };
+        if (ctx === _wkKasusCtx) await renderWkCount().catch(() => {});
     } catch (err) {
         console.error('[kasus] refresh error', err);
     }
