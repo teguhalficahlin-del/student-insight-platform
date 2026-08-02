@@ -627,6 +627,22 @@ export async function getAttendanceFillRate(dateStart, dateEnd) {
     return { total: hadir + pending + tidak, hadir, pending, tidak };
 }
 
+export async function getWakaKurStats(dateStart, dateEnd) {
+    const { data, error } = await supabase.rpc('fn_waka_kur_stats', {
+        p_date_start: dateStart ?? null,
+        p_date_end:   dateEnd   ?? null,
+    });
+    if (error) throw error;
+    const r = data?.[0] ?? {};
+    return {
+        sudah_isi:   Number(r.sudah_isi   ?? 0),
+        belum_isi:   Number(r.belum_isi   ?? 0),
+        tidak_hadir: Number(r.tidak_hadir ?? 0),
+        total:       Number(r.total       ?? 0),
+        pct_hadir:   r.pct_hadir != null ? Number(r.pct_hadir) : null,
+    };
+}
+
 // Hanya untuk Panel 1 (hari ini) — satu hari, baris sedikit, aman tanpa RPC.
 export async function getPendingAttendanceSessions(date) {
     const { data, error } = await supabase

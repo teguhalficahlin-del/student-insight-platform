@@ -22,7 +22,7 @@ import {
 
     getSchoolStats, getKepsekMonitoring,
     getPendingAttendanceSessions, getPendingSessionsByTeacher, getPendingSessionsDetail,
-    getAttendanceFillRate,
+    getWakaKurStats,
     getAttendanceRecapPerClass, getOpenCases,
     getPrograms, getStudentAttendanceSessions,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
@@ -2499,43 +2499,36 @@ async function loadWkKurStats(dateStart, dateEnd, prefix = 'wk-kur', emptyMsg = 
         const isHariIniPanel = (dateStart === today && dateEnd === today)
             || (!dateStart && !dateEnd);
 
-        let hariIniData, tidakData;
+        // Panel 1: satu panggilan rentang 7 hari — belum_isi (hari ini) + tidak_hadir
+        // (sudah lewat) dibedakan di DB via parameter p_date_end, bukan CURRENT_DATE.
+        // Panel 2: rentang dari date picker user.
+        const _start = isHariIniPanel ? localDateStr(new Date(Date.now() - 6 * 86400000)) : dateStart;
+        const _end   = isHariIniPanel ? today : dateEnd;
 
-        if (isHariIniPanel) {
-            // Panel 1: card 1+2 = hari ini, card 3 = 7 hari terakhir
-            const sevenDaysAgo = new Date(Date.now() - 6 * 86400000).toISOString().split('T')[0];
-            [hariIniData, tidakData] = await Promise.all([
-                getAttendanceFillRate(today, today),
-                getAttendanceFillRate(sevenDaysAgo, today),
-            ]);
-        } else {
-            // Panel 2: semua card pakai rentang yang dipilih user
-            hariIniData = await getAttendanceFillRate(dateStart, dateEnd);
-            tidakData = hariIniData;
-        }
+        const d = await getWakaKurStats(_start, _end);
 
-        // Card 1 — Sudah isi
-        elHadir.textContent = hariIniData.hadir;
+        // Card 1 — Sudah isi (persentase)
+        elHadir.textContent = (d.pct_hadir != null) ? d.pct_hadir + '%' : '0%';
         if (elDetailSudah) {
-            elDetailSudah.textContent = hariIniData.total > 0
-                ? `${hariIniData.hadir} dari ${hariIniData.total} sesi`
+            elDetailSudah.textContent = d.total > 0
+                ? `${d.sudah_isi} / ${d.total} sesi sudah diisi`
                 : emptyMsg;
         }
 
-        // Card 2 — Belum diisi
-        elPending.textContent = hariIniData.pending;
+        // Card 2 — Belum diisi (sesi hari ini yang belum ada absensi)
+        elPending.textContent = d.belum_isi;
         if (elDetailBelum) {
-            elDetailBelum.textContent = hariIniData.pending > 0
-                ? `${hariIniData.pending} sesi belum diisi`
+            elDetailBelum.textContent = d.belum_isi > 0
+                ? `${d.belum_isi} sesi belum diisi`
                 : 'semua sesi sudah diproses';
         }
 
-        // Card 3 — Tidak hadir
-        elTidak.textContent = tidakData.tidak;
+        // Card 3 — Tidak hadir (sesi masa lalu tanpa absensi dalam rentang)
+        elTidak.textContent = d.tidak_hadir;
         if (elDetailTidak) {
             elDetailTidak.textContent = isHariIniPanel
-                ? `${tidakData.tidak} sesi, 7 hari terakhir`
-                : `${tidakData.tidak} sesi dalam rentang ini`;
+                ? `${d.tidak_hadir} sesi, 7 hari terakhir`
+                : `${d.tidak_hadir} sesi dalam rentang ini`;
         }
 
     } catch (e) {
