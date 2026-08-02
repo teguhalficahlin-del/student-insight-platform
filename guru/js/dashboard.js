@@ -2862,7 +2862,7 @@ async function initKepsekTab() {
         // Wire period preset buttons
         document.getElementById('ks-period-toggle').addEventListener('click', e => {
             const btn = e.target.closest('.ks-period-btn');
-            if (!btn) return;
+            if (!btn || btn.disabled) return;
             document.querySelectorAll('.ks-period-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             const period = btn.dataset.period;
@@ -2927,7 +2927,17 @@ async function loadKepsekMonitoring(period, academicYear = null, dateStart = nul
     errEl.style.display  = 'none';
 
     try {
-        const d = await getKepsekMonitoring(period, academicYear, dateStart, dateEnd);
+        // FIX 3: 'hari_ini' pakai tanggal lokal browser, bukan CURRENT_DATE UTC di DB
+        let _period    = period;
+        let _dateStart = dateStart;
+        let _dateEnd   = dateEnd;
+        if (period === 'hari_ini') {
+            const today = localDateStr();
+            _period    = 'rentang';
+            _dateStart = today;
+            _dateEnd   = today;
+        }
+        const d = await getKepsekMonitoring(_period, academicYear, _dateStart, _dateEnd);
         const s = d.summary ?? {};
 
         pctSiswa.textContent = (s.pct_siswa != null && !isNaN(s.pct_siswa)) ? s.pct_siswa + '%' : '0%';
@@ -2945,6 +2955,21 @@ async function loadKepsekMonitoring(period, academicYear = null, dateStart = nul
             : d.by_month ? 'Persentase kehadiran per bulan' : 'Persentase kehadiran per hari';
 
         renderKepsekChart(chartData, d.by_month);
+
+        // FIX 2: disable tombol Tahun Lalu jika tidak ada data untuk tahun ajaran lalu
+        const btnTahunLalu = document.querySelector('.ks-period-btn[data-period="tahun_ajaran_lalu"]');
+        if (btnTahunLalu) {
+            const earliest = d.data_earliest;
+            const noData = !earliest || earliest > '2026-06-30';
+            btnTahunLalu.disabled = noData;
+            btnTahunLalu.style.opacity = noData ? '0.4' : '';
+            if (noData && btnTahunLalu.classList.contains('active')) {
+                btnTahunLalu.classList.remove('active');
+                const btn7 = document.querySelector('.ks-period-btn[data-period="7_hari"]');
+                if (btn7) btn7.classList.add('active');
+                loadKepsekMonitoring('7_hari');
+            }
+        }
     } catch (err) {
         errEl.textContent   = `Gagal memuat data: ${fe(err)}`;
         errEl.style.display = 'block';
@@ -3025,7 +3050,7 @@ function renderKepsekChart(chartData, byMonth) {
                             if (ctx.dataset.yAxisID === 'y2') {
                                 return `${ctx.dataset.label}: ${v != null ? v + ' siswa' : '—'}`;
                             }
-                            return `${ctx.dataset.label}: ${v != null ? v + '%' : '—'}`;
+                            return `${ctx.dataset.label}: ${v != null ? v + '%' : '0%'}`;
                         },
                     },
                 },
