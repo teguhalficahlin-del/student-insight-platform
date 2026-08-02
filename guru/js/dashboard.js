@@ -2595,7 +2595,7 @@ async function loadWkKur2() {
             const badge    = alert
                 ? `<span style="font-size:11px;background:var(--color-danger,#ef4444);color:#fff;border-radius:4px;padding:1px 6px;margin-left:6px">≥${THRESHOLD}×</span>`
                 : '';
-            html += `<tr style="cursor:pointer" onclick="_wkKur2ToggleDetail('${detailId}','${row.teacher_id}','${esc(dateStart||'')}','${esc(dateEnd||'')}')">
+            html += `<tr style="cursor:pointer" data-detail-id="${detailId}" data-teacher-id="${row.teacher_id}" data-start="${esc(dateStart||'')}" data-end="${esc(dateEnd||'')}">
                 <td style="text-align:center">${idx + 1}</td>
                 <td style="color:${color};font-weight:${alert?'600':'400'}">${esc(row.teacher_name)}${badge}</td>
                 <td style="text-align:center;color:${color};font-weight:${alert?'600':'400'}">${count} sesi</td>
@@ -2616,6 +2616,16 @@ async function loadWkKur2() {
             </tr>`;
         });
         tbody.innerHTML = html;
+        tbody.querySelectorAll('tr[data-detail-id]').forEach(tr => {
+            tr.addEventListener('click', () => {
+                _wkKur2ToggleDetail(
+                    tr.dataset.detailId,
+                    tr.dataset.teacherId,
+                    tr.dataset.start || null,
+                    tr.dataset.end   || null,
+                );
+            });
+        });
         wrapEl.style.display = '';
         btn.textContent      = 'Sembunyikan';
         _wkKur2Visible = true;
