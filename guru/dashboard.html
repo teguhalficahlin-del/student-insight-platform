@@ -397,8 +397,9 @@
     ════════════════════════════════════════════════════════ -->
     <div class="tab-panel" id="tab-wali_kelas">
         <div class="page-body">
-            <div class="section-card">
-                <h3 id="wali-class-title">Kelas Walian</h3>
+            <div class="section-card kp-acc-item" id="wali-att-card">
+                <div class="kp-acc-header"><span id="wali-class-title">Kelas Walian</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="wali-att-body" style="display:none">
                 <div class="date-row" style="margin-bottom:12px">
                     <label for="wali-date-start">Dari:</label>
                     <input type="date" id="wali-date-start" class="input" style="width:auto">
@@ -411,6 +412,7 @@
                     </div>
                 </div>
                 <div id="wali-att-recap"><p class="hint">Pilih rentang tanggal lalu klik Filter.</p></div>
+                </div>
             </div>
 
             <div class="section-card" style="margin-top:16px">
@@ -491,8 +493,9 @@
     ════════════════════════════════════════════════════════ -->
     <div class="tab-panel" id="tab-bk">
         <div class="page-body">
-            <div class="section-card">
-                <h3>Kehadiran Per Kelas</h3>
+            <div class="section-card kp-acc-item" id="bk-att-card">
+                <div class="kp-acc-header"><span>Kehadiran Per Kelas</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="bk-att-body" style="display:none">
                 <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
                     <div style="display:flex;align-items:center;gap:8px">
                         <label for="bk-att-start" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">Dari:</label>
@@ -505,6 +508,7 @@
                     </div>
                 </div>
                 <div id="bk-att-recap"><p class="hint">Pilih rentang tanggal lalu klik Filter.</p></div>
+                </div>
             </div>
 
             <div class="section-card" style="margin-top:16px">
@@ -879,8 +883,9 @@
     ════════════════════════════════════════════════════════ -->
     <div class="tab-panel" id="tab-waka_kesiswaan">
         <div class="page-body">
-            <div class="section-card">
-                <h3>Kehadiran Per Kelas</h3>
+            <div class="section-card kp-acc-item" id="wk-att-card">
+                <div class="kp-acc-header"><span>Kehadiran Per Kelas</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="wk-att-body" style="display:none">
                 <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
                     <div style="display:flex;align-items:center;gap:8px">
                         <label for="wk-att-start" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">Dari:</label>
@@ -893,10 +898,12 @@
                     </div>
                 </div>
                 <div id="wk-att-recap"><p class="hint">Pilih rentang tanggal lalu klik Filter.</p></div>
+                </div>
             </div>
 
-            <div class="section-card">
-                <h3>Rekap Keterlambatan</h3>
+            <div class="section-card kp-acc-item" id="wk-late-card">
+                <div class="kp-acc-header"><span>Rekap Keterlambatan</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="wk-late-body" style="display:none">
                 <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
                     <div style="display:flex;align-items:center;gap:8px">
                         <label for="wk-late-start" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">Dari:</label>
@@ -909,6 +916,7 @@
                     </div>
                 </div>
                 <div id="wk-late-recap"><p class="hint">Memuat…</p></div>
+                </div>
             </div>
 
             <div class="section-card" style="margin-top:16px">
@@ -1105,8 +1113,9 @@
             </div>
 
             <!-- Grafik tren kehadiran -->
-            <div class="section-card">
-                <h3 style="margin:0 0 12px">Tren kehadiran sekolah</h3>
+            <div class="section-card kp-acc-item" id="ks-chart-card">
+                <div class="kp-acc-header"><span>Tren kehadiran sekolah</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="ks-chart-body" style="display:none">
 
                 <!-- Tombol periode preset -->
                 <div id="ks-period-toggle" role="group" aria-label="Pilih periode" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">
@@ -1155,6 +1164,7 @@
                     </div>
                 </div>
                 <p id="ks-chart-hint" style="font-size:11px;color:var(--color-text-muted);text-align:center;margin-top:6px"></p>
+                </div>
             </div>
 
             <!-- Dokumen DISAHKAN_WAKA (read-only) -->
@@ -1163,8 +1173,9 @@
                 <div id="ks-disahkan-list"><p class="hint">Memuat…</p></div>
             </div>
 
-            <div class="section-card">
-                <h3>Rekap Keterlambatan</h3>
+            <div class="section-card kp-acc-item" id="ks-late-card">
+                <div class="kp-acc-header"><span>Rekap Keterlambatan</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="ks-late-body" style="display:none">
                 <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
                     <div style="display:flex;align-items:center;gap:8px">
                         <label for="ks-late-start" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">Dari:</label>
@@ -1177,6 +1188,7 @@
                     </div>
                 </div>
                 <div id="ks-late-recap"><p class="hint">Memuat…</p></div>
+                </div>
             </div>
 
             <div class="section-card" style="margin-top:16px">

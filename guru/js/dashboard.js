@@ -1241,6 +1241,7 @@ function renderObsHistory(rows, listEl) {
 // ─── TAB WALI KELAS ──────────────────────────────────────────
 
 async function initWaliTab() {
+    wireSimpleAccordion('wali-att-card');
     const classId = currentUser.wali_kelas_class_id;
     if (!classId) {
         document.getElementById('wali-kasus-list-content').innerHTML =
@@ -1451,6 +1452,7 @@ async function loadWaliSummary() {
 // ─── TAB BK ──────────────────────────────────────────────────
 
 async function initBkTab() {
+    wireSimpleAccordion('bk-att-card');
     const today        = localDateStr();
     const firstOfMonth = today.slice(0, 8) + '01';
     document.getElementById('bk-att-start').value = firstOfMonth;
@@ -1656,6 +1658,8 @@ async function loadBkAttendanceRecap() {
 // ─── TAB WAKA KESISWAAN ──────────────────────────────────────
 
 async function initWakaKesiswaanTab() {
+    wireSimpleAccordion('wk-att-card');
+    wireSimpleAccordion('wk-late-card');
     const today        = localDateStr();
     const firstOfMonth = today.slice(0, 8) + '01';
     document.getElementById('wk-att-start').value = firstOfMonth;
@@ -2850,6 +2854,8 @@ let _ksChart   = null;
 async function initKepsekTab() {
     if (!_ksTabInit) {
         _ksTabInit = true;
+        wireSimpleAccordion('ks-chart-card');
+        wireSimpleAccordion('ks-late-card');
 
         // Wire period preset buttons
         document.getElementById('ks-period-toggle').addEventListener('click', e => {
@@ -9356,6 +9362,21 @@ async function publikasiNilai() {
     }
 }
 
+
+// ─── Accordion: rekap kehadiran (collapsed by default) ────────
+function wireSimpleAccordion(cardId) {
+    const card = document.getElementById(cardId);
+    if (!card || card.dataset.accWired) return;
+    const header = card.querySelector('.kp-acc-header');
+    const body   = card.querySelector('.kp-acc-body');
+    if (!header || !body) return;
+    card.dataset.accWired = '1';
+    header.addEventListener('click', () => {
+        const open = card.classList.contains('open');
+        card.classList.toggle('open', !open);
+        body.style.display = open ? 'none' : 'block';
+    });
+}
 
 // ─── Download: Template & Rekap Pembinaan ────────────────────
 function wireKasusDownloadButtons(ctx) {
