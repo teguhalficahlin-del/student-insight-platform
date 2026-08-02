@@ -2937,10 +2937,10 @@ async function loadKepsekMonitoring(period, academicYear = null, dateStart = nul
         if (countLate)  countLate.textContent  = s.count_late  != null ? s.count_late  + ' siswa' : '—';
         if (countExits) countExits.textContent = s.count_exits != null ? s.count_exits + ' siswa' : '—';
         detSiswa.textContent = (s.siswa_total > 0)
-            ? `${s.siswa_hadir} dari ${s.siswa_total} sesi tercatat`
+            ? `${s.siswa_hadir} dari ${s.siswa_total} siswa`
             : 'Belum ada data';
         detGuru.textContent = (s.guru_total > 0)
-            ? `${s.guru_hadir} dari ${s.guru_total} sesi terjadwal`
+            ? `${s.guru_hadir} dari ${s.guru_total} guru berjadwal`
             : 'Belum ada data';
 
         const chartData = d.chart ?? [];
