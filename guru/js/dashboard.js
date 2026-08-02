@@ -2934,6 +2934,10 @@ async function loadKepsekMonitoring(period, academicYear = null, dateStart = nul
 
         pctSiswa.textContent = s.pct_siswa != null ? s.pct_siswa + '%' : '—';
         pctGuru.textContent  = s.pct_guru  != null ? s.pct_guru  + '%' : '—';
+        const countLate  = document.getElementById('ks-count-late');
+        const countExits = document.getElementById('ks-count-exits');
+        if (countLate)  countLate.textContent  = s.count_late  != null ? s.count_late  + ' siswa' : '—';
+        if (countExits) countExits.textContent = s.count_exits != null ? s.count_exits + ' siswa' : '—';
         detSiswa.textContent = (s.siswa_total > 0)
             ? `${s.siswa_hadir} dari ${s.siswa_total} sesi tercatat`
             : 'Belum ada data';
@@ -2961,6 +2965,8 @@ function renderKepsekChart(chartData, byMonth) {
     const labels     = chartData.map(p => fmtChartLabel(p.date, byMonth));
     const dataSiswa  = chartData.map(p => p.pct_siswa);
     const dataGuru   = chartData.map(p => p.pct_guru);
+    const dataLate   = chartData.map(p => p.count_late  ?? null);
+    const dataExits  = chartData.map(p => p.count_exits ?? null);
 
     if (_ksChart) { _ksChart.destroy(); _ksChart = null; }
 
@@ -2976,6 +2982,7 @@ function renderKepsekChart(chartData, byMonth) {
                     backgroundColor: '#1D9E7518',
                     tension: 0.3,
                     fill: true,
+                    yAxisID: 'y1',
                     pointRadius: chartData.length <= 14 ? 4 : 2,
                     spanGaps: true,
                 },
@@ -2986,6 +2993,27 @@ function renderKepsekChart(chartData, byMonth) {
                     backgroundColor: '#185FA518',
                     tension: 0.3,
                     fill: true,
+                    yAxisID: 'y1',
+                    pointRadius: chartData.length <= 14 ? 4 : 2,
+                    spanGaps: true,
+                },
+                {
+                    label: 'Keterlambatan',
+                    data: dataLate,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245,158,11,0.1)',
+                    tension: 0.3,
+                    yAxisID: 'y2',
+                    pointRadius: chartData.length <= 14 ? 4 : 2,
+                    spanGaps: true,
+                },
+                {
+                    label: 'Izin Keluar',
+                    data: dataExits,
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139,92,246,0.1)',
+                    tension: 0.3,
+                    yAxisID: 'y2',
                     pointRadius: chartData.length <= 14 ? 4 : 2,
                     spanGaps: true,
                 },
@@ -2998,15 +3026,33 @@ function renderKepsekChart(chartData, byMonth) {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y != null ? ctx.parsed.y + '%' : '—'}`,
+                        label: ctx => {
+                            const v = ctx.parsed.y;
+                            if (ctx.dataset.yAxisID === 'y2') {
+                                return `${ctx.dataset.label}: ${v != null ? v + ' siswa' : '—'}`;
+                            }
+                            return `${ctx.dataset.label}: ${v != null ? v + '%' : '—'}`;
+                        },
                     },
                 },
             },
             scales: {
-                y: {
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
                     min: 0, max: 100,
                     ticks: { callback: v => v + '%', font: { size: 11 } },
                     grid: { color: '#0001' },
+                },
+                y2: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    min: 0,
+                    title: { display: true, text: 'Jumlah Siswa', font: { size: 10 } },
+                    ticks: { font: { size: 11 }, precision: 0 },
+                    grid: { drawOnChartArea: false },
                 },
                 x: { ticks: { font: { size: 11 }, maxRotation: 45 } },
             },
