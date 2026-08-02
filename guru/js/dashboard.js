@@ -2528,15 +2528,58 @@ async function loadWkKur1(date) {
 
     try {
         const rows = await getPendingAttendanceSessions(date);
-        tbody.innerHTML = rows.length === 0
-            ? `<tr><td colspan="5" class="hint" style="text-align:center;padding:12px">✓ Tidak ada sesi yang menunggu pengisian absensi hari ini.</td></tr>`
-            : rows.map((r, i) => `<tr>
-            <td style="text-align:center">${i + 1}</td>
-            <td>${esc(r.teacher?.full_name ?? '—')}</td>
-            <td>${esc(r.subject?.name ?? '—')}</td>
-            <td>${esc(r.class?.name ?? '—')}</td>
-            <td>${fmtTime(r.session_start)} – ${fmtTime(r.session_end)}</td>
-        </tr>`).join('');
+
+        if (rows.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="hint" style="text-align:center;padding:12px">✓ Tidak ada sesi yang menunggu pengisian absensi hari ini.</td></tr>`;
+        } else {
+            const groups = {};
+            rows.forEach(r => {
+                const key = r.teacher_id;
+                if (!groups[key]) groups[key] = { name: r.teacher?.full_name ?? '—', sesi: [] };
+                groups[key].sesi.push(r);
+            });
+            const sorted = Object.keys(groups).sort((a, b) =>
+                groups[a].name.localeCompare(groups[b].name, 'id'));
+
+            let html = '';
+            sorted.forEach((tid, i) => {
+                const g = groups[tid];
+                html += `<tr data-guru-idx="${i}" style="cursor:pointer">
+                    <td style="text-align:center">${i + 1}</td>
+                    <td>${esc(g.name)} <span style="font-size:11px;background:var(--color-surface-raised,rgba(0,0,0,.12));border-radius:4px;padding:1px 6px;margin-left:4px">${g.sesi.length} sesi</span></td>
+                    <td style="text-align:center;font-size:18px;color:var(--color-text-muted)" class="wk-kur1-arrow">&#8250;</td>
+                </tr>
+                <tr id="wk-kur1-detail-${i}" style="display:none">
+                    <td colspan="3" style="padding:0">
+                        <table style="width:100%;border-collapse:collapse;background:var(--color-surface-raised,rgba(0,0,0,.08))">
+                            <thead><tr style="font-size:11px;color:var(--color-text-muted)">
+                                <th style="padding:5px 12px;text-align:left">Sesi</th>
+                                <th style="padding:5px 12px;text-align:left">Mata Pelajaran</th>
+                                <th style="padding:5px 12px;text-align:left">Kelas</th>
+                            </tr></thead>
+                            <tbody>${g.sesi.map(s => `<tr>
+                                <td style="padding:5px 12px">${fmtTime(s.session_start)}–${fmtTime(s.session_end)}</td>
+                                <td style="padding:5px 12px">${esc(s.subject?.name ?? '—')}</td>
+                                <td style="padding:5px 12px">${esc(s.class?.name ?? '—')}</td>
+                            </tr>`).join('')}</tbody>
+                        </table>
+                    </td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+
+            tbody.querySelectorAll('tr[data-guru-idx]').forEach(tr => {
+                tr.addEventListener('click', () => {
+                    const idx = tr.dataset.guruIdx;
+                    const det = document.getElementById(`wk-kur1-detail-${idx}`);
+                    const arr = tr.querySelector('.wk-kur1-arrow');
+                    const open = det.style.display !== 'none';
+                    det.style.display = open ? 'none' : '';
+                    if (arr) arr.innerHTML = open ? '&#8250;' : '&#8964;';
+                });
+            });
+        }
+
         wrapEl.style.display = '';
         btn.style.display    = '';
         btn.textContent      = 'Sembunyikan';

@@ -653,6 +653,7 @@ export async function getPendingAttendanceSessions(date) {
     return (data ?? []).map(r => ({
         session_start: r.session_start,
         session_end:   r.session_end,
+        teacher_id:    r.teacher_id,
         teacher: { full_name: r.teacher_name },
         subject: { name: r.subject_name },
         class:   { name: r.class_name },

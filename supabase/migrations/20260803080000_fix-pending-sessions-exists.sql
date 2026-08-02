@@ -92,6 +92,7 @@ CREATE OR REPLACE FUNCTION fn_pending_attendance_sessions(
     p_date DATE DEFAULT NULL
 )
 RETURNS TABLE (
+    teacher_id    UUID,
     session_start TIME,
     session_end   TIME,
     teacher_name  TEXT,
@@ -104,6 +105,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
     SELECT
+        ts.scheduled_teacher_id,
         ts.session_start::TIME,
         ts.session_end::TIME,
         u.full_name,
@@ -120,7 +122,7 @@ AS $$
           SELECT 1 FROM attendance ax
           WHERE ax.schedule_id = ts.schedule_id AND NOT ax.is_void
       )
-    ORDER BY ts.session_start;
+    ORDER BY u.full_name ASC, ts.session_start ASC;
 $$;
 
 GRANT  EXECUTE ON FUNCTION fn_pending_attendance_sessions TO authenticated;
