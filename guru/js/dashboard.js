@@ -150,6 +150,7 @@ let myStudents         = [];     // for observation selector
 let isBroadObserver    = false;  // BK/Waka/Kepsek — bisa cari siswa seluruh sekolah
 let _waliKasusCtx = null;
 let _bkKasusCtx   = null;
+let _kpKasusCtx   = null;
 let _wkKasusCtx   = null;
 let _ksKasusCtx   = null;
 
@@ -1335,6 +1336,7 @@ async function initWaliKasusSection() {
         _waliKasusCtx = makeKasusCtx('wali-kasus', { studentIds });
         document.getElementById('wali-kasus-back-btn')
             .addEventListener('click', () => showKasusList(_waliKasusCtx));
+        wireKasusDownloadButtons(_waliKasusCtx);
         await loadKasusList(false, _waliKasusCtx);
     } catch (err) {
         msgEl.innerHTML = `<div class="status-err">${esc(fe(err))}</div>`;
@@ -1461,6 +1463,7 @@ async function initBkKasusSection() {
         _bkKasusCtx = makeKasusCtx('bk-kasus', {});
         document.getElementById('bk-kasus-back-btn')
             .addEventListener('click', () => showKasusList(_bkKasusCtx));
+        wireKasusDownloadButtons(_bkKasusCtx);
     }
     await loadKasusList(false, _bkKasusCtx);
 }
@@ -1696,6 +1699,7 @@ async function initWakaKesiswaanKasusSection() {
         _wkKasusCtx = makeKasusCtx('wk-kasus', {});
         document.getElementById('wk-kasus-back-btn')
             .addEventListener('click', () => showKasusList(_wkKasusCtx));
+        wireKasusDownloadButtons(_wkKasusCtx);
     }
     await loadKasusList(false, _wkKasusCtx);
     await renderWkCount().catch(() => {});
@@ -2071,10 +2075,11 @@ async function initKaprodiKasusSection() {
         msgEl.innerHTML = '<p class="hint">Tidak ada siswa aktif di program ini.</p>';
         return;
     }
-    const ctx = makeKasusCtx('kp-kasus', { studentIds });
+    _kpKasusCtx = makeKasusCtx('kp-kasus', { studentIds });
     document.getElementById('kp-kasus-back-btn')
-        .addEventListener('click', () => showKasusList(ctx));
-    await loadKasusList(false, ctx);
+        .addEventListener('click', () => showKasusList(_kpKasusCtx));
+    wireKasusDownloadButtons(_kpKasusCtx);
+    await loadKasusList(false, _kpKasusCtx);
 }
 
 function renderKpSummary() {
@@ -2878,6 +2883,7 @@ async function initKepsekKasusSection() {
         _ksKasusCtx = makeKasusCtx('ks-kasus', { statusNotClosed: true });
         document.getElementById('ks-kasus-back-btn')
             .addEventListener('click', () => showKasusList(_ksKasusCtx));
+        wireKasusDownloadButtons(_ksKasusCtx);
     }
     await loadKasusList(false, _ksKasusCtx);
 }
@@ -3190,6 +3196,7 @@ async function initKasusTab() {
     // Filters
     document.getElementById('kasus-filter-status').addEventListener('change', () => loadKasusList());
     document.getElementById('kasus-filter-track').addEventListener('change',  () => loadKasusList());
+    wireKasusDownloadButtons(kasusCtxDefault);
 
     // Sembunyikan tombol buat kasus untuk role ADMINISTRATIVE (bukan penanganan siswa)
     if (currentUser.role_type === 'ADMINISTRATIVE') {
@@ -9339,6 +9346,113 @@ async function publikasiNilai() {
     }
 }
 
+
+// ─── Download: Template & Rekap Pembinaan ────────────────────
+function wireKasusDownloadButtons(ctx) {
+    const prefix     = ctx.prefix;
+    const templateBtn = document.getElementById(`${prefix}-template-btn`);
+    const templateMenu = document.getElementById(`${prefix}-template-menu`);
+    const rekapBtn   = document.getElementById(`${prefix}-rekap-btn`);
+
+    if (templateBtn && templateMenu) {
+        templateBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            const open = templateMenu.style.display !== 'none';
+            document.querySelectorAll('[id$="-template-menu"]').forEach(m => { m.style.display = 'none'; });
+            if (!open) templateMenu.style.display = 'block';
+        });
+    }
+
+    if (rekapBtn) {
+        rekapBtn.addEventListener('click', async () => {
+            const origText = rekapBtn.textContent;
+            rekapBtn.disabled    = true;
+            rekapBtn.textContent = 'Memuat…';
+            try {
+                const status = document.getElementById(`${prefix}-filter-status`)?.value ?? '';
+                const track  = document.getElementById(`${prefix}-filter-track`)?.value  ?? '';
+                const cases  = await getCases({
+                    ...ctx.extraQuery,
+                    status, track,
+                    offset: 0, limit: 1000,
+                });
+                const parts = [];
+                if (status) parts.push(CASE_STATUS_LABEL[status] ?? status);
+                if (track)  parts.push(CASE_TRACK_LABEL[track]  ?? track);
+                const filterDesc = parts.length ? parts.join(', ') : 'Semua Kasus';
+                generateRekapPembinaan(cases, filterDesc);
+            } catch (err) {
+                alert('Gagal mengunduh rekap: ' + (err?.message ?? err));
+            } finally {
+                rekapBtn.disabled    = false;
+                rekapBtn.textContent = origText;
+            }
+        });
+    }
+}
+
+function generateRekapPembinaan(cases, filterDesc) {
+    function escH(s) {
+        return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    const schoolName = document.querySelector('[data-brand="school-name"]')?.textContent?.trim() || 'Sekolah';
+    const tgl = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    const rows = cases.map((c, i) => `
+        <tr>
+            <td style="text-align:center">${i + 1}</td>
+            <td>${escH(c.student?.full_name ?? '—')}</td>
+            <td>${escH(c.student?.nis ?? '—')}</td>
+            <td>${escH(c.title)}</td>
+            <td>${escH(CASE_TRACK_LABEL[c.track] ?? c.track)}</td>
+            <td>${escH(CASE_STATUS_LABEL[c.status] ?? c.status)}</td>
+            <td>${escH(c.handler?.full_name ?? '—')}</td>
+            <td>${fmt(c.created_at)}</td>
+        </tr>`).join('');
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+         xmlns:w="urn:schemas-microsoft-com:office:word"
+         xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8">
+<style>
+  body { font-family: Arial, sans-serif; font-size: 11pt; margin: 2cm; }
+  h1   { font-size: 14pt; text-align: center; margin-bottom: 4px; }
+  p    { margin: 2px 0; font-size: 10pt; }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+  th, td { border: 1px solid #000; padding: 4px 6px; font-size: 9pt; vertical-align: top; }
+  th { background: #e0e0e0; font-weight: bold; text-align: center; }
+  .footer { margin-top: 16px; font-size: 10pt; }
+</style>
+</head>
+<body>
+<h1>${escH(schoolName)}</h1>
+<h1>REKAP PEMBINAAN SISWA</h1>
+<p style="text-align:center">Filter: ${escH(filterDesc)}</p>
+<p style="text-align:center">Dicetak: ${escH(tgl)}</p>
+<table>
+  <thead><tr>
+    <th>No</th><th>Nama Siswa</th><th>NIS</th><th>Judul Kasus</th>
+    <th>Track</th><th>Status</th><th>Handler Saat Ini</th><th>Tgl Dibuat</th>
+  </tr></thead>
+  <tbody>${rows || '<tr><td colspan="8" style="text-align:center">Tidak ada data</td></tr>'}</tbody>
+</table>
+<p class="footer">Jumlah kasus: <strong>${cases.length}</strong></p>
+</body></html>`;
+
+    const blob = new Blob([html], { type: 'application/msword' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `rekap-pembinaan-${new Date().toISOString().slice(0, 10)}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Tutup semua dropdown template saat klik di luar
+document.addEventListener('click', () => {
+    document.querySelectorAll('[id$="-template-menu"]').forEach(m => { m.style.display = 'none'; });
+});
 
 // ─── Start ───────────────────────────────────────────────────
 init().catch(err => {
