@@ -3519,8 +3519,7 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
 
     // ── Status change ──
     const nextStatuses = STATUS_AFTER_CURRENT[kasus.status] ?? [];
-    const canChangeStatus = isHandler || ['KEPSEK','BK','WAKA_KESISWAAN'].includes(currentUser.role_type);
-    if (canChangeStatus && nextStatuses.length) {
+    if (isHandler && nextStatuses.length) {
         statusSel.innerHTML = nextStatuses.map(s =>
             `<option value="${s}">${esc(CASE_STATUS_LABEL[s])}</option>`
         ).join('');
@@ -3537,13 +3536,15 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
     if (isInternal) {
         audienceBlock.innerHTML = `
             <h4 style="margin:0 0 8px">Bagikan Kasus</h4>
-            <div style="display:flex;gap:10px;flex-wrap:wrap">
-                <button id="${ctx.prefix}-share-student-btn" class="btn btn-sm ${kasus.is_shared_to_student ? 'btn-primary' : 'btn-secondary'}">
-                    ${kasus.is_shared_to_student ? '✓ Siswa Punya Akses' : 'Bagikan ke Siswa'}
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+                <button id="${ctx.prefix}-share-student-btn" class="btn btn-sm ${kasus.is_shared_to_student ? 'btn-danger-outline' : 'btn-primary'}">
+                    ${kasus.is_shared_to_student ? 'Tarik dari Siswa' : 'Bagikan ke Siswa'}
                 </button>
-                <button id="${ctx.prefix}-share-parent-btn" class="btn btn-sm ${kasus.is_shared_to_parent ? 'btn-primary' : 'btn-secondary'}">
-                    ${kasus.is_shared_to_parent ? '✓ Orang Tua Punya Akses' : 'Bagikan ke Orang Tua'}
+                ${kasus.is_shared_to_student ? '<span style="font-size:12px;color:var(--color-success)">✓ Sudah dibagikan ke siswa</span>' : ''}
+                <button id="${ctx.prefix}-share-parent-btn" class="btn btn-sm ${kasus.is_shared_to_parent ? 'btn-danger-outline' : 'btn-primary'}">
+                    ${kasus.is_shared_to_parent ? 'Tarik dari Orang Tua' : 'Bagikan ke Orang Tua'}
                 </button>
+                ${kasus.is_shared_to_parent ? '<span style="font-size:12px;color:var(--color-success)">✓ Sudah dibagikan ke orang tua</span>' : ''}
             </div>
             <p id="${ctx.prefix}-audience-msg" style="font-size:12px;margin:6px 0 0;min-height:16px"></p>
         `;
