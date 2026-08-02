@@ -2982,6 +2982,7 @@ async function loadKepsekMonitoring(period, academicYear = null, dateStart = nul
 
 function renderKepsekChart(chartData, byMonth) {
     const canvas = document.getElementById('ks-chart');
+    const maxY2  = Math.max(10, ...chartData.map(p => p.count_late ?? 0), ...chartData.map(p => p.count_exits ?? 0));
     const labels     = chartData.map(p => fmtChartLabel(p.date, byMonth));
     const dataSiswa  = chartData.map(p => p.pct_siswa);
     const dataGuru   = chartData.map(p => p.pct_guru);
@@ -3070,6 +3071,7 @@ function renderKepsekChart(chartData, byMonth) {
                     display: true,
                     position: 'right',
                     min: 0,
+                    max: maxY2,
                     title: { display: true, text: 'Jumlah Siswa', font: { size: 10 } },
                     ticks: { font: { size: 11 }, precision: 0 },
                     grid: { drawOnChartArea: false },
