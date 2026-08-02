@@ -1158,7 +1158,7 @@ export async function closeCoachingCase({ caseId, note, authorUserId, previousSt
 export async function listSchoolAdmins() {
     const { data, error } = await supabase
         .from('v_users_staff_directory')
-        .select('user_id, full_name, login_identifier')
+        .select('user_id, full_name, teacher_code')
         .eq('role_type', 'ADMINISTRATIVE')
         .eq('is_active', true)
         .order('full_name');
