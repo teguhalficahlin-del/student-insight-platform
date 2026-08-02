@@ -865,6 +865,7 @@ export async function getCases({
     track = '',
     studentIds = null,
     statusNotClosed = false,
+    allRows = false,
     offset = 0,
     limit = 51
 } = {}) {
@@ -876,8 +877,10 @@ export async function getCases({
             student:students(student_id, full_name, nis),
             handler:users!coaching_cases_current_handler_user_id_fkey(full_name)
         `)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+        .order('created_at', { ascending: false });
+    if (!allRows) {
+        req = req.range(offset, offset + limit - 1);
+    }
     if (status) {
         req = req.eq('status', status);
     } else if (statusNotClosed) {
