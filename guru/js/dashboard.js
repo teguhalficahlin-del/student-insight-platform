@@ -336,14 +336,14 @@ function showPWAInstallInstructions() {
 const TAB_SHORT = {
     guru: 'Beranda', wali_kelas: 'Wali', bk: 'BK', kaprodi: 'Prodi',
     waka_kesiswaan: 'Kesiswaan', waka_kurikulum: 'Kurikulum', waka_humas: 'Humas',
-    kepsek: 'Kepsek', ks_admin: 'Admin',
+    kepsek: 'Kepsek',
     kasus: 'Pembinaan', jurnal: 'Jurnal', observasi: 'Catatan', forum: 'Forum',
     perangkat_ajar: 'Perangkat', piket: 'Piket',
 };
 const TAB_ICON = {
     guru: 'ti-home', wali_kelas: 'ti-users', bk: 'ti-heart-handshake', kaprodi: 'ti-building',
     waka_kesiswaan: 'ti-school', waka_kurikulum: 'ti-book', waka_humas: 'ti-briefcase',
-    kepsek: 'ti-chart-line', ks_admin: 'ti-shield-check',
+    kepsek: 'ti-chart-line',
     kasus: 'ti-alert-triangle', jurnal: 'ti-notebook', observasi: 'ti-notes', forum: 'ti-messages',
     perangkat_ajar: 'ti-book-2', piket: 'ti-clipboard-list',
 };
@@ -355,7 +355,7 @@ async function buildTabs() {
     if (isTeacher) tabs.push({ key: 'guru', label: 'Dashboard Guru' });
     jabatan.forEach(j => tabs.push({ key: j, label: jabatanLabel(j) }));
     tabs.push({ key: 'kasus', label: 'Pembinaan Siswa' });
-    if (jabatan.includes('kepsek')) tabs.push({ key: 'ks_admin', label: 'Kelola Admin' });
+
     const onDuty = await isOnDutyToday();
     if (onDuty) tabs.push({ key: 'piket', label: 'Piket' });
     if (isTeacher) tabs.push({ key: 'observasi', label: 'Catatan Siswa' });
@@ -402,7 +402,7 @@ async function loadTabContent(key) {
             case 'waka_kurikulum': await initWakaKurTab(); break;
             case 'waka_humas':  await initWakaHumasTab(); break;
             case 'kepsek':      await initKepsekTab(); break;
-            case 'ks_admin':    await initKsAdminTab(); break;
+
             case 'kasus':       await initKasusTab(); break;
             case 'piket':       await initPiketTab(); break;
             case 'jurnal':      await initJurnalTab(); break;
@@ -2857,6 +2857,7 @@ async function initKepsekTab() {
         wireSimpleAccordion('ks-chart-card');
         wireSimpleAccordion('ks-disahkan-section');
         wireSimpleAccordion('ks-monitoring-card');
+        wireSimpleAccordion('ks-admin-card');
 
         // Wire period preset buttons
         document.getElementById('ks-period-toggle').addEventListener('click', e => {
@@ -2886,6 +2887,7 @@ async function initKepsekTab() {
     await loadKepsekMonitoring('7_hari');
     await loadKepsekDisahkanDocs();
     await initKepsekKasusSection();
+    await initKsAdminTab();
 }
 
 async function initKepsekKasusSection() {
