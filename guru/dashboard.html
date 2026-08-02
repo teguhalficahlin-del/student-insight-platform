@@ -412,6 +412,50 @@
                 </div>
                 <div id="wali-att-recap"><p class="hint">Pilih rentang tanggal lalu klik Filter.</p></div>
             </div>
+
+            <div class="section-card" style="margin-top:16px">
+                <h3>Pembinaan Siswa Walian</h3>
+                <div id="wali-kasus-list-view" style="display:block">
+                    <div id="wali-kasus-list-content"><p class="hint">Memuat…</p></div>
+                </div>
+                <div id="wali-kasus-detail-view" style="display:none">
+                    <button class="btn btn-secondary btn-sm" id="wali-kasus-back-btn" style="margin-bottom:12px">← Kembali ke Daftar</button>
+                    <div id="wali-kasus-detail-header"></div>
+                    <div class="section-card" style="margin-top:12px">
+                        <h4>Timeline Kasus</h4>
+                        <div id="wali-kasus-events-list"></div>
+                    </div>
+                    <div class="section-card" id="wali-kasus-actions" style="display:none; margin-top:12px">
+                        <h4>Tindakan</h4>
+                        <div style="margin-bottom:16px">
+                            <label>Tambah Komentar</label>
+                            <textarea id="wali-kasus-comment-text" class="input" rows="3" placeholder="Tulis komentar…" style="margin-bottom:6px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="wali-kasus-comment-submit-btn">Kirim Komentar</button>
+                            <span id="wali-kasus-comment-msg" style="font-size:13px; margin-left:8px"></span>
+                            <p class="hint" style="margin-top:4px">Komentar hanya terlihat oleh staf internal sekolah.</p>
+                        </div>
+                        <div id="wali-kasus-escalate-block" style="margin-bottom:16px; display:none">
+                            <label for="wali-kasus-escalate-to">Teruskan kasus ke</label>
+                            <select id="wali-kasus-escalate-to" class="input" style="margin-bottom:6px; width:auto"></select>
+                            <div id="wali-kasus-escalate-warn" style="display:none; font-size:12px; color:var(--color-warning); margin-bottom:6px"></div>
+                            <textarea id="wali-kasus-escalate-note" class="input" rows="2" placeholder="Catatan (opsional)…" style="margin-bottom:8px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="wali-kasus-escalate-btn">Teruskan</button>
+                            <span id="wali-kasus-escalate-msg" style="font-size:13px; margin-left:8px"></span>
+                        </div>
+                        <div id="wali-kasus-audience-block" style="margin-bottom:16px; display:none; padding:12px; border:1px solid var(--color-border); border-radius:var(--radius)"></div>
+                        <div id="wali-kasus-status-block" style="display:none">
+                            <label for="wali-kasus-new-status">Ubah Status</label>
+                            <select id="wali-kasus-new-status" class="input" style="width:auto; margin-bottom:6px"></select>
+                            <textarea id="wali-kasus-status-note" class="input" rows="2" placeholder="Catatan perubahan (opsional)…" style="margin-bottom:8px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="wali-kasus-status-btn">Simpan Status</button>
+                            <span id="wali-kasus-status-msg" style="font-size:13px; margin-left:8px"></span>
+                        </div>
+                        <div style="margin-top:16px">
+                            <button class="btn btn-danger btn-sm" id="wali-kasus-close-btn" style="display:none">Tutup Kasus</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -434,6 +478,50 @@
                     </div>
                 </div>
                 <div id="bk-att-recap"><p class="hint">Pilih rentang tanggal lalu klik Filter.</p></div>
+            </div>
+
+            <div class="section-card" style="margin-top:16px">
+                <h3>Pembinaan Siswa — BK</h3>
+                <div id="bk-kasus-list-view" style="display:block">
+                    <div id="bk-kasus-list-content"><p class="hint">Memuat…</p></div>
+                </div>
+                <div id="bk-kasus-detail-view" style="display:none">
+                    <button class="btn btn-secondary btn-sm" id="bk-kasus-back-btn" style="margin-bottom:12px">← Kembali ke Daftar</button>
+                    <div id="bk-kasus-detail-header"></div>
+                    <div class="section-card" style="margin-top:12px">
+                        <h4>Timeline Kasus</h4>
+                        <div id="bk-kasus-events-list"></div>
+                    </div>
+                    <div class="section-card" id="bk-kasus-actions" style="display:none; margin-top:12px">
+                        <h4>Tindakan</h4>
+                        <div style="margin-bottom:16px">
+                            <label>Tambah Komentar</label>
+                            <textarea id="bk-kasus-comment-text" class="input" rows="3" placeholder="Tulis komentar…" style="margin-bottom:6px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="bk-kasus-comment-submit-btn">Kirim Komentar</button>
+                            <span id="bk-kasus-comment-msg" style="font-size:13px; margin-left:8px"></span>
+                            <p class="hint" style="margin-top:4px">Komentar hanya terlihat oleh staf internal sekolah.</p>
+                        </div>
+                        <div id="bk-kasus-escalate-block" style="margin-bottom:16px; display:none">
+                            <label for="bk-kasus-escalate-to">Teruskan kasus ke</label>
+                            <select id="bk-kasus-escalate-to" class="input" style="margin-bottom:6px; width:auto"></select>
+                            <div id="bk-kasus-escalate-warn" style="display:none; font-size:12px; color:var(--color-warning); margin-bottom:6px"></div>
+                            <textarea id="bk-kasus-escalate-note" class="input" rows="2" placeholder="Catatan (opsional)…" style="margin-bottom:8px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="bk-kasus-escalate-btn">Teruskan</button>
+                            <span id="bk-kasus-escalate-msg" style="font-size:13px; margin-left:8px"></span>
+                        </div>
+                        <div id="bk-kasus-audience-block" style="margin-bottom:16px; display:none; padding:12px; border:1px solid var(--color-border); border-radius:var(--radius)"></div>
+                        <div id="bk-kasus-status-block" style="display:none">
+                            <label for="bk-kasus-new-status">Ubah Status</label>
+                            <select id="bk-kasus-new-status" class="input" style="width:auto; margin-bottom:6px"></select>
+                            <textarea id="bk-kasus-status-note" class="input" rows="2" placeholder="Catatan perubahan (opsional)…" style="margin-bottom:8px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="bk-kasus-status-btn">Simpan Status</button>
+                            <span id="bk-kasus-status-msg" style="font-size:13px; margin-left:8px"></span>
+                        </div>
+                        <div style="margin-top:16px">
+                            <button class="btn btn-danger btn-sm" id="bk-kasus-close-btn" style="display:none">Tutup Kasus</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -576,6 +664,52 @@
                 </div>
             </div>
 
+            <div class="section-card kp-acc-item">
+                <div class="kp-acc-header" data-target="kp-body-kasus"><span>Pembinaan Siswa Program Studi</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="kp-body-kasus" style="display:none">
+                <div id="kp-kasus-list-view" style="display:block">
+                    <div id="kp-kasus-list-content"><p class="hint">Memuat…</p></div>
+                </div>
+                <div id="kp-kasus-detail-view" style="display:none">
+                    <button class="btn btn-secondary btn-sm" id="kp-kasus-back-btn" style="margin-bottom:12px">← Kembali ke Daftar</button>
+                    <div id="kp-kasus-detail-header"></div>
+                    <div class="section-card" style="margin-top:12px">
+                        <h4>Timeline Kasus</h4>
+                        <div id="kp-kasus-events-list"></div>
+                    </div>
+                    <div class="section-card" id="kp-kasus-actions" style="display:none; margin-top:12px">
+                        <h4>Tindakan</h4>
+                        <div style="margin-bottom:16px">
+                            <label>Tambah Komentar</label>
+                            <textarea id="kp-kasus-comment-text" class="input" rows="3" placeholder="Tulis komentar…" style="margin-bottom:6px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="kp-kasus-comment-submit-btn">Kirim Komentar</button>
+                            <span id="kp-kasus-comment-msg" style="font-size:13px; margin-left:8px"></span>
+                            <p class="hint" style="margin-top:4px">Komentar hanya terlihat oleh staf internal sekolah.</p>
+                        </div>
+                        <div id="kp-kasus-escalate-block" style="margin-bottom:16px; display:none">
+                            <label for="kp-kasus-escalate-to">Teruskan kasus ke</label>
+                            <select id="kp-kasus-escalate-to" class="input" style="margin-bottom:6px; width:auto"></select>
+                            <div id="kp-kasus-escalate-warn" style="display:none; font-size:12px; color:var(--color-warning); margin-bottom:6px"></div>
+                            <textarea id="kp-kasus-escalate-note" class="input" rows="2" placeholder="Catatan (opsional)…" style="margin-bottom:8px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="kp-kasus-escalate-btn">Teruskan</button>
+                            <span id="kp-kasus-escalate-msg" style="font-size:13px; margin-left:8px"></span>
+                        </div>
+                        <div id="kp-kasus-audience-block" style="margin-bottom:16px; display:none; padding:12px; border:1px solid var(--color-border); border-radius:var(--radius)"></div>
+                        <div id="kp-kasus-status-block" style="display:none">
+                            <label for="kp-kasus-new-status">Ubah Status</label>
+                            <select id="kp-kasus-new-status" class="input" style="width:auto; margin-bottom:6px"></select>
+                            <textarea id="kp-kasus-status-note" class="input" rows="2" placeholder="Catatan perubahan (opsional)…" style="margin-bottom:8px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="kp-kasus-status-btn">Simpan Status</button>
+                            <span id="kp-kasus-status-msg" style="font-size:13px; margin-left:8px"></span>
+                        </div>
+                        <div style="margin-top:16px">
+                            <button class="btn btn-danger btn-sm" id="kp-kasus-close-btn" style="display:none">Tutup Kasus</button>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -694,6 +828,51 @@
                     </div>
                 </div>
                 <div id="wk-late-recap"><p class="hint">Memuat…</p></div>
+            </div>
+
+            <div class="section-card" style="margin-top:16px">
+                <h3>Pembinaan Siswa — Kesiswaan</h3>
+                <div id="wk-kasus-count-rekap" style="display:none"></div>
+                <div id="wk-kasus-list-view" style="display:block">
+                    <div id="wk-kasus-list-content"><p class="hint">Memuat…</p></div>
+                </div>
+                <div id="wk-kasus-detail-view" style="display:none">
+                    <button class="btn btn-secondary btn-sm" id="wk-kasus-back-btn" style="margin-bottom:12px">← Kembali ke Daftar</button>
+                    <div id="wk-kasus-detail-header"></div>
+                    <div class="section-card" style="margin-top:12px">
+                        <h4>Timeline Kasus</h4>
+                        <div id="wk-kasus-events-list"></div>
+                    </div>
+                    <div class="section-card" id="wk-kasus-actions" style="display:none; margin-top:12px">
+                        <h4>Tindakan</h4>
+                        <div style="margin-bottom:16px">
+                            <label>Tambah Komentar</label>
+                            <textarea id="wk-kasus-comment-text" class="input" rows="3" placeholder="Tulis komentar…" style="margin-bottom:6px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="wk-kasus-comment-submit-btn">Kirim Komentar</button>
+                            <span id="wk-kasus-comment-msg" style="font-size:13px; margin-left:8px"></span>
+                            <p class="hint" style="margin-top:4px">Komentar hanya terlihat oleh staf internal sekolah.</p>
+                        </div>
+                        <div id="wk-kasus-escalate-block" style="margin-bottom:16px; display:none">
+                            <label for="wk-kasus-escalate-to">Teruskan kasus ke</label>
+                            <select id="wk-kasus-escalate-to" class="input" style="margin-bottom:6px; width:auto"></select>
+                            <div id="wk-kasus-escalate-warn" style="display:none; font-size:12px; color:var(--color-warning); margin-bottom:6px"></div>
+                            <textarea id="wk-kasus-escalate-note" class="input" rows="2" placeholder="Catatan (opsional)…" style="margin-bottom:8px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="wk-kasus-escalate-btn">Teruskan</button>
+                            <span id="wk-kasus-escalate-msg" style="font-size:13px; margin-left:8px"></span>
+                        </div>
+                        <div id="wk-kasus-audience-block" style="margin-bottom:16px; display:none; padding:12px; border:1px solid var(--color-border); border-radius:var(--radius)"></div>
+                        <div id="wk-kasus-status-block" style="display:none">
+                            <label for="wk-kasus-new-status">Ubah Status</label>
+                            <select id="wk-kasus-new-status" class="input" style="width:auto; margin-bottom:6px"></select>
+                            <textarea id="wk-kasus-status-note" class="input" rows="2" placeholder="Catatan perubahan (opsional)…" style="margin-bottom:8px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="wk-kasus-status-btn">Simpan Status</button>
+                            <span id="wk-kasus-status-msg" style="font-size:13px; margin-left:8px"></span>
+                        </div>
+                        <div style="margin-top:16px">
+                            <button class="btn btn-danger btn-sm" id="wk-kasus-close-btn" style="display:none">Tutup Kasus</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
         </div>
@@ -890,6 +1069,50 @@
                     </div>
                 </div>
                 <div id="ks-late-recap"><p class="hint">Memuat…</p></div>
+            </div>
+
+            <div class="section-card" style="margin-top:16px">
+                <h3>Monitoring Pembinaan Siswa</h3>
+                <div id="ks-kasus-list-view" style="display:block">
+                    <div id="ks-kasus-list-content"><p class="hint">Memuat…</p></div>
+                </div>
+                <div id="ks-kasus-detail-view" style="display:none">
+                    <button class="btn btn-secondary btn-sm" id="ks-kasus-back-btn" style="margin-bottom:12px">← Kembali ke Daftar</button>
+                    <div id="ks-kasus-detail-header"></div>
+                    <div class="section-card" style="margin-top:12px">
+                        <h4>Timeline Kasus</h4>
+                        <div id="ks-kasus-events-list"></div>
+                    </div>
+                    <div class="section-card" id="ks-kasus-actions" style="display:none; margin-top:12px">
+                        <h4>Tindakan</h4>
+                        <div style="margin-bottom:16px">
+                            <label>Tambah Komentar</label>
+                            <textarea id="ks-kasus-comment-text" class="input" rows="3" placeholder="Tulis komentar…" style="margin-bottom:6px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="ks-kasus-comment-submit-btn">Kirim Komentar</button>
+                            <span id="ks-kasus-comment-msg" style="font-size:13px; margin-left:8px"></span>
+                            <p class="hint" style="margin-top:4px">Komentar hanya terlihat oleh staf internal sekolah.</p>
+                        </div>
+                        <div id="ks-kasus-escalate-block" style="margin-bottom:16px; display:none">
+                            <label for="ks-kasus-escalate-to">Teruskan kasus ke</label>
+                            <select id="ks-kasus-escalate-to" class="input" style="margin-bottom:6px; width:auto"></select>
+                            <div id="ks-kasus-escalate-warn" style="display:none; font-size:12px; color:var(--color-warning); margin-bottom:6px"></div>
+                            <textarea id="ks-kasus-escalate-note" class="input" rows="2" placeholder="Catatan (opsional)…" style="margin-bottom:8px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="ks-kasus-escalate-btn">Teruskan</button>
+                            <span id="ks-kasus-escalate-msg" style="font-size:13px; margin-left:8px"></span>
+                        </div>
+                        <div id="ks-kasus-audience-block" style="margin-bottom:16px; display:none; padding:12px; border:1px solid var(--color-border); border-radius:var(--radius)"></div>
+                        <div id="ks-kasus-status-block" style="display:none">
+                            <label for="ks-kasus-new-status">Ubah Status</label>
+                            <select id="ks-kasus-new-status" class="input" style="width:auto; margin-bottom:6px"></select>
+                            <textarea id="ks-kasus-status-note" class="input" rows="2" placeholder="Catatan perubahan (opsional)…" style="margin-bottom:8px"></textarea>
+                            <button class="btn btn-primary btn-sm" id="ks-kasus-status-btn">Simpan Status</button>
+                            <span id="ks-kasus-status-msg" style="font-size:13px; margin-left:8px"></span>
+                        </div>
+                        <div style="margin-top:16px">
+                            <button class="btn btn-danger btn-sm" id="ks-kasus-close-btn" style="display:none">Tutup Kasus</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
         </div>

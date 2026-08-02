@@ -27,7 +27,7 @@ import {
     getPrograms, getStudentAttendanceSessions,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
     getMyObservations,
-    getCases, getCase, getCoachingCaseEvents, createCase,
+    getCases, getCase, getCoachingCaseEvents, createCase, getCoachingCasesCount,
     addCoachingNote, escalateCoachingCase, changeCoachingCaseStatus, closeCoachingCase,
     shareCoachingCaseToStudent, unshareCoachingCaseFromStudent,
     shareCoachingCaseToParent, unshareCoachingCaseFromParent,
@@ -148,6 +148,11 @@ let jabatan      = [];
 let isTeacher    = false;  // hanya GURU & WALI_KELAS yang mengajar
 let myStudents         = [];     // for observation selector
 let isBroadObserver    = false;  // BK/Waka/Kepsek — bisa cari siswa seluruh sekolah
+let _waliKasusCtx = null;
+let _bkKasusCtx   = null;
+let _wkKasusCtx   = null;
+let _ksKasusCtx   = null;
+
 let kaprodiAllStudents = [];     // PKL + aktif di prodi Kaprodi, untuk batas pencarian
 let _studentPoolInit   = false;  // guard: ensureStudentPool hanya load sekali
 let kpStudents      = [];  // kaprodi PKL students
@@ -1236,7 +1241,11 @@ function renderObsHistory(rows, listEl) {
 
 async function initWaliTab() {
     const classId = currentUser.wali_kelas_class_id;
-    if (!classId) return;
+    if (!classId) {
+        document.getElementById('wali-kasus-list-content').innerHTML =
+            '<p class="hint">Anda belum ditugaskan sebagai wali kelas.</p>';
+        return;
+    }
 
     const info = await getWaliKelasInfo(classId);
     document.getElementById('wali-class-title').textContent =
@@ -1309,6 +1318,27 @@ async function initWaliTab() {
     };
 
     await loadWaliSummary();
+    await initWaliKasusSection();
+}
+
+async function initWaliKasusSection() {
+    const classId = currentUser.wali_kelas_class_id;
+    const msgEl   = document.getElementById('wali-kasus-list-content');
+    if (_waliKasusCtx) { await loadKasusList(false, _waliKasusCtx); return; }
+    try {
+        const enrolled   = await getEnrolledStudents(classId, config.current_academic_year);
+        const studentIds = enrolled.map(s => s.student_id);
+        if (!studentIds.length) {
+            msgEl.innerHTML = '<p class="hint">Tidak ada siswa terdaftar di kelas ini.</p>';
+            return;
+        }
+        _waliKasusCtx = makeKasusCtx('wali-kasus', { studentIds });
+        document.getElementById('wali-kasus-back-btn')
+            .addEventListener('click', () => showKasusList(_waliKasusCtx));
+        await loadKasusList(false, _waliKasusCtx);
+    } catch (err) {
+        msgEl.innerHTML = `<div class="status-err">${esc(fe(err))}</div>`;
+    }
 }
 
 async function loadWaliSummary() {
@@ -1423,6 +1453,16 @@ async function initBkTab() {
     document.getElementById('bk-att-end').value   = today;
     document.getElementById('bk-att-filter-btn').onclick = loadBkAttendanceRecap;
     await loadBkAttendanceRecap();
+    await initBkKasusSection();
+}
+
+async function initBkKasusSection() {
+    if (!_bkKasusCtx) {
+        _bkKasusCtx = makeKasusCtx('bk-kasus', {});
+        document.getElementById('bk-kasus-back-btn')
+            .addEventListener('click', () => showKasusList(_bkKasusCtx));
+    }
+    await loadKasusList(false, _bkKasusCtx);
 }
 
 async function loadBkAttendanceRecap() {
@@ -1621,6 +1661,41 @@ async function initWakaKesiswaanTab() {
 
     await loadWkAttendanceRecap();
     await loadWkLateRecap();
+    await initWakaKesiswaanKasusSection();
+}
+
+async function initWakaKesiswaanKasusSection() {
+    if (!_wkKasusCtx) {
+        _wkKasusCtx = makeKasusCtx('wk-kasus', {});
+        document.getElementById('wk-kasus-back-btn')
+            .addEventListener('click', () => showKasusList(_wkKasusCtx));
+        try {
+            const counts  = await getCoachingCasesCount();
+            const rekapEl = document.getElementById('wk-kasus-count-rekap');
+            const lbl     = 'font-size:11px;color:var(--color-text-muted);margin-top:2px';
+            rekapEl.style.display = '';
+            rekapEl.innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+                    <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+                        <div style="font-size:20px;font-weight:500;color:var(--color-primary)">${counts.OPEN ?? 0}</div>
+                        <div style="${lbl}">Terbuka</div>
+                    </div>
+                    <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+                        <div style="font-size:20px;font-weight:500;color:var(--color-warning,#f59e0b)">${counts.UNDER_REVIEW ?? 0}</div>
+                        <div style="${lbl}">Ditinjau</div>
+                    </div>
+                    <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+                        <div style="font-size:20px;font-weight:500;color:var(--color-danger)">${counts.INTERVENTION ?? 0}</div>
+                        <div style="${lbl}">Intervensi</div>
+                    </div>
+                    <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+                        <div style="font-size:20px;font-weight:500;color:var(--color-success)">${counts.MONITORING ?? 0}</div>
+                        <div style="${lbl}">Monitoring</div>
+                    </div>
+                </div>`;
+        } catch (_) { /* rekap count non-blocking */ }
+    }
+    await loadKasusList(false, _wkKasusCtx);
 }
 
 function buildAttStatCards(rows) {
@@ -1959,6 +2034,7 @@ async function initKaprodiTab() {
         studentsBody.addEventListener('click', handleKpStudentsClick);
 
         await Promise.all([loadKpRecap(), loadKpClsRecap(), loadKpObs(), initKpPlacementForm(programId)]);
+        await initKaprodiKasusSection();
         document.querySelectorAll('#kp-accordion .kp-acc-header').forEach(header => {
             const newHeader = header.cloneNode(true);
             header.parentNode.replaceChild(newHeader, header);
@@ -1983,6 +2059,19 @@ async function initKaprodiTab() {
             panel.innerHTML = '<div class="section-card"><p style="color:red;padding:8px">Gagal memuat tab Kaprodi. Silakan coba lagi atau refresh halaman.</p></div>';
         }
     }
+}
+
+async function initKaprodiKasusSection() {
+    const msgEl      = document.getElementById('kp-kasus-list-content');
+    const studentIds = kpAktifStudents.map(s => s.student_id);
+    if (!studentIds.length) {
+        msgEl.innerHTML = '<p class="hint">Tidak ada siswa aktif di program ini.</p>';
+        return;
+    }
+    const ctx = makeKasusCtx('kp-kasus', { studentIds });
+    document.getElementById('kp-kasus-back-btn')
+        .addEventListener('click', () => showKasusList(ctx));
+    await loadKasusList(false, ctx);
 }
 
 function renderKpSummary() {
@@ -2778,6 +2867,16 @@ async function initKepsekTab() {
     await loadKepsekMonitoring('7_hari');
     await loadKepsekDisahkanDocs();
     await loadKsLateRecap();
+    await initKepsekKasusSection();
+}
+
+async function initKepsekKasusSection() {
+    if (!_ksKasusCtx) {
+        _ksKasusCtx = makeKasusCtx('ks-kasus', { statusNotClosed: true });
+        document.getElementById('ks-kasus-back-btn')
+            .addEventListener('click', () => showKasusList(_ksKasusCtx));
+    }
+    await loadKasusList(false, _ksKasusCtx);
 }
 
 let _ksAdminTabInit = false;
