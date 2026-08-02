@@ -2960,7 +2960,8 @@ async function loadKepsekMonitoring(period, academicYear = null, dateStart = nul
         const btnTahunLalu = document.querySelector('.ks-period-btn[data-period="tahun_ajaran_lalu"]');
         if (btnTahunLalu) {
             const earliest = d.data_earliest;
-            const noData = !earliest || earliest > '2026-06-30';
+            const _prevAyEnd = _prevAcademicYear().split('/')[1] + '-06-30';
+            const noData = !earliest || earliest > _prevAyEnd;
             btnTahunLalu.disabled = noData;
             btnTahunLalu.style.opacity = noData ? '0.4' : '';
             if (noData && btnTahunLalu.classList.contains('active')) {
