@@ -3486,6 +3486,12 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
         return;
     }
 
+    const isHandler = kasus.current_handler_user_id === currentUser.user_id;
+    if (!isHandler) {
+        actionsEl.style.display = 'none';
+        return;
+    }
+
     actionsEl.style.display = 'block';
 
     // ── Eskalasi: kandidat dari fn_get_escalation_candidates ──
@@ -3513,7 +3519,6 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
 
     // ── Status change ──
     const nextStatuses = STATUS_AFTER_CURRENT[kasus.status] ?? [];
-    const isHandler = kasus.current_handler_user_id === currentUser.user_id;
     const canChangeStatus = isHandler || ['KEPSEK','BK','WAKA_KESISWAAN'].includes(currentUser.role_type);
     if (canChangeStatus && nextStatuses.length) {
         statusSel.innerHTML = nextStatuses.map(s =>
