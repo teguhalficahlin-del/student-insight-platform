@@ -940,7 +940,7 @@ export async function getCoachingCaseEvents(caseId) {
         .from('coaching_case_events')
         .select(`
             event_id, event_type, is_visible_to_student,
-            previous_status, new_status, payload, created_at,
+            payload, created_at,
             author:users!coaching_case_events_author_user_id_fkey(full_name)
         `)
         .eq('case_id', caseId)
@@ -1093,8 +1093,8 @@ export async function changeCoachingCaseStatus({ caseId, previousStatus, newStat
             event_type:            'STATUS_CHANGED',
             author_user_id:        authorUserId,
             is_visible_to_student: false,
-            previous_status:       previousStatus,
-            new_status:            newStatus,
+            // previous_status/new_status tidak ada sebagai kolom di coaching_case_events —
+            // riwayat status hidup di payload JSONB (lihat mig 20260802020000).
             payload:               note ? { old_status: previousStatus, new_status: newStatus, note } : { old_status: previousStatus, new_status: newStatus },
         });
     if (error) throw error;
@@ -1108,9 +1108,13 @@ export async function closeCoachingCase({ caseId, note, authorUserId, previousSt
             event_type:            'CLOSED',
             author_user_id:        authorUserId,
             is_visible_to_student: false,
-            previous_status:       previousStatus ?? null,
-            new_status:            'CLOSED',
-            payload:               note ? { summary: note } : {},
+            // Sama seperti STATUS_CHANGED: kolom previous_status/new_status tidak ada,
+            // status lama & baru ikut di payload agar timeline bisa menampilkannya.
+            payload:               {
+                old_status: previousStatus ?? null,
+                new_status: 'CLOSED',
+                ...(note ? { summary: note } : {}),
+            },
         });
     if (error) throw error;
 }
