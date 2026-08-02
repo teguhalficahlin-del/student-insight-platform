@@ -3509,10 +3509,10 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
             await addCoachingNote({ caseId: kasus.case_id, text, authorUserId: currentUser.user_id, schoolId: currentUser.school_id, isVisibleToStudent });
             kEl(ctx, 'comment-text').value = '';
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Catatan dikirim.';
+            newCommentBtn.disabled = false; newCommentBtn.textContent = 'Kirim Komentar';
             await refreshKasusDetail(ctx);
         } catch (err) {
             msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
-        } finally {
             newCommentBtn.disabled = false; newCommentBtn.textContent = 'Kirim Komentar';
         }
     });
