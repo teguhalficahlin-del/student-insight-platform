@@ -153,6 +153,7 @@ let _bkKasusCtx   = null;
 let _kpKasusCtx   = null;
 let _wkKasusCtx   = null;
 let _ksKasusCtx   = null;
+let _ksDisahkanPage = 0;
 
 let kaprodiAllStudents = [];     // PKL + aktif di prodi Kaprodi, untuk batas pencarian
 let _studentPoolInit   = false;  // guard: ensureStudentPool hanya load sekali
@@ -6640,6 +6641,8 @@ async function loadWakaDocApprovals() {
 }
 
 // Dipanggil dari initKepsekTab — daftar dokumen DISAHKAN_WAKA (read-only)
+const _KS_DISAHKAN_PAGE_SIZE = 10;
+
 async function loadKepsekDisahkanDocs() {
     const section = document.getElementById('ks-disahkan-section');
     if (!section) return;
@@ -6648,23 +6651,51 @@ async function loadKepsekDisahkanDocs() {
     listEl.innerHTML = '<p class="hint">Memuat...</p>';
 
     try {
-        const [docs, phases] = await Promise.all([
-            getDisahkanWakaDocs(currentUser.school_id),
+        const from = _ksDisahkanPage * _KS_DISAHKAN_PAGE_SIZE;
+        const to   = from + _KS_DISAHKAN_PAGE_SIZE - 1;
+
+        const [{ data: rawDocs, error, count }, phases] = await Promise.all([
+            supabase
+                .from('teacher_documents')
+                .select('doc_id, document_type, academic_year, semester, updated_at, core_subject_id, phase_id, teacher_user_id', { count: 'exact' })
+                .eq('school_id', currentUser.school_id)
+                .eq('status', 'DISAHKAN_WAKA')
+                .order('updated_at', { ascending: false })
+                .range(from, to),
             getCorePhases(),
         ]);
+        if (error) throw error;
+
+        const docs = rawDocs ?? [];
         const phaseMap = new Map(phases.map(p => [p.phase_id, p]));
 
-        if (!docs.length) {
+        if (!docs.length && _ksDisahkanPage === 0) {
             listEl.innerHTML = '<p class="hint">Belum ada dokumen yang disahkan Waka Kurikulum.</p>';
             return;
         }
 
-        listEl.innerHTML = docs.map(doc => {
+        // resolve nama guru
+        const authIds = [...new Set(docs.map(d => d.teacher_user_id).filter(Boolean))];
+        const { data: users } = authIds.length
+            ? await supabase.rpc('fn_resolve_teacher_names', { p_auth_ids: authIds })
+            : { data: [] };
+        const nameMap = new Map((users ?? []).map(u => [u.auth_user_id, u.full_name]));
+
+        const totalPages = Math.ceil((count ?? 0) / _KS_DISAHKAN_PAGE_SIZE);
+        const pageLabel  = totalPages > 1 ? `<p class="hint" style="margin:0 0 8px">Halaman ${_ksDisahkanPage + 1} dari ${totalPages} · ${count} dokumen</p>` : '';
+
+        const navHtml = totalPages > 1 ? `
+            <div style="display:flex;gap:8px;margin-top:8px">
+                <button class="btn btn-sm btn-secondary" id="ks-disahkan-prev" ${_ksDisahkanPage === 0 ? 'disabled' : ''}>← Sebelumnya</button>
+                <button class="btn btn-sm btn-secondary" id="ks-disahkan-next" ${_ksDisahkanPage >= totalPages - 1 ? 'disabled' : ''}>Berikutnya →</button>
+            </div>` : '';
+
+        listEl.innerHTML = pageLabel + docs.map(doc => {
             const dtype    = DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type;
             const phase    = phaseMap.get(doc.phase_id);
             const semLabel = doc.semester ? ` · Semester ${doc.semester}` : '';
-            const guruHtml = doc.teacher_name
-                ? `<p style="margin:2px 0 0;font-size:12px;color:var(--color-text-muted)">Guru: ${esc(doc.teacher_name)}</p>`
+            const guruHtml = (nameMap.get(doc.teacher_user_id))
+                ? `<p style="margin:2px 0 0;font-size:12px;color:var(--color-text-muted)">Guru: ${esc(nameMap.get(doc.teacher_user_id))}</p>`
                 : '';
             return `
             <div style="border:1px solid var(--color-border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px">
@@ -6681,7 +6712,10 @@ async function loadKepsekDisahkanDocs() {
                     </div>
                 </div>
             </div>`;
-        }).join('');
+        }).join('') + navHtml;
+
+        document.getElementById('ks-disahkan-prev')?.addEventListener('click', () => { _ksDisahkanPage--; loadKepsekDisahkanDocs(); });
+        document.getElementById('ks-disahkan-next')?.addEventListener('click', () => { _ksDisahkanPage++; loadKepsekDisahkanDocs(); });
 
     } catch (err) {
         listEl.innerHTML = `<div class="status-err">Gagal memuat. ${esc(fe(err))}</div>`;
