@@ -27,7 +27,7 @@ import {
     getPrograms, getStudentAttendanceSessions,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
     getMyObservations,
-    getCases, getCase, getCoachingCaseEvents, createCase, getCoachingCasesCount,
+    getCases, getCasesAll, getCase, getCoachingCaseEvents, createCase, getCoachingCasesCount,
     addCoachingNote, escalateCoachingCase, changeCoachingCaseStatus, closeCoachingCase,
     shareCoachingCaseToStudent, unshareCoachingCaseFromStudent,
     shareCoachingCaseToParent, unshareCoachingCaseFromParent,
@@ -9371,10 +9371,9 @@ function wireKasusDownloadButtons(ctx) {
             try {
                 const status = document.getElementById(`${prefix}-filter-status`)?.value ?? '';
                 const track  = document.getElementById(`${prefix}-filter-track`)?.value  ?? '';
-                const cases  = await getCases({
+                const cases  = await getCasesAll({
                     ...ctx.extraQuery,
                     status, track,
-                    offset: 0, limit: 5000,
                 });
                 const parts = [];
                 if (status) parts.push(CASE_STATUS_LABEL[status] ?? status);

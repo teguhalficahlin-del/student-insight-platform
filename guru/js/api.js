@@ -894,6 +894,23 @@ export async function getCases({
 }
 
 /**
+ * Ambil SEMUA kasus tanpa ceiling — pagination otomatis per PAGE_SIZE.
+ * Cocok untuk generate rekap. Jangan pakai untuk tampilan UI (gunakan getCases).
+ */
+export async function getCasesAll(params = {}) {
+    const PAGE_SIZE = 1000;
+    let offset = 0;
+    let allCases = [];
+    while (true) {
+        const page = await getCases({ ...params, offset, limit: PAGE_SIZE });
+        allCases = allCases.concat(page);
+        if (page.length < PAGE_SIZE) break;
+        offset += PAGE_SIZE;
+    }
+    return allCases;
+}
+
+/**
  * Jumlah kasus per status — untuk rekap ringkas tab Waka Kesiswaan.
  * Scope tenant mengandalkan RLS `coaching_cases`, sama seperti getCases().
  * @returns {Promise<Object>} { OPEN: n, UNDER_REVIEW: n, INTERVENTION: n, MONITORING: n, CLOSED: n }
