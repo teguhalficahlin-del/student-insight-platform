@@ -9374,7 +9374,7 @@ function wireKasusDownloadButtons(ctx) {
                 const cases  = await getCases({
                     ...ctx.extraQuery,
                     status, track,
-                    offset: 0, limit: 1000,
+                    offset: 0, limit: 5000,
                 });
                 const parts = [];
                 if (status) parts.push(CASE_STATUS_LABEL[status] ?? status);
