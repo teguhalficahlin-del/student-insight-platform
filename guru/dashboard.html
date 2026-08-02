@@ -1099,23 +1099,23 @@
         <div class="page-body">
 
             <!-- Kartu ringkasan -->
-            <div class="stats-row">
-                <div class="stat-card">
-                    <span class="stat-value" id="ks-pct-siswa">—</span>
+            <div class="stats-row" style="flex-wrap:nowrap;gap:8px">
+                <div class="stat-card" style="min-width:0;flex:1;font-size:13px">
+                    <span class="stat-value" id="ks-pct-siswa" style="font-size:1.3rem">—</span>
                     <div class="stat-label">Kehadiran Siswa</div>
                     <div id="ks-detail-siswa" style="font-size:12px;color:var(--color-text-muted);margin-top:2px"></div>
                 </div>
-                <div class="stat-card">
-                    <span class="stat-value" id="ks-pct-guru">—</span>
+                <div class="stat-card" style="min-width:0;flex:1;font-size:13px">
+                    <span class="stat-value" id="ks-pct-guru" style="font-size:1.3rem">—</span>
                     <div class="stat-label">Kehadiran Guru di Kelas</div>
                     <div id="ks-detail-guru" style="font-size:12px;color:var(--color-text-muted);margin-top:2px"></div>
                 </div>
-                <div class="stat-card">
-                    <span class="stat-value" id="ks-count-late">—</span>
+                <div class="stat-card" style="min-width:0;flex:1;font-size:13px">
+                    <span class="stat-value" id="ks-count-late" style="font-size:1.3rem">—</span>
                     <div class="stat-label">Keterlambatan Siswa</div>
                 </div>
-                <div class="stat-card">
-                    <span class="stat-value" id="ks-count-exits">—</span>
+                <div class="stat-card" style="min-width:0;flex:1;font-size:13px">
+                    <span class="stat-value" id="ks-count-exits" style="font-size:1.3rem">—</span>
                     <div class="stat-label">Izin Keluar Siswa</div>
                 </div>
             </div>
@@ -1126,12 +1126,12 @@
                 <div class="kp-acc-body" id="ks-chart-body" style="display:block">
 
                 <!-- Tombol periode preset -->
-                <div id="ks-period-toggle" role="group" aria-label="Pilih periode" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">
-                    <button class="btn btn-sm ks-period-btn active" data-period="7_hari" style="white-space:nowrap">7 Hari</button>
-                    <button class="btn btn-sm ks-period-btn" data-period="hari_ini" style="white-space:nowrap">Hari Ini</button>
-                    <button class="btn btn-sm ks-period-btn" data-period="minggu_lalu" style="white-space:nowrap">Minggu Lalu</button>
-                    <button class="btn btn-sm ks-period-btn" data-period="bulan_lalu" style="white-space:nowrap">Bulan Lalu</button>
+                <div id="ks-period-toggle" role="group" aria-label="Pilih periode" style="display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:10px;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none">
                     <button class="btn btn-sm ks-period-btn" data-period="tahun_ajaran_lalu" style="white-space:nowrap">Tahun Lalu</button>
+                    <button class="btn btn-sm ks-period-btn" data-period="bulan_lalu" style="white-space:nowrap">Bulan Lalu</button>
+                    <button class="btn btn-sm ks-period-btn" data-period="minggu_lalu" style="white-space:nowrap">Minggu Lalu</button>
+                    <button class="btn btn-sm ks-period-btn" data-period="hari_ini" style="white-space:nowrap">Hari Ini</button>
+                    <button class="btn btn-sm ks-period-btn active" data-period="7_hari" style="white-space:nowrap">7 Hari</button>
                 </div>
 
                 <!-- Divider -->
