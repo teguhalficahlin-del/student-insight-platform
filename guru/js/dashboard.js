@@ -5989,7 +5989,7 @@ async function loadPerangkatAjarDashboard() {
             getMyTeachingCoreSubjects(currentUser.user_id, currentUser.school_id, ay),
             getCorePhases(),
         ]);
-        const coreSubjects = mySubjects.length > 0 ? mySubjects : await ensureCoreSubjects();
+        const coreSubjects = mySubjects.length > 0 ? mySubjects : await getCoreSubjectsDirect();
 
         const subjectMap = new Map(coreSubjects.map(s => [s.subject_id, s]));
         const phaseMap   = new Map(phases.map(p => [p.phase_id, p]));
@@ -6153,7 +6153,7 @@ async function openBuatDokumenModal(preselect) {
     const ay = config?.current_academic_year ?? getCurrentAcademicYear();
 
     const [coreSubjects, phases] = await Promise.all([
-        ensureCoreSubjects(),
+        getCoreSubjectsDirect(),
         getCorePhases(),
     ]);
 
