@@ -43,7 +43,6 @@
             <button class="tab-btn" data-tab="section-schedule">Jadwal</button>
             <button class="tab-btn" data-tab="section-attendance">Kehadiran</button>
             <button class="tab-btn" data-tab="section-observations">Catatan Guru</button>
-            <button class="tab-btn" data-tab="section-cases">Kasus</button>
             <button class="tab-btn" data-tab="section-forum">Forum</button>
             <button class="tab-btn" data-tab="section-nilai">Nilai</button>
         </nav>
@@ -111,6 +110,16 @@
             </table>
             </div>
             <p id="attendance-empty" class="hint" style="display:none">Tidak ada data kehadiran untuk periode ini.</p>
+            <div style="margin-top:16px">
+                <h3 style="font-size:1rem;margin:0 0 8px">Riwayat Keterlambatan</h3>
+                <p id="late-hint" class="hint">Memuat…</p>
+                <div id="late-body"></div>
+            </div>
+            <div style="margin-top:16px">
+                <h3 style="font-size:1rem;margin:0 0 8px">Riwayat Izin Keluar</h3>
+                <p id="exits-hint" class="hint">Memuat…</p>
+                <div id="exits-body"></div>
+            </div>
         </section>
 
         <section id="section-observations" class="section" style="display:none">
@@ -128,22 +137,11 @@
             </div>
             <div id="observations-list"></div>
             <p id="observations-empty" class="hint" style="display:none">Belum ada catatan guru untuk anak ini.</p>
-            <div style="margin-top:20px;border-top:1px solid var(--color-border,#e5e7eb);padding-top:16px">
-                <h3 style="font-size:1rem;margin:0 0 8px">Riwayat Keterlambatan</h3>
-                <p id="late-hint" class="hint">Memuat…</p>
-                <div id="late-body"></div>
+            <div style="margin-top:16px">
+                <h3 style="font-size:1rem;margin:0 0 8px">Riwayat Kasus</h3>
+                <div id="cases-list"></div>
+                <p id="cases-empty" class="hint" style="display:none">Tidak ada kasus yang dibagikan kepada Anda saat ini.</p>
             </div>
-            <div style="margin-top:20px;border-top:1px solid var(--color-border,#e5e7eb);padding-top:16px">
-                <h3 style="font-size:1rem;margin:0 0 8px">Riwayat Izin Keluar</h3>
-                <p id="exits-hint" class="hint">Memuat…</p>
-                <div id="exits-body"></div>
-            </div>
-        </section>
-
-        <section id="section-cases" class="section" style="display:none">
-            <h3>Kasus Tentang Anak Saya</h3>
-            <div id="cases-list"></div>
-            <p id="cases-empty" class="hint" style="display:none">Tidak ada kasus yang dibagikan kepada Anda saat ini.</p>
         </section>
 
         <section id="section-nilai" class="section" style="display:none">
@@ -269,10 +267,6 @@
             <button class="tab-btn" data-tab="section-observations">
                 <span class="nav-icon">📝</span>
                 <span>Catatan</span>
-            </button>
-            <button class="tab-btn" data-tab="section-cases">
-                <span class="nav-icon">⚠️</span>
-                <span>Kasus</span>
             </button>
             <button class="tab-btn" data-tab="section-forum">
                 <span class="nav-icon">💬</span>

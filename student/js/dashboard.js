@@ -24,8 +24,9 @@ let currentUser = null;
 let student     = null;   // baris students milik user
 let config      = null;   // { current_academic_year, current_semester }
 let myClass     = null;   // enrollment + class
-let obsLoaded   = false;
-let pklLoaded   = false;
+let obsLoaded        = false;
+let pklLoaded        = false;
+let lateExitsLoaded  = false;
 
 const DIMENSION_LABELS = { AKADEMIK:'Akademik', KEHADIRAN:'Kehadiran', PERILAKU:'Perilaku', SOSIAL:'Sosial', AFEKTIF:'Afektif', BAKAT_MINAT:'Bakat & Minat', FISIK:'Fisik', LAINNYA:'Lainnya' };
 // EKSKUL dihapus dari absensi → dipetakan ke Hadir (kompat data lama)
@@ -175,7 +176,20 @@ function activateTab(key) {
 async function loadTabContent(key) {
     switch (key) {
         case 'jadwal':    await loadSchedule(); break;       // muat ulang tanggal aktif
-        case 'kehadiran': await loadAttendance(); break;
+        case 'kehadiran':
+            await loadAttendance();
+            if (!lateExitsLoaded) {
+                lateExitsLoaded = true;
+                const [lr, er] = await Promise.allSettled([
+                    getMyLateArrivals(student.student_id),
+                    getMyExits(student.student_id),
+                ]);
+                if (lr.status === 'fulfilled') renderLateArrivals(lr.value);
+                else { const h = document.getElementById('late-hint'); if (h) { h.style.display='block'; h.textContent=`Gagal memuat riwayat keterlambatan. ${fe(lr.reason)}`; } }
+                if (er.status === 'fulfilled') renderExits(er.value);
+                else { const h = document.getElementById('exits-hint'); if (h) { h.style.display='block'; h.textContent=`Gagal memuat riwayat izin keluar. ${fe(er.reason)}`; } }
+            }
+            break;
         case 'observasi': if (!obsLoaded) await loadObservations(); break;
         case 'pkl':       if (!pklLoaded) await loadPkl(); break;
         case 'forum':     await initForumTab(); break;
@@ -513,11 +527,9 @@ async function loadObservations() {
     casesHintEl.style.display = 'block';
     document.getElementById('cases-list').innerHTML = '';
 
-    const [obsResult, casesResult, lateResult, exitResult] = await Promise.allSettled([
+    const [obsResult, casesResult] = await Promise.allSettled([
         getMyObservations(student.student_id, dateStart, dateEnd),
         getMyCases(student.student_id),
-        getMyLateArrivals(student.student_id),
-        getMyExits(student.student_id),
     ]);
 
     if (obsResult.status === 'fulfilled') {
@@ -534,19 +546,6 @@ async function loadObservations() {
         casesHintEl.textContent = `Gagal memuat data kasus. ${fe(casesResult.reason)}`;
     }
 
-    if (lateResult.status === 'fulfilled') {
-        renderLateArrivals(lateResult.value);
-    } else {
-        const lateHintEl = document.getElementById('late-hint');
-        if (lateHintEl) { lateHintEl.style.display = 'block'; lateHintEl.textContent = `Gagal memuat riwayat keterlambatan. ${fe(lateResult.reason)}`; }
-    }
-
-    if (exitResult.status === 'fulfilled') {
-        renderExits(exitResult.value);
-    } else {
-        const exitsHintEl = document.getElementById('exits-hint');
-        if (exitsHintEl) { exitsHintEl.style.display = 'block'; exitsHintEl.textContent = `Gagal memuat riwayat izin keluar. ${fe(exitResult.reason)}`; }
-    }
 }
 
 function renderLateArrivals(rows) {

@@ -48,7 +48,6 @@ const attTbody       = document.querySelector('#attendance-table tbody');
 const attEmpty       = document.getElementById('attendance-empty');
 const obsListEl      = document.getElementById('observations-list');
 const obsEmpty       = document.getElementById('observations-empty');
-const sectionCases   = document.getElementById('section-cases');
 const casesListEl    = document.getElementById('cases-list');
 const casesEmpty     = document.getElementById('cases-empty');
 const filterStart    = document.getElementById('filter-date-start');
@@ -71,7 +70,7 @@ const sectionNilai   = document.getElementById('section-nilai');
 const tabNav         = document.getElementById('tab-nav');
 const tabBtns        = document.querySelectorAll('.tab-btn');
 const ALL_SECTIONS   = [sectionPkl, sectionSched, sectionAtt,
-                        sectionObs, sectionCases, sectionForum, sectionNilai];
+                        sectionObs, sectionForum, sectionNilai];
 let _notifPollTimer  = null;
 
 let currentUser = null;
@@ -186,7 +185,6 @@ function getTabKey(sectionId) {
         'section-schedule':     'schedule',
         'section-attendance':   'attendance',
         'section-observations': 'observations',
-        'section-cases':        'cases',
         'section-forum':         'forum',
         'section-nilai':         'nilai',
     };
@@ -219,13 +217,15 @@ async function showTab(sectionId) {
         currentClassId = child.class_id;
         await loadSchedule(child.class_id);
     }
-    if (key === 'attendance')   await loadAttendance(child.student_id);
-    if (key === 'observations') {
-        await loadObservations(child.student_id);
+    if (key === 'attendance') {
+        await loadAttendance(child.student_id);
         await loadLateArrivals(child.student_id);
         await loadExits(child.student_id);
     }
-    if (key === 'cases')        await loadCases(child.student_id);
+    if (key === 'observations') {
+        await loadObservations(child.student_id);
+        await loadCases(child.student_id);
+    }
     if (key === 'forum')         await initForumSection();
     if (key === 'nilai')         await initNilaiTab(child.student_id);
 }
