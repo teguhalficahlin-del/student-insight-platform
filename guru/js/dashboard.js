@@ -2855,7 +2855,8 @@ async function initKepsekTab() {
     if (!_ksTabInit) {
         _ksTabInit = true;
         wireSimpleAccordion('ks-chart-card');
-        wireSimpleAccordion('ks-late-card');
+        wireSimpleAccordion('ks-disahkan-section');
+        wireSimpleAccordion('ks-monitoring-card');
 
         // Wire period preset buttons
         document.getElementById('ks-period-toggle').addEventListener('click', e => {
@@ -2881,14 +2882,9 @@ async function initKepsekTab() {
         document.getElementById('ks-range-start').value = localDateStr(new Date(Date.now() - 6 * 86400000));
         document.getElementById('ks-range-end').value   = localDateStr();
 
-        // Wire keterlambatan filter
-        document.getElementById('ks-late-start').value = localDateStr(new Date(Date.now() - 29 * 86400000));
-        document.getElementById('ks-late-end').value   = localDateStr();
-        document.getElementById('ks-late-filter-btn').addEventListener('click', loadKsLateRecap);
     }
     await loadKepsekMonitoring('7_hari');
     await loadKepsekDisahkanDocs();
-    await loadKsLateRecap();
     await initKepsekKasusSection();
 }
 
@@ -3141,44 +3137,6 @@ window.confirmRemoveAdmin = async function(btn) {
         btn.disabled = false;
     }
 };
-
-async function loadKsLateRecap() {
-    const start     = document.getElementById('ks-late-start').value;
-    const end       = document.getElementById('ks-late-end').value;
-    const container = document.getElementById('ks-late-recap');
-    if (!start || !end || start > end) {
-        container.innerHTML = '<p class="hint" style="color:var(--color-danger)">Rentang tanggal tidak valid.</p>';
-        return;
-    }
-    container.innerHTML = '<p class="hint">Memuat…</p>';
-    try {
-        const rows = await getLateArrivalsAggregate(start, end);
-        if (!rows.length) {
-            container.innerHTML = '<p class="hint">Tidak ada catatan keterlambatan pada rentang ini.</p>';
-            return;
-        }
-        const total = rows.reduce((s, r) => s + r.total, 0);
-        const fmtDisp = d => new Date(d + 'T00:00:00').toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
-        container.innerHTML = `
-            <p class="hint" style="margin-bottom:8px">Total: <strong>${total}</strong> kejadian dalam ${rows.length} hari</p>
-            <div style="overflow-x:auto">
-            <table class="table" style="width:100%;max-width:420px">
-                <thead><tr>
-                    <th>Tanggal</th>
-                    <th style="text-align:right">Jumlah Siswa Terlambat</th>
-                </tr></thead>
-                <tbody>${rows.map(r => `
-                    <tr>
-                        <td>${fmtDisp(r.date)}</td>
-                        <td style="text-align:right;font-weight:600">${r.total}</td>
-                    </tr>`).join('')}
-                </tbody>
-            </table>
-            </div>`;
-    } catch (err) {
-        container.innerHTML = `<div class="alert alert-danger">${esc(fe(err))}</div>`;
-    }
-}
 
 // ─── TAB KASUS ───────────────────────────────────────────────
 

@@ -1121,9 +1121,9 @@
             </div>
 
             <!-- Grafik tren kehadiran -->
-            <div class="section-card kp-acc-item" id="ks-chart-card">
-                <div class="kp-acc-header"><span>Tren kehadiran sekolah</span><span class="kp-acc-arrow">▸</span></div>
-                <div class="kp-acc-body" id="ks-chart-body" style="display:none">
+            <div class="section-card kp-acc-item open" id="ks-chart-card">
+                <div class="kp-acc-header"><span>Tren Kehadiran</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" id="ks-chart-body" style="display:block">
 
                 <!-- Tombol periode preset -->
                 <div id="ks-period-toggle" role="group" aria-label="Pilih periode" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">
@@ -1182,31 +1182,16 @@
             </div>
 
             <!-- Dokumen DISAHKAN_WAKA (read-only) -->
-            <div class="section-card" id="ks-disahkan-section">
-                <h3 style="margin:0 0 12px">Perangkat Ajar Disahkan Waka Kurikulum</h3>
-                <div id="ks-disahkan-list"><p class="hint">Memuat…</p></div>
-            </div>
-
-            <div class="section-card kp-acc-item" id="ks-late-card">
-                <div class="kp-acc-header"><span>Rekap Keterlambatan</span><span class="kp-acc-arrow">▸</span></div>
-                <div class="kp-acc-body" id="ks-late-body" style="display:none">
-                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-                    <div style="display:flex;align-items:center;gap:8px">
-                        <label for="ks-late-start" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">Dari:</label>
-                        <input type="date" id="ks-late-start" class="input" style="flex:1;min-width:0">
-                    </div>
-                    <div style="display:flex;align-items:center;gap:8px">
-                        <label for="ks-late-end" style="min-width:32px;margin:0;font-size:13px;color:var(--color-text-muted)">s/d:</label>
-                        <input type="date" id="ks-late-end" class="input" style="flex:1;min-width:0">
-                        <button class="btn btn-secondary btn-sm" id="ks-late-filter-btn">Filter</button>
-                    </div>
-                </div>
-                <div id="ks-late-recap"><p class="hint">Memuat…</p></div>
+            <div class="section-card kp-acc-item" id="ks-disahkan-section">
+                <div class="kp-acc-header"><span>Perangkat Ajar Disahkan Waka Kurikulum</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" style="display:none">
+                    <div id="ks-disahkan-list"><p class="hint">Memuat…</p></div>
                 </div>
             </div>
 
-            <div class="section-card" style="margin-top:16px">
-                <h3>Monitoring Pembinaan Siswa</h3>
+            <div class="section-card kp-acc-item" id="ks-monitoring-card" style="margin-top:16px">
+                <div class="kp-acc-header"><span>Monitoring Pembinaan Siswa</span><span class="kp-acc-arrow">▸</span></div>
+                <div class="kp-acc-body" style="display:none">
                 <div id="ks-kasus-list-view" style="display:block">
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center">
                         <div style="position:relative; display:inline-block">
@@ -1274,6 +1259,7 @@
                         </div>
                     </div>
                 </div>
+                </div><!-- /kp-acc-body monitoring -->
             </div>
 
         </div>
