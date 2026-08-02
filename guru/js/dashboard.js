@@ -2463,6 +2463,7 @@ async function initKpPlacementForm(programId) {
 // ─── TAB WAKA KURIKULUM ───────────────────────────────────────
 
 let _wkKur1Visible = false;
+let _wkKur1Loaded  = false;
 let _wkKur2Visible = false;
 let _wkKurTabInit  = false;
 
@@ -2477,8 +2478,8 @@ async function initWakaKurTab() {
         document.getElementById('wk-kur1-btn').onclick = handleWkKur1Btn;
         document.getElementById('wk-kur2-btn').onclick = handleWkKur2Btn;
     }
-    // Selalu reload Panel 1 + stats saat tab dibuka agar data terbaru tampil
-    await Promise.all([loadWkKurStats(localDateStr(), localDateStr()), loadWkKur1(localDateStr())]);
+    // Hanya load stats saat tab dibuka; tabel Panel 1 load on demand (klik Tampilkan)
+    await Promise.all([loadWkKurStats(localDateStr(), localDateStr())]);
     await loadWakaDocApprovals();
 }
 
@@ -2591,6 +2592,11 @@ async function loadWkKur1(date) {
 }
 
 function handleWkKur1Btn() {
+    if (!_wkKur1Loaded) {
+        _wkKur1Loaded = true;
+        loadWkKur1(localDateStr());
+        return;
+    }
     const wrapEl = document.getElementById('wk-kur1-wrap');
     const btn    = document.getElementById('wk-kur1-btn');
     _wkKur1Visible = !_wkKur1Visible;
