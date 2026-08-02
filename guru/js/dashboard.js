@@ -3068,11 +3068,12 @@ async function loadAdminList() {
         }
         el.innerHTML = `
             <table class="data-table" style="width:100%">
-                <thead><tr><th style="text-align:left">Nama</th><th></th></tr></thead>
+                <thead><tr><th style="text-align:left">Nama</th><th style="text-align:left">Login Admin</th><th></th></tr></thead>
                 <tbody>
                     ${admins.map(a => `
                         <tr>
                             <td>${esc(a.full_name)}</td>
+                            <td><code style="font-size:12px">${esc(a.login_identifier || '—')}</code></td>
                             <td style="text-align:right">
                                 ${a.user_id === currentUser.user_id
                                     ? '<span class="hint">(Anda)</span>'
