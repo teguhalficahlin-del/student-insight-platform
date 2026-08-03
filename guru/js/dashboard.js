@@ -2475,6 +2475,7 @@ async function initWakaKurTab() {
         document.getElementById('wk-kur-start').value = weekAgo;
         document.getElementById('wk-kur-end').value   = localDateStr();
         document.getElementById('wk-kur1-refresh').onclick = () => { loadWkKurStats(localDateStr(), localDateStr()); loadWkKur1(localDateStr()); };
+        document.getElementById('wk-kur2-refresh').onclick = () => loadWkKur2();
         document.getElementById('wk-kur1-btn').onclick = handleWkKur1Btn;
         document.getElementById('wk-kur2-btn').onclick = handleWkKur2Btn;
     }

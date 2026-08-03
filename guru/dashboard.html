@@ -1020,7 +1020,7 @@
                     <h2 style="margin:0;font-size:15px">Sesi Belum Diisi — Hari Ini</h2>
                     <div style="display:flex;gap:6px">
                         <button class="btn btn-secondary btn-sm" id="wk-kur1-refresh">Muat Ulang</button>
-                        <button class="btn" id="wk-kur1-btn" style="display:none">Sembunyikan</button>
+                        <button class="btn" id="wk-kur1-btn">Tampilkan</button>
                     </div>
                 </div>
                 <p class="hint" id="wk-kur1-hint" style="display:none"></p>
@@ -1038,13 +1038,18 @@
 
             <!-- Tabel 2: Rentang Waktu -->
             <div class="section-card">
-                <h2 style="margin:0 0 12px;font-size:15px">Sesi Belum Diisi — Rentang Waktu</h2>
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+                    <h2 style="margin:0;font-size:15px">Sesi Belum Diisi — Rentang Waktu</h2>
+                    <div style="display:flex;gap:6px">
+                        <button class="btn btn-secondary btn-sm" id="wk-kur2-refresh">Muat Ulang</button>
+                        <button class="btn" id="wk-kur2-btn">Tampilkan</button>
+                    </div>
+                </div>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
                     <label for="wk-kur-start" style="font-size:13px;color:var(--color-text)">Dari</label>
                     <input type="date" id="wk-kur-start" class="input" style="width:auto">
                     <label for="wk-kur-end" style="font-size:13px;color:var(--color-text)">s/d</label>
                     <input type="date" id="wk-kur-end" class="input" style="width:auto">
-                    <button class="btn" id="wk-kur2-btn" style="margin-left:auto">Tampilkan</button>
                 </div>
                 <div id="wk-kur2-stats-row" class="wk-stats-grid" style="display:none;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px">
                     <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;padding:16px;text-align:center">
