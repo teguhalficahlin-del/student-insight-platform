@@ -1675,26 +1675,30 @@ export async function getWakaApprovalHistory(schoolId) {
     if (!data?.length) return [];
 
     const docIds = [...new Set(data.map(r => r.doc_id).filter(Boolean))];
-    const { data: docs } = await supabase
+    const { data: docs, error: docsError } = await supabase
         .from('teacher_documents')
         .select('doc_id, document_type, academic_year, semester, core_subject_id, phase_id, teacher_user_id')
+        .eq('school_id', schoolId)
         .in('doc_id', docIds);
+    if (docsError) throw docsError;
     const docMap = new Map((docs ?? []).map(d => [d.doc_id, d]));
 
     const subjectIds = [...new Set((docs ?? []).map(d => d.core_subject_id).filter(Boolean))];
     let subjectMap = new Map();
     if (subjectIds.length) {
-        const { data: subjects } = await supabase
+        const { data: subjects, error: subjectsError } = await supabase
             .from('v_core_subjects')
             .select('subject_id, name')
             .in('subject_id', subjectIds);
+        if (subjectsError) throw subjectsError;
         subjectMap = new Map((subjects ?? []).map(s => [s.subject_id, s.name]));
     }
 
     const authIds = [...new Set((docs ?? []).map(d => d.teacher_user_id).filter(Boolean))];
     let nameMap = new Map();
     if (authIds.length) {
-        const { data: users } = await supabase.rpc('fn_resolve_teacher_names', { p_auth_ids: authIds });
+        const { data: users, error: namesError } = await supabase.rpc('fn_resolve_teacher_names', { p_auth_ids: authIds });
+        if (namesError) throw namesError;
         nameMap = new Map((users ?? []).map(u => [u.auth_user_id, u.full_name]));
     }
 
