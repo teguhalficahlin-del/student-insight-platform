@@ -49,6 +49,8 @@ import {
     getLateArrivalsByRange, getLateArrivalsAggregate,
     getTodayExits, recordExit, updateReturnTime, deleteExit,
     getClassProgramContext, getCpForSubject, checkElementDuplicate,
+    getLearningObjectives, createLearningObjective, updateLearningObjective, deleteLearningObjective,
+    getAssessments, createAssessment, updateAssessment, deleteAssessment,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
@@ -7943,7 +7945,12 @@ async function uploadATPFlow(coreSubjects, phases, ay) {
 
 let _penilaianInit = false;
 let _penilaianCtx  = { kelasId: null, subjectId: null, year: null, semester: null };
-let _penilaianTpList = [];
+let _penilaianTpList = [];   // learning_objectives aktif
+let _penilaianASList = [];   // assessments aktif
+let _penilaianEditingLOId = null;
+let _penilaianEditingASId = null;
+let _penilaianTPAbort = null;
+let _penilaianASAbort = null;
 
 
 async function initPenilaianTab() {
@@ -8066,7 +8073,18 @@ async function loadPenilaianMapel(selEl, kelasId) {
 }
 
 async function onPenilaianContextChange() {
-    // sub-panel akan diisi saat fitur penilaian baru tersedia (ADR-008)
+    const { kelasId, subjectId, year, semester } = _penilaianCtx;
+    const ready = !!(kelasId && subjectId && year && semester);
+    document.getElementById('penilaian-tp-add-btn').style.display = ready ? '' : 'none';
+    document.getElementById('penilaian-as-add-btn').style.display = ready ? '' : 'none';
+    if (!ready) {
+        document.getElementById('penilaian-tp-container').innerHTML =
+            '<p class="hint">Pilih kelas, mapel, tahun, dan semester untuk melihat TP.</p>';
+        document.getElementById('penilaian-as-container').innerHTML =
+            '<p class="hint">Pilih kelas, mapel, tahun, dan semester untuk melihat asesmen.</p>';
+        return;
+    }
+    await Promise.all([loadTPList(), loadAssessmentList()]);
 }
 
 function showPenilaianMsg(area, text, type) {
@@ -8078,6 +8096,333 @@ function showPenilaianMsg(area, text, type) {
         ? 'var(--color-danger)'
         : 'var(--color-success, #16a34a)';
     setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+// ─── Section Perencanaan: Tujuan Pembelajaran (TP) ───────────
+
+async function loadTPList() {
+    const { kelasId, subjectId, year, semester } = _penilaianCtx;
+    const container = document.getElementById('penilaian-tp-container');
+    container.innerHTML = '<p class="hint">Memuat TP…</p>';
+    _penilaianTpList = await getLearningObjectives(
+        currentUser.school_id, kelasId, subjectId, year, parseInt(semester)
+    );
+    renderTPList(container);
+    // wire add button (idempotent — guard via AbortController)
+    const addBtn = document.getElementById('penilaian-tp-add-btn');
+    addBtn.onclick = () => openTPForm(null);
+}
+
+function renderTPList(container) {
+    if (!_penilaianTpList.length) {
+        container.innerHTML = '<p class="hint">Belum ada TP. Klik "+ Tambah TP" untuk memulai.</p>';
+        return;
+    }
+    container.innerHTML = `
+        <div class="table-wrapper" style="overflow-x:auto">
+            <table class="table" style="width:100%;font-size:13px">
+                <thead><tr>
+                    <th style="width:100px">Kode</th>
+                    <th>Deskripsi</th>
+                    <th style="width:60px;text-align:center">Urutan</th>
+                    <th style="width:80px"></th>
+                </tr></thead>
+                <tbody>
+                    ${_penilaianTpList.map(lo => `
+                    <tr data-lo-id="${esc(lo.id)}">
+                        <td style="font-weight:600">${esc(lo.kode_tp)}</td>
+                        <td>${esc(lo.deskripsi_tp)}</td>
+                        <td style="text-align:center">${esc(String(lo.urutan))}</td>
+                        <td style="white-space:nowrap">
+                            <button class="btn btn-ghost btn-sm tp-edit-btn" style="padding:2px 8px;font-size:12px">Edit</button>
+                            <button class="btn btn-ghost btn-sm tp-del-btn" style="padding:2px 8px;font-size:12px;color:var(--color-danger)">Hapus</button>
+                        </td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>`;
+    container.querySelectorAll('.tp-edit-btn').forEach(btn => {
+        const loId = btn.closest('tr').dataset.loId;
+        btn.addEventListener('click', () => {
+            const lo = _penilaianTpList.find(x => x.id === loId);
+            if (lo) openTPForm(lo);
+        });
+    });
+    container.querySelectorAll('.tp-del-btn').forEach(btn => {
+        const loId = btn.closest('tr').dataset.loId;
+        btn.addEventListener('click', () => deleteTPConfirm(loId));
+    });
+}
+
+function openTPForm(lo) {
+    _penilaianEditingLOId = lo?.id ?? null;
+    document.getElementById('penilaian-tp-modal-title').textContent = lo ? 'Edit TP' : 'Tambah TP';
+    document.getElementById('penilaian-tp-kode').value      = lo?.kode_tp      ?? '';
+    document.getElementById('penilaian-tp-deskripsi').value = lo?.deskripsi_tp ?? '';
+    document.getElementById('penilaian-tp-urutan').value    = lo?.urutan       ?? 0;
+    document.getElementById('penilaian-tp-modal-msg').style.display = 'none';
+
+    const modal = document.getElementById('penilaian-tp-modal');
+    modal.style.display = 'flex';
+
+    if (_penilaianTPAbort) _penilaianTPAbort.abort();
+    _penilaianTPAbort = new AbortController();
+    const sig = _penilaianTPAbort.signal;
+
+    document.getElementById('penilaian-tp-modal-cancel').addEventListener('click', () => {
+        modal.style.display = 'none';
+    }, { signal: sig });
+    modal.addEventListener('click', e => {
+        if (e.target === modal) modal.style.display = 'none';
+    }, { signal: sig });
+    document.getElementById('penilaian-tp-modal-save').addEventListener('click', async () => {
+        await saveTP();
+    }, { signal: sig });
+}
+
+async function saveTP() {
+    const kode  = document.getElementById('penilaian-tp-kode').value.trim();
+    const desk  = document.getElementById('penilaian-tp-deskripsi').value.trim();
+    const urut  = parseInt(document.getElementById('penilaian-tp-urutan').value) || 0;
+    const msgEl = document.getElementById('penilaian-tp-modal-msg');
+
+    if (!kode || !desk) {
+        msgEl.textContent = 'Kode TP dan Deskripsi wajib diisi.';
+        msgEl.style.color = 'var(--color-danger)';
+        msgEl.style.display = '';
+        return;
+    }
+    const saveBtn = document.getElementById('penilaian-tp-modal-save');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Menyimpan…';
+    msgEl.style.display = 'none';
+
+    try {
+        const { kelasId, subjectId, year, semester } = _penilaianCtx;
+        if (_penilaianEditingLOId) {
+            await updateLearningObjective(_penilaianEditingLOId, {
+                kode_tp: kode, deskripsi_tp: desk, urutan: urut,
+            });
+        } else {
+            await createLearningObjective({
+                schoolId:    currentUser.school_id,
+                teacherId:   currentUser.user_id,
+                classId:     kelasId,
+                subjectId,
+                academicYear: year,
+                semester:    parseInt(semester),
+                kodeTp:      kode,
+                deskripsiTp: desk,
+                urutan:      urut,
+            });
+        }
+        document.getElementById('penilaian-tp-modal').style.display = 'none';
+        await loadTPList();
+    } catch (e) {
+        msgEl.textContent = `Gagal menyimpan: ${esc(e.message)}`;
+        msgEl.style.color = 'var(--color-danger)';
+        msgEl.style.display = '';
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Simpan';
+    }
+}
+
+async function deleteTPConfirm(loId) {
+    if (!confirm('Hapus TP ini? Asesmen yang terkait tidak akan ikut terhapus (tp_id menjadi kosong).')) return;
+    try {
+        await deleteLearningObjective(loId);
+        await Promise.all([loadTPList(), loadAssessmentList()]);
+    } catch (e) {
+        showPenilaianMsg('tp', `Gagal menghapus TP: ${esc(e.message)}`, 'error');
+    }
+}
+
+// ─── Section Pelaksanaan: Asesmen ─────────────────────────────
+
+const _JENIS_LABEL = {
+    DIAGNOSTIK_NK: 'Diagnostik Non-Kognitif',
+    DIAGNOSTIK_K:  'Diagnostik Kognitif',
+    FORMATIF:      'Formatif',
+    SUMATIF:       'Sumatif',
+};
+const _JENIS_ORDER = ['DIAGNOSTIK_NK', 'DIAGNOSTIK_K', 'FORMATIF', 'SUMATIF'];
+
+async function loadAssessmentList() {
+    const { kelasId, subjectId, year, semester } = _penilaianCtx;
+    const container = document.getElementById('penilaian-as-container');
+    container.innerHTML = '<p class="hint">Memuat asesmen…</p>';
+    _penilaianASList = await getAssessments(
+        currentUser.school_id, kelasId, subjectId, year, parseInt(semester)
+    );
+    renderAssessmentList(container);
+    const addBtn = document.getElementById('penilaian-as-add-btn');
+    addBtn.onclick = () => openAssessmentForm(null);
+}
+
+function renderAssessmentList(container) {
+    if (!_penilaianASList.length) {
+        container.innerHTML = '<p class="hint">Belum ada asesmen. Klik "+ Buat Asesmen" untuk memulai.</p>';
+        return;
+    }
+    const grouped = {};
+    for (const jenis of _JENIS_ORDER) grouped[jenis] = [];
+    for (const as of _penilaianASList) {
+        if (grouped[as.jenis]) grouped[as.jenis].push(as);
+    }
+    let html = '';
+    for (const jenis of _JENIS_ORDER) {
+        const list = grouped[jenis];
+        if (!list.length) continue;
+        html += `<h4 style="margin:12px 0 8px;font-size:13px;color:var(--color-text-muted)">${esc(_JENIS_LABEL[jenis])}</h4>
+            <div class="table-wrapper" style="overflow-x:auto;margin-bottom:8px">
+                <table class="table" style="width:100%;font-size:13px">
+                    <thead><tr>
+                        <th>Judul</th>
+                        <th style="width:100px">Tanggal</th>
+                        <th style="width:80px">Teknik</th>
+                        <th style="width:60px;text-align:center">Publish</th>
+                        <th style="width:80px"></th>
+                    </tr></thead>
+                    <tbody>
+                        ${list.map(as => `
+                        <tr data-as-id="${esc(as.id)}">
+                            <td>${esc(as.judul)}</td>
+                            <td>${as.tanggal ? esc(as.tanggal) : '<span class="hint">—</span>'}</td>
+                            <td>${as.teknik ? esc(as.teknik) : '<span class="hint">—</span>'}</td>
+                            <td style="text-align:center">${as.is_published ? '✓' : '—'}</td>
+                            <td style="white-space:nowrap">
+                                <button class="btn btn-ghost btn-sm as-edit-btn" style="padding:2px 8px;font-size:12px">Edit</button>
+                                <button class="btn btn-ghost btn-sm as-del-btn" style="padding:2px 8px;font-size:12px;color:var(--color-danger)">Hapus</button>
+                            </td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>`;
+    }
+    container.innerHTML = html;
+    container.querySelectorAll('.as-edit-btn').forEach(btn => {
+        const asId = btn.closest('tr').dataset.asId;
+        btn.addEventListener('click', () => {
+            const as = _penilaianASList.find(x => x.id === asId);
+            if (as) openAssessmentForm(as);
+        });
+    });
+    container.querySelectorAll('.as-del-btn').forEach(btn => {
+        const asId = btn.closest('tr').dataset.asId;
+        btn.addEventListener('click', () => deleteAssessmentConfirm(asId));
+    });
+}
+
+function openAssessmentForm(as) {
+    _penilaianEditingASId = as?.id ?? null;
+    document.getElementById('penilaian-as-modal-title').textContent = as ? 'Edit Asesmen' : 'Buat Asesmen';
+    document.getElementById('penilaian-as-judul').value   = as?.judul   ?? '';
+    document.getElementById('penilaian-as-jenis').value   = as?.jenis   ?? 'FORMATIF';
+    document.getElementById('penilaian-as-teknik').value  = as?.teknik  ?? '';
+    document.getElementById('penilaian-as-tanggal').value = as?.tanggal ?? '';
+    document.getElementById('penilaian-as-format').value  = as?.format_penilaian ?? '';
+    document.getElementById('penilaian-as-tl').value      = as?.tindak_lanjut    ?? '';
+    document.getElementById('penilaian-as-catatan-tl').value = as?.catatan_tl    ?? '';
+    document.getElementById('penilaian-as-modal-msg').style.display = 'none';
+
+    // Populate TP dropdown dari list aktif
+    const selTp = document.getElementById('penilaian-as-tp');
+    selTp.innerHTML = '<option value="">— Tidak dikaitkan ke TP —</option>';
+    _penilaianTpList.forEach(lo => {
+        const opt = document.createElement('option');
+        opt.value = lo.id;
+        opt.textContent = `${lo.kode_tp} — ${lo.deskripsi_tp.slice(0, 50)}`;
+        opt.selected = (as?.tp_id === lo.id);
+        selTp.appendChild(opt);
+    });
+
+    const modal = document.getElementById('penilaian-as-modal');
+    modal.style.display = 'flex';
+
+    if (_penilaianASAbort) _penilaianASAbort.abort();
+    _penilaianASAbort = new AbortController();
+    const sig = _penilaianASAbort.signal;
+
+    document.getElementById('penilaian-as-modal-cancel').addEventListener('click', () => {
+        modal.style.display = 'none';
+    }, { signal: sig });
+    modal.addEventListener('click', e => {
+        if (e.target === modal) modal.style.display = 'none';
+    }, { signal: sig });
+    document.getElementById('penilaian-as-modal-save').addEventListener('click', async () => {
+        await saveAssessmentForm();
+    }, { signal: sig });
+}
+
+async function saveAssessmentForm() {
+    const judul  = document.getElementById('penilaian-as-judul').value.trim();
+    const jenis  = document.getElementById('penilaian-as-jenis').value;
+    const msgEl  = document.getElementById('penilaian-as-modal-msg');
+
+    if (!judul || !jenis) {
+        msgEl.textContent = 'Judul dan Jenis wajib diisi.';
+        msgEl.style.color = 'var(--color-danger)';
+        msgEl.style.display = '';
+        return;
+    }
+    const saveBtn = document.getElementById('penilaian-as-modal-save');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Menyimpan…';
+    msgEl.style.display = 'none';
+
+    try {
+        const { kelasId, subjectId, year, semester } = _penilaianCtx;
+        const patch = {
+            judul,
+            jenis,
+            teknik:           document.getElementById('penilaian-as-teknik').value.trim()  || null,
+            tanggal:          document.getElementById('penilaian-as-tanggal').value        || null,
+            tp_id:            document.getElementById('penilaian-as-tp').value             || null,
+            format_penilaian: document.getElementById('penilaian-as-format').value         || null,
+            tindak_lanjut:    document.getElementById('penilaian-as-tl').value.trim()      || null,
+            catatan_tl:       document.getElementById('penilaian-as-catatan-tl').value.trim() || null,
+        };
+        if (_penilaianEditingASId) {
+            await updateAssessment(_penilaianEditingASId, patch);
+        } else {
+            await createAssessment({
+                schoolId:        currentUser.school_id,
+                teacherId:       currentUser.user_id,
+                classId:         kelasId,
+                subjectId,
+                academicYear:    year,
+                semester:        parseInt(semester),
+                judul:           patch.judul,
+                jenis:           patch.jenis,
+                teknik:          patch.teknik,
+                tanggal:         patch.tanggal,
+                tpId:            patch.tp_id,
+                formatPenilaian: patch.format_penilaian,
+                tindakLanjut:    patch.tindak_lanjut,
+                catatanTl:       patch.catatan_tl,
+            });
+        }
+        document.getElementById('penilaian-as-modal').style.display = 'none';
+        await loadAssessmentList();
+    } catch (e) {
+        msgEl.textContent = `Gagal menyimpan: ${esc(e.message)}`;
+        msgEl.style.color = 'var(--color-danger)';
+        msgEl.style.display = '';
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Simpan';
+    }
+}
+
+async function deleteAssessmentConfirm(asId) {
+    if (!confirm('Hapus asesmen ini? Semua data nilai siswa untuk asesmen ini akan ikut terhapus.')) return;
+    try {
+        await deleteAssessment(asId);
+        await loadAssessmentList();
+    } catch (e) {
+        showPenilaianMsg('as', `Gagal menghapus asesmen: ${esc(e.message)}`, 'error');
+    }
 }
 
 // ─── Accordion: rekap kehadiran (collapsed by default) ────────
