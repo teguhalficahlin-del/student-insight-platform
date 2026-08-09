@@ -51,7 +51,7 @@ import {
     getClassProgramContext, getCpForSubject, checkElementDuplicate,
     getLearningObjectives, createLearningObjective, updateLearningObjective, deleteLearningObjective,
     getAssessments, createAssessment, updateAssessment, deleteAssessment,
-    getStudentGrades, upsertStudentGrades, publishAssessment,
+    getStudentGrades, upsertStudentGrades, publishAssessment, getClassStudents,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
