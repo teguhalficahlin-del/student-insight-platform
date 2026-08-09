@@ -2132,3 +2132,32 @@ export async function deleteAssessment(id) {
         .eq('id', id);
     if (error) throw error;
 }
+
+// ═══════════════════════════════════════════════════════
+// PENILAIAN — Student Grades
+// ═══════════════════════════════════════════════════════
+export async function getStudentGrades(assessmentId) {
+    try {
+        const { data, error } = await supabase
+            .from('student_grades')
+            .select('id, student_id, nilai_angka, deskripsi, tindak_lanjut, is_published')
+            .eq('assessment_id', assessmentId);
+        if (error) { console.warn('[penilaian] getStudentGrades:', error.message); return []; }
+        return data ?? [];
+    } catch (e) { console.warn('[penilaian] getStudentGrades exception:', e); return []; }
+}
+
+export async function upsertStudentGrades(rows) {
+    const { error } = await supabase
+        .from('student_grades')
+        .upsert(rows, { onConflict: 'assessment_id,student_id' });
+    if (error) throw error;
+}
+
+export async function publishAssessment(assessmentId) {
+    const { error } = await supabase
+        .from('assessments')
+        .update({ is_published: true, updated_at: new Date().toISOString() })
+        .eq('id', assessmentId);
+    if (error) throw error;
+}

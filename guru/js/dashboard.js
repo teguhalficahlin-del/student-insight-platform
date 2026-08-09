@@ -51,6 +51,7 @@ import {
     getClassProgramContext, getCpForSubject, checkElementDuplicate,
     getLearningObjectives, createLearningObjective, updateLearningObjective, deleteLearningObjective,
     getAssessments, createAssessment, updateAssessment, deleteAssessment,
+    getStudentGrades, upsertStudentGrades, publishAssessment,
 } from './api.js';
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
@@ -7951,6 +7952,7 @@ let _penilaianEditingLOId = null;
 let _penilaianEditingASId = null;
 let _penilaianTPAbort = null;
 let _penilaianASAbort = null;
+let _penilaianActiveAS = null;   // assessment sedang aktif di grade panel
 
 
 async function initPenilaianTab() {
@@ -8292,6 +8294,7 @@ function renderAssessmentList(container) {
                             <td>${as.teknik ? esc(as.teknik) : '<span class="hint">—</span>'}</td>
                             <td style="text-align:center">${as.is_published ? '✓' : '—'}</td>
                             <td style="white-space:nowrap">
+                                <button class="btn btn-ghost btn-sm as-grade-btn" style="padding:2px 8px;font-size:12px">Input Nilai</button>
                                 <button class="btn btn-ghost btn-sm as-edit-btn" style="padding:2px 8px;font-size:12px">Edit</button>
                                 <button class="btn btn-ghost btn-sm as-del-btn" style="padding:2px 8px;font-size:12px;color:var(--color-danger)">Hapus</button>
                             </td>
@@ -8301,6 +8304,13 @@ function renderAssessmentList(container) {
             </div>`;
     }
     container.innerHTML = html;
+    container.querySelectorAll('.as-grade-btn').forEach(btn => {
+        const asId = btn.closest('tr').dataset.asId;
+        btn.addEventListener('click', () => {
+            const as = _penilaianASList.find(x => x.id === asId);
+            if (as) openGradeInput(as);
+        });
+    });
     container.querySelectorAll('.as-edit-btn').forEach(btn => {
         const asId = btn.closest('tr').dataset.asId;
         btn.addEventListener('click', () => {
@@ -8422,6 +8432,169 @@ async function deleteAssessmentConfirm(asId) {
         await loadAssessmentList();
     } catch (e) {
         showPenilaianMsg('as', `Gagal menghapus asesmen: ${esc(e.message)}`, 'error');
+    }
+}
+
+// ─── Section Pelaksanaan: Input Nilai per Siswa ───────────────
+
+async function openGradeInput(as) {
+    _penilaianActiveAS = as;
+    const panel = document.getElementById('penilaian-grade-panel');
+    panel.style.display = '';
+    panel.innerHTML = '<p class="hint">Memuat data siswa…</p>';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    await loadGradeGrid(as, panel);
+}
+
+async function loadGradeGrid(as, panel) {
+    const { kelasId } = _penilaianCtx;
+    let students, grades;
+    try {
+        [students, grades] = await Promise.all([
+            getClassStudents(kelasId),
+            getStudentGrades(as.id),
+        ]);
+    } catch (e) {
+        panel.innerHTML = `<p style="color:var(--color-danger)">Gagal memuat: ${esc(e.message)}</p>`;
+        return;
+    }
+    const gradesMap = {};
+    for (const g of grades) gradesMap[g.student_id] = g;
+
+    const isPublished = as.is_published;
+    const isSumatif   = as.jenis === 'SUMATIF';
+
+    const publishBtn = isPublished
+        ? `<span style="font-size:12px;color:var(--color-success);font-weight:600">✓ Dipublikasi</span>`
+        : `<button type="button" class="btn btn-primary btn-sm" id="pg-publish-btn" style="font-size:12px">Publikasi</button>`;
+
+    const headerHtml = `
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+            <div>
+                <span style="font-weight:600">${esc(as.judul)}</span>
+                <span style="font-size:12px;color:var(--color-text-muted);margin-left:8px">${esc(_JENIS_LABEL[as.jenis] ?? as.jenis)}</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+                ${publishBtn}
+                <button type="button" class="btn btn-ghost btn-sm" id="pg-close-btn" style="font-size:12px">✕ Tutup</button>
+            </div>
+        </div>`;
+
+    const tableHtml = `
+        <div class="table-wrapper" style="overflow-x:auto">
+            <table class="table" style="width:100%;font-size:13px" id="pg-table">
+                <thead><tr>
+                    <th style="min-width:160px">Nama</th>
+                    ${isSumatif ? '<th style="width:100px">Nilai (0–100)</th>' : ''}
+                    <th style="min-width:200px">Deskripsi</th>
+                    <th style="width:140px">Tindak Lanjut</th>
+                </tr></thead>
+                <tbody>
+                    ${students.map(s => {
+                        const g = gradesMap[s.student_id] ?? {};
+                        const dis = isPublished ? 'disabled' : '';
+                        return `<tr data-student-id="${esc(s.student_id)}">
+                            <td>${esc(s.full_name)}${s.nis ? `<br><span class="hint" style="font-size:11px">${esc(s.nis)}</span>` : ''}</td>
+                            ${isSumatif ? `<td><input type="number" class="input pg-nilai" min="0" max="100" step="0.01" value="${g.nilai_angka ?? ''}" ${dis} style="width:80px;font-size:12px;padding:4px 6px"></td>` : ''}
+                            <td><textarea class="input pg-deskripsi" rows="2" ${dis} style="font-size:12px;padding:4px 6px;resize:vertical;min-width:180px">${esc(g.deskripsi ?? '')}</textarea></td>
+                            <td><select class="input pg-tindaklanjut" ${dis} style="font-size:12px;padding:4px 6px">
+                                <option value="">—</option>
+                                <option value="PENGAYAAN" ${g.tindak_lanjut === 'PENGAYAAN' ? 'selected' : ''}>Pengayaan</option>
+                                <option value="PENGUATAN" ${g.tindak_lanjut === 'PENGUATAN' ? 'selected' : ''}>Penguatan</option>
+                                <option value="PENDAMPINGAN" ${g.tindak_lanjut === 'PENDAMPINGAN' ? 'selected' : ''}>Pendampingan</option>
+                            </select></td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>`;
+
+    const footerHtml = isPublished ? '' : `
+        <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+            <button type="button" class="btn btn-primary btn-sm" id="pg-save-btn">Simpan Semua</button>
+            <span id="pg-save-msg" class="hint" style="display:none"></span>
+        </div>`;
+
+    panel.innerHTML = `
+        <div class="section-card" style="border:2px solid var(--color-border);margin-top:0">
+            ${headerHtml}
+            ${tableHtml}
+            ${footerHtml}
+        </div>`;
+
+    document.getElementById('pg-close-btn').addEventListener('click', () => {
+        panel.style.display = 'none';
+        panel.innerHTML = '';
+        _penilaianActiveAS = null;
+    });
+
+    if (!isPublished) {
+        document.getElementById('pg-publish-btn').addEventListener('click', async () => {
+            await publishAssessmentAction(as);
+        });
+        document.getElementById('pg-save-btn').addEventListener('click', async () => {
+            await saveAllGrades(as, students, panel);
+        });
+    }
+}
+
+async function saveAllGrades(as, students, panel) {
+    if (as.is_published) {
+        showPenilaianMsg('as', 'Asesmen sudah dipublikasi — nilai tidak dapat diubah.', 'error');
+        return;
+    }
+    const saveBtn = document.getElementById('pg-save-btn');
+    const msgEl   = document.getElementById('pg-save-msg');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Menyimpan…';
+    msgEl.style.display = 'none';
+
+    try {
+        const isSumatif = as.jenis === 'SUMATIF';
+        const rows = students.map(s => {
+            const tr = document.querySelector(`#pg-table tr[data-student-id="${s.student_id}"]`);
+            const nilaiAngka   = isSumatif ? (parseFloat(tr.querySelector('.pg-nilai')?.value) || null) : null;
+            const deskripsi    = tr.querySelector('.pg-deskripsi')?.value.trim() || null;
+            const tindakLanjut = tr.querySelector('.pg-tindaklanjut')?.value || null;
+            return {
+                assessment_id: as.id,
+                student_id:    s.student_id,
+                school_id:     currentUser.school_id,
+                teacher_id:    currentUser.user_id,
+                nilai_angka:   nilaiAngka,
+                deskripsi,
+                tindak_lanjut: tindakLanjut,
+            };
+        });
+        await upsertStudentGrades(rows);
+        msgEl.textContent = 'Tersimpan.';
+        msgEl.style.color = 'var(--color-success)';
+        msgEl.style.display = '';
+        setTimeout(() => { msgEl.style.display = 'none'; }, 3000);
+    } catch (e) {
+        msgEl.textContent = `Gagal: ${esc(e.message)}`;
+        msgEl.style.color = 'var(--color-danger)';
+        msgEl.style.display = '';
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Simpan Semua';
+    }
+}
+
+async function publishAssessmentAction(as) {
+    if (!confirm(`Publikasi asesmen "${as.judul}"? Setelah dipublikasi, nilai tidak dapat diubah lagi.`)) return;
+    try {
+        await publishAssessment(as.id);
+        as.is_published = true;
+        const idx = _penilaianASList.findIndex(x => x.id === as.id);
+        if (idx !== -1) _penilaianASList[idx].is_published = true;
+        await loadAssessmentList();
+        const panel = document.getElementById('penilaian-grade-panel');
+        if (panel && panel.style.display !== 'none') {
+            await loadGradeGrid(as, panel);
+        }
+    } catch (e) {
+        showPenilaianMsg('as', `Gagal publikasi: ${esc(e.message)}`, 'error');
     }
 }
 
