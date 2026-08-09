@@ -8064,7 +8064,16 @@ async function loadPenilaianMapel(selEl, kelasId) {
     }
 }
 
-async function onPenilaianContextChange() {}
+async function onPenilaianContextChange() {
+    if (window.initPenilaianPanel) {
+        window.initPenilaianPanel(
+            _penilaianCtx.kelasId,
+            _penilaianCtx.subjectId,
+            _penilaianCtx.year,
+            _penilaianCtx.semester
+        );
+    }
+}
 
 // ─── Accordion: rekap kehadiran (collapsed by default) ────────
 function wireSimpleAccordion(cardId) {
