@@ -2031,3 +2031,47 @@ export async function checkElementDuplicate(elementId, schoolId, loId) {
     return data ?? [];
 }
 
+// ─── Penilaian: Tujuan Pembelajaran (learning_objectives) ────────────────────
+
+export async function getTps(kelasId, subjectId, year, semester) {
+    const { data, error } = await supabase
+        .from('learning_objectives')
+        .select('id, kode_tp, deskripsi_tp, urutan')
+        .eq('class_id', kelasId)
+        .eq('subject_id', subjectId)
+        .eq('academic_year', year)
+        .eq('semester', semester)
+        .order('urutan', { ascending: true });
+    if (error) throw error;
+    return data || [];
+}
+
+export async function createTp(payload) {
+    const { data, error } = await supabase
+        .from('learning_objectives')
+        .insert(payload)
+        .select('id, kode_tp, deskripsi_tp, urutan')
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function updateTp(id, payload) {
+    const { data, error } = await supabase
+        .from('learning_objectives')
+        .update(payload)
+        .eq('id', id)
+        .select('id, kode_tp, deskripsi_tp, urutan')
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function deleteTp(id) {
+    const { error } = await supabase
+        .from('learning_objectives')
+        .delete()
+        .eq('id', id);
+    if (error) throw error;
+}
+

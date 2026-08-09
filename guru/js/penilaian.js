@@ -1,93 +1,340 @@
-(function () {
-  'use strict';
+import { getTps, createTp, updateTp, deleteTp, getCurrentUserRow } from './api.js';
 
-  let _kelasId   = null;
-  let _subjectId = null;
-  let _year      = null;
-  let _semester  = null;
+let _kelasId        = null;
+let _subjectId      = null;
+let _year           = null;
+let _semester       = null;
+let _tpsCache       = [];
+let _userInfo       = null;
+let _delegationInit = false;
 
-  // ── Styles ───────────────────────────────────────────────────────────────────
+function esc(s) {
+    return String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
-  function injectStyles() {
+async function getUserInfo() {
+    if (_userInfo) return _userInfo;
+    _userInfo = await getCurrentUserRow();
+    return _userInfo;
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+function injectStyles() {
     if (document.getElementById('pen-styles')) return;
     const s = document.createElement('style');
     s.id = 'pen-styles';
     s.textContent = `
-.pen-section { border:1px solid var(--color-border); border-radius:var(--radius); overflow:hidden; margin-bottom:12px; }
-.pen-section-header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:var(--color-surface); cursor:pointer; user-select:none; font-weight:600; color:var(--color-text); }
-.pen-section-header:hover { background:var(--color-bg); }
-.pen-chevron { transition:transform .2s; color:var(--color-text-muted); }
-.pen-section-body { padding:12px 16px; border-top:1px solid var(--color-border); }
+.pen-section{border:1px solid var(--color-border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;}
+.pen-section-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--color-surface);cursor:pointer;user-select:none;font-weight:600;color:var(--color-text);}
+.pen-section-header:hover{background:var(--color-bg);}
+.pen-chevron{transition:transform .2s;color:var(--color-text-muted);}
+.pen-section-body{padding:12px 16px;border-top:1px solid var(--color-border);}
+.pen-tp-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--color-border);}
+.pen-tp-row:last-of-type{border-bottom:none;}
+.pen-tp-text{flex:1;min-width:0;}
+.pen-tp-kode{font-weight:600;font-size:13px;color:var(--color-text);margin-bottom:2px;}
+.pen-tp-desc{font-size:13px;color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pen-tp-actions{display:flex;gap:6px;flex-shrink:0;align-self:flex-start;}
+.pen-btn{padding:4px 10px;border-radius:var(--radius);border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);font-size:12px;cursor:pointer;white-space:nowrap;line-height:1.5;}
+.pen-btn:hover{border-color:var(--color-primary);color:var(--color-primary);}
+.pen-btn-danger{border-color:var(--color-danger);color:var(--color-danger);}
+.pen-btn-danger:hover{background:var(--color-danger-bg);}
+.pen-add-btn{display:block;width:100%;box-sizing:border-box;text-align:center;padding:8px;margin-top:10px;border-radius:var(--radius);border:1px dashed var(--color-border);background:none;color:var(--color-text-muted);font-size:13px;cursor:pointer;}
+.pen-add-btn:hover{border-color:var(--color-primary);color:var(--color-primary);}
+.pen-del-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0 4px;border-top:1px solid var(--color-border);margin-top:6px;}
+.pen-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:900;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;}
+.pen-modal-box{background:var(--color-surface);border-radius:var(--radius-lg);width:100%;max-width:480px;display:flex;flex-direction:column;max-height:90vh;border:1px solid var(--color-border);}
+.pen-modal-header{padding:16px 20px 0;font-weight:600;font-size:15px;color:var(--color-text);}
+.pen-modal-body{padding:14px 20px;flex:1;overflow-y:auto;}
+.pen-modal-body label{display:block;font-size:12px;font-weight:600;color:var(--color-text-muted);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.04em;}
+.pen-modal-body label:first-child{margin-top:0;}
+.pen-modal-body input,.pen-modal-body textarea{width:100%;box-sizing:border-box;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius);color:var(--color-text);font-size:14px;padding:8px 10px;font-family:inherit;}
+.pen-modal-body input:focus,.pen-modal-body textarea:focus{outline:none;border-color:var(--color-primary);}
+.pen-modal-err{font-size:12px;color:var(--color-danger);min-height:1.2rem;padding:2px 20px 0;}
+.pen-modal-footer{padding:10px 20px 16px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--color-border);}
 `;
     document.head.appendChild(s);
-  }
+}
 
-  // ── Collapse ─────────────────────────────────────────────────────────────────
+// ── Modal helper ──────────────────────────────────────────────────────────────
 
-  function initCollapse() {
-    [
-      { headerId: 'pen-perencanaan-header', bodyId: 'pen-perencanaan-body', open: true },
-      { headerId: 'pen-pelaksanaan-header', bodyId: 'pen-pelaksanaan-body', open: false },
-    ].forEach(function (cfg) {
-      const header  = document.getElementById(cfg.headerId);
-      const body    = document.getElementById(cfg.bodyId);
-      const chevron = header ? header.querySelector('.pen-chevron') : null;
-      if (!header || !body) return;
+function openModal({ title, bodyHtml, onSave, saveLabel = 'Simpan' }) {
+    document.getElementById('pen-modal')?.remove();
 
-      body.style.display = cfg.open ? '' : 'none';
-      if (chevron) chevron.style.transform = cfg.open ? 'rotate(180deg)' : '';
+    const overlay = document.createElement('div');
+    overlay.id        = 'pen-modal';
+    overlay.className = 'pen-modal-overlay';
+    overlay.innerHTML =
+        '<div class="pen-modal-box">' +
+            '<div class="pen-modal-header">' + esc(title) + '</div>' +
+            '<div class="pen-modal-body">' + bodyHtml + '</div>' +
+            '<div class="pen-modal-err" id="pen-modal-err"></div>' +
+            '<div class="pen-modal-footer">' +
+                '<button type="button" class="pen-btn pen-modal-cancel">Batal</button>' +
+                '<button type="button" class="pen-btn pen-modal-save">' + esc(saveLabel) + '</button>' +
+            '</div>' +
+        '</div>';
 
-      header.addEventListener('click', function () {
-        const isOpen = body.style.display !== 'none';
-        body.style.display = isOpen ? 'none' : '';
-        if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
-      });
+    function close() {
+        overlay.remove();
+        document.removeEventListener('keydown', onEsc);
+    }
+    function onEsc(e) { if (e.key === 'Escape') close(); }
+
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    overlay.querySelector('.pen-modal-cancel').addEventListener('click', close);
+    document.addEventListener('keydown', onEsc);
+
+    const saveBtn = overlay.querySelector('.pen-modal-save');
+    saveBtn.addEventListener('click', async function () {
+        const errEl = overlay.querySelector('#pen-modal-err');
+        errEl.textContent = '';
+        saveBtn.disabled    = true;
+        saveBtn.textContent = 'Menyimpan…';
+        try {
+            await onSave(overlay, close);
+        } catch (err) {
+            errEl.textContent   = 'Gagal: ' + (err.message || 'Error tidak diketahui.');
+            saveBtn.disabled    = false;
+            saveBtn.textContent = saveLabel;
+        }
     });
-  }
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+    document.body.appendChild(overlay);
+    overlay.querySelector('input, textarea')?.focus();
+}
 
-  function renderAll() {
+// ── Modal TP ──────────────────────────────────────────────────────────────────
+
+function openTpModal(tp) {
+    openModal({
+        title: tp ? 'Edit Tujuan Pembelajaran' : 'Tambah Tujuan Pembelajaran',
+        bodyHtml:
+            '<label>Kode TP <span style="color:var(--color-danger)">*</span></label>' +
+            '<input type="text" id="pen-tp-kode" maxlength="30" placeholder="Contoh: TP 1" value="' + esc(tp?.kode_tp || '') + '">' +
+            '<label>Deskripsi TP <span style="color:var(--color-danger)">*</span></label>' +
+            '<textarea id="pen-tp-desc" rows="4" maxlength="2000" placeholder="Deskripsi tujuan pembelajaran…">' + esc(tp?.deskripsi_tp || '') + '</textarea>' +
+            '<label>Urutan <span style="color:var(--color-danger)">*</span></label>' +
+            '<input type="number" id="pen-tp-urutan" min="1" step="1" placeholder="1" value="' + esc(String(tp?.urutan ?? '')) + '">',
+        onSave: async function (overlay, close) {
+            const kode   = overlay.querySelector('#pen-tp-kode').value.trim();
+            const desc   = overlay.querySelector('#pen-tp-desc').value.trim();
+            const urutan = parseInt(overlay.querySelector('#pen-tp-urutan').value, 10);
+
+            if (!kode)              throw new Error('Kode TP tidak boleh kosong.');
+            if (!desc)              throw new Error('Deskripsi TP tidak boleh kosong.');
+            if (!urutan || urutan < 1) throw new Error('Urutan harus angka ≥ 1.');
+
+            if (tp) {
+                await updateTp(tp.id, { kode_tp: kode, deskripsi_tp: desc, urutan });
+            } else {
+                const user = await getUserInfo();
+                if (!user) throw new Error('Sesi tidak ditemukan, coba muat ulang halaman.');
+                await createTp({
+                    school_id:    user.school_id,
+                    teacher_id:   user.user_id,
+                    class_id:     _kelasId,
+                    subject_id:   _subjectId,
+                    academic_year: _year,
+                    semester:     Number(_semester),
+                    kode_tp:      kode,
+                    deskripsi_tp: desc,
+                    urutan,
+                });
+            }
+            close();
+            await renderPerencanaan();
+        },
+    });
+}
+
+// ── Inline delete confirm ─────────────────────────────────────────────────────
+
+function confirmDeleteTp(origBtn, tp) {
+    origBtn.style.display = 'none';
+
+    const row = origBtn.closest('.pen-tp-row');
+    const bar = document.createElement('div');
+    bar.className = 'pen-del-bar';
+    bar.innerHTML =
+        '<span style="flex:1;min-width:0;font-size:12px;color:var(--color-text-muted)">Hapus "' + esc(tp.kode_tp) + '"?</span>' +
+        '<button type="button" class="pen-btn pen-btn-danger pen-del-yes">Ya, Hapus</button>' +
+        '<button type="button" class="pen-btn pen-del-no">Tidak</button>';
+
+    row.appendChild(bar);
+
+    bar.querySelector('.pen-del-yes').addEventListener('click', async function () {
+        const yesBtn = this;
+        yesBtn.disabled    = true;
+        yesBtn.textContent = 'Menghapus…';
+        try {
+            await deleteTp(tp.id);
+            await renderPerencanaan();
+        } catch (err) {
+            bar.remove();
+            origBtn.style.display = '';
+            alert('Gagal hapus: ' + (err.message || 'Error tidak diketahui.'));
+        }
+    });
+
+    bar.querySelector('.pen-del-no').addEventListener('click', function () {
+        bar.remove();
+        origBtn.style.display = '';
+    });
+}
+
+// ── Event delegation ──────────────────────────────────────────────────────────
+
+function handleClick(e) {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    switch (btn.dataset.action) {
+        case 'tp-add':
+            openTpModal(null);
+            break;
+        case 'tp-edit': {
+            const tp = _tpsCache.find(function (t) { return t.id === btn.dataset.id; });
+            if (tp) openTpModal(tp);
+            break;
+        }
+        case 'tp-delete': {
+            const tp = _tpsCache.find(function (t) { return t.id === btn.dataset.id; });
+            if (tp) confirmDeleteTp(btn, tp);
+            break;
+        }
+    }
+}
+
+function initDelegation() {
+    if (_delegationInit) return;
+    const container = document.getElementById('penilaian-placeholder');
+    if (!container) return;
+    container.addEventListener('click', handleClick);
+    _delegationInit = true;
+}
+
+// ── Collapse ──────────────────────────────────────────────────────────────────
+
+function initCollapse() {
+    [
+        { headerId: 'pen-perencanaan-header', bodyId: 'pen-perencanaan-body', open: true },
+        { headerId: 'pen-pelaksanaan-header', bodyId: 'pen-pelaksanaan-body', open: false },
+    ].forEach(function (cfg) {
+        const header  = document.getElementById(cfg.headerId);
+        const body    = document.getElementById(cfg.bodyId);
+        const chevron = header ? header.querySelector('.pen-chevron') : null;
+        if (!header || !body) return;
+
+        body.style.display = cfg.open ? '' : 'none';
+        if (chevron) chevron.style.transform = cfg.open ? 'rotate(180deg)' : '';
+
+        header.addEventListener('click', function () {
+            const isOpen = body.style.display !== 'none';
+            body.style.display = isOpen ? 'none' : '';
+            if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+        });
+    });
+}
+
+// ── Render Perencanaan ────────────────────────────────────────────────────────
+
+async function renderPerencanaan() {
+    const body = document.getElementById('pen-perencanaan-body');
+    if (!body) return;
+
+    if (!_kelasId || !_subjectId || !_year || !_semester) {
+        body.innerHTML = '<p class="hint">Pilih kelas, mapel, tahun, dan semester untuk melihat TP.</p>';
+        return;
+    }
+
+    body.innerHTML = '<p class="hint">Memuat…</p>';
+
+    let tps;
+    try {
+        tps = await getTps(_kelasId, _subjectId, _year, Number(_semester));
+    } catch (err) {
+        body.innerHTML = '<p class="hint" style="color:var(--color-danger)">Gagal memuat TP: ' + esc(err.message) + '</p>';
+        return;
+    }
+
+    _tpsCache = tps;
+
+    let html = '';
+    tps.forEach(function (tp) {
+        const desc = tp.deskripsi_tp.length > 80
+            ? tp.deskripsi_tp.slice(0, 80) + '…'
+            : tp.deskripsi_tp;
+        html +=
+            '<div class="pen-tp-row" data-tp-id="' + esc(tp.id) + '">' +
+                '<div class="pen-tp-text">' +
+                    '<div class="pen-tp-kode">' + esc(tp.kode_tp) + '</div>' +
+                    '<div class="pen-tp-desc">' + esc(desc) + '</div>' +
+                '</div>' +
+                '<div class="pen-tp-actions">' +
+                    '<button class="pen-btn" data-action="tp-edit" data-id="' + esc(tp.id) + '">Edit</button>' +
+                    '<button class="pen-btn pen-btn-danger" data-action="tp-delete" data-id="' + esc(tp.id) + '">Hapus</button>' +
+                '</div>' +
+            '</div>';
+    });
+
+    if (tps.length === 0) {
+        html = '<p class="hint">Belum ada TP untuk mapel dan kelas ini.</p>';
+    }
+    html += '<button class="pen-add-btn" data-action="tp-add">＋ Tambah TP</button>';
+
+    body.innerHTML = html;
+}
+
+// ── Render Pelaksanaan (placeholder — sprint berikutnya) ──────────────────────
+
+function renderPelaksanaan() {
+    const body = document.getElementById('pen-pelaksanaan-body');
+    if (!body) return;
+    if (!_kelasId || !_subjectId || !_year || !_semester) {
+        body.innerHTML = '<p class="hint">Pilih kelas, mapel, tahun, dan semester untuk melihat data.</p>';
+        return;
+    }
+    body.innerHTML = '<p class="hint">Belum ada entri penilaian.</p>';
+}
+
+// ── renderAll ─────────────────────────────────────────────────────────────────
+
+async function renderAll() {
     const container = document.getElementById('penilaian-placeholder');
     if (!container) return;
 
-    const hasCtx = _kelasId && _subjectId && _year && _semester;
-    const emptyHint = hasCtx
-      ? null
-      : '<p class="hint">Pilih kelas, mapel, tahun, dan semester untuk melihat data.</p>';
-
     container.innerHTML =
-      '<div class="pen-section">' +
-        '<div class="pen-section-header" id="pen-perencanaan-header">' +
-          '<span>Perencanaan</span>' +
-          '<span class="pen-chevron">▼</span>' +
+        '<div class="pen-section">' +
+            '<div class="pen-section-header" id="pen-perencanaan-header">' +
+                '<span>Perencanaan</span>' +
+                '<span class="pen-chevron">▼</span>' +
+            '</div>' +
+            '<div class="pen-section-body" id="pen-perencanaan-body"></div>' +
         '</div>' +
-        '<div class="pen-section-body" id="pen-perencanaan-body">' +
-          (emptyHint || '<p class="hint">Belum ada TP untuk mapel dan kelas ini.</p>') +
-        '</div>' +
-      '</div>' +
-      '<div class="pen-section">' +
-        '<div class="pen-section-header" id="pen-pelaksanaan-header">' +
-          '<span>Pelaksanaan</span>' +
-          '<span class="pen-chevron">▼</span>' +
-        '</div>' +
-        '<div class="pen-section-body" id="pen-pelaksanaan-body">' +
-          (emptyHint || '<p class="hint">Belum ada entri penilaian.</p>') +
-        '</div>' +
-      '</div>';
+        '<div class="pen-section">' +
+            '<div class="pen-section-header" id="pen-pelaksanaan-header">' +
+                '<span>Pelaksanaan</span>' +
+                '<span class="pen-chevron">▼</span>' +
+            '</div>' +
+            '<div class="pen-section-body" id="pen-pelaksanaan-body" style="display:none"></div>' +
+        '</div>';
 
     initCollapse();
-  }
+    initDelegation();
+    await renderPerencanaan();
+    renderPelaksanaan();
+}
 
-  // ── Entry point ───────────────────────────────────────────────────────────────
+// ── Entry point ───────────────────────────────────────────────────────────────
 
-  window.initPenilaianPanel = function (kelasId, subjectId, year, semester) {
+window.initPenilaianPanel = function (kelasId, subjectId, year, semester) {
     _kelasId   = kelasId   || null;
     _subjectId = subjectId || null;
     _year      = year      || null;
     _semester  = semester  || null;
     injectStyles();
     renderAll();
-  };
-
-}());
+};
