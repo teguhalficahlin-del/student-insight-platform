@@ -704,13 +704,15 @@ export async function getAttendanceRecapPerClass(dateStart, dateEnd) {
  */
 export async function getClassStudents(classId) {
     const { data, error } = await supabase
-        .from('students')
-        .select('student_id, nis, full_name')
+        .from('class_enrollments')
+        .select('student:students ( student_id, nis, full_name, student_status )')
         .eq('class_id', classId)
-        .eq('is_active', true)
-        .order('full_name');
+        .is('withdrawn_at', null);
     if (error) throw error;
-    return data ?? [];
+    return (data ?? [])
+        .map(r => r.student)
+        .filter(s => s && s.student_status === 'AKTIF')
+        .sort((a, b) => a.full_name.localeCompare(b.full_name, 'id'));
 }
 
 export async function getAttendanceSummaryByStudents(classId, academicYear, dateStart, dateEnd, teacherId = null) {
