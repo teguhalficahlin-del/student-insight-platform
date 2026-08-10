@@ -77,6 +77,7 @@ function injectStyles() {
 .pen-tp-count{font-size:11px;padding:1px 6px;border-radius:999px;background:var(--color-bg);border:1px solid var(--color-border);color:var(--color-text-muted);}
 .pen-item-actions{display:flex;gap:6px;flex-shrink:0;align-self:flex-start;}
 .pen-tp-item-body{padding:6px 0 4px;}
+.pen-kktp-list{margin-top:8px;padding-top:8px;border-top:1px solid var(--color-border);}
 .pen-tp-desc-short,.pen-tp-desc-full{font-size:13px;color:var(--color-text-muted);line-height:1.5;margin:0;}
 .pen-tp-more{background:none;border:none;padding:0;font-size:12px;color:var(--color-primary);cursor:pointer;margin-top:2px;display:block;}
 .pen-placeholder{font-size:13px;color:var(--color-text-muted);margin:0;}
@@ -399,7 +400,10 @@ async function renderPerencanaan() {
                             ? '<p class="pen-tp-desc-full" id="pen-tp-full-' + esc(tp.id) + '" style="display:none">' + esc(tp.deskripsi_tp) + '</p>' +
                               '<button class="pen-tp-more" data-action="tp-desc-toggle" data-id="' + esc(tp.id) + '">Selengkapnya</button>'
                             : '') +
-                        '<p class="pen-placeholder" style="margin-top:8px">Belum ada KKTP.</p>' +
+                        '<div class="pen-kktp-list" id="pen-kktp-list-' + esc(tp.id) + '">' +
+                            '<p class="pen-placeholder">Belum ada KKTP.</p>' +
+                            '<button class="pen-add-btn" data-action="kktp-add" data-tp-id="' + esc(tp.id) + '">＋ Tambah KKTP</button>' +
+                        '</div>' +
                     '</div>' +
                 '</div>' +
                 '<div class="pen-item-actions">' +
