@@ -68,6 +68,24 @@ function injectStyles() {
 .pen-cp-elemen:last-child{margin-bottom:0;}
 .pen-cp-elemen-nama{font-weight:600;font-size:12px;color:var(--color-text);margin-bottom:3px;}
 .pen-cp-elemen-desc{font-size:12px;color:var(--color-text-muted);line-height:1.5;}
+.pen-subsec{border:1px solid var(--color-border);border-radius:var(--radius);overflow:hidden;margin-bottom:10px;}
+.pen-subsec-header{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 14px;background:var(--color-bg);cursor:pointer;user-select:none;border:none;font-family:inherit;text-align:left;}
+.pen-subsec-header:hover{background:var(--color-surface);}
+.pen-subsec-title{font-weight:600;font-size:13px;color:var(--color-text);}
+.pen-subsec-body{padding:12px 14px;border-top:1px solid var(--color-border);}
+.pen-tp-item{border-bottom:1px solid var(--color-border);padding:8px 0;}
+.pen-tp-item:last-of-type{border-bottom:none;}
+.pen-tp-item-header{display:flex;align-items:flex-start;gap:8px;}
+.pen-tp-toggle{background:none;border:none;cursor:pointer;padding:2px 4px;font-size:11px;color:var(--color-text-muted);flex-shrink:0;line-height:1.6;transition:transform .15s;}
+.pen-tp-meta{flex:1;min-width:0;}
+.pen-tp-headline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.pen-tp-title{font-weight:600;font-size:13px;color:var(--color-text);}
+.pen-tp-count{font-size:11px;padding:1px 6px;border-radius:999px;background:var(--color-bg);border:1px solid var(--color-border);color:var(--color-text-muted);}
+.pen-item-actions{display:flex;gap:6px;margin-top:4px;}
+.pen-tp-item-body{padding:6px 0 2px;display:none;}
+.pen-tp-desc-short,.pen-tp-desc-full{font-size:13px;color:var(--color-text-muted);line-height:1.5;margin:0;}
+.pen-tp-more{background:none;border:none;padding:0;font-size:12px;color:var(--color-primary);cursor:pointer;margin-top:2px;display:block;}
+.pen-placeholder{font-size:13px;color:var(--color-text-muted);margin:0;}
 `;
     document.head.appendChild(s);
 }
@@ -218,6 +236,28 @@ function handleClick(e) {
             if (tp) confirmDeleteTp(btn, tp);
             break;
         }
+        case 'pen-toggle': {
+            const bodyEl = document.getElementById(btn.dataset.body);
+            if (!bodyEl) break;
+            const isOpen = bodyEl.style.display !== 'none';
+            bodyEl.style.display = isOpen ? 'none' : '';
+            const chevron = btn.querySelector('.pen-chevron');
+            if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+            if (btn.classList.contains('pen-tp-toggle')) {
+                btn.textContent = isOpen ? '▶' : '▼';
+            }
+            break;
+        }
+        case 'tp-desc-toggle': {
+            const shortEl = document.getElementById('pen-tp-short-' + btn.dataset.id);
+            const fullEl  = document.getElementById('pen-tp-full-'  + btn.dataset.id);
+            if (!shortEl || !fullEl) break;
+            const expanded = fullEl.style.display !== 'none';
+            shortEl.style.display = expanded ? '' : 'none';
+            fullEl.style.display  = expanded ? 'none' : '';
+            btn.textContent       = expanded ? 'Selengkapnya' : 'Ringkas';
+            break;
+        }
     }
 }
 
@@ -296,12 +336,33 @@ async function renderPerencanaan() {
     const body = document.getElementById('pen-perencanaan-body');
     if (!body) return;
 
-    if (!_kelasId || !_subjectId || !_year || !_semester) {
-        body.innerHTML = '<p class="hint">Pilih kelas, mapel, tahun, dan semester untuk melihat TP.</p>';
-        return;
-    }
+    const PLACEHOLDER = '<p class="pen-placeholder">Pilih kelas, mapel, tahun, dan semester untuk melihat data.</p>';
+    const cpBodyId    = 'pen-cp-subsec-body';
+    const tpBodyId    = 'pen-tp-subsec-body';
+    const tpTitleId   = 'pen-tp-subsec-title';
+    const contextOk   = _kelasId && _subjectId && _year && _semester;
 
-    body.innerHTML = '<p class="hint">Memuat…</p>';
+    body.innerHTML =
+        '<div class="pen-subsec">' +
+            '<button class="pen-subsec-header" data-action="pen-toggle" data-body="' + cpBodyId + '">' +
+                '<span class="pen-subsec-title">Capaian Pembelajaran</span>' +
+                '<span class="pen-chevron">▼</span>' +
+            '</button>' +
+            '<div class="pen-subsec-body" id="' + cpBodyId + '" style="display:none">' +
+                (!_subjectId ? PLACEHOLDER : '<p class="pen-placeholder">Memuat…</p>') +
+            '</div>' +
+        '</div>' +
+        '<div class="pen-subsec">' +
+            '<button class="pen-subsec-header" data-action="pen-toggle" data-body="' + tpBodyId + '">' +
+                '<span class="pen-subsec-title" id="' + tpTitleId + '">Tujuan Pembelajaran</span>' +
+                '<span class="pen-chevron">▼</span>' +
+            '</button>' +
+            '<div class="pen-subsec-body" id="' + tpBodyId + '" style="display:none">' +
+                (!contextOk ? PLACEHOLDER : '<p class="pen-placeholder">Memuat…</p>') +
+            '</div>' +
+        '</div>';
+
+    if (!contextOk) return;
 
     let tps, cpHtml;
     try {
@@ -310,36 +371,56 @@ async function renderPerencanaan() {
             renderCp(),
         ]);
     } catch (err) {
-        body.innerHTML = '<p class="hint" style="color:var(--color-danger)">Gagal memuat TP: ' + esc(err.message) + '</p>';
+        const tpEl = document.getElementById(tpBodyId);
+        if (tpEl) tpEl.innerHTML = '<p class="pen-placeholder" style="color:var(--color-danger)">Gagal memuat: ' + esc(err.message) + '</p>';
         return;
     }
 
     _tpsCache = tps;
 
-    let html = cpHtml;
+    const cpEl = document.getElementById(cpBodyId);
+    if (cpEl) cpEl.innerHTML = cpHtml;
+
+    const tpTitle = document.getElementById(tpTitleId);
+    if (tpTitle) tpTitle.textContent = 'Tujuan Pembelajaran (' + tps.length + ')';
+
+    let tpHtml = '';
     tps.forEach(function (tp) {
-        const desc = tp.deskripsi_tp.length > 80
-            ? tp.deskripsi_tp.slice(0, 80) + '…'
-            : tp.deskripsi_tp;
-        html +=
-            '<div class="pen-tp-row" data-tp-id="' + esc(tp.id) + '">' +
-                '<div class="pen-tp-text">' +
-                    '<div class="pen-tp-kode">' + esc(tp.kode_tp) + '</div>' +
-                    '<div class="pen-tp-desc">' + esc(desc) + '</div>' +
+        const long   = tp.deskripsi_tp.length > 120;
+        const short  = long ? tp.deskripsi_tp.slice(0, 120) + '…' : tp.deskripsi_tp;
+        const itemBodyId = 'pen-tp-item-body-' + tp.id;
+        tpHtml +=
+            '<div class="pen-tp-item" data-tp-id="' + esc(tp.id) + '">' +
+                '<div class="pen-tp-item-header">' +
+                    '<button class="pen-tp-toggle" data-action="pen-toggle" data-body="' + itemBodyId + '">▶</button>' +
+                    '<div class="pen-tp-meta">' +
+                        '<div class="pen-tp-headline">' +
+                            '<span class="pen-tp-title">' + esc(tp.kode_tp) + '</span>' +
+                            '<span class="pen-tp-count">0 KKTP</span>' +
+                        '</div>' +
+                        '<div class="pen-item-actions">' +
+                            '<button class="pen-btn" data-action="tp-edit" data-id="' + esc(tp.id) + '">Edit</button>' +
+                            '<button class="pen-btn pen-btn-danger" data-action="tp-delete" data-id="' + esc(tp.id) + '">Hapus</button>' +
+                        '</div>' +
+                    '</div>' +
                 '</div>' +
-                '<div class="pen-tp-actions">' +
-                    '<button class="pen-btn" data-action="tp-edit" data-id="' + esc(tp.id) + '">Edit</button>' +
-                    '<button class="pen-btn pen-btn-danger" data-action="tp-delete" data-id="' + esc(tp.id) + '">Hapus</button>' +
+                '<div class="pen-tp-item-body" id="' + itemBodyId + '">' +
+                    '<p class="pen-tp-desc-short" id="pen-tp-short-' + esc(tp.id) + '">' + esc(short) + '</p>' +
+                    (long
+                        ? '<p class="pen-tp-desc-full" id="pen-tp-full-' + esc(tp.id) + '" style="display:none">' + esc(tp.deskripsi_tp) + '</p>' +
+                          '<button class="pen-tp-more" data-action="tp-desc-toggle" data-id="' + esc(tp.id) + '">Selengkapnya</button>'
+                        : '') +
                 '</div>' +
             '</div>';
     });
 
     if (tps.length === 0) {
-        html += '<p class="hint">Belum ada TP untuk mapel dan kelas ini.</p>';
+        tpHtml = '<p class="pen-placeholder">Belum ada TP untuk mapel dan kelas ini.</p>';
     }
-    html += '<button class="pen-add-btn" data-action="tp-add">＋ Tambah TP</button>';
+    tpHtml += '<button class="pen-add-btn" data-action="tp-add">＋ Tambah Tujuan Pembelajaran</button>';
 
-    body.innerHTML = html;
+    const tpEl = document.getElementById(tpBodyId);
+    if (tpEl) tpEl.innerHTML = tpHtml;
 }
 
 // ── Render Pelaksanaan (placeholder — sprint berikutnya) ──────────────────────
