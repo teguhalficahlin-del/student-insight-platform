@@ -36,7 +36,7 @@ function injectStyles() {
 .pen-section-header:hover{background:var(--color-bg);}
 .pen-chevron{transition:transform .2s;color:var(--color-text-muted);}
 .pen-section-body{padding:12px 16px;border-top:1px solid var(--color-border);}
-.pen-tp-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--color-border);width:100%;box-sizing:border-box;}
+.pen-tp-row{display:block;padding:10px 0;border-bottom:1px solid var(--color-border);width:100%;box-sizing:border-box;}
 .pen-tp-row:last-of-type{border-bottom:none;}
 .pen-tp-text{flex:1;min-width:0;}
 .pen-tp-kode{font-weight:600;font-size:13px;color:var(--color-text);margin-bottom:2px;}
@@ -543,6 +543,10 @@ async function renderPerencanaan() {
                         '<button class="pen-tp-toggle" data-action="pen-toggle" data-body="' + itemBodyId + '" data-tp-id="' + esc(tp.id) + '">▶</button>' +
                         '<span class="pen-tp-title">' + esc(tp.kode_tp) + '</span>' +
                         '<span class="pen-tp-count" id="pen-tp-count-' + esc(tp.id) + '">0 KKTP</span>' +
+                        '<div class="pen-item-actions" style="margin-left:auto">' +
+                            '<button class="pen-btn" data-action="tp-edit" data-id="' + esc(tp.id) + '">Edit</button>' +
+                            '<button class="pen-btn pen-btn-danger" data-action="tp-delete" data-id="' + esc(tp.id) + '">Hapus</button>' +
+                        '</div>' +
                     '</div>' +
                     '<div class="pen-tp-item-body" id="' + itemBodyId + '" style="display:none">' +
                         '<p class="pen-tp-desc-short" id="pen-tp-short-' + esc(tp.id) + '">' + esc(short) + '</p>' +
@@ -555,10 +559,6 @@ async function renderPerencanaan() {
                             '<button class="pen-add-btn" data-action="kktp-add" data-tp-id="' + esc(tp.id) + '">＋ Tambah KKTP</button>' +
                         '</div>' +
                     '</div>' +
-                '</div>' +
-                '<div class="pen-item-actions">' +
-                    '<button class="pen-btn" data-action="tp-edit" data-id="' + esc(tp.id) + '">Edit</button>' +
-                    '<button class="pen-btn pen-btn-danger" data-action="tp-delete" data-id="' + esc(tp.id) + '">Hapus</button>' +
                 '</div>' +
             '</div>';
     });
