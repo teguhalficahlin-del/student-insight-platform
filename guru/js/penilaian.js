@@ -70,16 +70,13 @@ function injectStyles() {
 .pen-cp-elemen-desc{font-size:12px;color:var(--color-text-muted);line-height:1.5;}
 .pen-sec{margin-bottom:16px;}
 .pen-sec-label{font-weight:600;font-size:13px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;}
-.pen-tp-item{border-bottom:1px solid var(--color-border);padding:8px 0;}
-.pen-tp-item:last-of-type{border-bottom:none;}
-.pen-tp-item-header{display:flex;align-items:flex-start;gap:8px;}
+.pen-tp-left{flex:1;min-width:0;}
 .pen-tp-toggle{background:none;border:none;cursor:pointer;padding:2px 4px;font-size:11px;color:var(--color-text-muted);flex-shrink:0;line-height:1.6;transition:transform .15s;}
-.pen-tp-meta{flex:1;min-width:0;}
 .pen-tp-headline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .pen-tp-title{font-weight:600;font-size:13px;color:var(--color-text);}
 .pen-tp-count{font-size:11px;padding:1px 6px;border-radius:999px;background:var(--color-bg);border:1px solid var(--color-border);color:var(--color-text-muted);}
-.pen-item-actions{display:flex;gap:6px;margin-top:4px;}
-.pen-tp-item-body{padding:6px 0 2px;display:none;}
+.pen-item-actions{display:flex;gap:6px;flex-shrink:0;align-self:flex-start;}
+.pen-tp-item-body{padding:6px 0 4px;}
 .pen-tp-desc-short,.pen-tp-desc-full{font-size:13px;color:var(--color-text-muted);line-height:1.5;margin:0;}
 .pen-tp-more{background:none;border:none;padding:0;font-size:12px;color:var(--color-primary);cursor:pointer;margin-top:2px;display:block;}
 .pen-placeholder{font-size:13px;color:var(--color-text-muted);margin:0;}
@@ -389,26 +386,25 @@ async function renderPerencanaan() {
         const short      = long ? tp.deskripsi_tp.slice(0, 120) + '…' : tp.deskripsi_tp;
         const itemBodyId = 'pen-tp-item-body-' + tp.id;
         tpHtml +=
-            '<div class="pen-tp-item" data-tp-id="' + esc(tp.id) + '">' +
-                '<div class="pen-tp-item-header">' +
-                    '<button class="pen-tp-toggle" data-action="pen-toggle" data-body="' + itemBodyId + '">▶</button>' +
-                    '<div class="pen-tp-meta">' +
-                        '<div class="pen-tp-headline">' +
-                            '<span class="pen-tp-title">' + esc(tp.kode_tp) + '</span>' +
-                            '<span class="pen-tp-count">0 KKTP</span>' +
-                        '</div>' +
-                        '<div class="pen-item-actions">' +
-                            '<button class="pen-btn" data-action="tp-edit" data-id="' + esc(tp.id) + '">Edit</button>' +
-                            '<button class="pen-btn pen-btn-danger" data-action="tp-delete" data-id="' + esc(tp.id) + '">Hapus</button>' +
-                        '</div>' +
+            '<div class="pen-tp-row" data-tp-id="' + esc(tp.id) + '">' +
+                '<div class="pen-tp-left">' +
+                    '<div class="pen-tp-headline">' +
+                        '<button class="pen-tp-toggle" data-action="pen-toggle" data-body="' + itemBodyId + '">▶</button>' +
+                        '<span class="pen-tp-title">' + esc(tp.kode_tp) + '</span>' +
+                        '<span class="pen-tp-count">0 KKTP</span>' +
+                    '</div>' +
+                    '<div class="pen-tp-item-body" id="' + itemBodyId + '" style="display:none">' +
+                        '<p class="pen-tp-desc-short" id="pen-tp-short-' + esc(tp.id) + '">' + esc(short) + '</p>' +
+                        (long
+                            ? '<p class="pen-tp-desc-full" id="pen-tp-full-' + esc(tp.id) + '" style="display:none">' + esc(tp.deskripsi_tp) + '</p>' +
+                              '<button class="pen-tp-more" data-action="tp-desc-toggle" data-id="' + esc(tp.id) + '">Selengkapnya</button>'
+                            : '') +
+                        '<p class="pen-placeholder" style="margin-top:8px">Belum ada KKTP.</p>' +
                     '</div>' +
                 '</div>' +
-                '<div class="pen-tp-item-body" id="' + itemBodyId + '" style="display:none">' +
-                    '<p class="pen-tp-desc-short" id="pen-tp-short-' + esc(tp.id) + '">' + esc(short) + '</p>' +
-                    (long
-                        ? '<p class="pen-tp-desc-full" id="pen-tp-full-' + esc(tp.id) + '" style="display:none">' + esc(tp.deskripsi_tp) + '</p>' +
-                          '<button class="pen-tp-more" data-action="tp-desc-toggle" data-id="' + esc(tp.id) + '">Selengkapnya</button>'
-                        : '') +
+                '<div class="pen-item-actions">' +
+                    '<button class="pen-btn" data-action="tp-edit" data-id="' + esc(tp.id) + '">Edit</button>' +
+                    '<button class="pen-btn pen-btn-danger" data-action="tp-delete" data-id="' + esc(tp.id) + '">Hapus</button>' +
                 '</div>' +
             '</div>';
     });
