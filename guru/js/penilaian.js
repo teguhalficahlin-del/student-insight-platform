@@ -85,7 +85,7 @@ function injectStyles() {
 .pen-kktp-row{display:contents;}
 .pen-kktp-bullet{color:var(--color-text-muted);}
 .pen-kktp-predikat{font-weight:600;color:var(--color-text);}
-.pen-kktp-range{color:var(--color-text-muted);white-space:nowrap;}
+.pen-kktp-range{color:var(--color-text-muted);white-space:nowrap;padding-left:24px;}
 .pen-kktp-actions{display:contents;}
 .pen-tp-desc-short,.pen-tp-desc-full{font-size:13px;color:var(--color-text-muted);line-height:1.5;margin:0;}
 .pen-tp-more{background:none;border:none;padding:0;font-size:12px;color:var(--color-primary);cursor:pointer;margin-top:2px;display:block;}
