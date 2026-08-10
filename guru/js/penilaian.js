@@ -81,12 +81,11 @@ function injectStyles() {
 .pen-tp-count{font-size:11px;padding:1px 6px;border-radius:999px;background:var(--color-bg);border:1px solid var(--color-border);color:var(--color-text-muted);}
 .pen-item-actions{display:flex;gap:6px;flex-shrink:0;align-self:flex-start;}
 .pen-tp-item-body{padding:6px 0 4px;}
-.pen-kktp-list{margin-top:8px;padding-top:8px;border-top:1px solid var(--color-border);width:100%;}
-.pen-kktp-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;width:100%;box-sizing:border-box;}
-.pen-kktp-bullet{color:var(--color-text-muted);flex-shrink:0;}
-.pen-kktp-predikat{font-weight:600;color:var(--color-text);min-width:100px;flex:1;}
-.pen-kktp-range{color:var(--color-text-muted);flex-shrink:0;padding-left:16px;white-space:nowrap;}
-.pen-kktp-actions{display:flex;gap:4px;flex-shrink:0;margin-left:auto;}
+.pen-kktp-list{margin-top:8px;padding-top:8px;border-top:1px solid var(--color-border);width:100%;display:grid;grid-template-columns:auto 1fr auto auto auto;align-items:center;gap:4px 8px;}
+.pen-kktp-row{display:contents;}
+.pen-kktp-bullet{color:var(--color-text-muted);}
+.pen-kktp-predikat{font-weight:600;color:var(--color-text);min-width:0;}
+.pen-kktp-range{color:var(--color-text-muted);white-space:nowrap;}
 .pen-tp-desc-short,.pen-tp-desc-full{font-size:13px;color:var(--color-text-muted);line-height:1.5;margin:0;}
 .pen-tp-more{background:none;border:none;padding:0;font-size:12px;color:var(--color-primary);cursor:pointer;margin-top:2px;display:block;}
 .pen-placeholder{font-size:13px;color:var(--color-text-muted);margin:0;}
@@ -245,16 +244,14 @@ function renderKktpList(tpId, kktps) {
                 '<span class="pen-kktp-bullet">•</span>' +
                 '<span class="pen-kktp-predikat">' + esc(k.predikat) + '</span>' +
                 '<span class="pen-kktp-range">' + esc(String(k.batas_bawah)) + '–' + esc(String(k.batas_atas)) + '</span>' +
-                '<div class="pen-kktp-actions">' +
-                    '<button class="pen-btn" data-action="kktp-edit" data-id="' + esc(k.id) + '" data-tp-id="' + esc(tpId) + '">Edit</button>' +
-                    '<button class="pen-btn pen-btn-danger" data-action="kktp-delete" data-id="' + esc(k.id) + '" data-tp-id="' + esc(tpId) + '">Hapus</button>' +
-                '</div>' +
+                '<button class="pen-btn" data-action="kktp-edit" data-id="' + esc(k.id) + '" data-tp-id="' + esc(tpId) + '">Edit</button>' +
+                '<button class="pen-btn pen-btn-danger" data-action="kktp-delete" data-id="' + esc(k.id) + '" data-tp-id="' + esc(tpId) + '">Hapus</button>' +
             '</div>';
     });
     if (kktps.length === 0) {
         html = '<p class="pen-placeholder">Belum ada KKTP.</p>';
     }
-    html += '<button class="pen-add-btn" data-action="kktp-add" data-tp-id="' + esc(tpId) + '">＋ Tambah KKTP</button>';
+    html += '<button class="pen-add-btn" style="grid-column:1/-1" data-action="kktp-add" data-tp-id="' + esc(tpId) + '">＋ Tambah KKTP</button>';
     listEl.innerHTML = html;
 
     const badge = document.getElementById('pen-tp-count-' + tpId);
@@ -318,12 +315,13 @@ function confirmDeleteKktp(origBtn) {
     const row = origBtn.closest('.pen-kktp-row');
     const bar = document.createElement('div');
     bar.className = 'pen-del-bar';
+    bar.style.gridColumn = '1/-1';
     bar.innerHTML =
         '<span style="flex:1;min-width:0;font-size:12px;color:var(--color-text-muted)">Hapus KKTP ini?</span>' +
         '<button type="button" class="pen-btn pen-btn-danger pen-del-yes">Ya, Hapus</button>' +
         '<button type="button" class="pen-btn pen-del-no">Tidak</button>';
 
-    row.appendChild(bar);
+    row.insertAdjacentElement('afterend', bar);
 
     bar.querySelector('.pen-del-yes').addEventListener('click', async function () {
         const yesBtn = this;
