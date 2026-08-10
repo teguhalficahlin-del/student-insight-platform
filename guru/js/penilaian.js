@@ -84,8 +84,8 @@ function injectStyles() {
 .pen-kktp-list{margin-top:8px;padding-top:8px;border-top:1px solid var(--color-border);}
 .pen-kktp-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;width:100%;box-sizing:border-box;}
 .pen-kktp-bullet{color:var(--color-text-muted);flex-shrink:0;}
-.pen-kktp-predikat{font-weight:600;color:var(--color-text);min-width:100px;}
-.pen-kktp-range{color:var(--color-text-muted);flex:1;padding-left:16px;}
+.pen-kktp-predikat{font-weight:600;color:var(--color-text);min-width:100px;flex:1;}
+.pen-kktp-range{color:var(--color-text-muted);flex-shrink:0;padding-left:16px;white-space:nowrap;}
 .pen-kktp-actions{display:flex;gap:4px;flex-shrink:0;}
 .pen-tp-desc-short,.pen-tp-desc-full{font-size:13px;color:var(--color-text-muted);line-height:1.5;margin:0;}
 .pen-tp-more{background:none;border:none;padding:0;font-size:12px;color:var(--color-primary);cursor:pointer;margin-top:2px;display:block;}
