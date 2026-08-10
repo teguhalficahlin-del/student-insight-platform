@@ -335,7 +335,7 @@ async function renderPerencanaan() {
     });
 
     if (tps.length === 0) {
-        html = '<p class="hint">Belum ada TP untuk mapel dan kelas ini.</p>';
+        html += '<p class="hint">Belum ada TP untuk mapel dan kelas ini.</p>';
     }
     html += '<button class="pen-add-btn" data-action="tp-add">＋ Tambah TP</button>';
 
