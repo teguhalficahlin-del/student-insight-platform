@@ -876,7 +876,7 @@ const DEPENDENCY_LABELS = {
     attendance:           'record absensi',
     observations:         'catatan observasi',
     achievements:         'catatan prestasi',
-    cases:                'kasus siswa',
+    coaching_cases:       'kasus siswa',
     student_parents:      'data orang tua',
     substitute_schedules: 'jadwal guru pengganti',
     schedule_templates:   'template jadwal',
@@ -903,7 +903,7 @@ const DEPENDENCY_MAP = {
     students: [
         { table: 'attendance',        column: 'student_id' },
         { table: 'observations',      column: 'student_id' },
-        { table: 'cases',             column: 'student_id' },
+        { table: 'coaching_cases',    column: 'student_id' },
         { table: 'pkl_placements',    column: 'student_id' },
         { table: 'pkl_attendance',    column: 'student_id' },
     ],
