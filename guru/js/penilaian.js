@@ -68,11 +68,8 @@ function injectStyles() {
 .pen-cp-elemen:last-child{margin-bottom:0;}
 .pen-cp-elemen-nama{font-weight:600;font-size:12px;color:var(--color-text);margin-bottom:3px;}
 .pen-cp-elemen-desc{font-size:12px;color:var(--color-text-muted);line-height:1.5;}
-.pen-subsec{border:1px solid var(--color-border);border-radius:var(--radius);overflow:hidden;margin-bottom:10px;}
-.pen-subsec-header{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 14px;background:var(--color-bg);cursor:pointer;user-select:none;border:none;font-family:inherit;text-align:left;}
-.pen-subsec-header:hover{background:var(--color-surface);}
-.pen-subsec-title{font-weight:600;font-size:13px;color:var(--color-text);}
-.pen-subsec-body{padding:12px 14px;border-top:1px solid var(--color-border);}
+.pen-sec{margin-bottom:16px;}
+.pen-sec-label{font-weight:600;font-size:13px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;}
 .pen-tp-item{border-bottom:1px solid var(--color-border);padding:8px 0;}
 .pen-tp-item:last-of-type{border-bottom:none;}
 .pen-tp-item-header{display:flex;align-items:flex-start;gap:8px;}
@@ -336,58 +333,60 @@ async function renderPerencanaan() {
     const body = document.getElementById('pen-perencanaan-body');
     if (!body) return;
 
-    const PLACEHOLDER = '<p class="pen-placeholder">Pilih kelas, mapel, tahun, dan semester untuk melihat data.</p>';
-    const cpBodyId    = 'pen-cp-subsec-body';
-    const tpBodyId    = 'pen-tp-subsec-body';
-    const tpTitleId   = 'pen-tp-subsec-title';
-    const contextOk   = _kelasId && _subjectId && _year && _semester;
+    const PLACEHOLDER_CONTEXT = '<p class="pen-placeholder">Pilih kelas, mapel, tahun, dan semester untuk melihat data.</p>';
+    const PLACEHOLDER_MAPEL   = '<p class="pen-placeholder">Pilih mapel untuk melihat CP.</p>';
+    const cpBodyId  = 'pen-cp-body';
+    const tpBodyId  = 'pen-tp-body';
+    const tpLabelId = 'pen-tp-label';
+    const contextOk = _kelasId && _subjectId && _year && _semester;
 
     body.innerHTML =
-        '<div class="pen-subsec">' +
-            '<button class="pen-subsec-header" data-action="pen-toggle" data-body="' + cpBodyId + '">' +
-                '<span class="pen-subsec-title">Capaian Pembelajaran</span>' +
-                '<span class="pen-chevron">▼</span>' +
-            '</button>' +
-            '<div class="pen-subsec-body" id="' + cpBodyId + '" style="display:none">' +
-                (!_subjectId ? PLACEHOLDER : '<p class="pen-placeholder">Memuat…</p>') +
+        '<div class="pen-sec">' +
+            '<div class="pen-sec-label">Capaian Pembelajaran</div>' +
+            '<div id="' + cpBodyId + '">' +
+                (!_subjectId ? PLACEHOLDER_MAPEL : '<p class="pen-placeholder">Memuat CP…</p>') +
             '</div>' +
         '</div>' +
-        '<div class="pen-subsec">' +
-            '<button class="pen-subsec-header" data-action="pen-toggle" data-body="' + tpBodyId + '">' +
-                '<span class="pen-subsec-title" id="' + tpTitleId + '">Tujuan Pembelajaran</span>' +
-                '<span class="pen-chevron">▼</span>' +
-            '</button>' +
-            '<div class="pen-subsec-body" id="' + tpBodyId + '" style="display:none">' +
-                (!contextOk ? PLACEHOLDER : '<p class="pen-placeholder">Memuat…</p>') +
+        '<div class="pen-sec">' +
+            '<div class="pen-sec-label" id="' + tpLabelId + '">Tujuan Pembelajaran</div>' +
+            '<div id="' + tpBodyId + '">' +
+                (!contextOk ? PLACEHOLDER_CONTEXT : '<p class="pen-placeholder">Memuat TP…</p>') +
             '</div>' +
         '</div>';
 
+    if (!_subjectId) return;
+
+    // Fetch CP — hanya butuh _subjectId
+    try {
+        const cpHtml = await renderCp();
+        const cpEl = document.getElementById(cpBodyId);
+        if (cpEl) cpEl.innerHTML = cpHtml;
+    } catch (err) {
+        const cpEl = document.getElementById(cpBodyId);
+        if (cpEl) cpEl.innerHTML = '<p class="pen-placeholder" style="color:var(--color-danger)">Gagal memuat CP: ' + esc(err.message) + '</p>';
+    }
+
     if (!contextOk) return;
 
-    let tps, cpHtml;
+    // Fetch TP — butuh semua 4 konteks
+    let tps;
     try {
-        [tps, cpHtml] = await Promise.all([
-            getTps(_kelasId, _subjectId, _year, Number(_semester)),
-            renderCp(),
-        ]);
+        tps = await getTps(_kelasId, _subjectId, _year, Number(_semester));
     } catch (err) {
         const tpEl = document.getElementById(tpBodyId);
-        if (tpEl) tpEl.innerHTML = '<p class="pen-placeholder" style="color:var(--color-danger)">Gagal memuat: ' + esc(err.message) + '</p>';
+        if (tpEl) tpEl.innerHTML = '<p class="pen-placeholder" style="color:var(--color-danger)">Gagal memuat TP: ' + esc(err.message) + '</p>';
         return;
     }
 
     _tpsCache = tps;
 
-    const cpEl = document.getElementById(cpBodyId);
-    if (cpEl) cpEl.innerHTML = cpHtml;
-
-    const tpTitle = document.getElementById(tpTitleId);
-    if (tpTitle) tpTitle.textContent = 'Tujuan Pembelajaran (' + tps.length + ')';
+    const tpLabel = document.getElementById(tpLabelId);
+    if (tpLabel) tpLabel.textContent = 'Tujuan Pembelajaran (' + tps.length + ')';
 
     let tpHtml = '';
     tps.forEach(function (tp) {
-        const long   = tp.deskripsi_tp.length > 120;
-        const short  = long ? tp.deskripsi_tp.slice(0, 120) + '…' : tp.deskripsi_tp;
+        const long       = tp.deskripsi_tp.length > 120;
+        const short      = long ? tp.deskripsi_tp.slice(0, 120) + '…' : tp.deskripsi_tp;
         const itemBodyId = 'pen-tp-item-body-' + tp.id;
         tpHtml +=
             '<div class="pen-tp-item" data-tp-id="' + esc(tp.id) + '">' +
