@@ -422,6 +422,15 @@ export async function addForumSekolahAck(postId, userId, schoolId) {
 export async function getParentForumRecipients(classId, schoolId) {
     const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
 
+    // Langkah A: ambil student_id di kelas ini (pre-fetch, sequential)
+    const { data: enrollData, error: enrollErr } = await supabase
+        .from('class_enrollments')
+        .select('student_id')
+        .eq('class_id', classId)
+        .is('withdrawn_at', null);
+    if (enrollErr) throw enrollErr;
+    const studentIds = (enrollData ?? []).map(r => r.student_id);
+
     const [waliRes, bkRes, guruWaliRes, jadwalRes] = await Promise.all([
         // Wali Kelas
         supabase.from('users')
@@ -438,17 +447,14 @@ export async function getParentForumRecipients(classId, schoolId) {
             .eq('school_id', schoolId)
             .eq('is_active', true),
 
-        // Guru Wali yang menangani siswa di kelas ini
-        supabase.from('guru_wali_assignments')
-            .select('guru_user_id')
-            .eq('school_id', schoolId)
-            .eq('is_active', true)
-            .in('student_id',
-                supabase.from('class_enrollments')
-                    .select('student_id')
-                    .eq('class_id', classId)
-                    .is('withdrawn_at', null)
-            ),
+        // Langkah B: query guru_wali_assignments dengan array student_id
+        studentIds.length > 0
+            ? supabase.from('guru_wali_assignments')
+                .select('guru_user_id')
+                .eq('school_id', schoolId)
+                .eq('is_active', true)
+                .in('student_id', studentIds)
+            : Promise.resolve({ data: [], error: null }),
 
         // Guru yang mengajar hari ini
         supabase.from('teaching_schedules')
