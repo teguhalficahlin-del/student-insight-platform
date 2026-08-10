@@ -404,7 +404,7 @@ async function renderPerencanaan() {
                         '</div>' +
                     '</div>' +
                 '</div>' +
-                '<div class="pen-tp-item-body" id="' + itemBodyId + '">' +
+                '<div class="pen-tp-item-body" id="' + itemBodyId + '" style="display:none">' +
                     '<p class="pen-tp-desc-short" id="pen-tp-short-' + esc(tp.id) + '">' + esc(short) + '</p>' +
                     (long
                         ? '<p class="pen-tp-desc-full" id="pen-tp-full-' + esc(tp.id) + '" style="display:none">' + esc(tp.deskripsi_tp) + '</p>' +
