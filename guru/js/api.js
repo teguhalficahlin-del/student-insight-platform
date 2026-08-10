@@ -2075,3 +2075,45 @@ export async function deleteTp(id) {
     if (error) throw error;
 }
 
+// ── KKTP (assessment_criteria) ────────────────────────────────────────────────
+
+export async function getKktps(learningObjectiveId) {
+    const { data, error } = await supabase
+        .from('assessment_criteria')
+        .select('id,predikat,batas_bawah,batas_atas,keterangan,urutan')
+        .eq('learning_objective_id', learningObjectiveId)
+        .order('urutan')
+        .order('batas_bawah');
+    if (error) throw error;
+    return data || [];
+}
+
+export async function createKktp(payload) {
+    const { data, error } = await supabase
+        .from('assessment_criteria')
+        .insert(payload)
+        .select('id,predikat,batas_bawah,batas_atas,keterangan,urutan')
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function updateKktp(id, payload) {
+    const { data, error } = await supabase
+        .from('assessment_criteria')
+        .update(payload)
+        .eq('id', id)
+        .select('id,predikat,batas_bawah,batas_atas,keterangan,urutan')
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function deleteKktp(id) {
+    const { error } = await supabase
+        .from('assessment_criteria')
+        .delete()
+        .eq('id', id);
+    if (error) throw error;
+}
+

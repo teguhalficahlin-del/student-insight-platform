@@ -1,4 +1,5 @@
-import { getTps, createTp, updateTp, deleteTp, getCurrentUserRow, getCpForSubject } from './api.js';
+import { getTps, createTp, updateTp, deleteTp, getCurrentUserRow, getCpForSubject,
+         getKktps, createKktp, updateKktp, deleteKktp } from './api.js';
 
 let _kelasId        = null;
 let _subjectId      = null;
@@ -7,6 +8,7 @@ let _semester       = null;
 let _programCode    = null;
 let _gradeLevel     = null;
 let _tpsCache       = [];
+let _kktpsCache     = {};
 let _userInfo       = null;
 let _delegationInit = false;
 
@@ -78,6 +80,11 @@ function injectStyles() {
 .pen-item-actions{display:flex;gap:6px;flex-shrink:0;align-self:flex-start;}
 .pen-tp-item-body{padding:6px 0 4px;}
 .pen-kktp-list{margin-top:8px;padding-top:8px;border-top:1px solid var(--color-border);}
+.pen-kktp-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;}
+.pen-kktp-bullet{color:var(--color-text-muted);flex-shrink:0;}
+.pen-kktp-predikat{font-weight:600;color:var(--color-text);min-width:60px;}
+.pen-kktp-range{color:var(--color-text-muted);flex:1;}
+.pen-kktp-actions{display:flex;gap:4px;flex-shrink:0;}
 .pen-tp-desc-short,.pen-tp-desc-full{font-size:13px;color:var(--color-text-muted);line-height:1.5;margin:0;}
 .pen-tp-more{background:none;border:none;padding:0;font-size:12px;color:var(--color-primary);cursor:pointer;margin-top:2px;display:block;}
 .pen-placeholder{font-size:13px;color:var(--color-text-muted);margin:0;}
@@ -212,6 +219,131 @@ function confirmDeleteTp(origBtn, tp) {
     });
 }
 
+// ── KKTP helpers ─────────────────────────────────────────────────────────────
+
+async function loadAndRenderKktps(tpId) {
+    try {
+        const kktps = await getKktps(tpId);
+        _kktpsCache[tpId] = kktps;
+        renderKktpList(tpId, kktps);
+    } catch (err) {
+        const listEl = document.getElementById('pen-kktp-list-' + tpId);
+        if (listEl) listEl.innerHTML = '<p class="pen-placeholder" style="color:var(--color-danger)">Gagal memuat KKTP: ' + esc(err.message) + '</p>';
+    }
+}
+
+function renderKktpList(tpId, kktps) {
+    const listEl = document.getElementById('pen-kktp-list-' + tpId);
+    if (!listEl) return;
+
+    let html = '';
+    kktps.forEach(function (k) {
+        html +=
+            '<div class="pen-kktp-row">' +
+                '<span class="pen-kktp-bullet">•</span>' +
+                '<span class="pen-kktp-predikat">' + esc(k.predikat) + '</span>' +
+                '<span class="pen-kktp-range">' + esc(String(k.batas_bawah)) + '–' + esc(String(k.batas_atas)) + '</span>' +
+                '<div class="pen-kktp-actions">' +
+                    '<button class="pen-btn" data-action="kktp-edit" data-id="' + esc(k.id) + '" data-tp-id="' + esc(tpId) + '">Edit</button>' +
+                    '<button class="pen-btn pen-btn-danger" data-action="kktp-delete" data-id="' + esc(k.id) + '" data-tp-id="' + esc(tpId) + '">Hapus</button>' +
+                '</div>' +
+            '</div>';
+    });
+    if (kktps.length === 0) {
+        html = '<p class="pen-placeholder">Belum ada KKTP.</p>';
+    }
+    html += '<button class="pen-add-btn" data-action="kktp-add" data-tp-id="' + esc(tpId) + '">＋ Tambah KKTP</button>';
+    listEl.innerHTML = html;
+
+    const badge = document.getElementById('pen-tp-count-' + tpId);
+    if (badge) badge.textContent = kktps.length + ' KKTP';
+}
+
+function openKktpModal(kktpId, tpId) {
+    const existing = kktpId && _kktpsCache[tpId]
+        ? _kktpsCache[tpId].find(function (k) { return k.id === kktpId; })
+        : null;
+
+    openModal({
+        title: kktpId ? 'Edit KKTP' : 'Tambah KKTP',
+        bodyHtml:
+            '<label>Predikat <span style="color:var(--color-danger)">*</span></label>' +
+            '<input type="text" id="pen-kktp-predikat" maxlength="50" placeholder="Contoh: Sangat Baik" value="' + esc(existing?.predikat || '') + '">' +
+            '<label>Batas Bawah (0–100) <span style="color:var(--color-danger)">*</span></label>' +
+            '<input type="number" id="pen-kktp-bawah" min="0" max="100" step="0.01" placeholder="0" value="' + esc(existing != null ? String(existing.batas_bawah) : '') + '">' +
+            '<label>Batas Atas (0–100) <span style="color:var(--color-danger)">*</span></label>' +
+            '<input type="number" id="pen-kktp-atas" min="0" max="100" step="0.01" placeholder="100" value="' + esc(existing != null ? String(existing.batas_atas) : '') + '">' +
+            '<label>Keterangan</label>' +
+            '<textarea id="pen-kktp-ket" rows="3" maxlength="500" placeholder="Opsional…">' + esc(existing?.keterangan || '') + '</textarea>',
+        onSave: async function (overlay, close) {
+            const predikat = overlay.querySelector('#pen-kktp-predikat').value.trim();
+            const bawah    = parseFloat(overlay.querySelector('#pen-kktp-bawah').value);
+            const atas     = parseFloat(overlay.querySelector('#pen-kktp-atas').value);
+            const ket      = overlay.querySelector('#pen-kktp-ket').value.trim();
+
+            if (!predikat)               throw new Error('Predikat tidak boleh kosong.');
+            if (isNaN(bawah) || bawah < 0 || bawah > 100) throw new Error('Batas bawah harus angka antara 0 dan 100.');
+            if (isNaN(atas)  || atas  < 0 || atas  > 100) throw new Error('Batas atas harus angka antara 0 dan 100.');
+            if (bawah >= atas) throw new Error('Batas bawah harus lebih kecil dari batas atas.');
+
+            if (kktpId) {
+                const row = await updateKktp(kktpId, { predikat, batas_bawah: bawah, batas_atas: atas, keterangan: ket || null });
+                _kktpsCache[tpId] = (_kktpsCache[tpId] || []).map(function (k) { return k.id === kktpId ? row : k; });
+            } else {
+                const user = await getUserInfo();
+                if (!user) throw new Error('Sesi tidak ditemukan, coba muat ulang halaman.');
+                const row = await createKktp({
+                    learning_objective_id: tpId,
+                    school_id:             user.school_id,
+                    predikat,
+                    batas_bawah:           bawah,
+                    batas_atas:            atas,
+                    keterangan:            ket || null,
+                });
+                _kktpsCache[tpId] = (_kktpsCache[tpId] || []).concat(row);
+            }
+            renderKktpList(tpId, _kktpsCache[tpId]);
+            close();
+        },
+    });
+}
+
+function confirmDeleteKktp(origBtn) {
+    const kktpId = origBtn.dataset.id;
+    const tpId   = origBtn.dataset.tpId;
+    origBtn.style.display = 'none';
+
+    const row = origBtn.closest('.pen-kktp-row');
+    const bar = document.createElement('div');
+    bar.className = 'pen-del-bar';
+    bar.innerHTML =
+        '<span style="flex:1;min-width:0;font-size:12px;color:var(--color-text-muted)">Hapus KKTP ini?</span>' +
+        '<button type="button" class="pen-btn pen-btn-danger pen-del-yes">Ya, Hapus</button>' +
+        '<button type="button" class="pen-btn pen-del-no">Tidak</button>';
+
+    row.appendChild(bar);
+
+    bar.querySelector('.pen-del-yes').addEventListener('click', async function () {
+        const yesBtn = this;
+        yesBtn.disabled    = true;
+        yesBtn.textContent = 'Menghapus…';
+        try {
+            await deleteKktp(kktpId);
+            _kktpsCache[tpId] = (_kktpsCache[tpId] || []).filter(function (k) { return k.id !== kktpId; });
+            renderKktpList(tpId, _kktpsCache[tpId]);
+        } catch (err) {
+            bar.remove();
+            origBtn.style.display = '';
+            alert('Gagal hapus: ' + (err.message || 'Error tidak diketahui.'));
+        }
+    });
+
+    bar.querySelector('.pen-del-no').addEventListener('click', function () {
+        bar.remove();
+        origBtn.style.display = '';
+    });
+}
+
 // ── Event delegation ──────────────────────────────────────────────────────────
 
 function handleClick(e) {
@@ -240,9 +372,24 @@ function handleClick(e) {
             if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
             if (btn.classList.contains('pen-tp-toggle')) {
                 btn.textContent = isOpen ? '▶' : '▼';
+                if (!isOpen) {
+                    const tpId = btn.dataset.tpId;
+                    if (tpId && _kktpsCache[tpId] === undefined) {
+                        loadAndRenderKktps(tpId);
+                    }
+                }
             }
             break;
         }
+        case 'kktp-add':
+            openKktpModal(null, btn.dataset.tpId);
+            break;
+        case 'kktp-edit':
+            openKktpModal(btn.dataset.id, btn.dataset.tpId);
+            break;
+        case 'kktp-delete':
+            confirmDeleteKktp(btn);
+            break;
         case 'tp-desc-toggle': {
             const shortEl = document.getElementById('pen-tp-short-' + btn.dataset.id);
             const fullEl  = document.getElementById('pen-tp-full-'  + btn.dataset.id);
@@ -390,9 +537,9 @@ async function renderPerencanaan() {
             '<div class="pen-tp-row" data-tp-id="' + esc(tp.id) + '">' +
                 '<div class="pen-tp-left">' +
                     '<div class="pen-tp-headline">' +
-                        '<button class="pen-tp-toggle" data-action="pen-toggle" data-body="' + itemBodyId + '">▶</button>' +
+                        '<button class="pen-tp-toggle" data-action="pen-toggle" data-body="' + itemBodyId + '" data-tp-id="' + esc(tp.id) + '">▶</button>' +
                         '<span class="pen-tp-title">' + esc(tp.kode_tp) + '</span>' +
-                        '<span class="pen-tp-count">0 KKTP</span>' +
+                        '<span class="pen-tp-count" id="pen-tp-count-' + esc(tp.id) + '">0 KKTP</span>' +
                     '</div>' +
                     '<div class="pen-tp-item-body" id="' + itemBodyId + '" style="display:none">' +
                         '<p class="pen-tp-desc-short" id="pen-tp-short-' + esc(tp.id) + '">' + esc(short) + '</p>' +
