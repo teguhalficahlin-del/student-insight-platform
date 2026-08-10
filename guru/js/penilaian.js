@@ -1,9 +1,11 @@
-import { getTps, createTp, updateTp, deleteTp, getCurrentUserRow } from './api.js';
+import { getTps, createTp, updateTp, deleteTp, getCurrentUserRow, getCpForSubject } from './api.js';
 
 let _kelasId        = null;
 let _subjectId      = null;
 let _year           = null;
 let _semester       = null;
+let _programCode    = null;
+let _gradeLevel     = null;
 let _tpsCache       = [];
 let _userInfo       = null;
 let _delegationInit = false;
@@ -55,6 +57,17 @@ function injectStyles() {
 .pen-modal-body input:focus,.pen-modal-body textarea:focus{outline:none;border-color:var(--color-primary);}
 .pen-modal-err{font-size:12px;color:var(--color-danger);min-height:1.2rem;padding:2px 20px 0;}
 .pen-modal-footer{padding:10px 20px 16px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--color-border);}
+.pen-cp-block{margin-bottom:14px;border:1px solid var(--color-border);border-radius:var(--radius);overflow:hidden;}
+.pen-cp-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--color-surface);cursor:pointer;user-select:none;}
+.pen-cp-header:hover{background:var(--color-bg);}
+.pen-cp-title{font-weight:600;font-size:13px;color:var(--color-text);}
+.pen-cp-badge{font-size:11px;padding:2px 7px;border-radius:999px;background:var(--color-bg);border:1px solid var(--color-border);color:var(--color-text-muted);flex-shrink:0;}
+.pen-cp-body{padding:12px 14px;border-top:1px solid var(--color-border);display:none;}
+.pen-cp-umum{font-size:13px;color:var(--color-text-muted);margin-bottom:10px;line-height:1.5;}
+.pen-cp-elemen{padding:8px 10px;margin-bottom:6px;border-left:3px solid var(--color-primary);background:var(--color-bg);border-radius:0 var(--radius) var(--radius) 0;}
+.pen-cp-elemen:last-child{margin-bottom:0;}
+.pen-cp-elemen-nama{font-weight:600;font-size:12px;color:var(--color-text);margin-bottom:3px;}
+.pen-cp-elemen-desc{font-size:12px;color:var(--color-text-muted);line-height:1.5;}
 `;
     document.head.appendChild(s);
 }
@@ -239,6 +252,44 @@ function initCollapse() {
     });
 }
 
+// ── Render CP (read-only) ─────────────────────────────────────────────────────
+
+async function renderCp() {
+    let cp;
+    try {
+        cp = await getCpForSubject(_subjectId, _programCode, _gradeLevel);
+    } catch (err) {
+        return '<p class="hint" style="color:var(--color-danger);margin-bottom:10px">Gagal memuat CP: ' + esc(err.message) + '</p>';
+    }
+
+    if (!cp || !cp.found) {
+        return '<p class="hint" style="margin-bottom:10px">CP nasional belum tersedia untuk mapel ini.</p>';
+    }
+
+    const badge = cp.confidence === 'HIGH' ? 'Cocok' : cp.confidence === 'MEDIUM' ? 'Perkiraan' : 'Rendah';
+    let eHtml = '';
+    (cp.elemen || []).forEach(function (e) {
+        eHtml +=
+            '<div class="pen-cp-elemen">' +
+                '<div class="pen-cp-elemen-nama">' + esc(e.nama_elemen) + '</div>' +
+                '<div class="pen-cp-elemen-desc">' + esc(e.deskripsi_cp) + '</div>' +
+            '</div>';
+    });
+
+    return (
+        '<div class="pen-cp-block">' +
+            '<div class="pen-cp-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'">' +
+                '<span class="pen-cp-title">Capaian Pembelajaran — ' + esc(cp.core_subject_name) + '</span>' +
+                '<span class="pen-cp-badge">' + esc(badge) + '</span>' +
+            '</div>' +
+            '<div class="pen-cp-body">' +
+                (cp.cp_umum ? '<p class="pen-cp-umum">' + esc(cp.cp_umum) + '</p>' : '') +
+                eHtml +
+            '</div>' +
+        '</div>'
+    );
+}
+
 // ── Render Perencanaan ────────────────────────────────────────────────────────
 
 async function renderPerencanaan() {
@@ -252,9 +303,12 @@ async function renderPerencanaan() {
 
     body.innerHTML = '<p class="hint">Memuat…</p>';
 
-    let tps;
+    let tps, cpHtml;
     try {
-        tps = await getTps(_kelasId, _subjectId, _year, Number(_semester));
+        [tps, cpHtml] = await Promise.all([
+            getTps(_kelasId, _subjectId, _year, Number(_semester)),
+            renderCp(),
+        ]);
     } catch (err) {
         body.innerHTML = '<p class="hint" style="color:var(--color-danger)">Gagal memuat TP: ' + esc(err.message) + '</p>';
         return;
@@ -262,7 +316,7 @@ async function renderPerencanaan() {
 
     _tpsCache = tps;
 
-    let html = '';
+    let html = cpHtml;
     tps.forEach(function (tp) {
         const desc = tp.deskripsi_tp.length > 80
             ? tp.deskripsi_tp.slice(0, 80) + '…'
@@ -330,11 +384,13 @@ async function renderAll() {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-window.initPenilaianPanel = function (kelasId, subjectId, year, semester) {
-    _kelasId   = kelasId   || null;
-    _subjectId = subjectId || null;
-    _year      = year      || null;
-    _semester  = semester  || null;
+window.initPenilaianPanel = function (kelasId, subjectId, year, semester, programCode, gradeLevel) {
+    _kelasId     = kelasId     || null;
+    _subjectId   = subjectId   || null;
+    _year        = year        || null;
+    _semester    = semester    || null;
+    _programCode = programCode || null;
+    _gradeLevel  = gradeLevel  != null ? Number(gradeLevel) : null;
     injectStyles();
     renderAll();
 };

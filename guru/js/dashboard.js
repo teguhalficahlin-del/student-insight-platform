@@ -7942,7 +7942,7 @@ async function uploadATPFlow(coreSubjects, phases, ay) {
 // ═══════════════════════════════════════════════════════
 
 let _penilaianInit = false;
-let _penilaianCtx  = { kelasId: null, subjectId: null, year: null, semester: null };
+let _penilaianCtx  = { kelasId: null, subjectId: null, year: null, semester: null, programCode: null, gradeLevel: null };
 
 
 async function initPenilaianTab() {
@@ -7993,6 +7993,9 @@ async function initPenilaianTab() {
 
     selKelas.addEventListener('change', async () => {
         _penilaianCtx.kelasId = selKelas.value || null;
+        const selOpt = selKelas.options[selKelas.selectedIndex];
+        _penilaianCtx.gradeLevel  = selOpt?.dataset.gradeLevel  ? Number(selOpt.dataset.gradeLevel)  : null;
+        _penilaianCtx.programCode = selOpt?.dataset.programCode || null;
         await loadPenilaianMapel(selMapel, selKelas.value);
         _penilaianCtx.subjectId = null;
         await onPenilaianContextChange();
@@ -8016,7 +8019,7 @@ async function loadPenilaianKelas(selEl) {
     try {
         const { data, error } = await supabase
             .from('teaching_assignments')
-            .select('class_id, classes(name)')
+            .select('class_id, classes(name, grade_level, program_id, programs(code))')
             .eq('school_id', currentUser.school_id)
             .eq('user_id', currentUser.user_id)
             .eq('is_active', true)
@@ -8029,6 +8032,8 @@ async function loadPenilaianKelas(selEl) {
             const opt = document.createElement('option');
             opt.value = row.class_id;
             opt.textContent = row.classes?.name || row.class_id;
+            opt.dataset.gradeLevel  = row.classes?.grade_level  ?? '';
+            opt.dataset.programCode = row.classes?.programs?.code ?? '';
             selEl.appendChild(opt);
         });
     } catch (e) {
@@ -8070,7 +8075,9 @@ async function onPenilaianContextChange() {
             _penilaianCtx.kelasId,
             _penilaianCtx.subjectId,
             _penilaianCtx.year,
-            _penilaianCtx.semester
+            _penilaianCtx.semester,
+            _penilaianCtx.programCode,
+            _penilaianCtx.gradeLevel
         );
     }
 }
