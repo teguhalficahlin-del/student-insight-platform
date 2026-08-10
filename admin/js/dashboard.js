@@ -2086,10 +2086,10 @@ async function renderActivityLogPanel() {
 
     const [evRes, obsRes] = await Promise.allSettled([
         supabase
-            .from('case_events')
-            .select(`event_type, created_at, author_role_at_time,
-                case:cases ( title, student:students ( full_name ) ),
-                author:users!case_events_author_user_id_fkey ( full_name )`)
+            .from('coaching_case_events')
+            .select(`event_type, created_at,
+                coaching_case:coaching_cases ( title, student:students ( full_name ) ),
+                author:users ( full_name )`)
             .order('created_at', { ascending: false })
             .limit(50),
         supabase
@@ -2112,9 +2112,9 @@ async function renderActivityLogPanel() {
                 <tr>
                     <td style="white-space:nowrap">${fmtTs(e.created_at)}</td>
                     <td>${EVENT_LABELS[e.event_type] ?? e.event_type}</td>
-                    <td>${e.case?.title ?? '—'}</td>
-                    <td>${e.case?.student?.full_name ?? '—'}</td>
-                    <td>${e.author?.full_name ?? '—'}<br><span class="hint" style="font-size:11px">${e.author_role_at_time ?? ''}</span></td>
+                    <td>${e.coaching_case?.title ?? '—'}</td>
+                    <td>${e.coaching_case?.student?.full_name ?? '—'}</td>
+                    <td>${e.author?.full_name ?? '—'}</td>
                 </tr>`).join('')}
             </tbody>
            </table>`;
