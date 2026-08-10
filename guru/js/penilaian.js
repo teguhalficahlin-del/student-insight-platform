@@ -36,7 +36,7 @@ function injectStyles() {
 .pen-section-header:hover{background:var(--color-bg);}
 .pen-chevron{transition:transform .2s;color:var(--color-text-muted);}
 .pen-section-body{padding:12px 16px;border-top:1px solid var(--color-border);}
-.pen-tp-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--color-border);}
+.pen-tp-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--color-border);width:100%;box-sizing:border-box;}
 .pen-tp-row:last-of-type{border-bottom:none;}
 .pen-tp-text{flex:1;min-width:0;}
 .pen-tp-kode{font-weight:600;font-size:13px;color:var(--color-text);margin-bottom:2px;}
@@ -48,6 +48,8 @@ function injectStyles() {
 .pen-btn-danger:hover{background:var(--color-danger-bg);}
 .pen-add-btn{display:block;width:100%;box-sizing:border-box;text-align:center;padding:8px;margin-top:10px;border-radius:var(--radius);border:1px dashed var(--color-border);background:none;color:var(--color-text-muted);font-size:13px;cursor:pointer;}
 .pen-add-btn:hover{border-color:var(--color-primary);color:var(--color-primary);}
+.pen-add-btn-tp{background:#1D9E75;color:#fff;border:none;font-weight:500;}
+.pen-add-btn-tp:hover{background:#178a65;color:#fff;border:none;}
 .pen-del-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0 4px;border-top:1px solid var(--color-border);margin-top:6px;}
 .pen-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:900;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;}
 .pen-modal-box{background:var(--color-surface);border-radius:var(--radius-lg);width:100%;max-width:480px;display:flex;flex-direction:column;max-height:90vh;border:1px solid var(--color-border);}
@@ -80,10 +82,10 @@ function injectStyles() {
 .pen-item-actions{display:flex;gap:6px;flex-shrink:0;align-self:flex-start;}
 .pen-tp-item-body{padding:6px 0 4px;}
 .pen-kktp-list{margin-top:8px;padding-top:8px;border-top:1px solid var(--color-border);}
-.pen-kktp-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;}
+.pen-kktp-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;width:100%;box-sizing:border-box;}
 .pen-kktp-bullet{color:var(--color-text-muted);flex-shrink:0;}
-.pen-kktp-predikat{font-weight:600;color:var(--color-text);min-width:60px;}
-.pen-kktp-range{color:var(--color-text-muted);flex:1;}
+.pen-kktp-predikat{font-weight:600;color:var(--color-text);min-width:100px;}
+.pen-kktp-range{color:var(--color-text-muted);flex:1;padding-left:16px;}
 .pen-kktp-actions{display:flex;gap:4px;flex-shrink:0;}
 .pen-tp-desc-short,.pen-tp-desc-full{font-size:13px;color:var(--color-text-muted);line-height:1.5;margin:0;}
 .pen-tp-more{background:none;border:none;padding:0;font-size:12px;color:var(--color-primary);cursor:pointer;margin-top:2px;display:block;}
@@ -563,7 +565,7 @@ async function renderPerencanaan() {
     if (tps.length === 0) {
         tpHtml = '<p class="pen-placeholder">Belum ada TP untuk mapel dan kelas ini.</p>';
     }
-    tpHtml += '<button class="pen-add-btn" data-action="tp-add">＋ Tambah Tujuan Pembelajaran</button>';
+    tpHtml += '<button class="pen-add-btn pen-add-btn-tp" data-action="tp-add">＋ Tambah Tujuan Pembelajaran</button>';
 
     const tpEl = document.getElementById(tpBodyId);
     if (tpEl) tpEl.innerHTML = tpHtml;
