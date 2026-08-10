@@ -8012,6 +8012,9 @@ async function initPenilaianTab() {
         _penilaianCtx.semester = parseInt(selSem.value) || null;
         await onPenilaianContextChange();
     });
+
+    // Render accordion segera saat tab dibuka, meski konteks belum lengkap
+    await onPenilaianContextChange();
 }
 
 async function loadPenilaianKelas(selEl) {
