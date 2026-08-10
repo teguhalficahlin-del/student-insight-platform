@@ -32,7 +32,6 @@ import {
     getDutyStaffCandidates, getDutySchedules,
     assignDutySchedule, revokeDutySchedule,
     wizardResetStudents, wizardResetSchedules,
-    deleteUserWithAuth,
     logout,
     getCoreSubjectsForSchedule,
 } from './api.js';
@@ -3051,13 +3050,7 @@ async function runServerReset(step, ids, btn) {
 
         if (step === 6) {
             btn.textContent = 'Menghapus siswa & data terkait…';
-            const result = await wizardResetStudents(schoolId, ids);
-            // Hapus akun auth siswa via edge function (satu per satu, tidak blocking UI)
-            const authIds = result?.auth_user_ids ?? [];
-            if (authIds.length > 0) {
-                btn.textContent = `Menghapus ${authIds.length} akun…`;
-                await Promise.allSettled(authIds.map(aid => deleteUserWithAuth(aid)));
-            }
+            await wizardResetStudents(schoolId, ids);
         } else if (step === 11) {
             btn.textContent = 'Menghapus jadwal & data terkait…';
             await wizardResetSchedules(schoolId);
