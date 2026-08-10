@@ -81,12 +81,12 @@ function injectStyles() {
 .pen-tp-count{font-size:11px;padding:1px 6px;border-radius:999px;background:var(--color-bg);border:1px solid var(--color-border);color:var(--color-text-muted);}
 .pen-item-actions{display:flex;gap:6px;flex-shrink:0;align-self:flex-start;}
 .pen-tp-item-body{padding:6px 0 4px;}
-.pen-kktp-list{margin-top:8px;padding-top:8px;border-top:1px solid var(--color-border);width:100%;display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 8px;}
-.pen-kktp-row{display:flex;align-items:center;gap:8px;min-width:0;}
-.pen-kktp-bullet{color:var(--color-text-muted);flex-shrink:0;}
-.pen-kktp-predikat{font-weight:600;color:var(--color-text);flex-shrink:0;}
-.pen-kktp-range{color:var(--color-text-muted);white-space:nowrap;margin-left:12px;}
-.pen-kktp-actions{display:flex;gap:4px;flex-shrink:0;}
+.pen-kktp-list{margin-top:8px;padding-top:8px;border-top:1px solid var(--color-border);width:100%;display:grid;grid-template-columns:auto auto 1fr auto auto;align-items:center;gap:4px 8px;}
+.pen-kktp-row{display:contents;}
+.pen-kktp-bullet{color:var(--color-text-muted);}
+.pen-kktp-predikat{font-weight:600;color:var(--color-text);}
+.pen-kktp-range{color:var(--color-text-muted);white-space:nowrap;}
+.pen-kktp-actions{display:contents;}
 .pen-tp-desc-short,.pen-tp-desc-full{font-size:13px;color:var(--color-text-muted);line-height:1.5;margin:0;}
 .pen-tp-more{background:none;border:none;padding:0;font-size:12px;color:var(--color-primary);cursor:pointer;margin-top:2px;display:block;}
 .pen-placeholder{font-size:13px;color:var(--color-text-muted);margin:0;}
@@ -315,7 +315,8 @@ function confirmDeleteKktp(origBtn) {
     const tpId   = origBtn.dataset.tpId;
     origBtn.style.display = 'none';
 
-    const row = origBtn.closest('.pen-kktp-actions');
+    const listEl = origBtn.closest('.pen-kktp-list');
+    const addBtn = listEl.querySelector('.pen-add-btn');
     const bar = document.createElement('div');
     bar.className = 'pen-del-bar';
     bar.style.gridColumn = '1/-1';
@@ -324,7 +325,7 @@ function confirmDeleteKktp(origBtn) {
         '<button type="button" class="pen-btn pen-btn-danger pen-del-yes">Ya, Hapus</button>' +
         '<button type="button" class="pen-btn pen-del-no">Tidak</button>';
 
-    row.insertAdjacentElement('afterend', bar);
+    addBtn.insertAdjacentElement('beforebegin', bar);
 
     bar.querySelector('.pen-del-yes').addEventListener('click', async function () {
         const yesBtn = this;
