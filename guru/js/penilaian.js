@@ -270,7 +270,7 @@ function initDelegation() {
 
 function initCollapse() {
     [
-        { headerId: 'pen-perencanaan-header', bodyId: 'pen-perencanaan-body', open: true },
+        { headerId: 'pen-perencanaan-header', bodyId: 'pen-perencanaan-body', open: false },
         { headerId: 'pen-pelaksanaan-header', bodyId: 'pen-pelaksanaan-body', open: false },
     ].forEach(function (cfg) {
         const header  = document.getElementById(cfg.headerId);
@@ -446,7 +446,7 @@ async function renderAll() {
                 '<span>Perencanaan</span>' +
                 '<span class="pen-chevron">▼</span>' +
             '</div>' +
-            '<div class="pen-section-body" id="pen-perencanaan-body"></div>' +
+            '<div class="pen-section-body" id="pen-perencanaan-body" style="display:none"></div>' +
         '</div>' +
         '<div class="pen-section">' +
             '<div class="pen-section-header" id="pen-pelaksanaan-header">' +
