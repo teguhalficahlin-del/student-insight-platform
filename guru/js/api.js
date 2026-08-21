@@ -498,7 +498,7 @@ export async function fetchAllPklStudents() {
         .from('students')
         .select(`
             student_id, nis, full_name, student_status,
-            program:programs ( program_name ),
+            program:programs ( name ),
             placements:pkl_placements (
                 placement_id, start_date, end_date, is_active,
                 dudi:users!pkl_placements_dudi_user_id_fkey ( user_id, full_name, dudi_org_name )
@@ -511,7 +511,7 @@ export async function fetchAllPklStudents() {
         const active = (s.placements ?? []).find(p => p.is_active) ?? s.placements?.[0] ?? null;
         return {
             student_id:   s.student_id, nis: s.nis, full_name: s.full_name,
-            program_name: s.program?.program_name ?? '—',
+            program_name: s.program?.name ?? '—',
             placement_id: active?.placement_id ?? null,
             dudi_name:    active?.dudi?.dudi_org_name ?? active?.dudi?.full_name ?? '—',
             start_date:   active?.start_date ?? null, end_date: active?.end_date ?? null,

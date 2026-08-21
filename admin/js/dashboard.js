@@ -1205,7 +1205,7 @@ async function renderStudentsPanel() {
             <strong>Akun Login Siswa</strong>
             <p class="hint" style="margin:6px 0">
                 ${noAccount > 0
-                    ? `<strong>${noAccount}</strong> siswa belum punya akun login. Siswa masuk ke Portal Siswa pakai <strong>NIS</strong>, password awal <code>{NIS}!SMK</code>.`
+                    ? `<strong>${noAccount}</strong> siswa belum punya akun login. Siswa masuk ke Portal Siswa pakai <strong>NIS</strong>, password awal <code>12345678</code>.`
                     : '✓ Semua siswa sudah punya akun login.'}
             </p>
             ${noAccount > 0

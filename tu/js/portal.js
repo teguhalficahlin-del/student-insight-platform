@@ -1104,7 +1104,7 @@ function renderDrillTree() {
                         try {
                             const tJur = _drillType === 'SISWA_DRILL' ? 'SISWA_PER_JURUSAN' : 'ORTU_PER_JURUSAN';
                             const list = await getForumRecipientCandidates(tJur, {
-                                programId: prog.program_id, academicYear: config.current_academic_year,
+                                programId: prog.program_id, academicYear: schoolConfig?.current_academic_year,
                             });
                             _drillJurusanCount.set(prog.program_id, list.length);
                         } catch (_) {
@@ -1178,7 +1178,7 @@ function renderDrillTree() {
                                     try {
                                         const tKls = _drillType === 'SISWA_DRILL' ? 'SISWA_PER_KELAS' : 'ORTU_PER_KELAS';
                                         const list = await getForumRecipientCandidates(tKls, {
-                                            classId: cls.class_id, academicYear: config.current_academic_year,
+                                            classId: cls.class_id, academicYear: schoolConfig?.current_academic_year,
                                         });
                                         _drillKelasCount.set(cls.class_id, list.length);
                                     } catch (_) {
@@ -1390,7 +1390,7 @@ function renderPiketTree() {
                         if (!_drillPiketHariCount.has(day)) {
                             try {
                                 const list = await getForumRecipientCandidates('GURU_PIKET', {
-                                    dayOfWeek: day, academicYear: config.current_academic_year,
+                                    dayOfWeek: day, academicYear: schoolConfig?.current_academic_year,
                                 });
                                 list.forEach(c => { c._dayOfWeek = day; });
                                 _drillPiketHariCount.set(day, list.length);
@@ -1445,7 +1445,7 @@ async function _togglePiketHari(day) {
     if (!_drillPiketHariData.has(day)) {
         try {
             const list = await getForumRecipientCandidates('GURU_PIKET', {
-                dayOfWeek: day, academicYear: config.current_academic_year,
+                dayOfWeek: day, academicYear: schoolConfig?.current_academic_year,
             });
             list.forEach(c => { c._dayOfWeek = day; });
             _drillPiketHariData.set(day, list);
@@ -1467,7 +1467,7 @@ async function submitDrillDownPiket() {
             let list = _drillPiketHariData.get(day);
             if (!list) {
                 list = await getForumRecipientCandidates('GURU_PIKET', {
-                    dayOfWeek: day, academicYear: config.current_academic_year,
+                    dayOfWeek: day, academicYear: schoolConfig?.current_academic_year,
                 });
                 list.forEach(c => { c._dayOfWeek = day; });
             }
@@ -1524,7 +1524,7 @@ function openDrillDownWaliKelasPicker() {
     _initPickerWiring(modal);
 
     getForumRecipientCandidates('SEMUA_WALI_KELAS', {
-        academicYear: config.current_academic_year,
+        academicYear: schoolConfig?.current_academic_year,
     }).then(list => {
         _waliKelasCache = new Map();
         list.forEach(c => { if (c.extra_info) _waliKelasCache.set(c.extra_info, c); });
