@@ -53,7 +53,11 @@ Kalau salah satu dari dua verifikasi ini belum dilakukan, JANGAN lanjut ke peker
 ## 4. Commit & Deploy
 
 - Commit hanya setelah diff ditinjau (dan ditampilkan verbatim — lihat aturan #2).
-- **TIDAK ADA** push tanpa konfirmasi eksplisit terpisah dari commit.
+- **TIDAK ADA** push tanpa konfirmasi eksplisit terpisah dari commit,
+  **kecuali sprint Mode C (Freebuff Audit) bertipe JS/HTML only** —
+  pada tipe ini git push boleh dijalankan otomatis di FASE 4 tanpa
+  konfirmasi terpisah, asalkan GATE 0–3 semua lulus dan prompt sprint
+  mencantumkan `Auto-execute FASE 4: YA`. Lihat CLAUDE.md §6b Mode C.
 - **TIDAK ADA** `git add + commit + push` digabung otomatis dalam satu langkah.
 - **TIDAK ADA** `supabase db push` (real, bukan dry-run) tanpa instruksi eksplisit terpisah setelah hasil dry-run ditinjau — berlaku bahkan kalau prompt sebelumnya sudah menyinggung soal "lanjut deploy".
 - Urutan deploy yang benar: `supabase db push` (setelah dry-run direview) → `supabase functions deploy` (kalau ada edge function berubah) → `git push`. Alasan urutan ini: mencegah jendela waktu di mana kode production yang sudah live memanggil RPC/fungsi yang belum ada di database remote.
