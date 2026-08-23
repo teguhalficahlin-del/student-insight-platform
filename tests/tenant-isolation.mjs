@@ -59,6 +59,27 @@
  * EXIT CODE: 0 = semua lulus, 1 = ada pelanggaran (cocok untuk CI).
  */
 
+// Auto-load .env jika SUPABASE_ACCESS_TOKEN belum tersedia di shell.
+// Memakai node:fs bawaan — tanpa dependency eksternal.
+if (!process.env.SUPABASE_ACCESS_TOKEN) {
+    try {
+        const { readFileSync } = await import('node:fs');
+        const { fileURLToPath } = await import('node:url');
+        const { dirname, join } = await import('node:path');
+        const __dirname = dirname(fileURLToPath(import.meta.url));
+        const envPath = join(__dirname, '..', '.env');
+        const lines = readFileSync(envPath, 'utf8').split('\n');
+        for (const line of lines) {
+            const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)\s*$/);
+            if (m && !process.env[m[1]]) {
+                process.env[m[1]] = m[2].replace(/^["']|["']$/g, '').trim();
+            }
+        }
+    } catch {
+        // .env tidak ada atau tidak bisa dibaca — env var harus disediakan manual
+    }
+}
+
 const REF   = process.env.PROJECT_REF || 'xovvuuwexoweoqyltepq';
 const TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
 const MGMT  = `https://api.supabase.com/v1/projects/${REF}`;
