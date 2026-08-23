@@ -133,6 +133,99 @@ Claude Code investigasi → lapor rekomendasi → STOP → tunggu konfirmasi
 **Mode B (Implementasi penuh)** — konteks sudah final:
 Claude Code investigasi cepat → apply → commit → STOP (tanpa push)
 
+**Mode C (Sprint Fix — Freebuff Audit)** — khusus untuk sprint
+perbaikan hasil audit freebuff. Setiap prompt sprint mengikuti
+struktur 5 fase berikut tanpa pengecualian:
+
+**KLASIFIKASI SPRINT** — wajib dicantumkan di baris pertama setiap
+prompt sprint:
+```
+KLASIFIKASI SPRINT:
+- Tipe: [JS/HTML only | Edge Function | Migration DB | Campuran]
+- Auto-execute FASE 4: [YA | TIDAK — tunggu konfirmasi Romo]
+```
+
+Aturan klasifikasi:
+| Tipe | Contoh | Auto-execute FASE 4? |
+|------|--------|----------------------|
+| JS/HTML only | *.js, *.html di folder portal | YA — jika semua gate lulus. §4 dilonggarkan khusus tipe ini: git push boleh otomatis tanpa konfirmasi terpisah |
+| Edge Function | supabase/functions/** | TIDAK — STOP setelah FASE 3, tampilkan hasil, tunggu konfirmasi Romo |
+| Migration DB | supabase/migrations/** | TIDAK — STOP setelah FASE 3, tampilkan hasil, tunggu konfirmasi Romo |
+| Campuran | Kombinasi tipe di atas | Ikuti aturan tipe paling ketat |
+
+**FASE 0 — BASELINE SNAPSHOT**
+- Jalankan `pwd`, baca `AGENT_WORKING_RULES.md` + `CLAUDE.md`
+- Jalankan test suite baseline:
+```
+  node tests/tenant-isolation.mjs 2>&1
+  npx playwright test --reporter=list 2>&1 (jika tersedia)
+```
+- Catat jumlah pass/fail sebagai baseline — tampilkan verbatim
+- GATE 0: Jika baseline sudah ada test yang fail sebelum perubahan
+  apapun → STOP, laporkan, jangan lanjut. Bukan tanggung jawab sprint ini.
+
+**FASE 1 — MAPPING AKTUAL**
+- Untuk setiap finding dalam prompt: jalankan grep/cat aktual ke file,
+  tampilkan baris yang ditemukan verbatim di badan teks
+- Identifikasi semua file yang akan disentuh
+- Grep semua dynamic caller dari fungsi yang akan diubah:
+  event listeners, callback, object dispatch (contoh: PANEL_RENDERERS),
+  import/export chain
+- GATE 1: Jika finding tidak ditemukan di lokasi yang diharapkan,
+  atau lokasi berbeda dari deskripsi audit → STOP, laporkan detail
+  perbedaan, jangan lanjut ke FASE 2
+
+**FASE 2 — DIFF + TARGETED TEST PLAN**
+- Tulis diff lengkap untuk setiap file yang akan diubah,
+  verbatim di badan teks dalam format:
+```diff
+  --- a/path/file
+  +++ b/path/file
+  @@ ... @@
+  - baris lama
+  + baris baru
+```
+- Untuk setiap finding yang di-fix, tulis test case minimal yang
+  membuktikan bug tidak ada lagi setelah fix (bukan hanya pernyataan)
+- Analisis dampak per file: fungsi yang terpengaruh, fungsi yang TIDAK
+  terpengaruh, potensi regresi
+- GATE 2: Jika tidak bisa menulis test case konkret yang membuktikan
+  fix, atau jika analisis dampak menemukan risiko tinggi → STOP,
+  laporkan, jangan lanjut ke FASE 3
+
+**FASE 3 — APPLY + TEST**
+- Simpan backup: `git stash push -m "backup-sebelum-[nama-sprint]"`
+- Apply perubahan ke working tree
+- Jalankan targeted test dari FASE 2 — tampilkan output verbatim
+- Jalankan full test suite:
+```
+  node tests/tenant-isolation.mjs 2>&1
+  npx playwright test --reporter=list 2>&1 (jika tersedia)
+```
+- Bandingkan jumlah pass/fail dengan baseline FASE 0
+- Tampilkan seluruh output test verbatim di badan teks
+- GATE 3: Jika targeted test fail, ATAU jumlah pass Playwright/
+  tenant-isolation berkurang dari baseline →
+```
+  git checkout -- .
+  git stash drop
+```
+  STOP, laporkan output lengkap, jangan lanjut ke FASE 4
+
+**FASE 4 — COMMIT + PUSH**
+- Hanya dieksekusi jika GATE 0 + 1 + 2 + 3 semua lulus
+- Jika Auto-execute FASE 4: TIDAK → STOP setelah FASE 3,
+  tampilkan semua hasil, tunggu konfirmasi eksplisit Romo
+- Jika Auto-execute FASE 4: YA (JS/HTML only):
+```
+  git add [file spesifik — BUKAN git add .]
+  git commit -m "fix([scope]): [deskripsi ringkas findings]"
+  git push origin main
+```
+  Laporkan verbatim: commit hash, file yang berubah,
+  test count before vs after
+  STOP
+
 ### 6c. Migration
 - Format nama: `YYYYMMDDHHMMSS_nama-fitur.sql` (14 digit)
 - Selalu `IF NOT EXISTS` / `OR REPLACE` (idempotent)
@@ -181,6 +274,12 @@ aman gunakan `BEGIN; ... ROLLBACK;` di local DB saja, atau
 3. REVOKE dua lapis jika ada SECURITY DEFINER baru?
 4. Diff sudah ditampilkan verbatim?
 5. Risiko data loss?
+
+Untuk sprint Mode C, self-review di atas tetap berlaku DAN dilengkapi
+dengan gate aktif di setiap fase (GATE 0–3). Gate bukan pengganti
+self-review — keduanya wajib dijalankan. Jika self-review 5 poin
+menemukan masalah di tengah FASE manapun, perlakukan sebagai gate
+gagal: STOP dan laporkan.
 
 ### 6g. Presisi kerja
 - **Jangan menulis ulang kode dari ingatan.** Definisi fungsi/kode existing yang akan
