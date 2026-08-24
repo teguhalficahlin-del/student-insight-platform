@@ -19,6 +19,16 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { autoRefreshToken: true, persistSession: true, storage: sessionStorage },
 });
 
+// Tanggal lokal dalam format YYYY-MM-DD. TIDAK memakai toISOString() yang
+// berbasis UTC — di WIB (UTC+7) antara pukul 00:00-07:00, toISOString()
+// mengembalikan tanggal KEMARIN, sehingga nilai yang ditulis ke DB (observed_at)
+// tersimpan salah secara permanen. Sengaja diduplikasi dari dateToLocalStr() di
+// dudi/js/dashboard.js agar api.js tidak punya dependency ke lapisan UI.
+function localDateStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 export async function loginWithIdentifier(identifier, password, schoolId = null) {
     const { data: email, error: resolveErr } = await supabase
         .rpc('fn_resolve_login_email', { p_identifier: identifier, p_school_id: schoolId });
@@ -266,7 +276,7 @@ export async function saveObservation({ studentId, sentiment, dimension, content
             content,
             visibility:     'RESTRICTED',
             school_id:      schoolId,
-            observed_at:    new Date().toISOString().slice(0, 10),
+            observed_at:    localDateStr(),
         });
 
     if (error) throw error;
