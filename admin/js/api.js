@@ -385,31 +385,19 @@ export async function getTimeSlots(academicYear, semester, dayOfWeek) {
 }
 
 export async function saveTimeSlots(academicYear, semester, dayOfWeek, slots) {
-    // Hapus slot lama untuk hari ini, lalu insert baru
-    const { error: delErr } = await supabase
-        .from('schedule_time_slots')
-        .delete()
-        .eq('academic_year', academicYear)
-        .eq('semester', semester)
-        .eq('day_of_week', dayOfWeek);
-    if (delErr) throw delErr;
-
-    if (slots.length === 0) return;
-
-    const rows = slots.map((s, i) => ({
-        academic_year: academicYear,
-        semester,
-        day_of_week: dayOfWeek,
-        slot_number: i + 1,
-        start_time: s.start_time,
-        end_time: s.end_time,
-        is_break: s.is_break ?? false,
-        break_label: s.break_label ?? null,
-    }));
-
-    const { error: insErr } = await supabase
-        .from('schedule_time_slots').insert(rows);
-    if (insErr) throw insErr;
+    const { error } = await supabase.rpc('fn_save_time_slots', {
+        p_academic_year: academicYear,
+        p_semester:      semester,
+        p_day_of_week:   dayOfWeek,
+        p_slots:         JSON.stringify(slots.map((s, i) => ({
+            slot_number: i + 1,
+            start_time:  s.start_time,
+            end_time:    s.end_time,
+            is_break:    s.is_break ?? false,
+            break_label: s.break_label ?? null,
+        }))),
+    });
+    if (error) throw error;
 }
 
 export async function getScheduleTemplates(academicYear, semester, dayOfWeek) {
@@ -421,34 +409,19 @@ export async function getScheduleTemplates(academicYear, semester, dayOfWeek) {
 }
 
 export async function saveScheduleTemplates(academicYear, semester, dayOfWeek, templates) {
-    // Hapus template lama untuk hari ini, lalu insert baru
-    const { error: delErr } = await supabase
-        .from('schedule_templates')
-        .delete()
-        .eq('academic_year', academicYear)
-        .eq('semester', semester)
-        .eq('day_of_week', dayOfWeek);
-    if (delErr) throw delErr;
-
-    if (templates.length === 0) return;
-
-    const rows = templates.map(t => ({
-        academic_year: academicYear,
-        semester,
-        day_of_week: dayOfWeek,
-        start_time: t.start_time,
-        end_time: t.end_time,
-        class_id: t.class_id,
-        teacher_id: t.teacher_id,
-        subject_label: t.subject_label || null,
-    }));
-
-    const CHUNK = 200;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-        const { error: insErr } = await supabase
-            .from('schedule_templates').insert(rows.slice(i, i + CHUNK));
-        if (insErr) throw insErr;
-    }
+    const { error } = await supabase.rpc('fn_save_schedule_templates', {
+        p_academic_year: academicYear,
+        p_semester:      semester,
+        p_day_of_week:   dayOfWeek,
+        p_templates:     JSON.stringify(templates.map(t => ({
+            start_time:   t.start_time,
+            end_time:     t.end_time,
+            class_id:     t.class_id,
+            teacher_id:   t.teacher_id,
+            subject_label: t.subject_label || null,
+        }))),
+    });
+    if (error) throw error;
 }
 
 export async function getTeacherList() {
