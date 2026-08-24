@@ -87,7 +87,7 @@ async function submitOne(item) {
  * Simpan satu absensi PKL. Online-first, antre bila jaringan gagal.
  * @returns {{status:'synced'|'queued'|'error', error?:string}}
  */
-export async function saveAttendanceOffline({ placementId, studentId, date, status, notes, userId }) {
+export async function saveAttendanceOffline({ placementId, studentId, date, status, notes, userId, schoolId }) {
     const payload = {
         placement_id:        placementId,
         student_id:          studentId,
@@ -95,6 +95,7 @@ export async function saveAttendanceOffline({ placementId, studentId, date, stat
         status,
         notes:               notes || null,
         recorded_by_user_id: userId,
+        school_id:           schoolId,
     };
 
     if (navigator.onLine) {
