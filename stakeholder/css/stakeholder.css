@@ -78,14 +78,14 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
     background: var(--color-surface); color: #fff;
     border-bottom: 2px solid var(--color-gold);
     padding: 12px 20px; display: flex; align-items: center; gap: 12px;
-    flex-wrap: wrap;
     border-radius: 0 0 16px 16px;
 }
-.app-header h2 { color: var(--color-gold); }
-.app-header h2 { color: #fff; margin: 0; font-size: 16px; flex: 1; }
-.header-info { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-.header-name { font-size: 14px; font-weight: 600; }
-.header-role { font-size: 12px; opacity: .85; }
+.hdr-left { display:flex; flex-direction:column; width:70px; flex-shrink:0; overflow:hidden; }
+.hdr-school { flex:1; text-align:center; font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; color:#fff; }
+.hdr-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.hdr-name { font-size:9px; font-weight:600; color:var(--color-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+.hdr-role { font-size:9px; color:var(--color-text-muted); opacity:.7; display:block; }
+.hdr-icon-btn { background:transparent; border:1px solid rgba(255,255,255,.3); border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; font-size:16px; padding:0; }
 
 /* ── Page body ───────────────────────────────────────────── */
 .page-body { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }

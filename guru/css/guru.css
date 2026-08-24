@@ -93,14 +93,14 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
     background: var(--color-surface); color: #fff;
     border-bottom: 2px solid var(--color-gold);
     padding: 12px 20px; display: flex; align-items: center; gap: 12px;
-    flex-wrap: wrap;
     border-radius: 0 0 16px 16px;
 }
-.app-header h2 { color: var(--color-gold); }
-.app-header h2 { color: #fff; margin: 0; font-size: 16px; flex: 1; }
-.header-info { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-.header-name { font-size: 14px; font-weight: 600; }
-.header-role { font-size: 12px; opacity: .85; }
+.hdr-left { display:flex; flex-direction:column; width:70px; flex-shrink:0; overflow:hidden; }
+.hdr-school { flex:1; text-align:center; font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; color:#fff; }
+.hdr-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.hdr-name { font-size:9px; font-weight:600; color:var(--color-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+.hdr-role { font-size:9px; color:var(--color-text-muted); opacity:.7; display:block; }
+.hdr-icon-btn { background:transparent; border:1px solid rgba(255,255,255,.3); border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; font-size:16px; padding:0; }
 
 /* ── Tab navigation ──────────────────────────────────────── */
 .tab-nav {
@@ -317,7 +317,6 @@ body.has-login-banner .app-header { margin-top: 94px; }
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 640px) {
-    .app-header h2 { flex-basis: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wk-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
     .date-row-actions { display: flex; gap: 8px; }
 }
@@ -330,10 +329,7 @@ body.has-login-banner .app-header { margin-top: 94px; }
     .section-card { padding: 14px 12px; margin-bottom: 12px; }
     #wk-kur1-wrap { max-height: 320px; overflow-y: auto; }
 
-    /* Header — nama lebih kecil agar tidak tumpang tindih */
     .app-header  { padding: 10px 14px; gap: 8px; }
-    .app-header h2 { font-size: 14px; }
-    .header-name { font-size: 13px; }
 
     /* Sembunyikan top nav, tampilkan bottom nav */
     .tab-nav { display: none; }

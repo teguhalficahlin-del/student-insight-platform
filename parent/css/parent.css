@@ -154,14 +154,19 @@ label {
 .topbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     background: var(--color-surface);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
     padding: 12px 20px;
     margin-bottom: 20px;
+    gap: 12px;
 }
-.topbar h2 { font-size: 16px; margin-bottom: 2px; }
+.hdr-left { display:flex; flex-direction:column; width:70px; flex-shrink:0; overflow:hidden; }
+.hdr-school { flex:1; text-align:center; font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; }
+.hdr-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.hdr-name { font-size:9px; font-weight:600; color:var(--color-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+.hdr-role { font-size:9px; color:var(--color-text-muted); opacity:.7; display:block; }
+.hdr-icon-btn { background:transparent; border:1px solid var(--color-border); border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--color-text); font-size:16px; padding:0; }
 
 .loading {
     text-align: center;
@@ -367,13 +372,6 @@ label {
     .data-table td:nth-child(4) {
         display: none;
     }
-
-    .topbar {
-        flex-direction: column;
-        gap: 10px;
-        align-items: flex-start;
-    }
-    .topbar > div:last-child { align-self: flex-end; }
 
     .filter-row {
         flex-direction: column;

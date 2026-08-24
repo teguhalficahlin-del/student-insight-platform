@@ -13,6 +13,7 @@
   <script src="js/sw-guard.js"></script>
 <script>(function(){var last=location.pathname.split("/").filter(Boolean).pop();if(["admin","guru","student","parent","dudi","stakeholder","superadmin"].indexOf(last)>-1){var b=document.createElement("base");b.href=location.pathname.endsWith("/")?location.pathname:location.pathname+"/";document.head.appendChild(b);}})();</script>
     <link rel="stylesheet" href="css/stakeholder.css">
+  <link rel="stylesheet" href="../shared/fonts/tabler-icons.min.css">
   <link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
   <link rel="icon" href="../favicon.ico" sizes="any">
   <link rel="manifest" href="manifest.json">
@@ -25,12 +26,14 @@
 
     <!-- Header -->
     <header class="app-header">
-        <h2 data-brand="school-name">Memuat…</h2>
-        <div class="header-info">
-            <span class="header-name" id="hdr-name">—</span>
-            <span class="header-role">Stakeholder · Ringkasan</span>
+        <div class="hdr-left">
+            <span class="hdr-name" id="hdr-name">—</span>
+            <span class="hdr-role">Stakeholder</span>
         </div>
-        <button class="btn btn-secondary btn-sm" id="logout-btn" style="margin-left:8px">Keluar</button>
+        <h2 class="hdr-school" data-brand="school-name">Memuat…</h2>
+        <div class="hdr-right">
+            <button id="logout-btn" class="hdr-icon-btn" title="Keluar" aria-label="Keluar"><i class="ti ti-logout" aria-hidden="true"></i></button>
+        </div>
     </header>
 
     <div class="page-body">

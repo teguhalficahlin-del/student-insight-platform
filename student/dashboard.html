@@ -26,17 +26,19 @@
 
     <!-- Header -->
     <header class="app-header">
-        <h2 data-brand="school-name">Memuat…</h2>
-        <div class="header-info">
-            <span class="header-name" id="hdr-name">—</span>
-            <span class="header-role" id="hdr-meta">—</span>
+        <div class="hdr-left">
+            <span class="hdr-name" id="hdr-name">—</span>
+            <span class="hdr-role" id="hdr-meta">—</span>
             <span id="hdr-status-badge" style="display:none"></span>
         </div>
-        <div style="position:relative;margin-left:8px">
-            <button class="btn btn-secondary btn-sm" id="notif-bell-btn" title="Notifikasi" aria-label="Buka notifikasi" style="font-size:16px;padding:6px 10px">&#128276;</button>
-            <div id="notif-dropdown" class="notif-dropdown" style="display:none"></div>
+        <h2 class="hdr-school" data-brand="school-name">Memuat…</h2>
+        <div class="hdr-right">
+            <div style="position:relative">
+                <button class="hdr-icon-btn" id="notif-bell-btn" title="Notifikasi" aria-label="Buka notifikasi">🔔</button>
+                <div id="notif-dropdown" class="notif-dropdown" style="display:none"></div>
+            </div>
+            <button class="hdr-icon-btn" id="logout-btn" title="Keluar" aria-label="Keluar"><i class="ti ti-logout" aria-hidden="true"></i></button>
         </div>
-        <button class="btn btn-secondary btn-sm" id="logout-btn" style="margin-left:8px">Keluar</button>
     </header>
 
     <!-- Tab navigation -->

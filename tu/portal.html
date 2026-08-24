@@ -11,17 +11,22 @@
     <script src="js/sw-guard.js"></script>
     <script>(function(){var last=location.pathname.split("/").filter(Boolean).pop();if(["admin","guru","student","parent","dudi","stakeholder","superadmin","tu"].indexOf(last)>-1){var b=document.createElement("base");b.href=location.pathname.endsWith("/")?location.pathname:location.pathname+"/";document.head.appendChild(b);}})();</script>
     <link rel="stylesheet" href="css/tu.css" />
+  <link rel="stylesheet" href="../shared/fonts/tabler-icons.min.css">
     <link rel="manifest" href="manifest.json">
 </head>
 <body>
     <div class="portal-shell">
         <header class="topbar">
-            <div>
-                <h2 id="portal-title">Portal Tata Usaha</h2>
-                <p id="portal-user-name"><span data-brand="school-name"></span></p>
+            <div class="hdr-left">
+                <span class="hdr-name" id="portal-user-name">—</span>
+                <span class="hdr-role">Tata Usaha</span>
             </div>
-            <button id="logout-btn" type="button" class="btn btn-secondary">Keluar</button>
+            <h2 class="hdr-school" data-brand="school-name">Memuat…</h2>
+            <div class="hdr-right">
+                <button id="logout-btn" type="button" class="hdr-icon-btn" title="Keluar" aria-label="Keluar"><i class="ti ti-logout" aria-hidden="true"></i></button>
+            </div>
         </header>
+        <h2 id="portal-title" style="display:none">Portal Tata Usaha</h2>
 
         <div id="loading" class="loading">Memuat data...</div>
 
