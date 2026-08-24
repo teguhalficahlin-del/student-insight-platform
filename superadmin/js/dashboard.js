@@ -206,7 +206,8 @@ async function loadSchools() {
 // SUP-10: delegasi klik daftar sekolah didaftarkan SEKALI di module level.
 // Sebelumnya listener ini berada di dalam loadSchools(), sehingga tiap refresh
 // (provision / hapus / toggle status) menambahkan satu handler baru dan satu
-// klik memicu N aksi. #schools-list ada statis di dashboard.html.
+// klik memicu N aksi. #schools-list ada statis di index.html
+// (#dashboard-view, sejak SUP-03 SPA migration).
 const schoolsListEl = document.getElementById('schools-list');
 schoolsListEl?.addEventListener('click', e => {
     // Accordion toggle

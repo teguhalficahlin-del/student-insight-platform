@@ -58,6 +58,8 @@ shared/       → shared/ (komponen lintas portal)
 ```
 
 Setiap portal: `index.html` (login) + `dashboard.html` (main app).
+Pengecualian: portal **superadmin** adalah SPA — login dan
+dashboard dalam satu `index.html` (sejak commit SUP-03).
 RLS selalu filter berdasarkan `school_id` tenant.
 
 **View aman untuk query staf:** `v_users_staff_directory` (10 kolom, security_invoker=true).
