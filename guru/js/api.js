@@ -2069,7 +2069,7 @@ export async function deleteTp(id) {
 export async function getKktps(learningObjectiveId) {
     const { data, error } = await supabase
         .from('assessment_criteria')
-        .select('id,predikat,batas_bawah,batas_atas,keterangan,urutan')
+        .select('id,predikat,batas_bawah,batas_atas,keterangan,urutan,rentang')
         .eq('learning_objective_id', learningObjectiveId)
         .order('urutan')
         .order('batas_bawah');
@@ -2081,7 +2081,7 @@ export async function createKktp(payload) {
     const { data, error } = await supabase
         .from('assessment_criteria')
         .insert(payload)
-        .select('id,predikat,batas_bawah,batas_atas,keterangan,urutan')
+        .select('id,predikat,batas_bawah,batas_atas,keterangan,urutan,rentang')
         .single();
     if (error) throw error;
     return data;
@@ -2092,7 +2092,7 @@ export async function updateKktp(id, payload) {
         .from('assessment_criteria')
         .update(payload)
         .eq('id', id)
-        .select('id,predikat,batas_bawah,batas_atas,keterangan,urutan')
+        .select('id,predikat,batas_bawah,batas_atas,keterangan,urutan,rentang')
         .single();
     if (error) throw error;
     return data;
@@ -2104,5 +2104,131 @@ export async function deleteKktp(id) {
         .delete()
         .eq('id', id);
     if (error) throw error;
+}
+
+// ─── Penilaian: Students roster per kelas ────────────────────────────────────
+
+export async function getStudentsForClass(classId) {
+    const { data, error } = await supabase
+        .from('class_enrollments')
+        .select('student_id, students!inner(student_id, full_name, student_status)')
+        .eq('class_id', classId);
+    if (error) throw error;
+    return (data ?? [])
+        .filter(r => r.students && ['AKTIF', 'PKL'].includes(r.students.student_status))
+        .map(r => ({ id: r.students.student_id, nama: r.students.full_name ?? '' }))
+        .sort((a, b) => a.nama.localeCompare(b.nama, 'id'));
+}
+
+// ─── Penilaian: Assessments ───────────────────────────────────────────────────
+
+export async function getAssessments(schoolId, classId, subjectId, year, semester) {
+    const { data, error } = await supabase
+        .from('assessments')
+        .select('*')
+        .eq('school_id', schoolId)
+        .eq('class_id', classId)
+        .eq('subject_id', subjectId)
+        .eq('academic_year', year)
+        .eq('semester', semester)
+        .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function createAssessment(schoolId, classId, subjectId, year, semester, teacherId, payload) {
+    const { data, error } = await supabase
+        .from('assessments')
+        .insert({ school_id: schoolId, class_id: classId, subject_id: subjectId,
+                  academic_year: year, semester, teacher_id: teacherId, ...payload })
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+export async function updateAssessment(id, payload) {
+    const { error } = await supabase
+        .from('assessments')
+        .update({ ...payload, updated_at: new Date().toISOString() })
+        .eq('id', id);
+    if (error) throw error;
+}
+
+export async function deleteAssessment(id) {
+    const { error } = await supabase.from('assessments').delete().eq('id', id);
+    if (error) throw error;
+}
+
+// ─── Penilaian: Assessment Results ───────────────────────────────────────────
+
+export async function getAssessmentResults(assessmentId) {
+    const { data, error } = await supabase
+        .from('assessment_results')
+        .select('*')
+        .eq('assessment_id', assessmentId);
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function upsertAssessmentResult(schoolId, classId, assessmentId, studentId, payload) {
+    const { error } = await supabase
+        .from('assessment_results')
+        .upsert(
+            { school_id: schoolId, class_id: classId,
+              assessment_id: assessmentId, student_id: studentId,
+              ...payload, updated_at: new Date().toISOString() },
+            { onConflict: 'assessment_id,student_id' }
+        );
+    if (error) throw error;
+}
+
+// ─── Penilaian: Student Groups ────────────────────────────────────────────────
+
+export async function getStudentGroups(schoolId, classId) {
+    const { data, error } = await supabase
+        .from('student_groups')
+        .select('student_id, grup, updated_at')
+        .eq('school_id', schoolId)
+        .eq('class_id', classId);
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function upsertStudentGroup(schoolId, classId, studentId, grup) {
+    const { error } = await supabase
+        .from('student_groups')
+        .upsert(
+            { school_id: schoolId, class_id: classId, student_id: studentId,
+              grup, updated_at: new Date().toISOString() },
+            { onConflict: 'class_id,student_id' }
+        );
+    if (error) throw error;
+}
+
+// ─── Penilaian: Grade Recap ───────────────────────────────────────────────────
+
+export async function upsertGradeRecap(schoolId, classId, studentId, loId, semester, year, payload) {
+    const { error } = await supabase
+        .from('grade_recap')
+        .upsert(
+            { school_id: schoolId, class_id: classId, student_id: studentId,
+              learning_objective_id: loId, semester, academic_year: year,
+              ...payload, updated_at: new Date().toISOString() },
+            { onConflict: 'school_id,class_id,student_id,learning_objective_id,semester,academic_year' }
+        );
+    if (error) throw error;
+}
+
+export async function getGradeRecap(schoolId, classId, semester, year) {
+    const { data, error } = await supabase
+        .from('grade_recap')
+        .select('*')
+        .eq('school_id', schoolId)
+        .eq('class_id', classId)
+        .eq('semester', semester)
+        .eq('academic_year', year);
+    if (error) throw error;
+    return data ?? [];
 }
 
