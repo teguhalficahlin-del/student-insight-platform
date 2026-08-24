@@ -37,10 +37,6 @@ const loadingEl      = document.getElementById('loading');
 const childSelector  = document.getElementById('child-selector');
 const selectChild    = document.getElementById('select-child');
 const sectionSched   = document.getElementById('section-schedule');
-const schedTbody     = document.querySelector('#schedule-table tbody');
-const schedEmpty     = document.getElementById('schedule-empty');
-const schedDate      = document.getElementById('schedule-date');
-const btnSchedule    = document.getElementById('btn-schedule');
 const sectionAtt     = document.getElementById('section-attendance');
 const sectionObs     = document.getElementById('section-observations');
 const attSummary     = document.getElementById('attendance-summary');
@@ -156,7 +152,7 @@ async function init() {
     }
 
     selectChild.innerHTML = children.map((c, i) =>
-        `<option value="${i}">${c.full_name} — ${c.class_name} (${c.nis})</option>`
+        `<option value="${i}">${esc(c.full_name)} — ${esc(c.class_name)} (${esc(c.nis)})</option>`
     ).join('');
 
     if (children.length > 1) {
@@ -168,7 +164,6 @@ async function init() {
     monthAgo.setDate(monthAgo.getDate() - 30);
     filterStart.value   = localDateStr(monthAgo);
     filterEnd.value     = localDateStr(today);
-    schedDate.value     = localDateStr(today);
     obsDateStart.value  = localDateStr(monthAgo);
     obsDateEnd.value    = localDateStr(today);
 
@@ -592,7 +587,6 @@ function localDateStr(d = new Date()) {
 }
 
 const CASE_STATUS_LABEL = { OPEN: 'Terbuka', CLOSED: 'Selesai' };
-const ROLE_LABEL_SHORT  = { GURU: 'Guru', BK: 'BK', WALI_KELAS: 'Wali Kelas', KAPRODI: 'Ka. Prodi', KEPSEK: 'Kepala Sekolah', WAKA_KESISWAAN: 'Waka Kesiswaan', WAKA_HUMAS: 'Waka Humas' };
 
 async function loadCases(studentId) {
     casesListEl.innerHTML = '<p class="hint">Memuat…</p>';
@@ -706,7 +700,11 @@ async function openNotifDropdown() {
     }
 }
 
-selectChild.addEventListener('change', () => loadChildData(Number(selectChild.value)));
+selectChild.addEventListener('change', () => {
+    // ORT-14: tutup dropdown notifikasi saat anak diganti.
+    if (notifDropdown) notifDropdown.style.display = 'none';
+    loadChildData(Number(selectChild.value));
+});
 
 btnObsFilter.addEventListener('click', async () => {
     const idx = Number(selectChild.value);
@@ -752,6 +750,8 @@ document.querySelectorAll('.sched-view-btn').forEach(btn => {
 });
 
 logoutBtn.addEventListener('click', async () => {
+    // ORT-22: hentikan polling notifikasi sebelum sesi di-invalidate.
+    if (_notifPollTimer) { clearInterval(_notifPollTimer); _notifPollTimer = null; }
     LC.clear();
     await logout();
     window.location.replace(getLoginUrl());
@@ -785,14 +785,22 @@ async function initForumSection() {
           ).join('')
         : '<option value="">Tidak ada anak terdaftar</option>';
 
+    await loadForumPosts();
+}
+
+// ORT-07: listener forum didaftarkan SEKALI saat module load, BUKAN di dalam
+// initForumSection(). Flag _forumInitDone di-reset setiap ganti anak
+// (loadChildData), sehingga listener yang berada di dalamnya akan menumpuk
+// satu set per switch anak. Semua elemen di bawah ada statis di portal.html.
+function initForumListeners() {
     // Sub-tab
-    document.getElementById('forum-tab-masuk').addEventListener('click', () => {
+    document.getElementById('forum-tab-masuk')?.addEventListener('click', () => {
         _forumMode = 'masuk'; _forumOffset = 0;
         document.getElementById('forum-tab-masuk').className = 'btn btn-primary';
         document.getElementById('forum-tab-terkirim').className = 'btn btn-secondary';
         loadForumPosts();
     });
-    document.getElementById('forum-tab-terkirim').addEventListener('click', () => {
+    document.getElementById('forum-tab-terkirim')?.addEventListener('click', () => {
         _forumMode = 'terkirim'; _forumOffset = 0;
         document.getElementById('forum-tab-masuk').className = 'btn btn-secondary';
         document.getElementById('forum-tab-terkirim').className = 'btn btn-primary';
@@ -800,24 +808,24 @@ async function initForumSection() {
     });
 
     // Buat posting
-    document.getElementById('btn-forum-buat').addEventListener('click', openForumBuat);
-    document.getElementById('btn-forum-buat-batal').addEventListener('click', closeForumBuat);
-    document.getElementById('modal-forum-buat').addEventListener('click', e => {
+    document.getElementById('btn-forum-buat')?.addEventListener('click', openForumBuat);
+    document.getElementById('btn-forum-buat-batal')?.addEventListener('click', closeForumBuat);
+    document.getElementById('modal-forum-buat')?.addEventListener('click', e => {
         if (e.target === e.currentTarget) closeForumBuat();
     });
-    document.getElementById('btn-forum-buat-kirim').addEventListener('click', submitForumBuat);
+    document.getElementById('btn-forum-buat-kirim')?.addEventListener('click', submitForumBuat);
 
     // Modal detail
-    document.getElementById('btn-forum-detail-close').addEventListener('click', closeForumDetail);
-    document.getElementById('modal-forum-detail').addEventListener('click', e => {
+    document.getElementById('btn-forum-detail-close')?.addEventListener('click', closeForumDetail);
+    document.getElementById('modal-forum-detail')?.addEventListener('click', e => {
         if (e.target === e.currentTarget) closeForumDetail();
     });
 
     // Load more
-    document.getElementById('btn-load-more-forum').addEventListener('click', () => loadForumPosts(true));
-
-    await loadForumPosts();
+    document.getElementById('btn-load-more-forum')?.addEventListener('click', () => loadForumPosts(true));
 }
+
+initForumListeners();
 
 async function loadForumPosts(loadMore = false) {
     const loadingEl = document.getElementById('forum-loading');
@@ -921,9 +929,14 @@ async function openForumDetail(post) {
                 .createSignedUrl(post.attachment_path, 172800);
             if (signed?.signedUrl) attachmentHref = signed.signedUrl;
         }
-        attEl.innerHTML = `<a href="${esc(attachmentHref)}" target="_blank"
-              class="btn btn-secondary" style="font-size:13px">
-              📎 ${esc(post.attachment_name ?? 'Unduh Lampiran')}</a>`;
+        if (attachmentHref) {
+            attEl.innerHTML = `<a href="${esc(attachmentHref)}" target="_blank"
+                  class="btn btn-secondary" style="font-size:13px">
+                  📎 ${esc(post.attachment_name ?? 'Unduh Lampiran')}</a>`;
+        } else {
+            // ORT-12: signed URL gagal — jangan render <a href="null">.
+            attEl.innerHTML = '<p class="hint" style="font-size:13px">Gagal memuat lampiran.</p>';
+        }
     } else {
         attEl.innerHTML = '';
     }
@@ -991,7 +1004,12 @@ async function submitForumBuat() {
         document.getElementById('forum-tab-masuk').className    = 'btn btn-secondary';
         document.getElementById('forum-tab-terkirim').className = 'btn btn-primary';
         _forumOffset = 0;
-        loadForumPosts();
+        // ORT-08: kegagalan muat ulang tidak boleh dilaporkan sebagai gagal kirim.
+        try {
+            await loadForumPosts();
+        } catch {
+            alert('Pesan terkirim, tetapi daftar gagal dimuat ulang. Muat ulang halaman untuk melihatnya.');
+        }
     } catch (err) {
         errEl.textContent = err.message ?? 'Gagal mengirim pesan.';
         errEl.style.display = 'block';
@@ -999,17 +1017,6 @@ async function submitForumBuat() {
         btnEl.disabled = false;
         btnEl.textContent = 'Kirim';
     }
-}
-
-function fmtRelative(isoStr) {
-    if (!isoStr) return '';
-    const diff = Date.now() - new Date(isoStr).getTime();
-    const m = Math.floor(diff / 60000);
-    if (m < 1)  return 'baru saja';
-    if (m < 60) return `${m} mnt lalu`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h} jam lalu`;
-    return formatDate(isoStr);
 }
 
 // ── Tab Nilai (ortu) ──
