@@ -296,6 +296,14 @@ export async function searchStudents(query, schoolId) {
     }));
 }
 
+// Sengaja tidak di-import dari dashboard.js — api.js
+// tidak boleh bergantung pada lapisan UI. Pola sama
+// dengan dudi/js/api.js.
+function localDateStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 /**
  * Simpan observasi baru. Offline-capable: antre ke IndexedDB bila jaringan mati.
  * @returns {{status:'synced'|'queued'|'error', error?:string}}
@@ -311,7 +319,7 @@ export async function insertObservation({ obsId, authorId, studentId, dimension,
         sentiment,
         visibility,
         content,
-        observed_at:     new Date().toISOString().slice(0, 10),
+        observed_at:     localDateStr(),
     };
     const result = await saveObservation(payload);
     return { ...result, observation_id };
@@ -587,7 +595,7 @@ export async function bulkImportPkl(csvText) {
 // ─── KEPSEK / WAKA ──────────────────────────────────────────
 
 export async function getSchoolStats(academicYear, semester) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateStr();
     const [studentsRes, staffRes, schedToday, attToday] = await Promise.all([
         supabase.from('students').select('student_id', { count: 'exact', head: true }).eq('student_status', 'AKTIF'),
         supabase.from('v_users_staff_directory').select('user_id', { count: 'exact', head: true }).not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")'),
@@ -1834,7 +1842,7 @@ export async function isOnDutyToday() {
 
 export async function getTodayLateArrivals() {
     try {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = localDateStr();
         const { data, error } = await supabase
             .from('late_arrivals')
             .select(`
@@ -1864,7 +1872,7 @@ export async function getTodayLateArrivals() {
 }
 
 export async function recordLateArrival(studentId, arrivalTime, reason, schoolId) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateStr();
     const userRow = await getCurrentUserRow();
     if (!userRow) throw new Error('Sesi tidak valid. Silakan login ulang.');
     const payload = {
