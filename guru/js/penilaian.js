@@ -325,11 +325,18 @@ function openKktpModal(tpId, kktp) {
                 const hi = parseInt(_overlay.querySelector('.pen-rentang-hi[data-predikat="' + p.val + '"]').value, 10);
                 rentang[p.val] = [isNaN(lo) ? 0 : lo, isNaN(hi) ? 100 : hi];
             });
+            await ensureUser();
             if (existing) {
                 await updateKktp(existing.id, { keterangan: label, rentang });
             } else {
                 const urutan = (await getKktps(tpId)).length + 1;
-                await createKktp({ learning_objective_id: tpId, keterangan: label, rentang, urutan });
+                await createKktp({
+                    school_id: _schoolId,
+                    learning_objective_id: tpId,
+                    keterangan: label,
+                    rentang,
+                    urutan,
+                });
             }
             close();
             await loadAndRenderKktps(tpId);
@@ -1154,6 +1161,10 @@ function initCollapse() {
 async function renderAll() {
     const container = document.getElementById('penilaian-placeholder');
     if (!container) return;
+
+    // penilaian-placeholder punya class section-card dari dashboard.html
+    // yang membungkus semua section jadi satu kotak — hapus agar tiap section terpisah
+    container.classList.remove('section-card');
 
     container.innerHTML =
         '<div class="pen-section"><div class="pen-section-header" id="pen-perencanaan-header">' +
