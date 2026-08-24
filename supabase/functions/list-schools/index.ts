@@ -43,10 +43,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 .select('school_id, name, npsn, slug, phone, primary_color, is_active, created_at')
                 .order('created_at', { ascending: false }),
 
-            // Data admin per sekolah (untuk fitur reset password)
+            // Data admin per sekolah (untuk fitur reset password).
+            // SUP-02: login_identifier (NIP/NIK) TIDAK ikut di-select — nilai itu
+            // data sensitif dan tidak pernah dipakai klien. Klien cukup tahu
+            // apakah akun admin ada (has_admin_account) plus namanya.
             admin
                 .from('users')
-                .select('school_id, login_identifier, full_name')
+                .select('school_id, full_name')
                 .eq('role_type', 'ADMINISTRATIVE')
                 .eq('is_active', true),
 
@@ -60,12 +63,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
         if (schoolsRes.error) throw schoolsRes.error;
 
-        type AdminRow   = { school_id: string; login_identifier: string; full_name: string };
+        type AdminRow   = { school_id: string; full_name: string };
         type StaffHealth = { school_id: string; kepsek_count: number; waka_kurikulum_count: number; waka_kesiswaan_count: number; waka_humas_count: number; staff_count: number };
         type StudentHealth = { school_id: string; student_count: number; provisioned_count: number };
 
         const adminBySchool = Object.fromEntries(
-            ((adminsRes.data ?? []) as AdminRow[]).map(a => [a.school_id, { login_identifier: a.login_identifier, full_name: a.full_name }])
+            ((adminsRes.data ?? []) as AdminRow[]).map(a => [a.school_id, { full_name: a.full_name }])
         );
         const staffBySchool = Object.fromEntries(
             ((staffHealthRes.data ?? []) as StaffHealth[]).map(h => [h.school_id, h])
@@ -79,7 +82,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const st = studentBySchool[s.school_id];
             return {
                 ...s,
-                admin_identifier:      adminBySchool[s.school_id]?.login_identifier ?? null,
+                has_admin_account:     !!adminBySchool[s.school_id],
                 admin_name:            adminBySchool[s.school_id]?.full_name ?? null,
                 // Health data
                 health: {

@@ -127,7 +127,7 @@ async function loadSchools() {
                   <span class="school-summary-name">${esc(s.name)}</span>
                   <span class="school-summary-meta" style="font-size:11px;color:#94a3b8;margin-top:2px;display:flex;gap:16px">
                       <span>${esc(s.admin_name || '—')}</span>
-                      <span style="color:#60a5fa">${esc(s.admin_identifier || '—')}</span>
+                      <span style="color:#60a5fa">${s.has_admin_account ? '(ada akun admin)' : '—'}</span>
                   </span>
                 </span>
                 <span class="school-summary-right">
@@ -139,7 +139,7 @@ async function loadSchools() {
                 <dl class="school-meta">
                   ${s.npsn ? `<div class="meta-row"><dt>NPSN</dt><dd>${esc(s.npsn)}</dd></div>` : ''}
                   <div class="meta-row"><dt>Admin</dt><dd>${esc(s.admin_name)}</dd></div>
-                  <div class="meta-row"><dt>Login Admin</dt><dd><code class="slug-code">${esc(s.admin_identifier)}</code></dd></div>
+                  <div class="meta-row"><dt>Login Admin</dt><dd>${s.has_admin_account ? 'Ada' : 'Belum ada'}</dd></div>
                   ${adminUrl ? `<div class="meta-row"><dt>Link Login</dt><dd>
                     <code class="slug-code">?school=${esc(s.slug)}</code>
                     <div class="meta-actions">
@@ -156,7 +156,7 @@ async function loadSchools() {
                   <button class="btn btn-sm btn-secondary reset-pw-btn"
                       data-school-id="${esc(s.school_id)}"
                       data-school-name="${esc(s.name)}"
-                      ${!s.admin_identifier ? 'disabled title="Tidak ada akun admin"' : ''}>
+                      ${!s.has_admin_account ? 'disabled title="Tidak ada akun admin"' : ''}>
                       Reset Password
                   </button>
                   ${s.is_active
