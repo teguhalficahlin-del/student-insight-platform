@@ -12,7 +12,7 @@ import { mountSemesterPanel } from './semester.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
 
 function esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;');
 }
 
 function generateTempPassword() {
@@ -53,6 +53,7 @@ function showPwModal(nama, pw) {
 
 const panelContent = document.getElementById('panel-content');
 let schoolSlug = null; // diisi saat init, dipakai panel renderers
+let currentUserId = null; // ADM-14: diisi saat init, guard self-deactivate
 
 const PANEL_RENDERERS = {
     setup:              renderSetupPanel,
@@ -316,7 +317,7 @@ async function renderForumKelasPanel() {
 
     } catch (err) {
         panelContent.innerHTML =
-            `<div class="alert alert-danger">${fe(err)}</div>`;
+            `<div class="alert alert-danger">${esc(err?.message ?? String(err))}</div>`;
     }
 }
 
@@ -1048,6 +1049,13 @@ async function renderStaffPanel() {
             return;
         }
 
+        // ADM-14: admin tidak boleh menonaktifkan akunnya sendiri.
+        if (currentUserId && userId === currentUserId) {
+            alert('Tidak bisa menonaktifkan akun Anda sendiri.');
+            btn.disabled = false; btn.textContent = 'Nonaktifkan';
+            return;
+        }
+
         // Nonaktifkan — cek dependensi jadwal dulu
         btn.disabled = true;
         btn.textContent = 'Memeriksa…';
@@ -1631,12 +1639,17 @@ async function renderAlumniPanel() {
                 resultDiv.querySelectorAll('.purge-student-btn').forEach(ab => {
                     ab.addEventListener('click', async () => {
                         const nama = ab.dataset.name;
-                        if (!confirm(
+                        const konfirmasi = prompt(
                             `HAPUS PERMANEN: ${nama}\n\n` +
                             'Seluruh data siswa ini akan dihapus:\n' +
                             '• Absensi & observasi\n• Kasus & riwayat\n• Akun portal\n• Data orang tua (jika tidak punya anak lain)\n\n' +
-                            'Tindakan ini TIDAK DAPAT dibatalkan. Lanjutkan?'
-                        )) return;
+                            'Tindakan ini TIDAK DAPAT dibatalkan.\n\n' +
+                            'Ketik HAPUS untuk konfirmasi:'
+                        );
+                        if (konfirmasi?.trim().toUpperCase() !== 'HAPUS') {
+                            if (konfirmasi !== null) alert('Konfirmasi tidak cocok. Penghapusan dibatalkan.');
+                            return;
+                        }
                         ab.disabled = true; ab.textContent = 'Menghapus…';
                         try {
                             await purgeExpiredStudents([ab.dataset.studentId]);
@@ -2325,6 +2338,9 @@ async function renderExportPanel() {
     ]);
 
     if (!requireAdministrativeOrRedirect(userRow)) return;
+
+    // ADM-14: dipakai guard self-deactivate di renderStaffPanel().
+    currentUserId = userRow.user_id;
 
     applyBrandingById(userRow.school_id, supabase);
 
