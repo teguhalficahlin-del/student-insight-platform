@@ -58,7 +58,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return json({ error: 'Sekolah harus dinonaktifkan terlebih dahulu sebelum dihapus' }, 409);
     }
 
-    // 1. Ambil semua auth_user_id pengguna sekolah ini
+    // 1. Ambil semua auth_user_id pengguna sekolah ini — SEBELUM users table dihapus
     const { data: users, error: usersErr } = await admin
         .from('users')
         .select('auth_user_id')
@@ -69,34 +69,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return json({ error: usersErr.message }, 500);
     }
 
-    // 2. Hapus semua Auth account — batched parallel (50 per batch)
+    // SUP-04: Auth accounts dihapus SETELAH data DB bersih (langkah 4).
+    // Jika DB delete gagal di tengah, Auth masih utuh → sekolah bisa tetap beroperasi.
     const authIds = (users ?? [])
         .map(u => u.auth_user_id)
         .filter(Boolean) as string[];
 
-    const BATCH_SIZE = 50;
-    const failedAuthIds: string[] = [];
-
-    for (let i = 0; i < authIds.length; i += BATCH_SIZE) {
-        const batch = authIds.slice(i, i + BATCH_SIZE);
-        const results = await Promise.allSettled(
-            batch.map(id => admin.auth.admin.deleteUser(id))
-        );
-        results.forEach((result, idx) => {
-            if (result.status === 'rejected') {
-                failedAuthIds.push(batch[idx]);
-                console.warn('[delete-school] deleteUser fail:', batch[idx], result.reason);
-            } else if (result.value.error) {
-                const msg = result.value.error.message ?? '';
-                if (!msg.includes('not found')) {
-                    failedAuthIds.push(batch[idx]);
-                    console.warn('[delete-school] deleteUser error:', batch[idx], msg);
-                }
-            }
-        });
-    }
-
-    // 3. Hapus semua data sekolah secara eksplisit — urut FK
+    // 2. Hapus semua data sekolah secara eksplisit — urut FK
     //    Semua FK ke schools adalah NO ACTION/RESTRICT, tidak ada CASCADE.
     //    Urutan wajib: child tables dulu, schools terakhir.
 
@@ -193,11 +172,34 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return json({ error: delErr.message }, 500);
     }
 
+    // 4. Baru hapus Auth accounts — data DB sudah bersih (SUP-04)
+    const BATCH_SIZE = 50;
+    const failedAuthIds: string[] = [];
+
+    for (let i = 0; i < authIds.length; i += BATCH_SIZE) {
+        const batch = authIds.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(
+            batch.map(id => admin.auth.admin.deleteUser(id))
+        );
+        results.forEach((result, idx) => {
+            if (result.status === 'rejected') {
+                failedAuthIds.push(batch[idx]);
+                console.warn('[delete-school] deleteUser fail:', batch[idx], result.reason);
+            } else if (result.value.error) {
+                const msg = result.value.error.message ?? '';
+                if (!msg.includes('not found')) {
+                    failedAuthIds.push(batch[idx]);
+                    console.warn('[delete-school] deleteUser error:', batch[idx], msg);
+                }
+            }
+        });
+    }
+
     return json({
         success: true,
         school_id,
         ...(failedAuthIds.length > 0 && {
-            warning: `${failedAuthIds.length} akun auth gagal dihapus`,
+            warning: `${failedAuthIds.length} akun auth gagal dihapus — data DB sudah bersih`,
             failed_auth_ids: failedAuthIds,
         }),
     });
