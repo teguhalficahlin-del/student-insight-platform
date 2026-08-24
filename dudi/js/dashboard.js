@@ -510,7 +510,7 @@ attendanceDateEl.addEventListener('change', () => loadAttendanceForDate(attendan
 btnPrevDay.addEventListener('click', () => {
     const d = new Date(attendanceDateEl.value);
     d.setDate(d.getDate() - 1);
-    attendanceDateEl.value = d.toISOString().slice(0, 10);
+    attendanceDateEl.value = dateToLocalStr(d);
     loadAttendanceForDate(attendanceDateEl.value);
 });
 
@@ -518,8 +518,8 @@ btnNextDay.addEventListener('click', () => {
     const d = new Date(attendanceDateEl.value);
     d.setDate(d.getDate() + 1);
     const today = todayStr();
-    if (d.toISOString().slice(0, 10) > today) return;
-    attendanceDateEl.value = d.toISOString().slice(0, 10);
+    if (dateToLocalStr(d) > today) return;
+    attendanceDateEl.value = dateToLocalStr(d);
     loadAttendanceForDate(attendanceDateEl.value);
 });
 
@@ -535,7 +535,13 @@ logoutBtn.addEventListener('click', async () => {
 function todayStr() {
     // DUD-09: pakai tanggal LOKAL, bukan UTC. Di WIB (UTC+7) antara pukul
     // 00:00-07:00, toISOString() mengembalikan tanggal kemarin.
-    const d = new Date();
+    return dateToLocalStr(new Date());
+}
+
+// DUD-09: satu sumber kebenaran untuk format tanggal lokal. Dipakai todayStr()
+// dan navigasi tanggal (btnPrevDay/btnNextDay) agar keduanya tidak pernah
+// memakai basis yang berbeda (lokal vs UTC).
+function dateToLocalStr(d) {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 

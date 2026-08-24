@@ -199,6 +199,10 @@ function fe(err, ctx = 'muat') {
         // yang gagal berbarengan menjadwalkan redirect berkali-kali.
         if (!fe._redirecting) {
             fe._redirecting = true;
+            // Auto-reset setelah 10 detik — jika redirect gagal (mis. diblokir
+            // ekstensi browser), error JWT berikutnya tetap bisa memicu redirect
+            // alih-alih terjebak selamanya oleh guard ini.
+            setTimeout(() => { fe._redirecting = false; }, 10000);
             setTimeout(() => window.location.replace(getLoginUrl()), 1500);
         }
         return 'Sesi habis. Mengalihkan ke halaman login…';
