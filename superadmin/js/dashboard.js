@@ -112,14 +112,18 @@ async function loadSchools() {
 
         listEl.innerHTML = data.map(s => {
             const adminUrl = s.slug ? `${BASE}admin/?school=${esc(s.slug)}` : null;
+            // SUP-08: primary_color masuk ke atribut style — validasi format hex
+            // agar nilai seperti 'red; width:100vw' tidak bisa menyuntik CSS.
+            const hexOk = /^#[0-9a-fA-F]{6}$/.test(s.primary_color ?? '');
+            const swatchColor = hexOk ? s.primary_color : '#cccccc';
             const colorSwatch = s.primary_color
-                ? `<span class="color-swatch" style="background:${esc(s.primary_color)}"></span>${esc(s.primary_color)}`
+                ? `<span class="color-swatch" style="background:${swatchColor}"></span>${esc(s.primary_color)}`
                 : '—';
             return `
             <div class="school-item">
               <button class="school-summary" type="button">
                 <span class="school-summary-left">
-                  ${s.primary_color ? `<span class="color-dot" style="background:${esc(s.primary_color)}"></span>` : ''}
+                  ${s.primary_color ? `<span class="color-dot" style="background:${swatchColor}"></span>` : ''}
                   <span class="school-summary-name">${esc(s.name)}</span>
                   <span class="school-summary-meta" style="font-size:11px;color:#94a3b8;margin-top:2px;display:flex;gap:16px">
                       <span>${esc(s.admin_name || '—')}</span>
@@ -182,39 +186,48 @@ async function loadSchools() {
             </div>`;
         }).join('');
 
-        // Accordion toggle
-        listEl.addEventListener('click', e => {
-            const summary = e.target.closest('.school-summary');
-            if (summary) {
-                const item = summary.closest('.school-item');
-                const isOpen = item.classList.contains('open');
-                // tutup semua lain
-                listEl.querySelectorAll('.school-item.open').forEach(el => el.classList.remove('open'));
-                if (!isOpen) item.classList.add('open');
-                return;
-            }
-            const resetBtn = e.target.closest('.reset-pw-btn');
-            if (resetBtn && !resetBtn.disabled) {
-                openResetModal(resetBtn.dataset.schoolId, resetBtn.dataset.schoolName);
-            }
-            const copyBtn = e.target.closest('.copy-url-btn');
-            if (copyBtn) {
-                navigator.clipboard.writeText(copyBtn.dataset.url).then(() => {
-                    const orig = copyBtn.textContent;
-                    copyBtn.textContent = 'Tersalin!';
-                    setTimeout(() => { copyBtn.textContent = orig; }, 1500);
-                });
-            }
-            const delBtn = e.target.closest('.delete-school-btn');
-            if (delBtn) confirmDeleteSchool(delBtn.dataset.schoolId, delBtn.dataset.schoolName);
-
-            const toggleBtn = e.target.closest('.toggle-status-btn');
-            if (toggleBtn) toggleSchoolStatus(toggleBtn);
-        });
     } catch (err) {
         hintEl.textContent = `Gagal memuat: ${err.message}`;
     }
 }
+
+// SUP-10: delegasi klik daftar sekolah didaftarkan SEKALI di module level.
+// Sebelumnya listener ini berada di dalam loadSchools(), sehingga tiap refresh
+// (provision / hapus / toggle status) menambahkan satu handler baru dan satu
+// klik memicu N aksi. #schools-list ada statis di dashboard.html.
+const schoolsListEl = document.getElementById('schools-list');
+schoolsListEl?.addEventListener('click', e => {
+    // Accordion toggle
+    const summary = e.target.closest('.school-summary');
+    if (summary) {
+        const item = summary.closest('.school-item');
+        const isOpen = item.classList.contains('open');
+        // tutup semua lain
+        schoolsListEl.querySelectorAll('.school-item.open').forEach(el => el.classList.remove('open'));
+        if (!isOpen) item.classList.add('open');
+        return;
+    }
+    const resetBtn = e.target.closest('.reset-pw-btn');
+    if (resetBtn && !resetBtn.disabled) {
+        openResetModal(resetBtn.dataset.schoolId, resetBtn.dataset.schoolName);
+    }
+    const copyBtn = e.target.closest('.copy-url-btn');
+    if (copyBtn) {
+        navigator.clipboard.writeText(copyBtn.dataset.url).then(() => {
+            const orig = copyBtn.textContent;
+            copyBtn.textContent = 'Tersalin!';
+            setTimeout(() => { copyBtn.textContent = orig; }, 1500);
+        }).catch(() => {
+            // SUP-09: clipboard API gagal (izin ditolak / bukan HTTPS) — beri jalan keluar.
+            alert('Gagal menyalin otomatis. Salin manual:\n' + copyBtn.dataset.url);
+        });
+    }
+    const delBtn = e.target.closest('.delete-school-btn');
+    if (delBtn) confirmDeleteSchool(delBtn.dataset.schoolId, delBtn.dataset.schoolName);
+
+    const toggleBtn = e.target.closest('.toggle-status-btn');
+    if (toggleBtn) toggleSchoolStatus(toggleBtn);
+});
 
 // ── Form daftar sekolah baru ──────────────────────────────────
 document.getElementById('provision-form').addEventListener('submit', async (e) => {
@@ -261,6 +274,17 @@ document.getElementById('provision-form').addEventListener('submit', async (e) =
         resultEl.style.display  = 'block';
 
         e.target.reset();
+        // SUP-19: form.reset() tidak selalu mengembalikan input[type=color] ke
+        // nilai atribut value-nya. Set ulang manual, berikut hex input pasangannya.
+        const DEF_PRIMARY = '#1a56db', DEF_SECONDARY = '#1e40af';
+        const pcPicker = document.getElementById('f-primary-color');
+        const pcHex    = document.getElementById('f-primary-color-hex');
+        const scPicker = document.getElementById('f-secondary-color');
+        const scHex    = document.getElementById('f-secondary-color-hex');
+        if (pcPicker) pcPicker.value = DEF_PRIMARY;
+        if (pcHex)    pcHex.value    = DEF_PRIMARY;
+        if (scPicker) scPicker.value = DEF_SECONDARY;
+        if (scHex)    scHex.value    = DEF_SECONDARY;
         await loadSchools();
     } catch (err) {
         resultEl.textContent   = `✗ ${err.message}`;
@@ -294,8 +318,15 @@ async function confirmDeleteSchool(schoolId, schoolName) {
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error ?? json?.message ?? 'Gagal menghapus');
-        alert(`Sekolah "${schoolName}" berhasil dihapus.`);
-        loadSchools();
+        // SUP-12: jangan pakai alert() yang memblokir thread — pesan sukses
+        // ditulis ke #schools-hint SETELAH refresh, karena loadSchools()
+        // menyembunyikan elemen itu pada jalur suksesnya.
+        await loadSchools();
+        const hintEl = document.getElementById('schools-hint');
+        if (hintEl) {
+            hintEl.textContent = `✓ Sekolah "${schoolName}" berhasil dihapus.`;
+            hintEl.style.display = 'block';
+        }
     } catch (err) {
         alert(`Error: ${err.message}`);
     }
@@ -318,7 +349,13 @@ async function toggleSchoolStatus(btn) {
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error ?? 'Gagal');
-        loadSchools();
+        await loadSchools();
+        // SUP-13: beri konfirmasi sukses — sebelumnya daftar refresh diam-diam.
+        const hintEl = document.getElementById('schools-hint');
+        if (hintEl) {
+            hintEl.textContent = `✓ Sekolah "${schoolName}" berhasil di${isActive ? 'nonaktifkan' : 'aktifkan'}.`;
+            hintEl.style.display = 'block';
+        }
     } catch (err) {
         alert(`Gagal ${aksi}: ${err.message}`);
         btn.disabled = false;
@@ -413,7 +450,10 @@ async function loadMaintenance() {
 
 maintBtn.addEventListener('click', async () => {
     const next = !maintActive;
-    if (next && !confirm('Nyalakan banner pemeliharaan di SEMUA portal sekarang?')) return;
+    const konfirmMsg = next
+        ? 'Nyalakan banner pemeliharaan di SEMUA portal sekarang?'
+        : 'Matikan banner pemeliharaan? Semua portal akan kembali normal.';
+    if (!confirm(konfirmMsg)) return;
     maintBtn.disabled = true;
     maintResult.style.display = 'none';
     try {
