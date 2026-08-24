@@ -89,6 +89,7 @@ let children    = [];
 let currentClassId = null;
 let tabLoaded = { pkl:false, schedule:false, attendance:false,
                   observations:false, cases:false, forum:false, nilai:false };
+let _loadChildAbort = null;
 
 const STATUS_LABELS = {
     HADIR:       'Hadir',
@@ -229,6 +230,10 @@ const STATUS_STUDENT_LABEL = { AKTIF: 'Aktif', PKL: 'Sedang PKL', LULUS: 'Lulus'
 const STATUS_STUDENT_CLASS = { AKTIF: 'badge-status-aktif', PKL: 'badge-status-pkl', LULUS: 'badge-status-lulus', KELUAR: 'badge-status-keluar' };
 
 async function loadChildData(index) {
+    if (_loadChildAbort) { _loadChildAbort.abort(); }
+    _loadChildAbort = new AbortController();
+    const signal = _loadChildAbort.signal;
+
     const child = children[index];
     portalTitle.textContent = `Portal Orang Tua — ${child.full_name}`;
 
@@ -264,6 +269,8 @@ async function loadChildData(index) {
                      : isInactive     ? 'section-observations'
                      :                  'section-schedule';
     await showTab(defaultTab);
+    if (signal.aborted) return;
+    _loadChildAbort = null;
 }
 
 async function loadSchedule(classId) {

@@ -60,6 +60,7 @@ function showPwModal(nama, pw) {
 const panelContent = document.getElementById('panel-content');
 let schoolSlug = null; // diisi saat init, dipakai panel renderers
 let currentUserId = null; // ADM-14: diisi saat init, guard self-deactivate
+let _panelRendering = false;
 
 const PANEL_RENDERERS = {
     setup:              renderSetupPanel,
@@ -82,13 +83,24 @@ const PANEL_RENDERERS = {
     'guru-piket':       renderGuruPiketPanel,
 };
 
-function navigateToPanel(panelId) {
+async function navigateToPanel(panelId) {
+    if (_panelRendering) return;
+    _panelRendering = true;
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('is-active'));
     const link = document.querySelector(`.nav-link[data-panel="${panelId}"]`);
     if (link) link.classList.add('is-active');
     history.replaceState(null, '', '#' + panelId);
     syncBottomNav(panelId);
-    (PANEL_RENDERERS[panelId] ?? renderComingSoon)(panelId);
+    const renderer = PANEL_RENDERERS[panelId] ?? renderComingSoon;
+    const hasOwnLoading = panelId === 'forum-kelas' || panelId === 'guru-piket';
+    if (!hasOwnLoading) panelContent.innerHTML = '<p class="hint">Memuat…</p>';
+    try {
+        await renderer(panelId);
+    } catch (err) {
+        panelContent.innerHTML = `<p class="hint" style="color:var(--color-danger,red)">Gagal memuat panel: ${err.message}</p>`;
+    } finally {
+        _panelRendering = false;
+    }
 }
 
 document.querySelectorAll('.nav-link').forEach(link => {
@@ -134,11 +146,7 @@ function syncBottomNav(panel) {
 
 document.querySelectorAll('.admin-bottom-nav .nav-tab[data-panel]').forEach(btn => {
     btn.addEventListener('click', () => {
-        const panel = btn.dataset.panel;
-        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('is-active'));
-        document.querySelector(`.nav-link[data-panel="${panel}"]`)?.classList.add('is-active');
-        (PANEL_RENDERERS[panel] ?? renderComingSoon)(panel);
-        syncBottomNav(panel);
+        navigateToPanel(btn.dataset.panel);
     });
 });
 
@@ -2378,6 +2386,6 @@ async function renderExportPanel() {
     });
 
     const hashPanel = location.hash.slice(1);
-    navigateToPanel(hashPanel in PANEL_RENDERERS ? hashPanel : 'setup');
+    await navigateToPanel(hashPanel in PANEL_RENDERERS ? hashPanel : 'setup');
     showPwaBanner({ hasBottomNav: true });
 })();
