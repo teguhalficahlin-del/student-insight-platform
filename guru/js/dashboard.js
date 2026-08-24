@@ -66,7 +66,6 @@ function _setBellBadge(n) {
         if (!badge) {
             badge = document.createElement('span');
             badge.className = 'notif-badge-count';
-            badge.className = 'notif-badge-count';
             btn.style.position = 'relative';
             btn.appendChild(badge);
         }
@@ -194,7 +193,16 @@ function esc(s) {
 function fe(err, ctx = 'muat') {
     console.error('[guru]', err);
     const m = String(err?.message ?? '').toLowerCase();
-    if (m.includes('jwt') || m.includes('expired')) return 'Sesi habis. Silakan login ulang.';
+    if (m.includes('jwt') || m.includes('expired')) {
+        // GRU-06: sesi sudah tidak valid — alihkan ke login, jangan hanya
+        // menampilkan pesan. Guard fe._redirecting mencegah banyak request
+        // yang gagal berbarengan menjadwalkan redirect berkali-kali.
+        if (!fe._redirecting) {
+            fe._redirecting = true;
+            setTimeout(() => window.location.replace(getLoginUrl()), 1500);
+        }
+        return 'Sesi habis. Mengalihkan ke halaman login…';
+    }
     if (m.includes('fetch') || m.includes('network') || m.includes('failed to fetch')) return 'Tidak ada koneksi. Periksa jaringan.';
     if (m.includes('security policy') || m.includes('permission') || m.includes('forbidden')) return 'Tidak memiliki izin.';
     return ctx === 's' ? 'Gagal menyimpan. Silakan coba lagi.'
@@ -256,7 +264,7 @@ async function init() {
     // Peringatan login dari perangkat baru: daftarkan perangkat ini.
     // Jika belum pernah dipakai (bukan yg pertama), server menaruh notif
     // di lonceng. Non-blocking; kegagalan tak mengganggu dashboard.
-    await registerLoginDevice();
+    registerLoginDevice();
 
     // Notifikasi: cek unread count lalu poll tiap 1 menit.
     refreshNotifBadge();
