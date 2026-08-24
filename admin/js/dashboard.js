@@ -22,6 +22,36 @@ function esc(s) {
     return el.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// CHECK-A: pengganti prompt() — mengembalikan Promise<string|null>
+function showInputModal(message, { placeholder = '', defaultValue = '', okLabel = 'OK', okClass = 'btn-primary' } = {}) {
+    return new Promise(resolve => {
+        const modal  = document.getElementById('input-confirm-modal');
+        const msgEl  = document.getElementById('icm-message');
+        const input  = document.getElementById('icm-input');
+        const btnOk  = document.getElementById('icm-ok');
+        const btnCan = document.getElementById('icm-cancel');
+        msgEl.textContent = message;
+        input.value = defaultValue;
+        input.placeholder = placeholder;
+        btnOk.className = `btn ${okClass}`;
+        modal.style.display = 'flex';
+        input.focus();
+        const done = (val) => {
+            modal.style.display = 'none';
+            input.removeEventListener('keydown', onKey);
+            btnOk.removeEventListener('click', onOk);
+            btnCan.removeEventListener('click', onCan);
+            resolve(val);
+        };
+        const onOk  = () => done(input.value);
+        const onCan = () => done(null);
+        const onKey = (e) => { if (e.key === 'Enter') onOk(); if (e.key === 'Escape') onCan(); };
+        btnOk.addEventListener('click', onOk);
+        btnCan.addEventListener('click', onCan);
+        input.addEventListener('keydown', onKey);
+    });
+}
+
 function generateTempPassword() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
     const arr = new Uint8Array(12);
@@ -1654,15 +1684,13 @@ async function renderAlumniPanel() {
                 resultDiv.querySelectorAll('.purge-student-btn').forEach(ab => {
                     ab.addEventListener('click', async () => {
                         const nama = ab.dataset.name;
-                        const konfirmasi = prompt(
-                            `HAPUS PERMANEN: ${nama}\n\n` +
-                            'Seluruh data siswa ini akan dihapus:\n' +
-                            '• Absensi & observasi\n• Kasus & riwayat\n• Akun portal\n• Data orang tua (jika tidak punya anak lain)\n\n' +
-                            'Tindakan ini TIDAK DAPAT dibatalkan.\n\n' +
-                            'Ketik HAPUS untuk konfirmasi:'
+                        const konfirmasi = await showInputModal(
+                            `HAPUS PERMANEN: ${nama}\n\nSeluruh data siswa ini akan dihapus:\n• Absensi & observasi\n• Kasus & riwayat\n• Akun portal\n• Data orang tua (jika tidak punya anak lain)\n\nTindakan ini TIDAK DAPAT dibatalkan.\n\nKetik HAPUS untuk konfirmasi:`,
+                            { placeholder: 'HAPUS', okLabel: 'Hapus Permanen', okClass: 'btn-danger' }
                         );
-                        if (konfirmasi?.trim().toUpperCase() !== 'HAPUS') {
-                            if (konfirmasi !== null) alert('Konfirmasi tidak cocok. Penghapusan dibatalkan.');
+                        if (konfirmasi === null) return;
+                        if (konfirmasi.trim().toUpperCase() !== 'HAPUS') {
+                            alert('Konfirmasi tidak cocok. Penghapusan dibatalkan.');
                             return;
                         }
                         ab.disabled = true; ab.textContent = 'Menghapus…';
@@ -1681,9 +1709,12 @@ async function renderAlumniPanel() {
                 // Hapus semua sekaligus
                 resultDiv.querySelector('#purge-all-btn')?.addEventListener('click', async () => {
                     const n = candidates.length;
-                    const confirmText = `HAPUS PERMANEN ${n} SISWA\n\nSeluruh data (absensi, observasi, kasus, akun) akan dihapus.\nTindakan ini TIDAK DAPAT dibatalkan.\n\nKetik "HAPUS" untuk konfirmasi:`;
-                    const input = prompt(confirmText);
-                    if (input?.trim().toUpperCase() !== 'HAPUS') return;
+                    const input = await showInputModal(
+                        `HAPUS PERMANEN ${n} SISWA\n\nSeluruh data (absensi, observasi, kasus, akun) akan dihapus.\nTindakan ini TIDAK DAPAT dibatalkan.\n\nKetik "HAPUS" untuk konfirmasi:`,
+                        { placeholder: 'HAPUS', okLabel: 'Hapus Permanen', okClass: 'btn-danger' }
+                    );
+                    if (input === null) return;
+                    if (input.trim().toUpperCase() !== 'HAPUS') return;
 
                     const allBtn = resultDiv.querySelector('#purge-all-btn');
                     if (allBtn) { allBtn.disabled = true; allBtn.textContent = 'Menghapus…'; }
@@ -2080,7 +2111,7 @@ async function renderAcademicYearPanel() {
             `Lanjutkan pembatalan tahun ajaran ${yr}?`,
         ].join('\n');
         if (!confirm(preview)) return;
-        const typed = prompt(`Untuk konfirmasi, ketik: BATALKAN`);
+        const typed = await showInputModal('Untuk konfirmasi, ketik: BATALKAN', { placeholder: 'BATALKAN', okClass: 'btn-danger' });
         if (typed === null) return;
         if (typed.trim().toUpperCase() !== 'BATALKAN') { alert('Konfirmasi tidak cocok. Dibatalkan.'); return; }
 
@@ -2184,10 +2215,11 @@ async function renderActivityLogPanel() {
         btn.addEventListener('click', async () => {
             const obsId   = btn.dataset.obsId;
             const preview = btn.dataset.obsContent || '';
-            const reason  = window.prompt(
-                `Batalkan observasi ini?\n\n"${preview}${preview.length >= 80 ? '…' : ''}"\n\nAlasan pembatalan (wajib):`
+            const reason  = await showInputModal(
+                `Batalkan observasi ini?\n\n"${preview}${preview.length >= 80 ? '…' : ''}"\n\nAlasan pembatalan (wajib):`,
+                { placeholder: 'Tuliskan alasan…', okClass: 'btn-danger' }
             );
-            if (reason === null) return;                 // batal di dialog
+            if (reason === null) return;
             if (!reason.trim()) { alert('Alasan pembatalan wajib diisi.'); return; }
 
             btn.disabled = true;

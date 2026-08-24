@@ -189,6 +189,52 @@ function esc(s) {
     el.textContent = s ?? '';
     return el.innerHTML;
 }
+
+// CHECK-A: pengganti prompt() — mengembalikan Promise<string|null>
+function showInputModal(message, { placeholder = '', defaultValue = '', okClass = 'btn-primary' } = {}) {
+    return new Promise(resolve => {
+        const modal  = document.getElementById('input-confirm-modal');
+        const msgEl  = document.getElementById('icm-message');
+        const input  = document.getElementById('icm-input');
+        const btnOk  = document.getElementById('icm-ok');
+        const btnCan = document.getElementById('icm-cancel');
+        msgEl.textContent = message;
+        input.value = defaultValue;
+        input.placeholder = placeholder;
+        btnOk.className = 'btn ' + okClass;
+        modal.style.display = 'flex';
+        input.focus();
+        const done = (val) => {
+            modal.style.display = 'none';
+            input.removeEventListener('keydown', onKey);
+            btnOk.removeEventListener('click', onOk);
+            btnCan.removeEventListener('click', onCan);
+            resolve(val);
+        };
+        const onOk  = () => done(input.value);
+        const onCan = () => done(null);
+        const onKey = (e) => { if (e.key === 'Enter') onOk(); if (e.key === 'Escape') onCan(); };
+        btnOk.addEventListener('click', onOk);
+        btnCan.addEventListener('click', onCan);
+        input.addEventListener('keydown', onKey);
+    });
+}
+
+// CHECK-B: pengganti alert() untuk pesan info/sukses
+function _showToast(msg) {
+    let toast = document.getElementById('_guru-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = '_guru-toast';
+        toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--color-surface,#fff);border:1px solid var(--color-border,#e5e7eb);padding:10px 18px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);font-size:0.875rem;z-index:8000;pointer-events:none;white-space:pre-wrap;max-width:320px;text-align:center';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.display = 'block';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { toast.style.display = 'none'; }, 3500);
+}
+
 /** Pesan error ramah pengguna — detail teknis ke console saja. */
 function fe(err, ctx = 'muat') {
     console.error('[guru]', err);
@@ -4210,7 +4256,7 @@ async function _piketRenderExits() {
     content.querySelectorAll('.piket-return-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
             const now = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-            const returnTime = prompt('Jam kembali (HH:MM):', now);
+            const returnTime = await showInputModal('Jam kembali (HH:MM):', { defaultValue: now, placeholder: 'HH:MM' });
             if (!returnTime) return;
             try {
                 await updateReturnTime(btn.dataset.exitId, returnTime);
@@ -6512,7 +6558,7 @@ async function openDetailDokumenModal(docId, coreSubjectId, phaseId) {
                 await deleteTeacherDocument(docId);
                 modal.style.display = 'none';
                 await loadPerangkatAjarDashboard();
-                alert('Dokumen berhasil dihapus.');
+                /* sukses — list sudah reload via loadPerangkatAjarDashboard() */
             } catch (err) {
                 showMsg(`✗ ${fe(err, 's')}`, true);
                 btn.disabled    = false;
@@ -7142,7 +7188,8 @@ async function openKonteksKelasModal() {
     } catch (e) { /* */ }
 
     if (!mySubjects.length) {
-        alert('Belum ada mata pelajaran yang diajar. Hubungi administrator untuk mengatur jadwal mengajar.');
+        _showToast('Belum ada mata pelajaran yang diajar.
+Hubungi administrator untuk mengatur jadwal mengajar.');
         return;
     }
 

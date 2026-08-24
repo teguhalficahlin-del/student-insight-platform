@@ -4,6 +4,21 @@
  * 3 tab: Jadwal Piket, Keterlambatan, Rekap Kehadiran.
  */
 
+// CHECK-B: pengganti alert() untuk pesan info/validasi
+function _tuHint(msg) {
+    let toast = document.getElementById('_tu-hint');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = '_tu-hint';
+        toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--color-warning-bg,#fef3c7);color:var(--color-warning,#92400e);padding:10px 18px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);font-size:0.875rem;z-index:8000;pointer-events:none';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.display = 'block';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { toast.style.display = 'none'; }, 3000);
+}
+
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { checkMustChangePassword } from '../../shared/change-password.js';
 import { initLoginGuard, registerLoginDevice } from '../../shared/login-guard.js';
@@ -157,7 +172,7 @@ async function loadPiket() {
 document.getElementById('btn-piket-filter').addEventListener('click', loadPiket);
 
 document.getElementById('btn-export-piket').addEventListener('click', () => {
-    if (!_cachedPiket.length) { alert('Tampilkan data dulu sebelum export.'); return; }
+    if (!_cachedPiket.length) { _tuHint('Tampilkan data dulu sebelum export.'); return; }
     const header = [['Hari', 'Nama Guru', 'Tahun Ajaran', 'Semester']];
     const rows   = _cachedPiket.map(r => [
         DOW_LABEL[r.day_of_week] ?? r.day_of_week,
@@ -226,7 +241,7 @@ async function loadLate() {
 document.getElementById('btn-late-filter').addEventListener('click', loadLate);
 
 document.getElementById('btn-export-late').addEventListener('click', () => {
-    if (!_cachedLate.length) { alert('Tampilkan data dulu sebelum export.'); return; }
+    if (!_cachedLate.length) { _tuHint('Tampilkan data dulu sebelum export.'); return; }
     const header = [['Tanggal', 'Jam Datang', 'Nama Siswa', 'NIS', 'Alasan']];
     const rows   = _cachedLate.map(r => [
         formatDate(r.date), r.arrival_time, r.student_name, r.nis, r.reason || '',
@@ -298,7 +313,7 @@ async function loadExitsRecap() {
 document.getElementById('btn-exits-filter')?.addEventListener('click', loadExitsRecap);
 
 document.getElementById('btn-export-exits')?.addEventListener('click', () => {
-    if (!_cachedExits.length) { alert('Tampilkan data dulu sebelum export.'); return; }
+    if (!_cachedExits.length) { _tuHint('Tampilkan data dulu sebelum export.'); return; }
     const header = [['Tanggal', 'Jam Keluar', 'Jam Kembali', 'Nama Siswa', 'NIS', 'Alasan']];
     const rows   = _cachedExits.map(r => [
         formatDate(r.date),
@@ -385,7 +400,7 @@ async function loadAttendance() {
 document.getElementById('btn-att-filter').addEventListener('click', loadAttendance);
 
 document.getElementById('btn-export-att').addEventListener('click', () => {
-    if (!_cachedAttendance.length) { alert('Tampilkan data dulu sebelum export.'); return; }
+    if (!_cachedAttendance.length) { _tuHint('Tampilkan data dulu sebelum export.'); return; }
     const header = [['Tanggal', 'Nama Siswa', 'NIS', 'Kelas', 'Status', 'Catatan']];
     const rows   = _cachedAttendance.map(r => [
         formatDate(r.date), r.student_name, r.nis, r.class_name,

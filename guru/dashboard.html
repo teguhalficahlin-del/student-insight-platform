@@ -1586,5 +1586,17 @@
     </div>
 </div>
 <script src="../shared/wa-float.js"></script>
+
+<!-- Modal input konfirmasi generik (CHECK-A: pengganti prompt()) -->
+<div id="input-confirm-modal" role="dialog" aria-modal="true" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.45);align-items:center;justify-content:center">
+    <div style="background:var(--color-surface,#fff);border-radius:10px;padding:24px;max-width:480px;width:calc(100% - 32px);box-shadow:0 8px 32px rgba(0,0,0,.25)">
+        <p id="icm-message" style="margin:0 0 16px;white-space:pre-wrap;font-size:0.9375rem;line-height:1.5"></p>
+        <input id="icm-input" type="text" class="input" style="width:100%;margin-bottom:16px" autocomplete="off" />
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button id="icm-cancel" class="btn btn-secondary">Batal</button>
+            <button id="icm-ok" class="btn btn-primary">OK</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>

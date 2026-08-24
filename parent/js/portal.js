@@ -187,7 +187,7 @@ function getTabKey(sectionId) {
     return map[sectionId] ?? null;
 }
 
-async function showTab(sectionId) {
+async function showTab(sectionId, signal = null) {
     // Sembunyikan semua section
     ALL_SECTIONS.forEach(s => {
         s.classList.remove('active');
@@ -204,6 +204,7 @@ async function showTab(sectionId) {
     // Lazy load — hanya load sekali per anak
     const key = getTabKey(sectionId);
     if (!key || tabLoaded[key]) return;
+    if (signal?.aborted) return;
     tabLoaded[key] = true;
     const idx   = Number(selectChild.value);
     const child = children[idx];
@@ -268,7 +269,7 @@ async function loadChildData(index) {
     const defaultTab = isPkl          ? 'section-pkl'
                      : isInactive     ? 'section-observations'
                      :                  'section-schedule';
-    await showTab(defaultTab);
+    await showTab(defaultTab, signal);
     if (signal.aborted) return;
     _loadChildAbort = null;
 }
@@ -1035,7 +1036,9 @@ async function initNilaiTab(studentId) {
     if (!selYear.dataset.populated) {
         selYear.dataset.populated = '1';
         const { data: cfg } = await supabase.from('school_config')
-            .select('current_academic_year').single();
+            .select('current_academic_year')
+            .eq('school_id', currentUser.school_id)
+            .single();
         const activeYear    = cfg?.current_academic_year ?? null;
         const activeStartYr = activeYear ? parseInt(activeYear) : new Date().getFullYear();
         [activeStartYr - 1, activeStartYr, activeStartYr + 1].forEach(y => {
