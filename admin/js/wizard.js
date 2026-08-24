@@ -579,9 +579,10 @@ async function importForumBk(csvText) {
         classes.map(c => [`${c.name.toLowerCase()}::${c.program_id}`, c])
     );
 
-    // Fetch login_identifier untuk BK (tidak ada di v_users_staff_directory)
+    // Fetch login_identifier untuk BK — tersedia di v_users_staff_directory
+    // sejak migration 20260802120000_add-login-identifier-to-view.sql
     const { data: bkUsers } = await supabase
-        .from('users')
+        .from('v_users_staff_directory')
         .select('user_id, login_identifier')
         .eq('role_type', 'BK')
         .eq('is_active', true);
@@ -668,7 +669,7 @@ async function importForumGuruWali(csvText) {
             .select('student_id, nis')
             .eq('student_status', 'AKTIF'),
         supabase
-            .from('users')
+            .from('v_users_staff_directory')
             .select('user_id, login_identifier')
             .in('role_type', [
                 'GURU','BK','WALI_KELAS','KAPRODI','KEPSEK',
@@ -751,7 +752,7 @@ async function importDutySchedule(csvText) {
     const currentUserRow = await getCurrentUserRow();
 
     const { data: staffRows } = await supabase
-        .from('users')
+        .from('v_users_staff_directory')
         .select('user_id, login_identifier')
         .in('role_type', ['GURU','BK','WALI_KELAS','KEPSEK',
             'WAKA_KURIKULUM','WAKA_KESISWAAN','WAKA_HUMAS'])

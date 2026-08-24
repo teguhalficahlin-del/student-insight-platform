@@ -60,7 +60,7 @@ shared/       → shared/ (komponen lintas portal)
 Setiap portal: `index.html` (login) + `dashboard.html` (main app).
 RLS selalu filter berdasarkan `school_id` tenant.
 
-**View aman untuk query staf:** `v_users_staff_directory` (8 kolom, security_invoker=true).
+**View aman untuk query staf:** `v_users_staff_directory` (10 kolom, security_invoker=true).
 Gunakan ini — JANGAN `.from('users')` langsung.
 
 **Role types di tabel `users`:**
