@@ -75,4 +75,4 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
     window.location.replace(getLoginUrl());
 });
 
-init();
+init().catch(err => console.error('[stakeholder] init failed:', err));
