@@ -1,5 +1,15 @@
 const SUPABASE_URL = 'https://xovvuuwexoweoqyltepq.supabase.co';
 
+let _saKey = null;
+export function getSuperadminKey() { return _saKey; }
+export function setSuperadminKey(k) { _saKey = k; }
+
+function showDashboard() {
+    document.getElementById('login-view').style.display = 'none';
+    document.getElementById('dashboard-view').style.display = '';
+    document.dispatchEvent(new CustomEvent('superadmin-ready'));
+}
+
 document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const key    = document.getElementById('sa-key').value.trim();
@@ -17,8 +27,10 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
         if (res.status === 401) throw new Error('Key salah. Coba lagi.');
         if (!res.ok) throw new Error('Gagal menghubungi server. Coba lagi.');
 
-        sessionStorage.setItem('sa_key', key);
-        window.location.replace('dashboard.html');
+        // Key disimpan di module variable — tidak di sessionStorage
+        // Refresh halaman = login ulang (by design, SUP-03 fix)
+        setSuperadminKey(key);
+        showDashboard();
     } catch (err) {
         errEl.textContent    = err.message ?? 'Gagal menghubungi server.';
         errEl.style.display  = 'block';

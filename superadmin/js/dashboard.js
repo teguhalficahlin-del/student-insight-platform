@@ -1,7 +1,17 @@
 const SUPABASE_URL  = 'https://xovvuuwexoweoqyltepq.supabase.co';
 
-const saKey = sessionStorage.getItem('sa_key');
-if (!saKey) window.location.replace('index.html');
+import { getSuperadminKey, setSuperadminKey } from './auth.js';
+
+function getSaKey() {
+    const k = getSuperadminKey();
+    if (!k) {
+        // Key hilang (refresh) — kembali ke login view
+        document.getElementById('dashboard-view').style.display = 'none';
+        document.getElementById('login-view').style.display = '';
+        return null;
+    }
+    return k;
+}
 
 // ── Tab navigation ────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -51,8 +61,9 @@ function fmt(d) {
 
 // ── Logout ────────────────────────────────────────────────────
 document.getElementById('logout-btn').addEventListener('click', () => {
-    sessionStorage.removeItem('sa_key');
-    window.location.replace('index.html');
+    setSuperadminKey(null);
+    document.getElementById('dashboard-view').style.display = 'none';
+    document.getElementById('login-view').style.display = '';
 });
 
 // ── Health badges per sekolah ─────────────────────────────────
@@ -89,6 +100,7 @@ function renderHealthBadges(h) {
 
 // ── Load daftar sekolah ───────────────────────────────────────
 async function loadSchools() {
+    const saKey = getSaKey(); if (!saKey) return;
     const hintEl  = document.getElementById('schools-hint');
 
     try {
@@ -232,6 +244,7 @@ schoolsListEl?.addEventListener('click', e => {
 // ── Form daftar sekolah baru ──────────────────────────────────
 document.getElementById('provision-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const saKey = getSaKey(); if (!saKey) return;
     const btn       = document.getElementById('provision-btn');
     const resultEl  = document.getElementById('provision-result');
     const credBox   = document.getElementById('cred-box');
@@ -317,6 +330,7 @@ document.getElementById('provision-form').addEventListener('submit', async (e) =
 
 // ── Hapus sekolah ────────────────────────────────────────────
 async function confirmDeleteSchool(schoolId, schoolName) {
+    const saKey = getSaKey(); if (!saKey) return;
     const konfirmasi = prompt(
         `⚠️ HAPUS PERMANEN: ${schoolName}\n\n` +
         `Semua data sekolah ini (guru, siswa, absensi, observasi) akan dihapus selamanya.\n\n` +
@@ -353,6 +367,7 @@ async function confirmDeleteSchool(schoolId, schoolName) {
 }
 
 async function toggleSchoolStatus(btn) {
+    const saKey = getSaKey(); if (!saKey) return;
     const schoolId   = btn.dataset.schoolId;
     const schoolName = btn.dataset.schoolName;
     const isActive   = btn.dataset.active === 'true';
@@ -410,6 +425,7 @@ document.getElementById('reset-close-btn').addEventListener('click', closeResetM
 resetModal.addEventListener('click', e => { if (e.target === resetModal) closeResetModal(); });
 
 document.getElementById('reset-confirm-btn').addEventListener('click', async () => {
+    const saKey = getSaKey(); if (!saKey) return;
     const btn = document.getElementById('reset-confirm-btn');
     resetError.style.display = 'none';
     btn.disabled = true; btn.textContent = 'Mereset…';
@@ -435,8 +451,6 @@ document.getElementById('reset-confirm-btn').addEventListener('click', async () 
     }
 });
 
-loadSchools();
-
 // ── Pemeliharaan Sistem (banner global) ──────────────────────
 const maintBtn     = document.getElementById('maint-toggle-btn');
 const maintMsgEl   = document.getElementById('maint-message');
@@ -453,6 +467,7 @@ function renderMaintState() {
 }
 
 async function loadMaintenance() {
+    const saKey = getSaKey(); if (!saKey) return;
     try {
         const res = await fetch(`${SUPABASE_URL}/functions/v1/set-maintenance`, {
             headers: { 'x-superadmin-key': saKey },
@@ -469,6 +484,7 @@ async function loadMaintenance() {
 }
 
 maintBtn.addEventListener('click', async () => {
+    const saKey = getSaKey(); if (!saKey) return;
     const next = !maintActive;
     const konfirmMsg = next
         ? 'Nyalakan banner pemeliharaan di SEMUA portal sekarang?'
@@ -500,10 +516,9 @@ maintBtn.addEventListener('click', async () => {
     }
 });
 
-loadMaintenance();
-
 // ── Monitoring Penyimpanan Database ──────────────────────────
 async function loadStorage() {
+    const saKey = getSaKey(); if (!saKey) return;
     const summary = document.getElementById('storage-summary');
     const table   = document.getElementById('storage-table');
     const body    = document.getElementById('storage-body');
@@ -535,4 +550,9 @@ async function loadStorage() {
     }
 }
 
-loadStorage();
+// Inisialisasi data dipicu oleh event dari auth.js setelah login sukses
+document.addEventListener('superadmin-ready', () => {
+    loadSchools();
+    loadMaintenance();
+    loadStorage();
+});
