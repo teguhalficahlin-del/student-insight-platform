@@ -116,8 +116,15 @@ const STAFF_ROLES = ROLE_TYPE.filter(
     r => !['SISWA', 'ORTU', 'ADMINISTRATIVE'].includes(r)
 );
 
+// ADM-01: password sementara wajib acak. Sebelumnya hardcoded '12345678',
+// sehingga setiap user hasil import punya password yang sama dan bisa ditebak
+// siapa pun yang pernah melihat satu akun saja. Charset dan panjang mengikuti
+// generatePassword() di manage-admin-account — tanpa karakter ambigu (I, l, O, 0, 1).
 function generateTempPassword(): string {
-    return '12345678';
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    const arr = new Uint8Array(12);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, b => chars[b % chars.length]).join('');
 }
 
 // ─────────────────────────────────────────────────────────────

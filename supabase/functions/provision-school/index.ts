@@ -66,6 +66,32 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return json({ error: 'school_name, admin_name, dan admin_identifier wajib diisi' }, 400);
         }
 
+        // SUP-01: validasi format server-side. Klien sudah menyaring slug
+        // (SUP-05), tapi fungsi ini bisa dipanggil langsung dengan header
+        // x-superadmin-key — format wajib disaring lagi di sisi server.
+        const namaTrim  = String(school_name).trim();
+        const adminTrim = String(admin_identifier).trim();
+
+        if (namaTrim.length === 0 || namaTrim.length > 200) {
+            return json({ error: 'school_name wajib diisi, maksimal 200 karakter' }, 400);
+        }
+        if (adminTrim.length === 0) {
+            return json({ error: 'admin_identifier tidak boleh kosong' }, 400);
+        }
+        if (npsn && !/^\d{8}$/.test(String(npsn).trim())) {
+            return json({ error: 'npsn harus 8 digit angka' }, 400);
+        }
+        if (slug) {
+            const slugTrim = String(slug).trim();
+            const formatOk = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/.test(slugTrim);
+            if (!formatOk || slugTrim.length < 3 || slugTrim.length > 50) {
+                return json({ error: 'slug hanya boleh huruf kecil, angka, dan strip; panjang 3-50; tidak diawali atau diakhiri strip' }, 400);
+            }
+        }
+        if (phone && !/^[0-9+\-\s]{6,20}$/.test(String(phone).trim())) {
+            return json({ error: 'phone hanya boleh angka, +, -, dan spasi; panjang 6-20' }, 400);
+        }
+
         const admin = getAdminClient();
 
         // ── 1. Idempotency: cek NPSN sudah terdaftar ─────────

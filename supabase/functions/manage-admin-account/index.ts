@@ -107,6 +107,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 full_name:        full_name.trim(),
                 email,
                 school_id:        user.school_id,
+                // ADM-04: admin baru lewat jalur ini dulu tidak diminta ganti
+                // password saat pertama login, beda dengan user hasil bulk-import.
+                must_change_password: true,
             })
             .select('user_id')
             .single();

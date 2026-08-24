@@ -81,6 +81,16 @@ interface ImportError {
 
 type RowOutcome = 'success' | 'updated' | 'restored';
 
+// ADM-02: password sementara akun ortu wajib acak. Sebelumnya hardcoded
+// '12345678' untuk setiap akun baru. Charset dan panjang mengikuti
+// generatePassword() di manage-admin-account — tanpa karakter ambigu (I, l, O, 0, 1).
+function generateTempPassword(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    const arr = new Uint8Array(12);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, b => chars[b % chars.length]).join('');
+}
+
 // ─────────────────────────────────────────────────────────────
 // MAIN HANDLER
 // ─────────────────────────────────────────────────────────────
@@ -220,7 +230,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             // sekolah (anak di sekolah berbeda). Auth global → tanpa prefix,
             // createUser sekolah kedua gagal "email already registered".
             const internalEmail = toInternalEmail(nik, 'NIK', user.school_id);
-            const password = '12345678';
+            const password = generateTempPassword();
 
             const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                 email:         internalEmail,
