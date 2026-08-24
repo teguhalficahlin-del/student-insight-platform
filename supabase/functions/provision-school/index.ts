@@ -88,7 +88,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 return json({ error: 'slug hanya boleh huruf kecil, angka, dan strip; panjang 3-50; tidak diawali atau diakhiri strip' }, 400);
             }
         }
-        if (phone && !/^[0-9+\-\s]{6,20}$/.test(String(phone).trim())) {
+        if (phone && !/^[0-9+\- ]{6,20}$/.test(String(phone).trim())) {
             return json({ error: 'phone hanya boleh angka, +, -, dan spasi; panjang 6-20' }, 400);
         }
 
