@@ -256,7 +256,14 @@ async function loadExitsRecap() {
     if (exitsTbody)   exitsTbody.innerHTML        = '';
 
     try {
-        const rows = await getExitsByRange(dateStart || null, dateEnd || null);
+        // TU-08: getExitsByRange() menerapkan .gte/.lte TANPA syarat — berbeda dari
+        // fetchLateArrivals() yang menjaga null (api.js baris 114-115). Meneruskan
+        // null membuat filter rusak dan hasilnya nol baris, bukan semua data.
+        // Input tanggal tidak punya value default, jadi kosong adalah kondisi awal
+        // panel ini. Rentang batas lebar dipakai agar "kosong" tetap berarti
+        // "tampilkan semua", konsisten dengan panel Terlambat.
+        const RANGE_MIN = '1900-01-01', RANGE_MAX = '2999-12-31';
+        const rows = await getExitsByRange(dateStart || RANGE_MIN, dateEnd || RANGE_MAX);
         _cachedExits = rows;
 
         if (!rows.length) { if (exitsEmpty) exitsEmpty.style.display = 'block'; return; }
@@ -1772,7 +1779,15 @@ async function submitForumPost() {
         _forumMode = 'terkirim';
         document.getElementById('forum-tab-masuk').className    = 'btn btn-secondary';
         document.getElementById('forum-tab-terkirim').className = 'btn btn-primary';
-        _forumOffset = 0; loadForumPosts();
+        _forumOffset = 0;
+        // TU-05: kegagalan muat ulang tidak boleh dilaporkan sebagai gagal kirim.
+        // Modal sudah ditutup di atas, jadi errEl tak terlihat — pakai alert.
+        try {
+            await loadForumPosts();
+        } catch {
+            alert('Pesan terkirim, tetapi daftar gagal dimuat ulang. ' +
+                  'Muat ulang halaman untuk melihatnya.');
+        }
     } catch (err) {
         if (uploadedPath) {
             supabase.storage.from('forum-attachments').remove([uploadedPath])
