@@ -16,6 +16,7 @@ import {
     fetchRecentAttendance,
     fetchMyObservations,
     saveObservation,
+    AudienceError,
     getUnreadNotifCount,
     getRecentNotifications,
     markNotificationsRead,
@@ -97,19 +98,68 @@ const STATUS_LABELS = {
 };
 
 // ── Offline banner ────────────────────────────────────────────
+// Warna asli banner (amber "menunggu sinkron") diambil dari inline style di
+// HTML, supaya bisa dikembalikan setelah dipakai untuk peringatan merah.
+const bannerBaseStyle = {
+    background:   offlineBannerEl?.style.background   ?? '',
+    color:        offlineBannerEl?.style.color        ?? '',
+    borderBottom: offlineBannerEl?.style.borderBottom ?? '',
+};
+
+// DUD-05: absensi yang DITOLAK server dibuang dari antrian (mengirim ulang
+// percuma), jadi satu-satunya jejaknya adalah peringatan ini. Menempel di
+// banner sampai user mengkliknya — bukan toast yang hilang sendiri.
+let flushFailNotice = null;
+
+function showFlushFailures(failed) {
+    if (!failed?.length) return;
+    console.warn('[dudi] absensi ditolak server:', failed);
+    const detail = failed
+        .map(f => `${f.attendance_date ?? '—'} (${STATUS_LABELS[f.status] ?? f.status ?? '—'})`)
+        .join(', ');
+    flushFailNotice = `${failed.length} absensi DITOLAK server dan tidak tersimpan: ${detail}. `
+        + 'Silakan input ulang. (klik untuk tutup)';
+}
+
 async function updateOfflineBanner() {
     const n = await pendingCount();
-    if (n > 0) {
-        offlineBannerText.textContent = `${n} absensi menunggu sinkron — akan terkirim otomatis saat koneksi kembali.`;
-        offlineBannerEl.style.display = 'block';
-    } else {
+    const parts = [];
+    if (flushFailNotice) parts.push(flushFailNotice);
+    if (n > 0) parts.push(`${n} absensi menunggu sinkron — akan terkirim otomatis saat koneksi kembali.`);
+
+    if (parts.length === 0) {
         offlineBannerEl.style.display = 'none';
+        return;
     }
+    offlineBannerText.textContent = parts.join(' · ');
+    // Penolakan server ≠ "menunggu sinkron". Bedakan warnanya supaya tidak
+    // terbaca sebagai keadaan normal.
+    if (flushFailNotice) {
+        offlineBannerEl.style.background   = 'var(--color-danger-bg,#fee2e2)';
+        offlineBannerEl.style.color        = 'var(--color-danger,#991b1b)';
+        offlineBannerEl.style.borderBottom = '1px solid var(--color-danger,#dc2626)';
+        offlineBannerEl.style.cursor       = 'pointer';
+    } else {
+        offlineBannerEl.style.background   = bannerBaseStyle.background;
+        offlineBannerEl.style.color        = bannerBaseStyle.color;
+        offlineBannerEl.style.borderBottom = bannerBaseStyle.borderBottom;
+        offlineBannerEl.style.cursor       = '';
+    }
+    offlineBannerEl.style.display = 'block';
 }
+
+offlineBannerEl?.addEventListener('click', () => {
+    if (!flushFailNotice) return;
+    flushFailNotice = null;
+    updateOfflineBanner();
+});
 
 window.addEventListener('online', async () => {
     const result = await flushPending();
-    if (result.synced > 0) await updateOfflineBanner();
+    // DUD-05: dulu banner cuma di-update kalau `synced > 0`, sehingga kasus
+    // "semua ditolak" tidak pernah tampil sama sekali.
+    showFlushFailures(result.failed);
+    await updateOfflineBanner();
 });
 
 // ── Notifikasi lonceng ────────────────────────────────────────
@@ -211,7 +261,9 @@ async function init() {
     userNameEl.textContent = 'PJ: ' + userRow.full_name;
 
     // Flush antrian offline + tampilkan banner bila ada sisa
-    flushPending().then(updateOfflineBanner);
+    flushPending()
+        .then(result => { showFlushFailures(result.failed); return updateOfflineBanner(); })
+        .catch(err => console.warn('[dudi] flush awal gagal:', err));
 
     // Notifikasi: cek unread count, poll tiap 1 menit
     refreshNotifBadge();
@@ -443,17 +495,33 @@ obsForm.addEventListener('submit', async (e) => {
     obsSubmitBtn.textContent   = 'Menyimpan...';
 
     try {
-        await saveObservation({
-            studentId:  obsStudentEl.value,
-            sentiment:  obsSentimentEl.value,
-            dimension:  obsDimensionEl.value,
-            content:    obsContentEl.value.trim(),
-            userId:     currentUser.user_id,
-            schoolId:   currentUser.school_id,
-        });
+        let audienceWarning = null;
+        try {
+            await saveObservation({
+                studentId:  obsStudentEl.value,
+                sentiment:  obsSentimentEl.value,
+                dimension:  obsDimensionEl.value,
+                content:    obsContentEl.value.trim(),
+                userId:     currentUser.user_id,
+                schoolId:   currentUser.school_id,
+            });
+        } catch (err) {
+            // DUD-02: partial success. Catatannya SUDAH tersimpan, yang gagal
+            // cuma daftar penerima — jadi jangan bilang "gagal menyimpan",
+            // karena user akan menulis ulang dan jadi catatan ganda.
+            if (!(err instanceof AudienceError)) throw err;
+            console.error('[dudi] AudienceError:', err.cause ?? err);
+            audienceWarning = 'Catatan TERSIMPAN, tetapi belum terkirim ke siswa, orang tua, dan '
+                + 'pihak sekolah. Jangan tulis ulang — laporkan ke admin sekolah.';
+        }
 
-        obsSuccessEl.textContent   = 'Catatan berhasil disimpan.';
-        obsSuccessEl.style.display = 'block';
+        if (audienceWarning) {
+            obsErrorEl.textContent   = audienceWarning;
+            obsErrorEl.style.display = 'block';
+        } else {
+            obsSuccessEl.textContent   = 'Catatan berhasil disimpan.';
+            obsSuccessEl.style.display = 'block';
+        }
         obsForm.reset();
         obsCharCount.textContent = '0';
         await loadObservationHistory();
@@ -524,11 +592,44 @@ btnNextDay.addEventListener('click', () => {
 });
 
 // ── Logout ────────────────────────────────────────────────────
+// DUD-10: antrian offline tidak dibuang begitu saja. Coba kirim dulu
+// (best-effort, dibatasi 5 detik supaya logout tidak menggantung), lalu minta
+// konfirmasi eksplisit kalau masih ada sisa yang akan hilang permanen.
 logoutBtn.addEventListener('click', async () => {
-    LC.clear();
-    await clearOfflineQueue();
-    await logout();
-    window.location.replace(getLoginUrl());
+    logoutBtn.disabled = true;
+    try {
+        // Antrian tak terbaca (IndexedDB bermasalah) tidak boleh mengunci
+        // logout — anggap kosong dan lanjut.
+        const countPending = async () => {
+            try { return await pendingCount(); } catch { return 0; }
+        };
+
+        let pending = await countPending();
+
+        if (pending > 0 && navigator.onLine) {
+            const flushed = await Promise.race([
+                flushPending().catch(() => null),
+                new Promise(res => setTimeout(() => res(null), 5000)),
+            ]);
+            if (flushed) showFlushFailures(flushed.failed);
+            pending = await countPending();
+        }
+
+        if (pending > 0) {
+            const ok = confirm(
+                `${pending} absensi belum terkirim ke server dan akan HILANG PERMANEN `
+                + 'jika Anda keluar sekarang.\n\nTetap keluar?'
+            );
+            if (!ok) { await updateOfflineBanner(); return; }
+        }
+
+        LC.clear();
+        await clearOfflineQueue();
+        await logout();
+        window.location.replace(getLoginUrl());
+    } finally {
+        logoutBtn.disabled = false;
+    }
 });
 
 // ── Helpers ───────────────────────────────────────────────────

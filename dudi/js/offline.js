@@ -115,26 +115,45 @@ export async function saveAttendanceOffline({ placementId, studentId, date, stat
 
 /**
  * Kirim semua absensi yang tertunda ke Supabase.
- * @returns {{synced:number, remaining:number}}
+ *
+ * DUD-05: entry yang DITOLAK server (bukan gagal jaringan) tetap dihapus dari
+ * antrian — mengirim ulang hanya akan ditolak lagi — tapi sekarang dikembalikan
+ * lewat `failed` dan TIDAK lagi dihitung sebagai `synced`. Tanpa ini, absensi
+ * yang ditolak hilang permanen sambil dilaporkan "tersinkron" ke user.
+ *
+ * @returns {{synced:number, remaining:number, failed:Array<object>}}
  */
 export async function flushPending() {
     const pending = await idbGetAll();
-    if (pending.length === 0) return { synced: 0, remaining: 0 };
-    if (!navigator.onLine)    return { synced: 0, remaining: pending.length };
+    if (pending.length === 0) return { synced: 0, remaining: 0, failed: [] };
+    if (!navigator.onLine)    return { synced: 0, remaining: pending.length, failed: [] };
 
     let synced = 0;
+    const failed = [];
     for (const item of pending) {
+        // Sisa antrian dari versi schema lama: dibuang, bukan kegagalan user —
+        // jadi tidak masuk `failed`.
         if (item._schema_ver && item._schema_ver !== OFFLINE_SCHEMA_VER) {
             await idbDelete(item.idempotency_key);
             synced++;
             continue;
         }
         const r = await submitOne(item);
-        if (r.ok) { await idbDelete(item.idempotency_key); synced++; }
-        else if (!r.networkError) { await idbDelete(item.idempotency_key); synced++; }
-        else break;
+        if (r.ok) {
+            await idbDelete(item.idempotency_key);
+            synced++;
+        } else if (!r.networkError) {
+            await idbDelete(item.idempotency_key);
+            failed.push({
+                placement_id:    item.placement_id,
+                student_id:      item.student_id,
+                attendance_date: item.attendance_date,
+                status:          item.status,
+                error:           r.error ?? 'Ditolak server.',
+            });
+        } else break;
     }
-    return { synced, remaining: (await idbGetAll()).length };
+    return { synced, remaining: (await idbGetAll()).length, failed };
 }
 
 /**

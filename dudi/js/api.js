@@ -226,23 +226,41 @@ export async function getKaprodiAndWakaHumas(schoolId) {
     } catch (e) { console.warn('[dudi] getKaprodiAndWakaHumas exception:', e); return []; }
 }
 
+/**
+ * DUD-02: dilempar saat observation SUDAH tersimpan tapi daftar penerimanya
+ * gagal ditulis. Partial success — wajib dibedakan dari kegagalan total, supaya
+ * UI tidak menyuruh user menulis ulang catatan yang sebenarnya sudah ada.
+ */
+export class AudienceError extends Error {
+    constructor(message, cause) {
+        super(message);
+        this.name  = 'AudienceError';
+        this.cause = cause;
+    }
+}
+
 export async function addObservationAudience(observationId, studentId, schoolId) {
+    const audienceRows = [];
+
+    // Fase kumpulkan penerima. Gagal di sini pun bukan kegagalan total —
+    // observation-nya sudah tersimpan — jadi tetap dibungkus AudienceError.
     try {
-        const { data: studentData } = await supabase
+        const { data: studentData, error: studentErr } = await supabase
             .from('students')
             .select('user_id')
             .eq('student_id', studentId)
             .maybeSingle();
+        if (studentErr) throw studentErr;
 
-        const { data: parents } = await supabase
+        const { data: parents, error: parentsErr } = await supabase
             .from('student_parents')
             .select('parent_user_id')
             .eq('student_id', studentId)
             .eq('school_id', schoolId);
+        if (parentsErr) throw parentsErr;
 
         const staffList = await getKaprodiAndWakaHumas(schoolId);
 
-        const audienceRows = [];
         if (studentData?.user_id) {
             audienceRows.push({ observation_id: observationId, user_id: studentData.user_id, school_id: schoolId, added_by_user_id: null });
         }
@@ -252,14 +270,18 @@ export async function addObservationAudience(observationId, studentId, schoolId)
         for (const s of staffList) {
             audienceRows.push({ observation_id: observationId, user_id: s.user_id, school_id: schoolId, added_by_user_id: null });
         }
+    } catch (e) {
+        throw new AudienceError('Daftar penerima catatan gagal disusun.', e);
+    }
 
-        if (audienceRows.length > 0) {
-            const { error } = await supabase
-                .from('observation_audience_members')
-                .insert(audienceRows);
-            if (error) console.warn('[dudi] addObservationAudience error:', error.message);
-        }
-    } catch (e) { console.warn('[dudi] addObservationAudience exception:', e); }
+    // Tidak ada penerima valid = sah, bukan error. Catatan tetap tersimpan dan
+    // tetap bisa dibaca penulisnya sendiri.
+    if (audienceRows.length === 0) return;
+
+    const { error } = await supabase
+        .from('observation_audience_members')
+        .insert(audienceRows);
+    if (error) throw new AudienceError('Penerima catatan gagal disimpan.', error);
 }
 
 export async function saveObservation({ studentId, sentiment, dimension, content, userId, schoolId }) {
@@ -281,7 +303,7 @@ export async function saveObservation({ studentId, sentiment, dimension, content
 
     if (error) throw error;
 
-    await addObservationAudience(observationId, studentId, schoolId).catch(e => {
-        console.warn('[dudi] addObservationAudience non-fatal:', e);
-    });
+    // DUD-02: blocking, bukan fire-and-forget. Kalau daftar penerima gagal
+    // ditulis, catatan ini tidak sampai ke siapa pun — caller wajib tahu.
+    await addObservationAudience(observationId, studentId, schoolId);
 }
