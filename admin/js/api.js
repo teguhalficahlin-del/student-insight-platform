@@ -1496,3 +1496,17 @@ export async function resolveSubjectCodes(kodes) {
         subject_name: nameMap.get(r.core_subject_id) ?? '',
     }]));
 }
+
+export async function getAdminPanelDudi() {
+    const { data, error } = await supabase
+        .rpc('fn_admin_panel_dudi');
+    if (error) throw error;
+    return data ?? [];
+}
+
+export async function getAdminPanelStaff(roleType) {
+    const { data, error } = await supabase
+        .rpc('fn_admin_panel_staff', { p_role_type: roleType });
+    if (error) throw error;
+    return data ?? [];
+}

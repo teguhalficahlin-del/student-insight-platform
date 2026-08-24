@@ -7,7 +7,8 @@
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { supabase, getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getForumGuruWaliCandidates, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent,
-    getDutyStaffCandidates, getDutySchedules, revokeDutySchedule } from './api.js';
+    getDutyStaffCandidates, getDutySchedules, revokeDutySchedule,
+    getAdminPanelDudi, getAdminPanelStaff } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
 
@@ -1773,8 +1774,8 @@ async function printAlumniRecap(studentId) {
 }
 
 async function renderDudiPanel() {
-    const [{ data: users }, programs] = await Promise.all([
-        supabase.from('users').select('user_id, full_name, dudi_org_name, program_id, must_change_password').eq('role_type', 'DUDI').is('deleted_at', null).order('dudi_org_name'),
+    const [users, programs] = await Promise.all([
+        getAdminPanelDudi(),
         getPrograms(),
     ]);
     const pn = new Map(programs.map(p => [p.program_id, p.name]));
@@ -1793,7 +1794,7 @@ async function renderDudiPanel() {
 }
 
 async function renderStakeholdersPanel() {
-    const { data: users } = await supabase.from('users').select('user_id, full_name, login_identifier, must_change_password').eq('role_type', 'STAKEHOLDER').is('deleted_at', null).order('full_name');
+    const users = await getAdminPanelStaff('STAKEHOLDER');
     panelContent.innerHTML = `
         <h3>Stakeholder (${(users ?? []).length})</h3>
         <table class="table">
@@ -1806,12 +1807,7 @@ async function renderStakeholdersPanel() {
 }
 
 async function renderTuPanel() {
-    const { data: users } = await supabase
-        .from('users')
-        .select('user_id, full_name, login_identifier, must_change_password')
-        .eq('role_type', 'TU')
-        .is('deleted_at', null)
-        .order('full_name');
+    const users = await getAdminPanelStaff('TU');
 
     const wizardLink = schoolSlug
         ? `wizard.html?school=${encodeURIComponent(schoolSlug)}#10`

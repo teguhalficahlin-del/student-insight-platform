@@ -65,7 +65,7 @@ Gunakan ini — JANGAN `.from('users')` langsung.
 
 **Role types di tabel `users`:**
 `GURU`, `WALI_KELAS`, `GURU_BK`, `WAKA_KURIKULUM`, `WAKA_HUMAS`, `KEPSEK`,
-`KAPRODI`, `GURU_PIKET`, `SISWA`, `ORTU`, `ADMIN`, `SUPERADMIN`, `TU`, `DUDI`, `STAKEHOLDER`
+`KAPRODI`, `GURU_PIKET`, `SISWA`, `ORTU`, `ADMINISTRATIVE`, `SUPERADMIN`, `TU`, `DUDI`, `STAKEHOLDER`
 
 ---
 

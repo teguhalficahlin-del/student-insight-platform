@@ -561,7 +561,8 @@ async function renderStep() {
             supabase.from('programs').select('program_id', { count: 'exact', head: true }),
             supabase.from('classes').select('class_id', { count: 'exact', head: true }),
             supabase.from('v_users_staff_directory').select('user_id', { count: 'exact', head: true })
-                .eq('role_type', 'GURU'),
+                .eq('role_type', 'GURU')
+                .is('deleted_at', null),
         ]);
 
         const hasPrograms = (programsData.count ?? 0) > 0;
