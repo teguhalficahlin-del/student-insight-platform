@@ -2859,8 +2859,7 @@ async function loadWhCases() {
     tbody.innerHTML = '<tr><td colspan="4" class="hint">Memuat…</td></tr>';
     empty.style.display = 'none';
     try {
-        const all = await getOpenCases(currentUser.school_id);
-        const cases = all.filter(c => c.track === 'PKL');
+        const cases = await getOpenCases(currentUser.school_id, 'PKL');
         if (cases.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
         tbody.innerHTML = cases.map(c => `<tr>
             <td>${esc(c.student?.full_name ?? '—')}</td>

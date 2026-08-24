@@ -743,14 +743,14 @@ export async function getAttendanceSummaryByStudents(classId, academicYear, date
     }));
 }
 
-export async function getOpenCases(schoolId) {
+export async function getOpenCases(schoolId, track = null) {
     let q = supabase
         .from('coaching_cases')
         .select('case_id, title, status, track, current_handler_user_id, created_at, student:students(full_name, nis), handler:users!coaching_cases_current_handler_user_id_fkey(full_name)')
         .neq('status', 'CLOSED')
-        .order('created_at', { ascending: false })
-        .limit(100);
+        .order('created_at', { ascending: false });
     if (schoolId) q = q.eq('school_id', schoolId);
+    if (track)    q = q.eq('track', track);
     const { data, error } = await q;
     if (error) throw error;
     return data ?? [];
