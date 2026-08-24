@@ -127,7 +127,7 @@ async function loadSchools() {
                   <span class="school-summary-name">${esc(s.name)}</span>
                   <span class="school-summary-meta" style="font-size:11px;color:#94a3b8;margin-top:2px;display:flex;gap:16px">
                       <span>${esc(s.admin_name || '—')}</span>
-                      <span style="color:#60a5fa">${s.has_admin_account ? '(ada akun admin)' : '—'}</span>
+                      <span style="color:#60a5fa">${s.admin_login_identifier ? esc(s.admin_login_identifier) : '—'}</span>
                   </span>
                 </span>
                 <span class="school-summary-right">
@@ -139,7 +139,7 @@ async function loadSchools() {
                 <dl class="school-meta">
                   ${s.npsn ? `<div class="meta-row"><dt>NPSN</dt><dd>${esc(s.npsn)}</dd></div>` : ''}
                   <div class="meta-row"><dt>Admin</dt><dd>${esc(s.admin_name)}</dd></div>
-                  <div class="meta-row"><dt>Login Admin</dt><dd>${s.has_admin_account ? 'Ada' : 'Belum ada'}</dd></div>
+                  <div class="meta-row"><dt>Login Admin</dt><dd>${s.admin_login_identifier ? esc(s.admin_login_identifier) : '—'}</dd></div>
                   ${adminUrl ? `<div class="meta-row"><dt>Link Login</dt><dd>
                     <code class="slug-code">?school=${esc(s.slug)}</code>
                     <div class="meta-actions">

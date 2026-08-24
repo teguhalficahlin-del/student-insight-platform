@@ -11,7 +11,8 @@
  * Deploy: supabase functions deploy list-schools --no-verify-jwt
  *
  * Response: array<{ school_id, name, npsn, slug, phone,
- *                   primary_color, is_active, created_at }>
+ *                   primary_color, is_active, created_at,
+ *                   has_admin_account, admin_name, admin_login_identifier }>
  */
 
 import { handleCors, corsHeaders } from '../_shared/cors.ts';
@@ -43,13 +44,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 .select('school_id, name, npsn, slug, phone, primary_color, is_active, created_at')
                 .order('created_at', { ascending: false }),
 
-            // Data admin per sekolah (untuk fitur reset password).
-            // SUP-02: login_identifier (NIP/NIK) TIDAK ikut di-select — nilai itu
-            // data sensitif dan tidak pernah dipakai klien. Klien cukup tahu
-            // apakah akun admin ada (has_admin_account) plus namanya.
+            // Data admin per sekolah (untuk fitur reset password + tampilan username).
+            // SUP-02 (direvisi 24 Agustus 2026): login_identifier semula tidak di-select
+            // karena dianggap sensitif. Keputusan direvisi — Superadmin adalah operator
+            // platform yang memerlukan username untuk keperluan operasional (identifikasi
+            // akun, troubleshooting login). Endpoint sudah di-gate X-Superadmin-Key.
             admin
                 .from('users')
-                .select('school_id, full_name')
+                .select('school_id, full_name, login_identifier')
                 .eq('role_type', 'ADMINISTRATIVE')
                 .eq('is_active', true),
 
@@ -63,12 +65,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
         if (schoolsRes.error) throw schoolsRes.error;
 
-        type AdminRow   = { school_id: string; full_name: string };
+        type AdminRow   = { school_id: string; full_name: string; login_identifier: string | null };
         type StaffHealth = { school_id: string; kepsek_count: number; waka_kurikulum_count: number; waka_kesiswaan_count: number; waka_humas_count: number; staff_count: number };
         type StudentHealth = { school_id: string; student_count: number; provisioned_count: number };
 
         const adminBySchool = Object.fromEntries(
-            ((adminsRes.data ?? []) as AdminRow[]).map(a => [a.school_id, { full_name: a.full_name }])
+            ((adminsRes.data ?? []) as AdminRow[]).map(a => [a.school_id, { full_name: a.full_name, login_identifier: a.login_identifier ?? null }])
         );
         const staffBySchool = Object.fromEntries(
             ((staffHealthRes.data ?? []) as StaffHealth[]).map(h => [h.school_id, h])
@@ -82,8 +84,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const st = studentBySchool[s.school_id];
             return {
                 ...s,
-                has_admin_account:     !!adminBySchool[s.school_id],
-                admin_name:            adminBySchool[s.school_id]?.full_name ?? null,
+                has_admin_account:        !!adminBySchool[s.school_id],
+                admin_name:               adminBySchool[s.school_id]?.full_name ?? null,
+                admin_login_identifier:   adminBySchool[s.school_id]?.login_identifier ?? null,
                 // Health data
                 health: {
                     kepsek_count:         sh?.kepsek_count         ?? 0,
