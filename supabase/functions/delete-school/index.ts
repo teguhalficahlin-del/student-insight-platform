@@ -108,6 +108,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return json({ error: `Gagal menghapus case_events: ${ceErr.message}` }, 500);
     }
 
+    // coaching_case_events: append-only (trg_coaching_case_events_immutable memblokir DELETE).
+    const { error: cceErr } = await admin.rpc('fn_delete_school_coaching_case_events', { p_school_id: school_id });
+    if (cceErr) {
+        console.error('[delete-school] delete coaching_case_events:', cceErr);
+        return json({ error: `Gagal menghapus coaching_case_events: ${cceErr.message}` }, 500);
+    }
+
     const tables: string[] = [
         // ── Forum kelas (RESTRICT ke schools) ──────────────────
         'forum_post_comments',
@@ -118,9 +125,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         // ── Penugasan (RESTRICT ke schools) ────────────────────
         'bk_class_assignments',
         'guru_wali_assignments',
+        // ── Coaching cases (coaching_case_events sudah dihapus via rpc di atas) ──
+        'coaching_case_handlers', // FK RESTRICT ke coaching_cases — harus sebelum coaching_cases
+        'coaching_cases',         // pengganti 'cases' (di-drop di 20260802060000)
+        'coaching_case_templates',
         // ── Data transaksional ──────────────────────────────────
-        // case_events sudah dihapus via rpc di atas
-        'cases',
         'pkl_attendance',
         'pkl_placements',
         'observations',
@@ -132,6 +141,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         'achievements',
         'student_updates',
         // ── Relasi siswa ────────────────────────────────────────
+        'late_arrivals',   // FK ke students — harus sebelum students
         'class_enrollments',
         'student_parents',
         // ── Jadwal ──────────────────────────────────────────────
@@ -139,6 +149,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
         'schedule_templates',
         'schedule_time_slots',
         'teaching_assignments',
+        // ── Perangkat ajar ──────────────────────────────────────
+        'teacher_document_approvals', // FK ke teacher_document_classes
+        'teacher_document_classes',   // FK ke teacher_documents
+        'teacher_documents',          // FK ke users
+        // ── Dinas ───────────────────────────────────────────────
+        'duty_schedules',  // FK ke users — harus sebelum users
         // ── Notifikasi & log ────────────────────────────────────
         'login_devices',
         'notifications',
