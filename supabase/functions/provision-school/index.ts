@@ -141,7 +141,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 password_changed:     false,
             });
 
-        if (configErr) throw configErr;
+        if (configErr) {
+            // SUP-11: rollback schools agar tidak orphan
+            await admin.from('schools').delete().eq('school_id', schoolId);
+            throw configErr;
+        }
 
         // ── 4. Buat Auth user untuk admin ─────────────────────
         const adminEmail    = toInternalEmail(admin_identifier, 'NIK', schoolId);
