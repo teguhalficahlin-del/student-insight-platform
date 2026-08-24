@@ -38,6 +38,13 @@ let _rcHasil    = null;
 let _delegInit  = false;
 let _userReady  = false;
 
+// sumatif state
+let _sumPage         = 0;
+let _sumNilai        = {};   // { sid: { nilai, predikat, tl } }
+let _sumSiswaList    = [];
+let _sumActiveSid    = null;
+let _sumSiswaContainer = null; // reference to #pai-siswa-section in open modal
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const PREDIKAT_RUBRIK = [
@@ -61,7 +68,9 @@ const INSTRUMEN_MAP = {
     TES_LISAN:   ['Wawancara', 'Monolog', 'Dialog'],
 };
 
-const STATUS_GRUP = { PAHAM: 'A', BELUM_PAHAM: 'B', PERLU_PERHATIAN: 'C' };
+const STATUS_GRUP   = { PAHAM: 'A', BELUM_PAHAM: 'B', PERLU_PERHATIAN: 'C' };
+const TINGKAT_OBS   = ['Terlihat Jelas', 'Terlihat', 'Belum Terlihat'];
+const PREDIKAT_ORDER = ['BB', 'MB', 'BSH', 'SB'];
 
 // ── Utility ───────────────────────────────────────────────────────────────────
 
@@ -176,20 +185,17 @@ function injectStyles() {
 .pai-srow:last-child { border-bottom:none }
 .pai-srow-name { font-weight:600; margin-bottom:4px }
 /* sumatif */
-.sum-chip-wrap { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px }
-.sum-chip { padding:5px 10px; border:1px solid var(--color-border); border-radius:16px;
-  font-size:12px; cursor:pointer; background:var(--color-surface) }
-.sum-chip.active { background:var(--color-primary); color:#fff; border-color:var(--color-primary) }
-.sum-pager { display:flex; gap:6px; justify-content:center; margin:8px 0 }
-.sum-input-row { display:flex; align-items:center; gap:8px; padding:6px 0;
-  border-bottom:1px solid var(--color-border); font-size:13px }
-.sum-input-row:last-child { border-bottom:none }
-.sum-input-row input { width:80px; text-align:center }
-/* instrumen body */
-.pai-instrumen-block { margin-bottom:12px }
-.pai-row { display:flex; gap:6px; align-items:center; margin-bottom:4px; font-size:12px }
-.pai-row input, .pai-row select { flex:1 }
-.pai-row-add { background:none; border:none; color:var(--color-primary); cursor:pointer; font-size:12px; padding:0 }
+.sum-names-wrap { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px }
+.sum-nav { display:flex; align-items:center; gap:8px; margin-bottom:6px }
+.sum-dots { display:flex; gap:4px; flex-wrap:wrap }
+.sum-input-panel { margin-top:10px }
+/* instrumen body — instrumen-centric siswa pickers */
+.pai-sw-picker { margin-top:3px }
+.pai-sw-chips { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px; min-height:4px }
+.pai-sw-chip { display:inline-flex; align-items:center; gap:3px; padding:2px 8px;
+  border-radius:12px; background:var(--color-primary); color:#fff;
+  font-size:11px; cursor:pointer; user-select:none }
+.pai-sw-chip:hover { opacity:.85 }
 /* rekap */
 .rc-filter-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center }
 .rc-filter-bar select, .rc-filter-bar input { padding:6px 8px; border:1px solid var(--color-border);
@@ -484,225 +490,713 @@ async function renderPerencanaan() {
 
 // ── Section 2: Pelaksanaan ────────────────────────────────────────────────────
 
-// instrumen body builders
-function instrumenFieldHtml(teknik, instrumen) {
-    const instrFmt = (instrumen || '').replace(/\s/g, '_').toUpperCase();
-    switch (teknik) {
-        case 'OBSERVASI':
-            if (instrumen === 'Lembar Observasi' || instrumen === 'Checklist') {
-                return '<div class="pai-instrumen-block">' +
-                    '<div class="pai-row"><input type="text" class="pai-aspek" placeholder="Aspek observasi" maxlength="200"><button type="button" class="pai-row-add" data-act="aspek-add">+ Aspek</button></div>' +
-                    '</div>';
-            }
-            if (instrumen === 'Catatan Anekdot') {
-                return '<div class="pai-instrumen-block"><div class="pai-row"><textarea class="pai-catatan-template" rows="3" placeholder="Template catatan anekdot…" maxlength="500"></textarea></div></div>';
-            }
-            return '';
-        case 'TES':
-            return '<div class="pai-instrumen-block">' +
-                '<label style="font-size:12px;font-weight:600">Soal</label>' +
-                '<div id="pai-soal-list"><div class="pai-row"><input type="text" class="pai-soal" placeholder="Soal 1" maxlength="500"><button type="button" class="pai-row-add" data-act="soal-add">+ Soal</button></div></div>' +
-                '</div>';
-        case 'PENUGASAN':
-        case 'PROYEK':
-        case 'PORTOFOLIO':
-        case 'UNJUK_KERJA':
-            if (instrumen === 'Rubrik') {
-                return '<div class="pai-instrumen-block">' +
-                    '<label style="font-size:12px;font-weight:600">Kriteria Rubrik</label>' +
-                    '<div id="pai-rubrik-list"><div class="pai-row"><input type="text" class="pai-kriteria" placeholder="Kriteria 1" maxlength="200"><select class="pai-bobot"><option value="1">Bobot 1</option><option value="2">Bobot 2</option><option value="3">Bobot 3</option></select><button type="button" class="pai-row-add" data-act="rubrik-add">+ Kriteria</button></div></div>' +
-                    '</div>';
-            }
-            if (instrumen === 'Checklist') {
-                return '<div class="pai-instrumen-block">' +
-                    '<label style="font-size:12px;font-weight:600">Item Checklist</label>' +
-                    '<div id="pai-checklist-list"><div class="pai-row"><input type="text" class="pai-item" placeholder="Item 1" maxlength="200"><button type="button" class="pai-row-add" data-act="checklist-add">+ Item</button></div></div>' +
-                    '</div>';
-            }
-            return '';
-        case 'TES_LISAN':
-            return '<div class="pai-instrumen-block">' +
-                '<label style="font-size:12px;font-weight:600">Pertanyaan</label>' +
-                '<div id="pai-lisan-list"><div class="pai-row"><input type="text" class="pai-pertanyaan" placeholder="Pertanyaan 1" maxlength="500"><button type="button" class="pai-row-add" data-act="lisan-add">+ Pertanyaan</button></div></div>' +
-                '</div>';
-        default: return '';
-    }
+// ── Instrumen-body helpers ────────────────────────────────────────────────────
+
+function inputCss(extra) {
+    return 'width:100%;padding:6px 8px;border:1px solid var(--color-border);border-radius:4px;' +
+        'background:var(--color-bg);color:var(--color-text);font-size:12px;box-sizing:border-box;' +
+        (extra ? extra + ';' : '');
 }
 
-function wireInstrumenBody(container) {
+function fieldLbl(label) {
+    return '<label style="display:block;font-size:11px;font-weight:600;color:var(--color-text-muted);margin:5px 0 2px">' + esc(label) + '</label>';
+}
+
+function addBtnHtml(cls, label) {
+    return '<button type="button" class="' + esc(cls) + '" ' +
+        'style="margin-top:6px;font-size:11px;background:transparent;' +
+        'border:1.5px dashed var(--color-border);color:var(--color-text-muted);' +
+        'border-radius:4px;cursor:pointer;padding:4px 10px;width:100%">' + esc(label) + '</button>';
+}
+
+function siswaPickerHtml(pickerId) {
+    const opts = _rosterCache.map(s =>
+        '<option value="' + esc(s.id) + '">' + esc(s.nama) + '</option>'
+    ).join('');
+    return '<div class="pai-sw-picker" data-picker-id="' + esc(pickerId) + '">' +
+        '<div class="pai-sw-chips"></div>' +
+        '<select class="pai-sw-sel" style="' + inputCss('font-size:11px;margin-top:3px') + '">' +
+        '<option value="">— Tambah siswa —</option>' + opts +
+        '</select></div>';
+}
+
+function chipSiswaHtml(sid, nama) {
+    return '<span class="pai-sw-chip" data-sid="' + esc(sid) + '">' + esc(nama) + ' ×</span>';
+}
+
+function aspekRowHtml(idx) {
+    return '<div class="pai-aspek-row" data-aspek="' + idx + '" ' +
+        'style="border:1px solid var(--color-border);border-radius:6px;padding:8px 10px;margin-bottom:6px">' +
+        '<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">' +
+        '<span style="font-size:11px;font-weight:600;color:var(--color-text-muted)">Aspek ' + (idx + 1) + ':</span>' +
+        '<input class="aspek-nama" type="text" placeholder="Nama aspek…" style="' + inputCss('flex:1') + '">' +
+        '<button type="button" class="btn-del-aspek" ' +
+        'style="background:transparent;border:none;cursor:pointer;font-size:13px;color:var(--color-text-muted);padding:2px 5px">✕</button>' +
+        '</div>' +
+        PREDIKAT_RUBRIK.map(p => (
+            '<div class="pai-aspek-pred" data-pred="' + p.val + '" ' +
+            'style="padding:4px 0;border-top:1px solid var(--color-border)">' +
+            '<div style="font-size:11px;font-weight:700;color:var(--color-text-muted);margin-bottom:3px">' + esc(p.lbl) + ':</div>' +
+            '<textarea class="predikat-desk predikat-desk-' + p.val + '" rows="2" ' +
+            'placeholder="Deskripsi deskriptor… (opsional)" ' +
+            'style="' + inputCss('resize:vertical;font-size:11px;margin-bottom:3px') + '"></textarea>' +
+            '<div style="font-size:11px;color:var(--color-text-muted);margin-bottom:2px">Siswa:</div>' +
+            siswaPickerHtml('aspek-' + idx + '-' + p.val) +
+            '</div>'
+        )).join('') +
+        '</div>';
+}
+
+function checklistItemHtml(idx) {
+    return '<div class="pai-item-row" data-item="' + idx + '" ' +
+        'style="border:1px solid var(--color-border);border-radius:6px;padding:8px 10px;margin-bottom:6px">' +
+        '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">' +
+        '<input class="item-nama" type="text" placeholder="Item ' + (idx + 1) + '…" ' +
+        'style="' + inputCss('flex:1') + '">' +
+        '<button type="button" class="btn-del-item" ' +
+        'style="background:transparent;border:none;cursor:pointer;font-size:13px;color:var(--color-text-muted);padding:2px 5px">✕</button>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--color-text-muted);margin-bottom:3px">Siswa yang memenuhi:</div>' +
+        siswaPickerHtml('item-' + idx + '-siswa') +
+        '</div>';
+}
+
+function observasiAspekHtml(idx) {
+    return '<div class="pai-obs-aspek" data-aspek="' + idx + '" ' +
+        'style="border:1px solid var(--color-border);border-radius:6px;padding:8px 10px;margin-bottom:6px">' +
+        '<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">' +
+        '<span style="font-size:11px;font-weight:600;color:var(--color-text-muted)">Aspek ' + (idx + 1) + ':</span>' +
+        '<input class="obs-aspek-nama" type="text" placeholder="Nama aspek observasi…" style="' + inputCss('flex:1') + '">' +
+        '<button type="button" class="btn-del-obs-aspek" ' +
+        'style="background:transparent;border:none;cursor:pointer;font-size:13px;color:var(--color-text-muted);padding:2px 5px">✕</button>' +
+        '</div>' +
+        '<div style="margin-bottom:4px">' + fieldLbl('Indikator (opsional):') +
+        '<input class="obs-indikator" type="text" placeholder="Tuliskan indikator…" style="' + inputCss() + '"></div>' +
+        TINGKAT_OBS.map(t => (
+            '<div style="padding:4px 0;border-top:1px solid var(--color-border)">' +
+            '<div style="font-size:11px;font-weight:700;margin-bottom:3px">' + esc(t) + ':</div>' +
+            siswaPickerHtml('obs-' + idx + '-' + t.replace(/\s/g, '_')) +
+            '</div>'
+        )).join('') +
+        '</div>';
+}
+
+function anekdotCatatanHtml(idx, modePerSiswa) {
+    const siswaOpts = _rosterCache.map(s =>
+        '<option value="' + esc(s.id) + '">' + esc(s.nama) + '</option>'
+    ).join('');
+    return '<div class="pai-anekdot-row" data-catatan="' + idx + '" ' +
+        'style="border:1px solid var(--color-border);border-radius:6px;padding:6px 10px;margin-bottom:4px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+        '<span style="font-size:11px;font-weight:700">Catatan ' + (idx + 1) + '</span>' +
+        '<button type="button" class="btn-del-catatan" ' +
+        'style="background:transparent;border:none;cursor:pointer;font-size:13px;color:var(--color-text-muted);padding:2px 5px">✕</button>' +
+        '</div>' +
+        (modePerSiswa
+            ? '<div style="margin-bottom:4px">' + fieldLbl('Siswa') +
+              '<select class="anekdot-siswa-sel" style="' + inputCss('font-size:11px') + '">' +
+              '<option value="">— Pilih siswa —</option>' + siswaOpts + '</select></div>'
+            : '<div style="margin-bottom:4px"><div style="font-size:11px;color:var(--color-text-muted);margin-bottom:2px">Siswa yang terlibat:</div>' +
+              siswaPickerHtml('anekdot-' + idx + '-siswa') + '</div>') +
+        '<div style="margin-bottom:4px">' + fieldLbl('Deskripsi kejadian') +
+        '<textarea class="anekdot-deskripsi" rows="2" placeholder="Tuliskan kejadian…" ' +
+        'style="' + inputCss('resize:vertical;font-size:11px') + '"></textarea></div>' +
+        '<div>' + fieldLbl('Interpretasi (opsional)') +
+        '<textarea class="anekdot-interpretasi" rows="2" placeholder="Tuliskan interpretasi opsional…" ' +
+        'style="' + inputCss('resize:vertical;font-size:11px') + '"></textarea></div>' +
+        '</div>';
+}
+
+function konteksPrefixHtml(teknik) {
+    if (teknik === 'PENUGASAN') return '<div style="margin-bottom:6px">' + fieldLbl('Deskripsi tugas (opsional)') + '<textarea id="pai-konteks-1" rows="2" placeholder="Tuliskan deskripsi tugas…" style="' + inputCss('resize:vertical;font-size:11px') + '"></textarea></div>';
+    if (teknik === 'PROYEK') return '<div style="margin-bottom:6px">' + fieldLbl('Nama proyek (opsional)') + '<input type="text" id="pai-konteks-1" placeholder="Tuliskan nama proyek…" style="' + inputCss() + '">' + '<div style="margin-top:4px">' + fieldLbl('Deskripsi (opsional)') + '<textarea id="pai-konteks-2" rows="2" placeholder="Tuliskan deskripsi proyek…" style="' + inputCss('resize:vertical;font-size:11px') + '"></textarea></div></div>';
+    if (teknik === 'PORTOFOLIO') return '<div style="margin-bottom:6px">' + fieldLbl('Tema portofolio (opsional)') + '<input type="text" id="pai-konteks-1" placeholder="Tuliskan tema…" style="' + inputCss() + '">' + '<div style="margin-top:4px">' + fieldLbl('Periode (opsional)') + '<input type="text" id="pai-konteks-2" placeholder="Tuliskan periode…" style="' + inputCss() + '"></div></div>';
+    if (teknik === 'UNJUK_KERJA') return '<div style="margin-bottom:6px">' + fieldLbl('Deskripsi unjuk kerja (opsional)') + '<textarea id="pai-konteks-1" rows="2" placeholder="Tuliskan deskripsi…" style="' + inputCss('resize:vertical;font-size:11px') + '"></textarea></div>';
+    return '';
+}
+
+function renderBodyInstrumen(teknik, instrumen, container) {
+    if (!container) return;
+    let inner = '';
+
+    if (teknik === 'OBSERVASI') {
+        if (instrumen === 'Lembar Observasi') {
+            inner = '<div id="pai-obs-aspeks">' + observasiAspekHtml(0) + '</div>' +
+                addBtnHtml('btn-tambah-obs-aspek', '+ Tambah aspek observasi');
+        } else if (instrumen === 'Catatan Anekdot') {
+            inner = '<div style="margin-bottom:6px">' + fieldLbl('Mode') +
+                '<select id="pai-anekdot-mode" style="' + inputCss() + '">' +
+                '<option value="per_siswa">Per Siswa</option>' +
+                '<option value="per_kejadian">Per Kejadian</option>' +
+                '</select></div>' +
+                '<div id="pai-anekdot-rows">' + anekdotCatatanHtml(0, true) + '</div>' +
+                addBtnHtml('btn-tambah-catatan', '+ Tambah catatan');
+        } else if (instrumen === 'Checklist') {
+            inner = '<div id="pai-cl-items">' + checklistItemHtml(0) + '</div>' +
+                addBtnHtml('btn-tambah-item', '+ Tambah item');
+        }
+    } else if (teknik === 'TES') {
+        inner = ['Menjawab dengan baik', 'Menjawab sebagian', 'Belum bisa menjawab'].map((dsk, i) => (
+            '<div class="pai-tl-dsk-block" data-dsk="' + i + '" ' +
+            'style="padding:5px 0;border-top:1px solid var(--color-border)">' +
+            '<div style="font-size:11px;font-weight:700;margin-bottom:3px">' + esc(dsk) + ':</div>' +
+            siswaPickerHtml('tes-dsk-' + i) +
+            '</div>'
+        )).join('');
+    } else if (teknik === 'TES_LISAN') {
+        if (instrumen === 'Wawancara') {
+            inner = '<div style="margin-bottom:6px">' + fieldLbl('Topik wawancara (opsional)') +
+                '<input type="text" id="pai-tl-topik" placeholder="Tuliskan topik…" style="' + inputCss() + '"></div>' +
+                ['Menjawab dengan baik', 'Menjawab sebagian', 'Belum bisa menjawab'].map((dsk, i) => (
+                    '<div class="pai-tl-dsk-block" data-dsk="' + i + '" ' +
+                    'style="padding:5px 0;border-top:1px solid var(--color-border)">' +
+                    '<div style="font-size:11px;font-weight:700;margin-bottom:3px">' + esc(dsk) + ':</div>' +
+                    siswaPickerHtml('tl-waw-' + i) +
+                    '</div>'
+                )).join('');
+        } else {
+            const topikLabel = instrumen === 'Monolog' ? 'Topik monolog (opsional)' : 'Topik dialog (opsional)';
+            inner = '<div style="margin-bottom:6px">' + fieldLbl(topikLabel) +
+                '<input type="text" id="pai-tl-topik" placeholder="Tuliskan topik…" style="' + inputCss() + '"></div>' +
+                PREDIKAT_RUBRIK.map((p, i) => (
+                    '<div class="pai-tl-pred-block" data-pred="' + p.val + '" ' +
+                    'style="padding:5px 0;border-top:1px solid var(--color-border)">' +
+                    '<div style="font-size:11px;font-weight:700;margin-bottom:3px">' + esc(p.lbl) + '</div>' +
+                    '<textarea class="tl-pred-desk tl-pred-desk-' + p.val + '" rows="2" ' +
+                    'placeholder="Deskripsi deskriptor… (opsional)" style="' + inputCss('resize:vertical;font-size:11px') + '"></textarea>' +
+                    '<div style="font-size:11px;color:var(--color-text-muted);margin:.3rem 0 .1rem">Siswa:</div>' +
+                    siswaPickerHtml('tl-' + i + '-' + p.val) +
+                    '</div>'
+                )).join('');
+        }
+    } else if (['PENUGASAN', 'PROYEK', 'PORTOFOLIO', 'UNJUK_KERJA'].includes(teknik)) {
+        const prefix = konteksPrefixHtml(teknik);
+        if (instrumen === 'Rubrik') {
+            inner = prefix + '<div id="pai-rubrik-aspeks">' + aspekRowHtml(0) + '</div>' +
+                addBtnHtml('btn-tambah-aspek', '+ Tambah aspek');
+        } else if (instrumen === 'Checklist') {
+            inner = prefix + '<div id="pai-cl-items">' + checklistItemHtml(0) + '</div>' +
+                addBtnHtml('btn-tambah-item', '+ Tambah item');
+        }
+    }
+
+    container.innerHTML = inner
+        ? '<div style="background:var(--color-surface);border-radius:6px;padding:10px">' +
+          '<div style="font-size:11px;font-weight:700;color:var(--color-primary);' +
+          'text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Isi Penilaian</div>' +
+          inner + '</div>'
+        : '';
+}
+
+function wireBodyInstrumen(container) {
+    if (!container) return;
+
+    container.addEventListener('change', e => {
+        if (e.target.classList.contains('pai-sw-sel')) {
+            const sid = e.target.value;
+            if (!sid) return;
+            const picker = e.target.closest('.pai-sw-picker');
+            if (!picker) return;
+            if (picker.querySelector('.pai-sw-chip[data-sid="' + sid + '"]')) { e.target.value = ''; return; }
+            const stu = _rosterCache.find(r => r.id === sid);
+            if (!stu) return;
+            picker.querySelector('.pai-sw-chips')?.insertAdjacentHTML('beforeend', chipSiswaHtml(sid, stu.nama));
+            const opt = e.target.querySelector('option[value="' + sid + '"]');
+            if (opt) opt.style.display = 'none';
+            e.target.value = '';
+            return;
+        }
+        if (e.target.id === 'pai-anekdot-mode') {
+            const modePerSiswa = e.target.value === 'per_siswa';
+            const rowsDiv = container.querySelector('#pai-anekdot-rows');
+            if (!rowsDiv) return;
+            const n = rowsDiv.querySelectorAll('.pai-anekdot-row').length || 1;
+            rowsDiv.innerHTML = Array.from({ length: n }, (_, i) => anekdotCatatanHtml(i, modePerSiswa)).join('');
+        }
+    });
+
     container.addEventListener('click', e => {
-        const btn = e.target.closest('[data-act]');
-        if (!btn) return;
-        const act = btn.dataset.act;
-        const addRow = (listId, inputClass, placeholder) => {
-            const list = container.querySelector('#' + listId);
-            if (!list) return;
-            const row = document.createElement('div'); row.className = 'pai-row';
-            row.innerHTML = '<input type="text" class="' + inputClass + '" placeholder="' + placeholder + '" maxlength="' + (listId === 'pai-soal-list' ? '500' : '200') + '">';
-            list.appendChild(row);
-            row.querySelector('input')?.focus();
-        };
-        if (act === 'aspek-add') { const b = container.querySelector('.pai-instrumen-block'); if (!b) return; const row = document.createElement('div'); row.className = 'pai-row'; row.innerHTML = '<input type="text" class="pai-aspek" placeholder="Aspek observasi" maxlength="200">'; b.insertBefore(row, btn.closest('.pai-row')); row.querySelector('input')?.focus(); }
-        if (act === 'soal-add')      addRow('pai-soal-list',     'pai-soal',      'Soal');
-        if (act === 'rubrik-add')    { const list = container.querySelector('#pai-rubrik-list'); if (!list) return; const row = document.createElement('div'); row.className = 'pai-row'; row.innerHTML = '<input type="text" class="pai-kriteria" placeholder="Kriteria" maxlength="200"><select class="pai-bobot"><option value="1">Bobot 1</option><option value="2">Bobot 2</option><option value="3">Bobot 3</option></select>'; list.appendChild(row); row.querySelector('input')?.focus(); }
-        if (act === 'checklist-add') addRow('pai-checklist-list', 'pai-item',      'Item');
-        if (act === 'lisan-add')     addRow('pai-lisan-list',     'pai-pertanyaan','Pertanyaan');
+        const chip = e.target.closest('.pai-sw-chip');
+        if (chip && container.contains(chip)) {
+            const sid = chip.dataset.sid;
+            const picker = chip.closest('.pai-sw-picker');
+            if (picker) {
+                const opt = picker.querySelector('.pai-sw-sel option[value="' + sid + '"]');
+                if (opt) opt.style.display = '';
+            }
+            chip.remove();
+            return;
+        }
+        const tgt = e.target.closest('button');
+        if (!tgt) return;
+        if (tgt.classList.contains('btn-tambah-aspek')) {
+            const d = container.querySelector('#pai-rubrik-aspeks');
+            if (d) d.insertAdjacentHTML('beforeend', aspekRowHtml(d.querySelectorAll('.pai-aspek-row').length));
+            return;
+        }
+        if (tgt.classList.contains('btn-del-aspek')) { tgt.closest('.pai-aspek-row')?.remove(); return; }
+        if (tgt.classList.contains('btn-tambah-item')) {
+            const d = container.querySelector('#pai-cl-items');
+            if (d) d.insertAdjacentHTML('beforeend', checklistItemHtml(d.querySelectorAll('.pai-item-row').length));
+            return;
+        }
+        if (tgt.classList.contains('btn-del-item')) { tgt.closest('.pai-item-row')?.remove(); return; }
+        if (tgt.classList.contains('btn-tambah-obs-aspek')) {
+            const d = container.querySelector('#pai-obs-aspeks');
+            if (d) d.insertAdjacentHTML('beforeend', observasiAspekHtml(d.querySelectorAll('.pai-obs-aspek').length));
+            return;
+        }
+        if (tgt.classList.contains('btn-del-obs-aspek')) { tgt.closest('.pai-obs-aspek')?.remove(); return; }
+        if (tgt.classList.contains('btn-tambah-catatan')) {
+            const d = container.querySelector('#pai-anekdot-rows');
+            const mode = container.querySelector('#pai-anekdot-mode')?.value;
+            if (d) d.insertAdjacentHTML('beforeend', anekdotCatatanHtml(d.querySelectorAll('.pai-anekdot-row').length, !mode || mode === 'per_siswa'));
+            return;
+        }
+        if (tgt.classList.contains('btn-del-catatan')) { tgt.closest('.pai-anekdot-row')?.remove(); return; }
     });
 }
 
-function collectInstrumenBody(container, teknik, instrumen) {
-    switch (teknik) {
-        case 'OBSERVASI':
-            if (instrumen === 'Catatan Anekdot') return { template: container.querySelector('.pai-catatan-template')?.value.trim() || '' };
-            return { aspek: [...container.querySelectorAll('.pai-aspek')].map(i => i.value.trim()).filter(Boolean) };
-        case 'TES':
-            return { soal: [...container.querySelectorAll('.pai-soal')].map(i => i.value.trim()).filter(Boolean) };
-        case 'PENUGASAN': case 'PROYEK': case 'PORTOFOLIO': case 'UNJUK_KERJA':
-            if (instrumen === 'Rubrik') return { kriteria: [...container.querySelectorAll('.pai-kriteria')].map((i, idx) => ({ teks: i.value.trim(), bobot: parseInt(container.querySelectorAll('.pai-bobot')[idx]?.value || '1', 10) })).filter(k => k.teks) };
-            return { item: [...container.querySelectorAll('.pai-item')].map(i => i.value.trim()).filter(Boolean) };
-        case 'TES_LISAN':
-            return { pertanyaan: [...container.querySelectorAll('.pai-pertanyaan')].map(i => i.value.trim()).filter(Boolean) };
-        default: return {};
+function collectBodyInstrumen(container, teknik, instrumen) {
+    if (!container || !teknik || !instrumen) return null;
+    const data = {};
+
+    function getSiswaOfPicker(pickerEl) {
+        return Array.from(pickerEl?.querySelectorAll('.pai-sw-chip') ?? []).map(c => c.dataset.sid).filter(Boolean);
     }
+
+    if (teknik === 'OBSERVASI') {
+        if (instrumen === 'Lembar Observasi') {
+            data.aspeks = Array.from(container.querySelectorAll('.pai-obs-aspek')).map(a => {
+                const pickers = a.querySelectorAll('.pai-sw-picker');
+                return {
+                    nama:           a.querySelector('.obs-aspek-nama')?.value.trim() || '',
+                    indikator:      a.querySelector('.obs-indikator')?.value.trim()  || null,
+                    terlihat_jelas: getSiswaOfPicker(pickers[0]),
+                    terlihat:       getSiswaOfPicker(pickers[1]),
+                    belum_terlihat: getSiswaOfPicker(pickers[2]),
+                };
+            });
+        } else if (instrumen === 'Catatan Anekdot') {
+            const mode = container.querySelector('#pai-anekdot-mode')?.value || 'per_siswa';
+            data.mode = mode;
+            data.catatan = Array.from(container.querySelectorAll('.pai-anekdot-row')).map(r => ({
+                siswa: mode === 'per_siswa'
+                    ? (r.querySelector('.anekdot-siswa-sel')?.value || null)
+                    : getSiswaOfPicker(r.querySelector('.pai-sw-picker')),
+                deskripsi:    r.querySelector('.anekdot-deskripsi')?.value.trim()    || '',
+                interpretasi: r.querySelector('.anekdot-interpretasi')?.value.trim() || null,
+            }));
+        } else if (instrumen === 'Checklist') {
+            data.items = Array.from(container.querySelectorAll('.pai-item-row')).map(r => ({
+                nama:  r.querySelector('.item-nama')?.value.trim() || '',
+                siswa: getSiswaOfPicker(r.querySelector('.pai-sw-picker')),
+            }));
+        }
+    } else if (teknik === 'TES') {
+        const labels = ['Menjawab dengan baik', 'Menjawab sebagian', 'Belum bisa menjawab'];
+        data.deskriptor = Array.from(container.querySelectorAll('.pai-tl-dsk-block')).map((b, i) => ({
+            label: labels[i] ?? '',
+            siswa: getSiswaOfPicker(b.querySelector('.pai-sw-picker')),
+        }));
+    } else if (teknik === 'TES_LISAN') {
+        data.topik = container.querySelector('#pai-tl-topik')?.value.trim() || null;
+        if (instrumen === 'Wawancara') {
+            const labels = ['Menjawab dengan baik', 'Menjawab sebagian', 'Belum bisa menjawab'];
+            data.deskriptor = Array.from(container.querySelectorAll('.pai-tl-dsk-block')).map((b, i) => ({
+                label: labels[i] ?? '',
+                siswa: getSiswaOfPicker(b.querySelector('.pai-sw-picker')),
+            }));
+        } else {
+            data.predikat = PREDIKAT_RUBRIK.map((p, i) => ({
+                val:      p.val,
+                label:    p.lbl,
+                deskripsi: container.querySelector('.tl-pred-desk-' + p.val)?.value.trim() || null,
+                siswa:    getSiswaOfPicker(Array.from(container.querySelectorAll('.pai-tl-pred-block .pai-sw-picker'))[i]),
+            }));
+        }
+    } else if (['PENUGASAN', 'PROYEK', 'PORTOFOLIO', 'UNJUK_KERJA'].includes(teknik)) {
+        data.konteks1 = container.querySelector('#pai-konteks-1')?.value.trim() || null;
+        data.konteks2 = container.querySelector('#pai-konteks-2')?.value.trim() || null;
+        if (instrumen === 'Rubrik') {
+            data.aspeks = Array.from(container.querySelectorAll('.pai-aspek-row')).map(a => ({
+                nama: a.querySelector('.aspek-nama')?.value.trim() || '',
+                predikat: PREDIKAT_RUBRIK.map((p, i) => ({
+                    val:      p.val,
+                    label:    p.lbl,
+                    deskripsi: a.querySelector('.predikat-desk-' + p.val)?.value.trim() || null,
+                    siswa:    getSiswaOfPicker(a.querySelectorAll('.pai-sw-picker')[i]),
+                })),
+            }));
+        } else if (instrumen === 'Checklist') {
+            data.items = Array.from(container.querySelectorAll('.pai-item-row')).map(r => ({
+                nama:  r.querySelector('.item-nama')?.value.trim() || '',
+                siswa: getSiswaOfPicker(r.querySelector('.pai-sw-picker')),
+            }));
+        }
+    }
+
+    return Object.keys(data).length ? data : null;
 }
 
-function prefillInstrumenBody(container, teknik, instrumen, konten) {
-    if (!konten) return;
-    switch (teknik) {
-        case 'OBSERVASI':
-            if (instrumen === 'Catatan Anekdot') { const t = container.querySelector('.pai-catatan-template'); if (t) t.value = konten.template || ''; return; }
-            (konten.aspek || []).forEach((a, i) => {
-                let inp = container.querySelectorAll('.pai-aspek')[i];
-                if (!inp) { const b = container.querySelector('.pai-instrumen-block'); if (!b) return; const row = document.createElement('div'); row.className = 'pai-row'; row.innerHTML = '<input type="text" class="pai-aspek" placeholder="Aspek" maxlength="200">'; b.insertBefore(row, b.querySelector('[data-act]')?.closest('.pai-row')); inp = row.querySelector('input'); }
-                if (inp) inp.value = a;
+function prefillBodyInstrumen(container, konten, teknik, instrumen) {
+    if (!container || !konten || !teknik || !instrumen) return;
+
+    function fillPicker(pickerEl, sids) {
+        if (!pickerEl || !Array.isArray(sids)) return;
+        const chips = pickerEl.querySelector('.pai-sw-chips');
+        const sel   = pickerEl.querySelector('.pai-sw-sel');
+        if (!chips) return;
+        for (const sid of sids) {
+            const stu = _rosterCache.find(r => r.id === sid);
+            if (!stu) continue;
+            if (chips.querySelector('.pai-sw-chip[data-sid="' + sid + '"]')) continue;
+            chips.insertAdjacentHTML('beforeend', chipSiswaHtml(sid, stu.nama));
+            if (sel) { const opt = sel.querySelector('option[value="' + sid + '"]'); if (opt) opt.style.display = 'none'; }
+        }
+    }
+
+    if (teknik === 'OBSERVASI') {
+        if (instrumen === 'Lembar Observasi' && Array.isArray(konten.aspeks)) {
+            const aspekEls = container.querySelectorAll('.pai-obs-aspek');
+            konten.aspeks.forEach((a, i) => {
+                const el = aspekEls[i]; if (!el) return;
+                const nameIn = el.querySelector('.obs-aspek-nama'); if (nameIn) nameIn.value = a.nama || '';
+                const indIn  = el.querySelector('.obs-indikator');  if (indIn)  indIn.value  = a.indikator || '';
+                const pickers = el.querySelectorAll('.pai-sw-picker');
+                fillPicker(pickers[0], a.terlihat_jelas);
+                fillPicker(pickers[1], a.terlihat);
+                fillPicker(pickers[2], a.belum_terlihat);
             });
-            return;
-        case 'TES':
-            (konten.soal || []).forEach((s, i) => {
-                let inp = container.querySelectorAll('.pai-soal')[i];
-                if (!inp) { const list = container.querySelector('#pai-soal-list'); if (!list) return; const row = document.createElement('div'); row.className = 'pai-row'; row.innerHTML = '<input type="text" class="pai-soal" placeholder="Soal" maxlength="500">'; list.appendChild(row); inp = row.querySelector('input'); }
-                if (inp) inp.value = s;
-            });
-            return;
-        case 'PENUGASAN': case 'PROYEK': case 'PORTOFOLIO': case 'UNJUK_KERJA':
-            if (instrumen === 'Rubrik') {
-                (konten.kriteria || []).forEach((k, i) => {
-                    let inp = container.querySelectorAll('.pai-kriteria')[i];
-                    let sel = container.querySelectorAll('.pai-bobot')[i];
-                    if (!inp) { const list = container.querySelector('#pai-rubrik-list'); if (!list) return; const row = document.createElement('div'); row.className = 'pai-row'; row.innerHTML = '<input type="text" class="pai-kriteria" placeholder="Kriteria" maxlength="200"><select class="pai-bobot"><option value="1">Bobot 1</option><option value="2">Bobot 2</option><option value="3">Bobot 3</option></select>'; list.appendChild(row); inp = row.querySelector('.pai-kriteria'); sel = row.querySelector('.pai-bobot'); }
-                    if (inp) inp.value = k.teks || '';
-                    if (sel) sel.value = String(k.bobot || 1);
-                });
-                return;
+        } else if (instrumen === 'Catatan Anekdot') {
+            const modeEl = container.querySelector('#pai-anekdot-mode');
+            if (modeEl && konten.mode) modeEl.value = konten.mode;
+            const modePerSiswa = (konten.mode || 'per_siswa') === 'per_siswa';
+            if (Array.isArray(konten.catatan) && konten.catatan.length > 0) {
+                const rowsDiv = container.querySelector('#pai-anekdot-rows');
+                if (rowsDiv) {
+                    rowsDiv.innerHTML = konten.catatan.map((_, i) => anekdotCatatanHtml(i, modePerSiswa)).join('');
+                    konten.catatan.forEach((c, i) => {
+                        const row = rowsDiv.querySelectorAll('.pai-anekdot-row')[i]; if (!row) return;
+                        const deskEl  = row.querySelector('.anekdot-deskripsi');    if (deskEl)  deskEl.value  = c.deskripsi    || '';
+                        const interEl = row.querySelector('.anekdot-interpretasi'); if (interEl) interEl.value = c.interpretasi || '';
+                        if (modePerSiswa) { const siswaEl = row.querySelector('.anekdot-siswa-sel'); if (siswaEl && c.siswa) siswaEl.value = c.siswa; }
+                        else fillPicker(row.querySelector('.pai-sw-picker'), c.siswa);
+                    });
+                }
             }
-            (konten.item || []).forEach((it, i) => {
-                let inp = container.querySelectorAll('.pai-item')[i];
-                if (!inp) { const list = container.querySelector('#pai-checklist-list'); if (!list) return; const row = document.createElement('div'); row.className = 'pai-row'; row.innerHTML = '<input type="text" class="pai-item" placeholder="Item" maxlength="200">'; list.appendChild(row); inp = row.querySelector('input'); }
-                if (inp) inp.value = it;
+        } else if (instrumen === 'Checklist' && Array.isArray(konten.items)) {
+            const itemsDiv = container.querySelector('#pai-cl-items');
+            if (itemsDiv) {
+                itemsDiv.innerHTML = konten.items.map((_, i) => checklistItemHtml(i)).join('');
+                konten.items.forEach((it, i) => {
+                    const row = itemsDiv.querySelectorAll('.pai-item-row')[i]; if (!row) return;
+                    const namaEl = row.querySelector('.item-nama'); if (namaEl) namaEl.value = it.nama || '';
+                    fillPicker(row.querySelector('.pai-sw-picker'), it.siswa);
+                });
+            }
+        }
+    } else if (teknik === 'TES' && Array.isArray(konten.deskriptor)) {
+        const blocks = container.querySelectorAll('.pai-tl-dsk-block');
+        konten.deskriptor.forEach((d, i) => { fillPicker(blocks[i]?.querySelector('.pai-sw-picker'), d.siswa); });
+    } else if (teknik === 'TES_LISAN') {
+        const topikEl = container.querySelector('#pai-tl-topik');
+        if (topikEl && konten.topik) topikEl.value = konten.topik;
+        if (instrumen === 'Wawancara' && Array.isArray(konten.deskriptor)) {
+            const blocks = container.querySelectorAll('.pai-tl-dsk-block');
+            konten.deskriptor.forEach((d, i) => { fillPicker(blocks[i]?.querySelector('.pai-sw-picker'), d.siswa); });
+        } else if (Array.isArray(konten.predikat)) {
+            const predPickers = Array.from(container.querySelectorAll('.pai-tl-pred-block .pai-sw-picker'));
+            konten.predikat.forEach((p, i) => {
+                const deskEl = container.querySelector('.tl-pred-desk-' + p.val);
+                if (deskEl) deskEl.value = p.deskripsi || '';
+                fillPicker(predPickers[i], p.siswa);
             });
-            return;
-        case 'TES_LISAN':
-            (konten.pertanyaan || []).forEach((p, i) => {
-                let inp = container.querySelectorAll('.pai-pertanyaan')[i];
-                if (!inp) { const list = container.querySelector('#pai-lisan-list'); if (!list) return; const row = document.createElement('div'); row.className = 'pai-row'; row.innerHTML = '<input type="text" class="pai-pertanyaan" placeholder="Pertanyaan" maxlength="500">'; list.appendChild(row); inp = row.querySelector('input'); }
-                if (inp) inp.value = p;
-            });
-            return;
+        }
+    } else if (['PENUGASAN', 'PROYEK', 'PORTOFOLIO', 'UNJUK_KERJA'].includes(teknik)) {
+        const k1 = container.querySelector('#pai-konteks-1'); if (k1 && konten.konteks1) k1.value = konten.konteks1;
+        const k2 = container.querySelector('#pai-konteks-2'); if (k2 && konten.konteks2) k2.value = konten.konteks2;
+        if (instrumen === 'Rubrik' && Array.isArray(konten.aspeks)) {
+            const aspeksDiv = container.querySelector('#pai-rubrik-aspeks');
+            if (aspeksDiv) {
+                aspeksDiv.innerHTML = konten.aspeks.map((_, i) => aspekRowHtml(i)).join('');
+                konten.aspeks.forEach((a, i) => {
+                    const row = aspeksDiv.querySelectorAll('.pai-aspek-row')[i]; if (!row) return;
+                    const namaEl = row.querySelector('.aspek-nama'); if (namaEl) namaEl.value = a.nama || '';
+                    const pickers = row.querySelectorAll('.pai-sw-picker');
+                    (a.predikat || []).forEach((p, j) => {
+                        const deskEl = row.querySelector('.predikat-desk-' + p.val);
+                        if (deskEl) deskEl.value = p.deskripsi || '';
+                        fillPicker(pickers[j], p.siswa);
+                    });
+                });
+            }
+        } else if (instrumen === 'Checklist' && Array.isArray(konten.items)) {
+            const itemsDiv = container.querySelector('#pai-cl-items');
+            if (itemsDiv) {
+                itemsDiv.innerHTML = konten.items.map((_, i) => checklistItemHtml(i)).join('');
+                konten.items.forEach((it, i) => {
+                    const row = itemsDiv.querySelectorAll('.pai-item-row')[i]; if (!row) return;
+                    const namaEl = row.querySelector('.item-nama'); if (namaEl) namaEl.value = it.nama || '';
+                    fillPicker(row.querySelector('.pai-sw-picker'), it.siswa);
+                });
+            }
+        }
     }
 }
 
-// per-student row in modal (diagnostik / formatif only — sumatif uses chip pagination)
-function studentRowHtml(siswa, result, jenis, kktpItems) {
-    const res = result || {};
-    const sid = siswa.id;
+// ── SUMATIF: full-name button list + single-student detail panel ──────────────
 
-    const statusOpts = ['', 'PAHAM', 'BELUM_PAHAM', 'PERLU_PERHATIAN'].map(v => (
-        '<option value="' + v + '"' + (res.status === v ? ' selected' : '') + '>' +
-        (v ? v.replace(/_/g, ' ') : '— Status —') + '</option>'
-    )).join('');
-
-    const kktpOpts = [{ id: '', keterangan: '— KKTP —' }, ...kktpItems].map(k => (
-        '<option value="' + esc(k.id) + '">' + esc(k.keterangan || k.id) + '</option>'
-    )).join('');
-
-    return (
-        '<div class="pai-srow" data-sid="' + esc(sid) + '">' +
-        '<div class="pai-srow-name">' + esc(siswa.nama) + '</div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">' +
-        '<select class="pai-status" data-sid="' + esc(sid) + '" style="font-size:11px">' + statusOpts + '</select>' +
-        (kktpItems.length ? '<select class="pai-kktp" data-sid="' + esc(sid) + '" style="font-size:11px">' + kktpOpts + '</select>' : '') +
-        '<input type="text" class="pai-umpan" data-sid="' + esc(sid) + '" placeholder="Umpan balik" value="' + esc(res.umpan_balik || '') + '" style="flex:1;min-width:120px;font-size:11px">' +
-        '<input type="text" class="pai-tindak" data-sid="' + esc(sid) + '" placeholder="Tindak lanjut" value="' + esc(res.tindak_lanjut || '') + '" style="flex:1;min-width:120px;font-size:11px">' +
-        '</div>' +
-        '</div>'
-    );
+function nilaiTengah(pred, rent) {
+    const r = rent?.[pred];
+    if (!r) return null;
+    return Math.round((r[0] + r[1]) / 2);
 }
 
-// sumatif pagination
-const SUM_PER_PAGE = 5;
-let _sumPage = 0;
-let _sumNilai = {};   // sid → number
-let _sumSiswaList = [];
+function kktpStatText(nilai, rent) {
+    if (nilai == null || !rent) return '';
+    for (const [p, r] of Object.entries(rent)) {
+        if (nilai >= r[0] && nilai <= r[1]) return p;
+    }
+    return '';
+}
+
+function flushSumActive() {
+    if (!_sumActiveSid || !_sumSiswaContainer) return;
+    const c = _sumSiswaContainer;
+    const isTes = c.dataset.teknik === 'TES' || !c.dataset.teknik;
+    if (isTes) {
+        const nilaiEl = c.querySelector('#sum-nilai-inp');
+        const tlEl    = c.querySelector('#sum-tl-chips');
+        const raw = nilaiEl?.value;
+        const n = raw !== '' && raw != null ? parseFloat(raw) : null;
+        _sumNilai[_sumActiveSid] = { nilai: isNaN(n) ? null : n, tl: tlEl ? _chipVal(tlEl) : null };
+    } else {
+        const predEl  = c.querySelector('#sum-pred-chips');
+        const tlEl    = c.querySelector('#sum-tl-chips');
+        const selPred = predEl ? _chipVal(predEl) : null;
+        const rent    = _sumCurrentRentang();
+        const autoN   = selPred && rent ? nilaiTengah(selPred, rent) : null;
+        _sumNilai[_sumActiveSid] = { predikat: selPred, nilai: autoN, tl: tlEl ? _chipVal(tlEl) : null };
+    }
+}
+
+function _chipVal(el) {
+    return el?.querySelector('.sum-chip-active')?.dataset.val || null;
+}
+
+function _sumCurrentRentang() {
+    const kktpItems = _allKktp || [];
+    return kktpItems[0]?.rentang || DEFAULT_RENTANG;
+}
+
+let _allKktp = [];  // set by openAsmtModal
+
+function renderSumInput() {
+    const c = _sumSiswaContainer;
+    if (!c) return;
+    const inputEl = c.querySelector('#sum-input-panel');
+    if (!inputEl) return;
+    if (!_sumActiveSid) { inputEl.style.display = 'none'; return; }
+    const stu   = _sumSiswaList.find(r => r.id === _sumActiveSid);
+    const vals  = _sumNilai[_sumActiveSid] ?? {};
+    const isTes = c.dataset.teknik === 'TES' || !c.dataset.teknik;
+    const rent  = _sumCurrentRentang();
+
+    const chipBtnCss = (val, active) =>
+        'padding:4px 12px;border-radius:1rem;font-size:12px;cursor:pointer;border:1.5px solid ' +
+        (active ? 'var(--color-primary)' : 'var(--color-border)') + ';' +
+        'background:' + (active ? 'var(--color-primary)' : 'transparent') + ';' +
+        'color:' + (active ? '#fff' : 'var(--color-text)') + ';';
+
+    let valorHtml;
+    if (isTes) {
+        const kktpStr = kktpStatText(vals.nilai, rent);
+        valorHtml =
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+            '<input type="number" id="sum-nilai-inp" min="0" max="100" step="0.5" placeholder="Nilai 0–100" ' +
+            'value="' + (vals.nilai != null ? String(vals.nilai) : '') + '" ' +
+            'style="width:100px;padding:6px 8px;border:1px solid var(--color-border);border-radius:4px;background:var(--color-bg);color:var(--color-text);font-size:13px">' +
+            '<span id="sum-kktp-txt" style="font-size:12px;color:var(--color-text-muted)">' + esc(kktpStr) + '</span>' +
+            '</div>';
+    } else {
+        const selPred = vals.predikat ?? null;
+        const autoN   = selPred && rent ? nilaiTengah(selPred, rent) : null;
+        const kktpStr = autoN != null ? kktpStatText(autoN, rent) : '';
+        valorHtml =
+            '<div style="margin-bottom:8px">' +
+            '<div style="font-size:11px;color:var(--color-text-muted);margin-bottom:4px">Predikat:</div>' +
+            '<div id="sum-pred-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">' +
+            PREDIKAT_ORDER.map(p => (
+                '<button type="button" class="sum-pred-chip' + (selPred === p ? ' sum-chip-active' : '') + '" data-val="' + p + '" ' +
+                'style="' + chipBtnCss(p, selPred === p) + '">' + esc(p) + '</button>'
+            )).join('') +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:6px;font-size:12px">' +
+            '<span style="color:var(--color-text-muted)">Nilai:</span>' +
+            '<strong id="sum-pred-nilai">' + (autoN != null ? autoN : '—') + '</strong>' +
+            '<span id="sum-kktp-txt" style="color:var(--color-text-muted)">' + esc(kktpStr) + '</span>' +
+            '</div></div>';
+    }
+
+    const tlHtml =
+        '<div><div style="font-size:11px;color:var(--color-text-muted);margin-bottom:4px">Tindak lanjut:</div>' +
+        '<div id="sum-tl-chips" style="display:flex;flex-wrap:wrap;gap:6px">' +
+        [['PENGAYAAN','Pengayaan'],['PENGUATAN','Penguatan'],['PENDAMPINGAN','Pendampingan']].map(([v, l]) => (
+            '<button type="button" class="sum-tl-chip' + (vals.tl === v ? ' sum-chip-active' : '') + '" data-val="' + v + '" ' +
+            'style="' + chipBtnCss(v, vals.tl === v) + '">' + esc(l) + '</button>'
+        )).join('') +
+        '</div></div>';
+
+    inputEl.innerHTML =
+        '<div style="font-size:13px;font-weight:600;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--color-border)">' + esc(stu?.nama ?? '') + '</div>' +
+        valorHtml + tlHtml;
+    inputEl.style.display = '';
+
+    // Wire nilai input → auto KKTP text
+    if (isTes) {
+        inputEl.querySelector('#sum-nilai-inp')?.addEventListener('input', function () {
+            const n = this.value === '' ? null : parseFloat(this.value);
+            const kEl = inputEl.querySelector('#sum-kktp-txt');
+            if (kEl) kEl.textContent = kktpStatText(n, rent);
+        });
+    } else {
+        // Wire predikat chips
+        inputEl.querySelectorAll('.sum-pred-chip').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const val = btn.dataset.val;
+                const wasActive = btn.classList.contains('sum-chip-active');
+                inputEl.querySelectorAll('.sum-pred-chip').forEach(b => {
+                    b.classList.remove('sum-chip-active');
+                    b.style.cssText = chipBtnCss(b.dataset.val, false);
+                });
+                if (!wasActive) {
+                    btn.classList.add('sum-chip-active');
+                    btn.style.cssText = chipBtnCss(val, true);
+                    const autoN2 = nilaiTengah(val, rent);
+                    const nilaiEl = inputEl.querySelector('#sum-pred-nilai');
+                    const kEl     = inputEl.querySelector('#sum-kktp-txt');
+                    if (nilaiEl) nilaiEl.textContent = autoN2 != null ? String(autoN2) : '—';
+                    if (kEl) kEl.textContent = autoN2 != null ? kktpStatText(autoN2, rent) : '';
+                }
+            });
+        });
+    }
+
+    // Wire tindak lanjut chips
+    inputEl.querySelectorAll('.sum-tl-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const val = btn.dataset.val;
+            const wasActive = btn.classList.contains('sum-chip-active');
+            inputEl.querySelectorAll('.sum-tl-chip').forEach(b => {
+                b.classList.remove('sum-chip-active');
+                b.style.cssText = chipBtnCss(b.dataset.val, false);
+            });
+            if (!wasActive) {
+                btn.classList.add('sum-chip-active');
+                btn.style.cssText = chipBtnCss(val, true);
+            }
+        });
+    });
+}
+
+const SUM_PAGE_SIZE = 8;
 
 function renderSumPage(container) {
-    const chips = container.querySelector('.sum-chip-wrap');
-    const inputArea = container.querySelector('#sum-input-area');
-    if (!chips || !inputArea) return;
-    chips.innerHTML = _sumSiswaList.map((s, i) => (
-        '<span class="sum-chip' + (Math.floor(i / SUM_PER_PAGE) === _sumPage ? ' active' : '') + '" data-page="' + Math.floor(i / SUM_PER_PAGE) + '">' + esc(s.nama.split(' ')[0]) + '</span>'
-    )).join('');
-    chips.querySelectorAll('.sum-chip').forEach(chip => {
-        chip.addEventListener('click', () => { _sumPage = parseInt(chip.dataset.page); renderSumPage(container); });
+    const names  = container.querySelector('#sum-names-wrap');
+    const nav    = container.querySelector('#sum-nav');
+    const dots   = container.querySelector('#sum-dots');
+    if (!names) return;
+    const total = _sumSiswaList.length;
+    const pages = Math.ceil(total / SUM_PAGE_SIZE) || 1;
+    _sumPage = Math.max(0, Math.min(_sumPage, pages - 1));
+    const slice = _sumSiswaList.slice(_sumPage * SUM_PAGE_SIZE, (_sumPage + 1) * SUM_PAGE_SIZE);
+
+    names.innerHTML = slice.map(s => {
+        const isAct  = s.id === _sumActiveSid;
+        const hasVal = _sumNilai[s.id]?.nilai != null || _sumNilai[s.id]?.predikat != null;
+        return '<button type="button" data-sum-sid="' + esc(s.id) + '" ' +
+            'style="padding:4px 12px;border-radius:1rem;font-size:12px;cursor:pointer;' +
+            'border:1.5px solid ' + (isAct ? 'var(--color-primary)' : hasVal ? 'rgba(128,128,128,.5)' : 'var(--color-border)') + ';' +
+            'background:' + (isAct ? 'var(--color-primary)' : 'transparent') + ';' +
+            'color:' + (isAct ? '#fff' : hasVal ? 'var(--color-text)' : 'var(--color-text-muted)') + '">' +
+            esc(s.nama) + (hasVal ? ' ✓' : '') + '</button>';
+    }).join('');
+
+    names.querySelectorAll('[data-sum-sid]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            flushSumActive();
+            _sumActiveSid = btn.dataset.sumSid;
+            renderSumPage(container);
+        });
     });
-    const start = _sumPage * SUM_PER_PAGE;
-    const page  = _sumSiswaList.slice(start, start + SUM_PER_PAGE);
-    inputArea.innerHTML = page.map(s => (
-        '<div class="sum-input-row">' +
-        '<span style="flex:1">' + esc(s.nama) + '</span>' +
-        '<input type="number" class="pai-nilai-sum" data-sid="' + esc(s.id) + '" min="0" max="100" step="0.5" placeholder="0–100" value="' + esc(String(_sumNilai[s.id] ?? '')) + '">' +
-        '</div>'
-    )).join('');
-    inputArea.querySelectorAll('.pai-nilai-sum').forEach(inp => {
-        inp.addEventListener('input', () => { _sumNilai[inp.dataset.sid] = parseFloat(inp.value) || null; });
-    });
+
+    if (pages > 1) {
+        nav.style.display = 'flex';
+        const prevBtn = nav.querySelector('#sum-prev');
+        const nextBtn = nav.querySelector('#sum-next');
+        const pageLbl = nav.querySelector('#sum-page-lbl');
+        if (prevBtn) prevBtn.disabled = _sumPage === 0;
+        if (nextBtn) nextBtn.disabled = _sumPage === pages - 1;
+        if (pageLbl) pageLbl.textContent = 'halaman ' + (_sumPage + 1) + '/' + pages;
+    } else {
+        nav.style.display = 'none';
+    }
+
+    if (dots) {
+        dots.innerHTML = pages > 1
+            ? Array.from({ length: pages }, (_, i) =>
+                '<span style="width:6px;height:6px;border-radius:50%;display:inline-block;' +
+                'background:' + (i === _sumPage ? 'var(--color-primary)' : 'var(--color-border)') + '"></span>'
+              ).join('')
+            : '';
+    }
+
+    if (_sumActiveSid && !slice.some(s => s.id === _sumActiveSid)) _sumActiveSid = null;
+    renderSumInput();
 }
 
 async function openAsmtModal(editAsmt) {
     await ensureUser();
     const roster = _rosterCache;
 
-    // for edit: load existing results
-    let existingResults = {};
-    if (editAsmt) {
+    // for edit: load existing SUMATIF results
+    let existingSumResults = {};
+    if (editAsmt?.jenis === 'SUMATIF') {
         const rows = await getAssessmentResults(editAsmt.id);
-        rows.forEach(r => { existingResults[r.student_id] = r; });
+        rows.forEach(r => { existingSumResults[r.student_id] = r; });
     }
 
-    // initial jenis/teknik/instrumen
-    const initJenis    = editAsmt?.jenis    || 'DIAGNOSTIK';
-    const initTeknik   = editAsmt?.teknik   || 'OBSERVASI';
+    const initJenis     = editAsmt?.jenis     || 'DIAGNOSTIK';
+    const initTeknik    = editAsmt?.teknik    || 'OBSERVASI';
     const initInstrumen = editAsmt?.instrumen || (INSTRUMEN_MAP.OBSERVASI[0]);
 
-    // load TPs if not cached (user might open pelaksanaan without opening perencanaan first)
     if (!_tpCache.length && ctxOk()) {
         try { _tpCache = await getTps(_kelasId, _subjectId, _year, Number(_semester)); } catch {}
     }
 
-    // collect all kktp for any TP
-    const allKktp = [];
+    _allKktp = [];
     for (const tp of _tpCache) {
-        try { const k = await getKktps(tp.id); allKktp.push(...k); } catch {}
+        try { const k = await getKktps(tp.id); _allKktp.push(...k); } catch {}
     }
 
     const tpOpts = [{ id: '', kode_tp: '— TP (Opsional) —' }, ..._tpCache].map(t => (
         '<option value="' + esc(t.id) + '"' + (editAsmt?.learning_objective_id === t.id ? ' selected' : '') + '>' + esc(t.kode_tp) + '</option>'
     )).join('');
 
-    const jenisOpts = JENIS_LIST.map(j => '<option value="' + j + '"' + (initJenis === j ? ' selected' : '') + '>' + j + '</option>').join('');
+    const jenisOpts  = JENIS_LIST.map(j => '<option value="' + j + '"' + (initJenis === j ? ' selected' : '') + '>' + j + '</option>').join('');
     const teknikOpts = TEKNIK_LIST.map(t => '<option value="' + t + '"' + (initTeknik === t ? ' selected' : '') + '>' + t.replace(/_/g, ' ') + '</option>').join('');
     const instrOpts  = (INSTRUMEN_MAP[initTeknik] || []).map(i => '<option value="' + i + '"' + (initInstrumen === i ? ' selected' : '') + '>' + i + '</option>').join('');
 
-    const isSumatif = initJenis === 'SUMATIF';
+    const SUM_HTML =
+        '<div id="sum-names-wrap" class="sum-names-wrap"></div>' +
+        '<div id="sum-nav" class="sum-nav" style="display:none">' +
+        '<button type="button" id="sum-prev" class="pen-btn pen-btn-sm">‹ Prev</button>' +
+        '<span id="sum-page-lbl" style="font-size:12px;flex:1;text-align:center"></span>' +
+        '<button type="button" id="sum-next" class="pen-btn pen-btn-sm">Next ›</button>' +
+        '</div>' +
+        '<div id="sum-dots" class="sum-dots" style="justify-content:center;margin-bottom:6px"></div>' +
+        '<div id="sum-input-panel" class="sum-input-panel" style="display:none;border-top:1px solid var(--color-border);padding-top:10px;margin-top:4px"></div>';
 
     const bodyHtml =
         '<label>Tujuan Pembelajaran (opsional)</label>' +
@@ -717,12 +1211,7 @@ async function openAsmtModal(editAsmt) {
         '<textarea id="pai-tujuan" rows="2" maxlength="500" placeholder="Tujuan penilaian ini…">' + esc(editAsmt?.tujuan || '') + '</textarea>' +
         '<hr style="margin:12px 0;border:none;border-top:1px solid var(--color-border)">' +
         '<div id="pai-instrumen-body"></div>' +
-        '<hr style="margin:12px 0;border:none;border-top:1px solid var(--color-border)">' +
-        '<div id="pai-siswa-section">' +
-        (isSumatif
-            ? '<div class="sum-chip-wrap"></div><div id="sum-input-area"></div>'
-            : roster.map(s => studentRowHtml(s, existingResults[s.id], initJenis, allKktp)).join('')) +
-        '</div>' +
+        '<div id="pai-siswa-section" style="margin-top:10px">' + (initJenis === 'SUMATIF' ? SUM_HTML : '') + '</div>' +
         '<hr style="margin:12px 0;border:none;border-top:1px solid var(--color-border)">' +
         '<label>Refleksi Guru</label>' +
         '<textarea id="pai-refleksi" rows="2" maxlength="500" placeholder="Refleksi setelah pelaksanaan…">' + esc(editAsmt?.refleksi_guru || '') + '</textarea>' +
@@ -733,17 +1222,17 @@ async function openAsmtModal(editAsmt) {
 
     openModal({ title: editAsmt ? 'Edit Penilaian' : 'Tambah Penilaian', bodyHtml, wide: true,
         onSave: async (_ov, close) => {
-            const jenis    = _ov.querySelector('#pai-jenis-sel').value;
-            const teknik   = _ov.querySelector('#pai-teknik-sel').value;
+            const jenis     = _ov.querySelector('#pai-jenis-sel').value;
+            const teknik    = _ov.querySelector('#pai-teknik-sel').value;
             const instrumen = _ov.querySelector('#pai-instrumen-sel').value;
-            const tpId     = _ov.querySelector('#pai-tp-sel').value || null;
-            const tujuan   = _ov.querySelector('#pai-tujuan').value.trim();
-            const refleksi = _ov.querySelector('#pai-refleksi').value.trim();
+            const tpId      = _ov.querySelector('#pai-tp-sel').value || null;
+            const tujuan    = _ov.querySelector('#pai-tujuan').value.trim();
+            const refleksi  = _ov.querySelector('#pai-refleksi').value.trim();
             const visS = _ov.querySelector('#pai-vis-siswa').checked;
             const visO = _ov.querySelector('#pai-vis-ortu').checked;
 
             const instrBody = _ov.querySelector('#pai-instrumen-body');
-            const konten = collectInstrumenBody(instrBody, teknik, instrumen);
+            const konten = collectBodyInstrumen(instrBody, teknik, instrumen);
 
             const payload = {
                 jenis, teknik, instrumen, tujuan: tujuan || null,
@@ -762,69 +1251,91 @@ async function openAsmtModal(editAsmt) {
                 asmtId = created.id;
             }
 
-            // save results
             if (jenis === 'SUMATIF') {
-                for (const [sid, nilai] of Object.entries(_sumNilai)) {
-                    if (nilai != null) await upsertAssessmentResult(_schoolId, _kelasId, asmtId, sid, { nilai });
-                }
-            } else {
-                const srows = _ov.querySelectorAll('.pai-srow');
-                for (const row of srows) {
-                    const sid = row.dataset.sid; if (!sid) continue;
-                    const status     = row.querySelector('.pai-status')?.value || null;
-                    const umpan      = row.querySelector('.pai-umpan')?.value.trim() || null;
-                    const tindak     = row.querySelector('.pai-tindak')?.value.trim() || null;
-                    const kktpSel    = row.querySelector('.pai-kktp');
-                    const kktpId     = kktpSel?.value || null;
-                    if (!status && !umpan && !tindak) continue;
-                    const grup = status ? STATUS_GRUP[status] || null : null;
-                    await upsertAssessmentResult(_schoolId, _kelasId, asmtId, sid, { status, umpan_balik: umpan, tindak_lanjut: tindak, grup_diferensiasi: grup });
-                    if (grup) await upsertStudentGroup(_schoolId, _kelasId, sid, grup);
+                flushSumActive();
+                for (const [sid, data] of Object.entries(_sumNilai)) {
+                    if (data.nilai != null || data.predikat) {
+                        await upsertAssessmentResult(_schoolId, _kelasId, asmtId, sid, {
+                            nilai: data.nilai ?? null,
+                            status: data.predikat ?? null,
+                            tindak_lanjut: data.tl ?? null,
+                        });
+                    }
                 }
             }
+            // non-SUMATIF: data siswa tersimpan dalam konten JSONB di assessment (instrumen-centric)
 
             close();
             await renderPelaksanaan();
         }
     });
 
-    // wire teknik/instrumen cascades
     const modal = document.querySelector('.pen-modal');
     if (!modal) return;
-    const jenisSel   = modal.querySelector('#pai-jenis-sel');
-    const teknikSel  = modal.querySelector('#pai-teknik-sel');
-    const instrSel   = modal.querySelector('#pai-instrumen-sel');
-    const instrBody  = modal.querySelector('#pai-instrumen-body');
-    const siswaSec   = modal.querySelector('#pai-siswa-section');
+    const jenisSel  = modal.querySelector('#pai-jenis-sel');
+    const teknikSel = modal.querySelector('#pai-teknik-sel');
+    const instrSel  = modal.querySelector('#pai-instrumen-sel');
+    const instrBody = modal.querySelector('#pai-instrumen-body');
+    const siswaSec  = modal.querySelector('#pai-siswa-section');
 
     function rebuildInstrBody() {
-        instrBody.innerHTML = instrumenFieldHtml(teknikSel.value, instrSel.value);
-        wireInstrumenBody(instrBody);
+        renderBodyInstrumen(teknikSel.value, instrSel.value, instrBody);
+        wireBodyInstrumen(instrBody);
         if (editAsmt && editAsmt.teknik === teknikSel.value && editAsmt.instrumen === instrSel.value) {
-            prefillInstrumenBody(instrBody, teknikSel.value, instrSel.value, editAsmt.konten);
+            prefillBodyInstrumen(instrBody, editAsmt.konten, teknikSel.value, instrSel.value);
         }
     }
 
     function rebuildSiswaSection() {
-        const j = jenisSel.value;
+        const j   = jenisSel.value;
         const isS = j === 'SUMATIF';
-        _sumPage = 0; _sumNilai = {}; _sumSiswaList = roster;
-        siswaSec.innerHTML = isS
-            ? '<div class="sum-chip-wrap"></div><div id="sum-input-area"></div>'
-            : roster.map(s => studentRowHtml(s, existingResults[s.id] || {}, j, allKktp)).join('');
-        if (isS) renderSumPage(siswaSec);
+        _sumPage = 0; _sumNilai = {}; _sumSiswaList = roster; _sumActiveSid = null;
+        siswaSec.innerHTML = isS ? SUM_HTML : '';
+        if (isS) {
+            _sumSiswaContainer = siswaSec;
+            siswaSec.dataset.teknik = teknikSel.value;
+            wireSumNav(siswaSec);
+            renderSumPage(siswaSec);
+        } else {
+            _sumSiswaContainer = null;
+        }
+    }
+
+    function wireSumNav(container) {
+        container.querySelector('#sum-prev')?.addEventListener('click', () => {
+            flushSumActive(); _sumPage--; renderSumPage(container);
+        });
+        container.querySelector('#sum-next')?.addEventListener('click', () => {
+            flushSumActive(); _sumPage++; renderSumPage(container);
+        });
     }
 
     teknikSel.addEventListener('change', () => {
         const instrs = INSTRUMEN_MAP[teknikSel.value] || [];
         instrSel.innerHTML = instrs.map(i => '<option value="' + i + '">' + i + '</option>').join('');
+        if (_sumSiswaContainer) _sumSiswaContainer.dataset.teknik = teknikSel.value;
         rebuildInstrBody();
     });
     instrSel.addEventListener('change', rebuildInstrBody);
     jenisSel.addEventListener('change', rebuildSiswaSection);
 
     rebuildInstrBody();
-    if (initJenis === 'SUMATIF') { _sumSiswaList = roster; _sumPage = 0; _sumNilai = {}; renderSumPage(siswaSec); }
+
+    if (initJenis === 'SUMATIF') {
+        _sumSiswaList = roster; _sumPage = 0; _sumActiveSid = null;
+        // prefill from existing results
+        _sumNilai = {};
+        for (const [sid, r] of Object.entries(existingSumResults)) {
+            _sumNilai[sid] = { nilai: r.nilai ?? null, predikat: r.status ?? null, tl: r.tindak_lanjut ?? null };
+        }
+        _sumSiswaContainer = siswaSec;
+        siswaSec.dataset.teknik = initTeknik;
+        wireSumNav(siswaSec);
+        renderSumPage(siswaSec);
+    } else {
+        _sumSiswaContainer = null;
+        _sumNilai = {};
+    }
 }
 
 function asmtRowHtml(a) {
