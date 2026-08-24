@@ -284,12 +284,13 @@ export async function addObservationAudience(observationId, studentId, schoolId)
 
     // Tidak ada penerima valid = sah, bukan error. Catatan tetap tersimpan dan
     // tetap bisa dibaca penulisnya sendiri.
-    if (audienceRows.length === 0) return;
+    if (audienceRows.length === 0) return 0;
 
     const { error } = await supabase
         .from('observation_audience_members')
         .insert(audienceRows);
     if (error) throw new AudienceError('Penerima catatan gagal disimpan.', error);
+    return audienceRows.length;
 }
 
 export async function saveObservation({ studentId, sentiment, dimension, content, userId, schoolId }) {
@@ -313,5 +314,6 @@ export async function saveObservation({ studentId, sentiment, dimension, content
 
     // DUD-02: blocking, bukan fire-and-forget. Kalau daftar penerima gagal
     // ditulis, catatan ini tidak sampai ke siapa pun — caller wajib tahu.
-    await addObservationAudience(observationId, studentId, schoolId);
+    const recipientCount = await addObservationAudience(observationId, studentId, schoolId);
+    return { recipientCount: recipientCount ?? 0 };
 }

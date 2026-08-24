@@ -145,6 +145,7 @@ export async function flushPending() {
         } else if (!r.networkError) {
             await idbDelete(item.idempotency_key);
             failed.push({
+                key:             item.idempotency_key,
                 placement_id:    item.placement_id,
                 student_id:      item.student_id,
                 attendance_date: item.attendance_date,

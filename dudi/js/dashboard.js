@@ -497,7 +497,7 @@ obsForm.addEventListener('submit', async (e) => {
     try {
         let audienceWarning = null;
         try {
-            await saveObservation({
+            const { recipientCount } = await saveObservation({
                 studentId:  obsStudentEl.value,
                 sentiment:  obsSentimentEl.value,
                 dimension:  obsDimensionEl.value,
@@ -518,6 +518,9 @@ obsForm.addEventListener('submit', async (e) => {
         if (audienceWarning) {
             obsErrorEl.textContent   = audienceWarning;
             obsErrorEl.style.display = 'block';
+        } else if (recipientCount === 0) {
+            obsSuccessEl.textContent   = 'Catatan tersimpan. Belum ada penerima terdaftar (siswa/ortu/pengawas belum punya akun).';
+            obsSuccessEl.style.display = 'block';
         } else {
             obsSuccessEl.textContent   = 'Catatan berhasil disimpan.';
             obsSuccessEl.style.display = 'block';
@@ -624,8 +627,11 @@ logoutBtn.addEventListener('click', async () => {
 
         // Dua sebab kehilangan data yang berbeda — dicek terpisah supaya
         // "ditolak server" tidak tertutup oleh antrian yang kebetulan kosong.
-        if (pending > 0 || rejected.length > 0) {
+        if (pending > 0 || rejected.length > 0 || flushFailNotice !== null) {
             const bagian = [];
+            if (flushFailNotice) {
+                bagian.push(flushFailNotice);
+            }
             if (pending > 0) {
                 bagian.push(`${pending} absensi belum terkirim ke server dan akan `
                     + 'HILANG PERMANEN jika Anda keluar sekarang.');

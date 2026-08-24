@@ -324,6 +324,7 @@ export async function markNotificationsRead(ids) {
 // baris mana yang terpungut — satu bug policy langsung berarti tahun ajaran
 // (dan daftar anak) milik tenant lain.
 export async function getMyChildren(schoolId) {
+    if (!schoolId) return [];
     const { data: config } = await supabase
         .from('school_config')
         .select('current_academic_year')
