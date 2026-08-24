@@ -654,9 +654,12 @@ function renderCases(cases) {
     listEl.innerHTML = cases.map(c => {
         const statusLabel = CASE_STATUS_LABEL[c.status] ?? c.status;
         const isClosed    = c.status === 'CLOSED';
-        const eventsHtml  = c.events.length === 0 ? '' : `
+        // Defense-in-depth: hanya event yang boleh dilihat siswa yang dirender.
+        // Lapis pertama ada di RLS (rls_cce_read_student), lapis kedua di getMyCases.
+        const visibleEvents = (c.events ?? []).filter(e => e.is_visible_to_student === true);
+        const eventsHtml  = visibleEvents.length === 0 ? '' : `
             <div style="margin-top:10px;border-top:1px solid var(--color-border,#2d3748);padding-top:10px">
-                ${c.events.map(e => `
+                ${visibleEvents.map(e => `
                     <div style="margin-bottom:8px;font-size:0.85rem">
                         <span style="color:var(--color-text-muted,#9ca3af)">${esc(e.author?.full_name ?? '—')} · ${fmt(e.created_at)}</span>
                         <p style="margin:4px 0 0">${esc(e.payload?.text ?? '')}</p>

@@ -205,6 +205,7 @@ export async function getMyCases(studentId) {
     return (data ?? []).map(c => ({
         ...c,
         events: (c.events ?? [])
+            .filter(e => e.is_visible_to_student === true)
             .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
     }));
 }
