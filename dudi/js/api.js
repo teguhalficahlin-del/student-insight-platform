@@ -213,17 +213,20 @@ export async function markNotificationsRead(ids) {
 }
 
 // ─── CATATAN SISWA ────────────────────────────────────────────
+// FOLLOWUP-C2: kaprodi & waka humas adalah penerima WAJIB catatan DUDI, bukan
+// tambahan opsional. Sebelumnya kegagalan query dibalas `[]` diam-diam, jadi
+// dua pengawas PKL tidak menerima catatan tanpa ada yang tahu. Sekarang error
+// dilempar apa adanya — addObservationAudience membungkusnya jadi
+// AudienceError, dan UI memberi tahu user bahwa catatan belum terkirim.
 export async function getKaprodiAndWakaHumas(schoolId) {
-    try {
-        const { data, error } = await supabase
-            .from('v_users_staff_directory')
-            .select('user_id, role_type')
-            .in('role_type', ['KAPRODI', 'WAKA_HUMAS'])
-            .eq('school_id', schoolId)
-            .eq('is_active', true);
-        if (error) { console.warn('[dudi] getKaprodiAndWakaHumas error:', error.message); return []; }
-        return data ?? [];
-    } catch (e) { console.warn('[dudi] getKaprodiAndWakaHumas exception:', e); return []; }
+    const { data, error } = await supabase
+        .from('v_users_staff_directory')
+        .select('user_id, role_type')
+        .in('role_type', ['KAPRODI', 'WAKA_HUMAS'])
+        .eq('school_id', schoolId)
+        .eq('is_active', true);
+    if (error) throw error;
+    return data ?? [];
 }
 
 /**

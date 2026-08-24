@@ -595,6 +595,9 @@ btnNextDay.addEventListener('click', () => {
 // DUD-10: antrian offline tidak dibuang begitu saja. Coba kirim dulu
 // (best-effort, dibatasi 5 detik supaya logout tidak menggantung), lalu minta
 // konfirmasi eksplisit kalau masih ada sisa yang akan hilang permanen.
+// FOLLOWUP-C3: entri yang DITOLAK server juga wajib dikonfirmasi, meski
+// antrian sudah kosong — entri itu tidak bisa dikirim ulang sama sekali, jadi
+// kalau user langsung keluar peringatannya tidak pernah sempat terbaca.
 logoutBtn.addEventListener('click', async () => {
     logoutBtn.disabled = true;
     try {
@@ -605,21 +608,36 @@ logoutBtn.addEventListener('click', async () => {
         };
 
         let pending = await countPending();
+        let rejected = [];
 
         if (pending > 0 && navigator.onLine) {
             const flushed = await Promise.race([
                 flushPending().catch(() => null),
                 new Promise(res => setTimeout(() => res(null), 5000)),
             ]);
-            if (flushed) showFlushFailures(flushed.failed);
+            if (flushed?.failed?.length) {
+                rejected = flushed.failed;
+                showFlushFailures(rejected);
+            }
             pending = await countPending();
         }
 
-        if (pending > 0) {
-            const ok = confirm(
-                `${pending} absensi belum terkirim ke server dan akan HILANG PERMANEN `
-                + 'jika Anda keluar sekarang.\n\nTetap keluar?'
-            );
+        // Dua sebab kehilangan data yang berbeda — dicek terpisah supaya
+        // "ditolak server" tidak tertutup oleh antrian yang kebetulan kosong.
+        if (pending > 0 || rejected.length > 0) {
+            const bagian = [];
+            if (pending > 0) {
+                bagian.push(`${pending} absensi belum terkirim ke server dan akan `
+                    + 'HILANG PERMANEN jika Anda keluar sekarang.');
+            }
+            if (rejected.length > 0) {
+                const detail = rejected
+                    .map(f => `  - ${f.attendance_date ?? '—'} (${STATUS_LABELS[f.status] ?? f.status ?? '—'})`)
+                    .join('\n');
+                bagian.push(`${rejected.length} absensi DITOLAK server dan tidak tersimpan:\n${detail}`);
+            }
+            bagian.push('Catat dulu, lalu input ulang setelah login kembali.\n\nTetap keluar?');
+            const ok = confirm(bagian.join('\n\n'));
             if (!ok) { await updateOfflineBanner(); return; }
         }
 
