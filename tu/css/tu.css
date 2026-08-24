@@ -101,8 +101,8 @@ select.input option { background:var(--color-surface); }
 .hdr-left { display:flex; flex-direction:column; width:70px; flex-shrink:0; overflow:hidden; }
 .hdr-school { flex:1; text-align:center; font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; }
 .hdr-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }
-.hdr-name { font-size:9px; font-weight:600; color:var(--color-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
-.hdr-role { font-size:9px; color:var(--color-text-muted); opacity:.7; display:block; }
+.hdr-name { font-size:14px; font-weight:600; color:var(--color-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+.hdr-role { font-size:13px; color:var(--color-text-muted); opacity:.7; display:block; }
 .hdr-icon-btn { background:transparent; border:1px solid var(--color-border); border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--color-text); font-size:16px; padding:0; }
 
 /* ── Tab nav ──────────────────────────────────────────────── */
