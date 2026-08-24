@@ -95,6 +95,14 @@ function renderHealthBadges(h) {
             ? `<span class="hstat ${provRatio < 100 ? 'hstat-warn' : ''}"><strong>${h.provisioned_count}</strong>/${h.student_count} punya akun (${provRatio}%)</span>`
             : ''}
       </div>
+      ${(h.guru_count != null) ? `
+      <div class="health-row" style="gap:12px;flex-wrap:wrap;font-size:12px;color:var(--color-text-muted,#64748b);border-top:1px solid var(--color-border,#e2e8f0);padding-top:6px;margin-top:4px">
+        <span>👩‍🏫 <strong>${h.guru_count}</strong> guru/staf</span>
+        <span>🎓 <strong>${h.siswa_count}</strong> siswa</span>
+        <span>👪 <strong>${h.ortu_count}</strong> ortu</span>
+        <span>🏭 <strong>${h.dudi_count}</strong> DUDI</span>
+        <span>📊 <strong>${h.stakeholder_count}</strong> stakeholder</span>
+      </div>` : ''}
     </div>`;
 }
 
