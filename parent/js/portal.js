@@ -641,7 +641,7 @@ function initNotifBell() {
     refreshNotifBadge();
     _notifPollTimer = setInterval(refreshNotifBadge, 60_000);
 
-    notifBellBtn.addEventListener('click', openNotifDropdown);
+    notifBellBtn.addEventListener('click', e => { e.stopPropagation(); openNotifDropdown(); });
     document.addEventListener('click', e => {
         if (!e.target.closest('#notif-bell-btn') && !e.target.closest('#notif-dropdown')) {
             if (notifDropdown) notifDropdown.style.display = 'none';

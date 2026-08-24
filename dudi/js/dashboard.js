@@ -238,7 +238,7 @@ async function openNotifDropdown() {
     }
 }
 
-document.getElementById('notif-bell-btn')?.addEventListener('click', openNotifDropdown);
+document.getElementById('notif-bell-btn')?.addEventListener('click', e => { e.stopPropagation(); openNotifDropdown(); });
 document.addEventListener('click', e => {
     const panel = document.getElementById('notif-dropdown');
     if (panel && !panel.contains(e.target) && e.target.id !== 'notif-bell-btn') {

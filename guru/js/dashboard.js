@@ -302,7 +302,7 @@ async function init() {
         window.location.replace(getLoginUrl());
     });
 
-    document.getElementById('notif-bell-btn')?.addEventListener('click', openNotifDropdown);
+    document.getElementById('notif-bell-btn')?.addEventListener('click', e => { e.stopPropagation(); openNotifDropdown(); });
     document.addEventListener('click', e => {
         if (!e.target.closest('#notif-bell-btn') && !e.target.closest('#notif-dropdown')) {
             const d = document.getElementById('notif-dropdown');

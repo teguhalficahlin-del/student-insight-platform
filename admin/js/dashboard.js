@@ -2472,7 +2472,7 @@ async function renderExportPanel() {
     document.getElementById('dashboard-school-name').textContent = schoolName;
     document.getElementById('dashboard-user-name').textContent = `Masuk sebagai ${userRow.full_name}`;
 
-    document.getElementById('notif-bell-btn')?.addEventListener('click', openNotifDropdown);
+    document.getElementById('notif-bell-btn')?.addEventListener('click', e => { e.stopPropagation(); openNotifDropdown(); });
     document.addEventListener('click', e => {
         if (!e.target.closest('#notif-bell-btn') && !e.target.closest('#notif-dropdown')) {
             const d = document.getElementById('notif-dropdown');
