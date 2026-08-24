@@ -302,6 +302,16 @@ async function init() {
         window.location.replace(getLoginUrl());
     });
 
+    document.getElementById('notif-bell-btn')?.addEventListener('click', openNotifDropdown);
+    document.addEventListener('click', e => {
+        if (!e.target.closest('#notif-bell-btn') && !e.target.closest('#notif-dropdown')) {
+            const d = document.getElementById('notif-dropdown');
+            if (d) d.style.display = 'none';
+        }
+    });
+    refreshNotifBadge();
+    startNotifPolling();
+
     await buildTabs();
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display     = 'block';
