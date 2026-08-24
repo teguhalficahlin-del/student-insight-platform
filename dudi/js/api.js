@@ -143,7 +143,12 @@ export async function fetchRecentAttendance(studentIds, days = 14) {
 
     const since = new Date();
     since.setDate(since.getDate() - days);
-    const sinceStr = since.toISOString().slice(0, 10);
+    // DUD-09-UTC: pakai tanggal LOKAL, bukan toISOString() yang berbasis UTC.
+    // Di WIB (UTC+7) pukul 00:00-07:00, toISOString() mengembalikan tanggal
+    // KEMARIN sehingga window query melebar satu hari. Pola sama dengan
+    // localDateStr() di atas; helper itu tidak bisa dipakai langsung karena
+    // tidak menerima parameter Date.
+    const sinceStr = `${since.getFullYear()}-${String(since.getMonth()+1).padStart(2,'0')}-${String(since.getDate()).padStart(2,'0')}`;
 
     const { data, error } = await supabase
         .from('pkl_attendance')

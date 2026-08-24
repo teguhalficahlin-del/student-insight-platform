@@ -253,6 +253,26 @@ document.getElementById('provision-form').addEventListener('submit', async (e) =
         secondary_color:  document.getElementById('f-secondary-color-hex').value.trim() || null,
     };
 
+    // SUP-05: slug ikut ke URL tenant (?school=<slug>). Format yang salah baru
+    // ketahuan setelah sekolah terlanjur dibuat, jadi disaring di sini sebelum
+    // request terkirim. Slug kosong dibiarkan — server yang men-generate.
+    if (payload.slug) {
+        const slugRe = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
+        const valid = slugRe.test(payload.slug)
+            && payload.slug.length >= 3
+            && payload.slug.length <= 50;
+        if (!valid) {
+            resultEl.textContent = '✗ Slug tidak valid. Gunakan huruf kecil, angka, '
+                + 'dan tanda strip (-). Minimal 3 karakter, tidak boleh diawali '
+                + 'atau diakhiri strip.';
+            resultEl.className     = 'alert alert-danger';
+            resultEl.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Daftarkan Sekolah';
+            return;
+        }
+    }
+
     try {
         const res  = await fetch(`${SUPABASE_URL}/functions/v1/provision-school`, {
             method:  'POST',
