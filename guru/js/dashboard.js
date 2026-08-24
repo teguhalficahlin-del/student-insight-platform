@@ -7188,8 +7188,7 @@ async function openKonteksKelasModal() {
     } catch (e) { /* */ }
 
     if (!mySubjects.length) {
-        _showToast('Belum ada mata pelajaran yang diajar.
-Hubungi administrator untuk mengatur jadwal mengajar.');
+        _showToast('Belum ada mata pelajaran yang diajar. Hubungi administrator untuk mengatur jadwal mengajar.');
         return;
     }
 
