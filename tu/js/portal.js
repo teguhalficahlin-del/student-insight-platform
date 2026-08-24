@@ -1724,6 +1724,16 @@ function renderRecipientChips() {
     });
 }
 
+// TU-04/TU-07: pasang lampiran ke post_id yang pasti — dipakai jalur buat
+// maupun jalur edit. Error sengaja dilempar supaya pemanggil bisa membersihkan
+// file yang terlanjur ter-upload (rollback orphan).
+async function setForumAttachment(postId, url, name, path) {
+    const { error } = await supabase.from('forum_posts')
+        .update({ attachment_url: url, attachment_name: name, attachment_path: path })
+        .eq('post_id', postId);
+    if (error) throw error;
+}
+
 async function submitForumPost() {
     const errEl  = document.getElementById('forum-post-error');
     const btnEl  = document.getElementById('btn-forum-modal-simpan');
@@ -1738,6 +1748,7 @@ async function submitForumPost() {
     }
     btnEl.disabled = true; btnEl.textContent = 'Mengirim…';
     let uploadedPath = null;
+    let postSaved    = false;
     try {
         let attachmentUrl = null, attachmentName = null;
         if (fileEl.files[0]) {
@@ -1756,18 +1767,44 @@ async function submitForumPost() {
             attachmentUrl = urlData.publicUrl; attachmentName = file.name;
         }
         if (_forumEditPostId) {
+            // TU-07: lampiran baru saat edit sebelumnya ter-upload tapi tak pernah
+            // direferensikan posting manapun — orphan permanen di bucket. Ambil
+            // path lama dulu supaya file yang digantikan bisa ikut dihapus.
+            let oldPath = null;
+            if (uploadedPath) {
+                const { data: oldRow, error: oldErr } = await supabase.from('forum_posts')
+                    .select('attachment_path')
+                    .eq('post_id', _forumEditPostId)
+                    .maybeSingle();
+                if (oldErr) throw oldErr;
+                oldPath = oldRow?.attachment_path ?? null;
+            }
             await updateForumSekolahPost(_forumEditPostId, title, body);
+            postSaved = true;
+            if (uploadedPath) {
+                const newPath = uploadedPath;
+                await setForumAttachment(_forumEditPostId, attachmentUrl,
+                    attachmentName, newPath);
+                uploadedPath = null;   // sudah tereferensi posting — bukan orphan lagi
+                if (oldPath && oldPath !== newPath) {
+                    supabase.storage.from('forum-attachments').remove([oldPath])
+                        .catch(e => console.warn('[forum] hapus lampiran lama gagal:', e));
+                }
+            }
         } else {
             const recipientIds = [..._forumRecipients.keys()];
-            await createForumSekolahPost(title, body, recipientIds,
+            // TU-04: pakai post_id yang dikembalikan fn_create_forum_post. Versi lama
+            // menempelkan lampiran ke "posting terakhir milik penulis"
+            // (author_user_id + order created_at desc + limit 1) — salah sasaran bila
+            // penulis mengirim dua posting hampir bersamaan dari dua tab/perangkat.
+            const newPostId = await createForumSekolahPost(title, body, recipientIds,
                 schoolConfig?.current_academic_year ?? '');
-            if (attachmentUrl) {
-                await supabase.from('forum_posts')
-                    .update({ attachment_url: attachmentUrl, attachment_name: attachmentName,
-                              attachment_path: uploadedPath })
-                    .eq('author_user_id', currentUser.user_id)
-                    .order('created_at', { ascending: false })
-                    .limit(1);
+            postSaved = true;
+            if (uploadedPath) {
+                if (!newPostId) throw new Error('Server tidak mengembalikan ID posting.');
+                await setForumAttachment(newPostId, attachmentUrl,
+                    attachmentName, uploadedPath);
+                uploadedPath = null;   // sudah tereferensi posting — bukan orphan lagi
             }
         }
         closeForumModal();
@@ -1787,8 +1824,19 @@ async function submitForumPost() {
         if (uploadedPath) {
             supabase.storage.from('forum-attachments').remove([uploadedPath])
                 .catch(e => console.warn('[forum] cleanup orphan failed:', e));
+            uploadedPath = null;
         }
-        errEl.textContent = fe(err); errEl.style.display = 'block';
+        if (postSaved) {
+            // TU-04: posting sudah tersimpan, yang gagal hanya pemasangan lampiran.
+            // Menampilkannya sebagai gagal kirim membuat penulis mengirim ulang →
+            // posting ganda. Pola sama dengan TU-05 di atas.
+            closeForumModal();
+            alert('Posting tersimpan, tetapi lampiran gagal dipasang. ' +
+                  'Buka posting lalu edit untuk melampirkan ulang.');
+            loadForumPosts().catch(() => {});
+        } else {
+            errEl.textContent = fe(err); errEl.style.display = 'block';
+        }
     } finally {
         btnEl.disabled = false; btnEl.textContent = 'Kirim';
     }
