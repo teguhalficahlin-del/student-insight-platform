@@ -100,6 +100,7 @@ export async function fetchChildren(parentUserId) {
 // pada jadwal tenant lain ikut terbaca.
 export async function fetchSchedule(classId, date, schoolId) {
     if (!classId) return [];
+    if (!schoolId) return [];
     const { data, error } = await supabase
         .from('teaching_schedules')
         .select(`
@@ -123,6 +124,7 @@ export async function fetchSchedule(classId, date, schoolId) {
 
 export async function fetchWeekSchedule(classId, schoolId) {
     if (!classId) return [];
+    if (!schoolId) return [];
     const today  = new Date();
     const dow    = today.getDay();
     const diff   = dow === 0 ? -6 : 1 - dow;

@@ -299,8 +299,7 @@ export async function searchStudents(query, schoolId) {
 // Sengaja tidak di-import dari dashboard.js — api.js
 // tidak boleh bergantung pada lapisan UI. Pola sama
 // dengan dudi/js/api.js.
-function localDateStr() {
-    const d = new Date();
+function localDateStr(d = new Date()) {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 

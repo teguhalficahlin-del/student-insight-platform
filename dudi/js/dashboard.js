@@ -159,6 +159,7 @@ window.addEventListener('online', async () => {
     // DUD-05: dulu banner cuma di-update kalau `synced > 0`, sehingga kasus
     // "semua ditolak" tidak pernah tampil sama sekali.
     showFlushFailures(result.failed);
+    if (!result.failed?.length && result.remaining === 0) flushFailNotice = null;
     await updateOfflineBanner();
 });
 
@@ -262,7 +263,11 @@ async function init() {
 
     // Flush antrian offline + tampilkan banner bila ada sisa
     flushPending()
-        .then(result => { showFlushFailures(result.failed); return updateOfflineBanner(); })
+        .then(result => {
+            showFlushFailures(result.failed);
+            if (!result.failed?.length && result.remaining === 0) flushFailNotice = null;
+            return updateOfflineBanner();
+        })
         .catch(err => console.warn('[dudi] flush awal gagal:', err));
 
     // Notifikasi: cek unread count, poll tiap 1 menit
@@ -520,8 +525,9 @@ obsForm.addEventListener('submit', async (e) => {
             obsErrorEl.textContent   = audienceWarning;
             obsErrorEl.style.display = 'block';
         } else if (recipientCount === 0) {
-            obsSuccessEl.textContent   = 'Catatan tersimpan. Belum ada penerima terdaftar (siswa/ortu/pengawas belum punya akun).';
-            obsSuccessEl.style.display = 'block';
+            obsErrorEl.style.color   = 'var(--color-warning,#92400e)';
+            obsErrorEl.textContent   = 'Catatan tersimpan. Belum ada penerima terdaftar (siswa/ortu/pengawas belum punya akun).';
+            obsErrorEl.style.display = 'block';
         } else {
             obsSuccessEl.textContent   = 'Catatan berhasil disimpan.';
             obsSuccessEl.style.display = 'block';
@@ -530,6 +536,7 @@ obsForm.addEventListener('submit', async (e) => {
         obsCharCount.textContent = '0';
         await loadObservationHistory();
     } catch (err) {
+        obsErrorEl.style.color   = '';
         obsErrorEl.textContent   = fe(err, 's');
         obsErrorEl.style.display = 'block';
     } finally {
