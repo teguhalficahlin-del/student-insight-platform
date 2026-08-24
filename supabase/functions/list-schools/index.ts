@@ -38,7 +38,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const admin = getAdminClient();
 
         // Jalankan semua query secara paralel untuk efisiensi
-        const [schoolsRes, adminsRes, staffHealthRes, studentHealthRes] = await Promise.all([
+        const [schoolsRes, adminsRes, staffHealthRes, studentHealthRes, userCountsRes] = await Promise.all([
             admin
                 .from('schools')
                 .select('school_id, name, npsn, slug, phone, primary_color, is_active, created_at')
@@ -61,13 +61,36 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
             // Health: siswa total vs sudah punya akun login
             admin.rpc('fn_school_student_health'),
+
+            // Jumlah pengguna aktif per role group per sekolah
+            admin
+                .from('users')
+                .select('school_id, role_type')
+                .eq('is_active', true)
+                .in('role_type', ['GURU','WALI_KELAS','GURU_BK','WAKA_KURIKULUM','WAKA_HUMAS','KEPSEK','KAPRODI','GURU_PIKET','TU','ADMINISTRATIVE','SISWA','ORTU','DUDI','STAKEHOLDER']),
         ]);
 
         if (schoolsRes.error) throw schoolsRes.error;
 
-        type AdminRow   = { school_id: string; full_name: string; login_identifier: string | null };
+        type AdminRow    = { school_id: string; full_name: string; login_identifier: string | null };
         type StaffHealth = { school_id: string; kepsek_count: number; waka_kurikulum_count: number; waka_kesiswaan_count: number; waka_humas_count: number; staff_count: number };
         type StudentHealth = { school_id: string; student_count: number; provisioned_count: number };
+        type UserRow    = { school_id: string; role_type: string };
+
+        // Agregasi jumlah pengguna per role group per sekolah
+        const GURU_ROLES = new Set(['GURU','WALI_KELAS','GURU_BK','WAKA_KURIKULUM','WAKA_HUMAS','KEPSEK','KAPRODI','GURU_PIKET','TU','ADMINISTRATIVE']);
+        const userCountsBySchool: Record<string, { guru: number; siswa: number; ortu: number; dudi: number; stakeholder: number }> = {};
+        for (const u of ((userCountsRes.data ?? []) as UserRow[])) {
+            if (!userCountsBySchool[u.school_id]) {
+                userCountsBySchool[u.school_id] = { guru: 0, siswa: 0, ortu: 0, dudi: 0, stakeholder: 0 };
+            }
+            const g = userCountsBySchool[u.school_id];
+            if (GURU_ROLES.has(u.role_type))    g.guru++;
+            else if (u.role_type === 'SISWA')   g.siswa++;
+            else if (u.role_type === 'ORTU')    g.ortu++;
+            else if (u.role_type === 'DUDI')    g.dudi++;
+            else if (u.role_type === 'STAKEHOLDER') g.stakeholder++;
+        }
 
         const adminBySchool = Object.fromEntries(
             ((adminsRes.data ?? []) as AdminRow[]).map(a => [a.school_id, { full_name: a.full_name, login_identifier: a.login_identifier ?? null }])
@@ -82,6 +105,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const result = ((schoolsRes.data ?? []) as { school_id: string; [key: string]: unknown }[]).map(s => {
             const sh = staffBySchool[s.school_id];
             const st = studentBySchool[s.school_id];
+            const uc = userCountsBySchool[s.school_id] ?? { guru: 0, siswa: 0, ortu: 0, dudi: 0, stakeholder: 0 };
             return {
                 ...s,
                 has_admin_account:        !!adminBySchool[s.school_id],
@@ -96,6 +120,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
                     staff_count:          sh?.staff_count          ?? 0,
                     student_count:        st?.student_count        ?? 0,
                     provisioned_count:    st?.provisioned_count    ?? 0,
+                    // Jumlah pengguna aktif per role group
+                    guru_count:           uc.guru,
+                    siswa_count:          uc.siswa,
+                    ortu_count:           uc.ortu,
+                    dudi_count:           uc.dudi,
+                    stakeholder_count:    uc.stakeholder,
                 },
             };
         });
