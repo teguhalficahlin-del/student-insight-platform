@@ -256,14 +256,9 @@ async function loadExitsRecap() {
     if (exitsTbody)   exitsTbody.innerHTML        = '';
 
     try {
-        // TU-08: getExitsByRange() menerapkan .gte/.lte TANPA syarat — berbeda dari
-        // fetchLateArrivals() yang menjaga null (api.js baris 114-115). Meneruskan
-        // null membuat filter rusak dan hasilnya nol baris, bukan semua data.
-        // Input tanggal tidak punya value default, jadi kosong adalah kondisi awal
-        // panel ini. Rentang batas lebar dipakai agar "kosong" tetap berarti
-        // "tampilkan semua", konsisten dengan panel Terlambat.
-        const RANGE_MIN = '1900-01-01', RANGE_MAX = '2999-12-31';
-        const rows = await getExitsByRange(dateStart || RANGE_MIN, dateEnd || RANGE_MAX);
+        // Null guard ada di getExitsByRange() (tu/js/api.js): filter tanggal hanya
+        // diterapkan bila nilainya ada, jadi kosong berarti tampilkan semua.
+        const rows = await getExitsByRange(dateStart || null, dateEnd || null);
         _cachedExits = rows;
 
         if (!rows.length) { if (exitsEmpty) exitsEmpty.style.display = 'block'; return; }

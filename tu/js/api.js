@@ -127,7 +127,7 @@ export async function fetchLateArrivals(dateStart, dateEnd) {
 }
 
 export async function getExitsByRange(dateStart, dateEnd) {
-    const { data, error } = await supabase
+    let q = supabase
         .from('student_exits')
         .select(`
             exit_id, exit_date, exit_time, return_time, reason,
@@ -135,10 +135,16 @@ export async function getExitsByRange(dateStart, dateEnd) {
                 class_enrollment:class_enrollments(class:classes(name))),
             recorder:users!student_exits_recorded_by_fkey(full_name)
         `)
-        .gte('exit_date', dateStart)
-        .lte('exit_date', dateEnd)
         .order('exit_date', { ascending: false })
         .order('exit_time', { ascending: true });
+
+    // Null guard: tanpa ini, dateStart/dateEnd bernilai null membuat filter rusak
+    // dan hasilnya nol baris alih-alih semua data. Pola sama dengan
+    // fetchLateArrivals() di atas.
+    if (dateStart) q = q.gte('exit_date', dateStart);
+    if (dateEnd)   q = q.lte('exit_date', dateEnd);
+
+    const { data, error } = await q;
     if (error) throw error;
     return (data ?? []).map(r => {
         const enrollment = r.student?.class_enrollment ?? [];
