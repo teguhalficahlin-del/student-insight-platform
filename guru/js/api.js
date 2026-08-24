@@ -597,7 +597,7 @@ export async function getSchoolStats(academicYear, semester) {
     const today = localDateStr();
     const [studentsRes, staffRes, schedToday, attToday] = await Promise.all([
         supabase.from('students').select('student_id', { count: 'exact', head: true }).eq('student_status', 'AKTIF'),
-        supabase.from('v_users_staff_directory').select('user_id', { count: 'exact', head: true }).not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")'),
+        supabase.from('v_users_staff_directory').select('user_id', { count: 'exact', head: true }).not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")').is('deleted_at', null),
         supabase.from('teaching_schedules').select('schedule_id, class_id', { count: 'exact' }).eq('session_date', today).eq('academic_year', academicYear),
         supabase.from('attendance').select('status', { count: 'exact' }).gte('created_at', today + 'T00:00:00').eq('status', 'HADIR'),
     ]);

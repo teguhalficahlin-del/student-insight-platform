@@ -820,7 +820,7 @@ export async function purgeUser(user_id) {
 /** Ambil daftar user yang soft-deleted di sekolah ini. */
 export async function getDeletedUsers() {
     const { data, error } = await supabase
-        .from('users')
+        .from('v_users_staff_directory')
         .select('user_id, full_name, login_identifier, role_type, deleted_at')
         .not('deleted_at', 'is', null)
         .order('deleted_at', { ascending: false });

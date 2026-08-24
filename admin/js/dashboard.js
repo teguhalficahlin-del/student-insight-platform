@@ -504,12 +504,12 @@ async function renderSetupPanel() {
     ] = await Promise.all([
         supabase.from('programs').select('*', { count: 'exact', head: true }),
         supabase.from('classes').select('*', { count: 'exact', head: true }),
-        supabase.from('users').select('*', { count: 'exact', head: true }).not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")').is('deleted_at', null),
+        supabase.from('v_users_staff_directory').select('*', { count: 'exact', head: true }).not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")').is('deleted_at', null),
         supabase.from('students').select('*', { count: 'exact', head: true }).eq('student_status', 'AKTIF'),
         supabase.from('students').select('*', { count: 'exact', head: true }).eq('student_status', 'LULUS'),
-        supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'DUDI').is('deleted_at', null),
-        supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'STAKEHOLDER').is('deleted_at', null),
-        supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'TU').is('deleted_at', null),
+        supabase.from('v_users_staff_directory').select('*', { count: 'exact', head: true }).eq('role_type', 'DUDI').is('deleted_at', null),
+        supabase.from('v_users_staff_directory').select('*', { count: 'exact', head: true }).eq('role_type', 'STAKEHOLDER').is('deleted_at', null),
+        supabase.from('v_users_staff_directory').select('*', { count: 'exact', head: true }).eq('role_type', 'TU').is('deleted_at', null),
         supabase.from('schedule_templates').select('*', { count: 'exact', head: true }),
         fetchAllRows('student_parents', q => q.select('parent_user_id, students(student_status)')),
     ]);
