@@ -206,6 +206,36 @@
     </div>
 </div>
 
+<!-- Modal hapus sekolah permanen -->
+<div id="delete-modal" class="modal-overlay" style="display:none">
+    <div class="modal-box">
+        <h3 style="margin:0 0 4px;color:var(--color-danger)">
+            ⚠️ Hapus Sekolah Permanen</h3>
+        <p id="delete-modal-school" class="modal-subtitle"></p>
+        <p style="font-size:14px;margin:0 0 16px;
+                  color:var(--color-text-muted)">
+            Semua data sekolah ini (guru, siswa, absensi,
+            observasi) akan dihapus selamanya dan
+            <strong>tidak bisa dipulihkan</strong>.</p>
+        <p style="font-size:13px;margin:0 0 8px">
+            Ketik nama sekolah persis untuk konfirmasi:</p>
+        <input type="text" id="delete-confirm-input"
+               class="input" autocomplete="off"
+               placeholder="Nama sekolah…"
+               style="margin-bottom:12px">
+        <div class="modal-actions">
+            <button class="btn btn-danger"
+                    id="delete-confirm-btn" disabled>
+                Hapus Permanen</button>
+            <button class="btn btn-ghost"
+                    id="delete-cancel-btn">Batal</button>
+        </div>
+        <p id="delete-error"
+           style="display:none;color:var(--color-danger);
+                  margin-top:12px;font-size:13px"></p>
+    </div>
+</div>
+
 </div><!-- /dashboard-view -->
 
 <script type="module" src="js/auth.js"></script>

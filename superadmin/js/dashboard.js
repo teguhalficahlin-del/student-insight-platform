@@ -329,41 +329,8 @@ document.getElementById('provision-form').addEventListener('submit', async (e) =
 });
 
 // ── Hapus sekolah ────────────────────────────────────────────
-async function confirmDeleteSchool(schoolId, schoolName) {
-    const saKey = getSaKey(); if (!saKey) return;
-    const konfirmasi = prompt(
-        `⚠️ HAPUS PERMANEN: ${schoolName}\n\n` +
-        `Semua data sekolah ini (guru, siswa, absensi, observasi) akan dihapus selamanya.\n\n` +
-        `Ketik nama sekolah persis untuk konfirmasi:\n${schoolName}`
-    );
-    if (konfirmasi !== schoolName) {
-        if (konfirmasi !== null) alert('Nama tidak cocok. Penghapusan dibatalkan.');
-        return;
-    }
-
-    try {
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-school`, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type':    'application/json',
-                'x-superadmin-key': saKey,
-            },
-            body: JSON.stringify({ school_id: schoolId }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json?.error ?? json?.message ?? 'Gagal menghapus');
-        // SUP-12: jangan pakai alert() yang memblokir thread — pesan sukses
-        // ditulis ke #schools-hint SETELAH refresh, karena loadSchools()
-        // menyembunyikan elemen itu pada jalur suksesnya.
-        await loadSchools();
-        const hintEl = document.getElementById('schools-hint');
-        if (hintEl) {
-            hintEl.textContent = `✓ Sekolah "${schoolName}" berhasil dihapus.`;
-            hintEl.style.display = 'block';
-        }
-    } catch (err) {
-        alert(`Error: ${err.message}`);
-    }
+function confirmDeleteSchool(schoolId, schoolName) {
+    openDeleteModal(schoolId, schoolName);
 }
 
 async function toggleSchoolStatus(btn) {
@@ -448,6 +415,80 @@ document.getElementById('reset-confirm-btn').addEventListener('click', async () 
         resetError.style.display = 'block';
     } finally {
         btn.disabled = false; btn.textContent = 'Ya, Reset Sekarang';
+    }
+});
+
+// ── Modal hapus sekolah permanen ─────────────────────────────
+const deleteModal        = document.getElementById('delete-modal');
+const deleteModalSchool  = document.getElementById('delete-modal-school');
+const deleteConfirmInput = document.getElementById('delete-confirm-input');
+const deleteConfirmBtn   = document.getElementById('delete-confirm-btn');
+const deleteError        = document.getElementById('delete-error');
+
+let _deleteSchoolId   = null;
+let _deleteSchoolName = null;
+
+function openDeleteModal(schoolId, schoolName) {
+    _deleteSchoolId   = schoolId;
+    _deleteSchoolName = schoolName;
+    deleteModalSchool.textContent = schoolName;
+    deleteConfirmInput.value      = '';
+    deleteConfirmBtn.disabled     = true;
+    deleteError.style.display     = 'none';
+    deleteModal.style.display     = 'flex';
+    deleteConfirmInput.focus();
+}
+
+function closeDeleteModal() {
+    deleteModal.style.display = 'none';
+    _deleteSchoolId   = null;
+    _deleteSchoolName = null;
+    deleteConfirmInput.value  = '';
+    deleteConfirmBtn.disabled = true;
+}
+
+deleteConfirmInput.addEventListener('input', () => {
+    deleteConfirmBtn.disabled =
+        deleteConfirmInput.value !== _deleteSchoolName;
+});
+
+document.getElementById('delete-cancel-btn')
+    .addEventListener('click', closeDeleteModal);
+deleteModal.addEventListener('click', e => {
+    if (e.target === deleteModal) closeDeleteModal();
+});
+
+deleteConfirmBtn.addEventListener('click', async () => {
+    const saKey = getSaKey(); if (!saKey) return;
+    deleteError.style.display = 'none';
+    deleteConfirmBtn.disabled = true;
+    deleteConfirmBtn.textContent = 'Menghapus…';
+    const namaSekolah = _deleteSchoolName;
+    try {
+        const res = await fetch(
+            `${SUPABASE_URL}/functions/v1/delete-school`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type':     'application/json',
+                'x-superadmin-key': saKey,
+            },
+            body: JSON.stringify({ school_id: _deleteSchoolId }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(
+            json?.error ?? json?.message ?? 'Gagal menghapus');
+        closeDeleteModal();
+        await loadSchools();
+        const hintEl = document.getElementById('schools-hint');
+        if (hintEl) {
+            hintEl.textContent = `✓ Sekolah "${namaSekolah}" berhasil dihapus.`;
+            hintEl.style.display = 'block';
+        }
+    } catch (err) {
+        deleteError.textContent = `✗ ${err.message}`;
+        deleteError.style.display = 'block';
+        deleteConfirmBtn.disabled = false;
+        deleteConfirmBtn.textContent = 'Hapus Permanen';
     }
 });
 
