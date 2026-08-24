@@ -11,8 +11,14 @@ import { supabase, getCurrentUserRow, requireAdministrativeOrRedirect, getSchool
 import { mountSemesterPanel } from './semester.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
 
+// ADM-22: escaping lewat DOM (createElement + textContent + innerHTML) supaya
+// seragam dengan portal lain, TAPI innerHTML tidak meng-escape kutip — padahal
+// esc() dipakai di 18+ konteks atribut ber-kutip di file ini. Tanpa dua replace
+// di bawah, nilai seperti `x" onmouseover="…` lolos keluar dari atribut.
 function esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;');
+    const el = document.createElement('span');
+    el.textContent = String(s ?? '');
+    return el.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function generateTempPassword() {

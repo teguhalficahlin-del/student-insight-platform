@@ -95,7 +95,10 @@ export async function fetchChildren(parentUserId) {
     });
 }
 
-export async function fetchSchedule(classId, date) {
+// ORT-06: filter school_id eksplisit sebagai defense-in-depth. RLS tetap
+// kontrol utama; filter ini memastikan satu bug policy tidak langsung berujung
+// pada jadwal tenant lain ikut terbaca.
+export async function fetchSchedule(classId, date, schoolId) {
     if (!classId) return [];
     const { data, error } = await supabase
         .from('teaching_schedules')
@@ -104,6 +107,7 @@ export async function fetchSchedule(classId, date) {
             subject:subjects ( name ),
             teacher:users ( full_name )
         `)
+        .eq('school_id', schoolId)
         .eq('class_id', classId)
         .eq('session_date', date)
         .order('session_start');
@@ -117,7 +121,7 @@ export async function fetchSchedule(classId, date) {
     }));
 }
 
-export async function fetchWeekSchedule(classId) {
+export async function fetchWeekSchedule(classId, schoolId) {
     if (!classId) return [];
     const today  = new Date();
     const dow    = today.getDay();
@@ -136,7 +140,8 @@ export async function fetchWeekSchedule(classId) {
 
     const results = await Promise.all(
         days.map(date =>
-            fetchSchedule(classId, date)
+            // ORT-06: schoolId diteruskan ke tiap pemanggilan, bukan berhenti di sini.
+            fetchSchedule(classId, date, schoolId)
                 .then(rows => ({ date, rows }))
                 .catch(() => ({ date, rows: [] }))
         )
@@ -314,10 +319,15 @@ export async function markNotificationsRead(ids) {
     if (error) throw error;
 }
 
-export async function getMyChildren() {
+// ORT-05/09: filter school_id eksplisit sebagai defense-in-depth. Tanpa ini,
+// .single() pada school_config bergantung sepenuhnya pada RLS untuk menentukan
+// baris mana yang terpungut — satu bug policy langsung berarti tahun ajaran
+// (dan daftar anak) milik tenant lain.
+export async function getMyChildren(schoolId) {
     const { data: config } = await supabase
         .from('school_config')
         .select('current_academic_year')
+        .eq('school_id', schoolId)
         .single();
     const academicYear = config?.current_academic_year ?? null;
 
@@ -331,7 +341,8 @@ export async function getMyChildren() {
                     class:classes ( name )
                 )
             )
-        `);
+        `)
+        .eq('school_id', schoolId);
     if (error) throw error;
     const result = [];
     for (const row of data ?? []) {

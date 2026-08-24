@@ -277,7 +277,7 @@ async function loadSchedule(classId) {
     const label    = new Date(date + 'T00:00:00')
         .toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     try {
-        const rows = await fetchSchedule(classId, date);
+        const rows = await fetchSchedule(classId, date, currentUser.school_id);
         const sesiCount = rows.length;
         const tableHtml = sesiCount === 0
             ? '<p class="hint" style="margin:8px 0 4px">Tidak ada jadwal pada hari ini.</p>'
@@ -314,7 +314,7 @@ async function loadWeekSchedule(classId) {
         return;
     }
     try {
-        const results  = await fetchWeekSchedule(classId);
+        const results  = await fetchWeekSchedule(classId, currentUser.school_id);
         const todayStr = localDateStr();
         const DAY_NAMES = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
         const hasAny = results.some(r => r.rows.length > 0);
@@ -771,7 +771,7 @@ async function initForumSection() {
 
     // Ambil daftar anak
     try {
-        _forumChildren = await getMyChildren();
+        _forumChildren = await getMyChildren(currentUser.school_id);
     } catch (e) {
         document.getElementById('forum-loading').textContent = 'Gagal memuat data anak.';
         return;
