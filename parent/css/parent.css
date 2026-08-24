@@ -152,21 +152,19 @@ label {
 }
 
 .topbar {
-    display: flex;
-    align-items: center;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; gap: 8px;
     background: var(--color-surface);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
-    padding: 12px 20px;
+    padding: 10px 16px;
     margin-bottom: 20px;
-    gap: 12px;
 }
-.hdr-left { display:flex; flex-direction:column; width:70px; flex-shrink:0; overflow:hidden; }
-.hdr-school { flex:1; text-align:center; font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; }
-.hdr-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }
-.hdr-name { font-size:14px; font-weight:600; color:var(--color-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
-.hdr-role { font-size:13px; color:var(--color-text-muted); opacity:.7; display:block; }
-.hdr-icon-btn { background:transparent; border:1px solid var(--color-border); border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--color-text); font-size:16px; padding:0; }
+.hdr-left { display:flex; flex-direction:column; min-width:0; overflow:hidden; gap:2px; }
+.hdr-school { text-align:center; font-size:clamp(11px,3vw,15px); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; padding:0 4px; }
+.hdr-right { display:flex; align-items:center; gap:6px; justify-content:flex-end; }
+.hdr-name { font-size:clamp(11px,3.5vw,14px); font-weight:600; color:var(--color-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+.hdr-role { font-size:clamp(10px,2.8vw,13px); color:var(--color-text-muted); opacity:.75; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hdr-icon-btn { background:transparent; border:1px solid var(--color-border); border-radius:8px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--color-text); font-size:18px; padding:0; flex-shrink:0; }
 
 .loading {
     text-align: center;

@@ -81,15 +81,16 @@ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .app-header {
     background: var(--color-surface); color: #fff;
     border-bottom: 2px solid var(--color-gold);
-    padding: 12px 20px; display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; gap: 8px;
     border-radius: 0 0 16px 16px;
 }
-.hdr-left { display:flex; flex-direction:column; width:70px; flex-shrink:0; overflow:hidden; }
-.hdr-school { flex:1; text-align:center; font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; color:#fff; }
-.hdr-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }
-.hdr-name { font-size:14px; font-weight:600; color:var(--color-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
-.hdr-role { font-size:13px; color:var(--color-text-muted); opacity:.7; display:block; }
-.hdr-icon-btn { background:transparent; border:1px solid rgba(255,255,255,.3); border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; font-size:16px; padding:0; }
+.hdr-left { display:flex; flex-direction:column; min-width:0; overflow:hidden; gap:2px; }
+.hdr-school { text-align:center; font-size:clamp(11px,3vw,15px); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; color:#fff; padding:0 4px; }
+.hdr-right { display:flex; align-items:center; gap:6px; justify-content:flex-end; }
+.hdr-name { font-size:clamp(11px,3.5vw,14px); font-weight:600; color:var(--color-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+.hdr-role { font-size:clamp(10px,2.8vw,13px); color:var(--color-text-muted); opacity:.75; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hdr-icon-btn { background:transparent; border:1px solid rgba(255,255,255,.3); border-radius:8px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; font-size:18px; padding:0; flex-shrink:0; }
 
 /* ── Tab navigation ──────────────────────────────────────── */
 .tab-nav {
