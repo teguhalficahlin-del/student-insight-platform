@@ -8,7 +8,8 @@
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { supabase, getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getForumGuruWaliCandidates, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent,
     getDutyStaffCandidates, getDutySchedules, revokeDutySchedule,
-    getAdminPanelDudi, getAdminPanelStaff } from './api.js';
+    getAdminPanelDudi, getAdminPanelStaff,
+    getUnreadNotifCount, getRecentNotifications, markNotificationsRead } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
 
@@ -50,6 +51,85 @@ function showInputModal(message, { placeholder = '', defaultValue = '', okLabel 
         btnCan.addEventListener('click', onCan);
         input.addEventListener('keydown', onKey);
     });
+}
+
+// ── Notifikasi ────────────────────────────────────────────
+let _notifPollTimer = null;
+
+function _setBellBadge(n) {
+    const btn = document.getElementById('notif-bell-btn');
+    if (!btn) return;
+    let badge = btn.querySelector('.notif-badge-count');
+    if (n > 0) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'notif-badge-count';
+            btn.style.position = 'relative';
+            btn.appendChild(badge);
+        }
+        badge.textContent = n > 99 ? '99+' : String(n);
+    } else {
+        badge?.remove();
+    }
+}
+
+async function refreshNotifBadge() {
+    try {
+        const n = await getUnreadNotifCount();
+        _setBellBadge(n);
+    } catch { /* tidak kritis */ }
+}
+
+function startNotifPolling() {
+    clearInterval(_notifPollTimer);
+    _notifPollTimer = setInterval(refreshNotifBadge, 60_000);
+}
+
+function fmt(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+
+async function openNotifDropdown() {
+    const panel = document.getElementById('notif-dropdown');
+    if (!panel) return;
+    if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+    panel.style.display = 'block';
+    panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-text-muted)">Memuat…</p>';
+    try {
+        const notifs = await getRecentNotifications(15);
+        if (!notifs.length) {
+            panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-text-muted)">Tidak ada notifikasi baru.</p>';
+            return;
+        }
+        panel.innerHTML = notifs.map(n => `
+            <div class="notif-item" data-id="${esc(n.notification_id)}"
+                 style="padding:10px 14px;border-bottom:1px solid var(--color-border);cursor:pointer;font-size:13px">
+                <div style="font-weight:600;margin-bottom:2px">${esc(n.title)}</div>
+                <div style="color:var(--color-text-muted);font-size:12px">${esc(n.body)}</div>
+                <div style="color:var(--color-text-muted);font-size:11px;margin-top:3px">${fmt(n.created_at)}</div>
+            </div>`).join('') +
+            `<div style="padding:8px 14px;text-align:center">
+                <button id="notif-mark-all-btn" class="btn btn-secondary btn-sm" style="font-size:12px">Tandai semua dibaca</button>
+            </div>`;
+        panel.querySelectorAll('.notif-item').forEach(el => {
+            el.addEventListener('mouseenter', () => { el.style.background = 'var(--color-bg)'; });
+            el.addEventListener('mouseleave', () => { el.style.background = ''; });
+            el.addEventListener('click', async () => {
+                panel.style.display = 'none';
+                await markNotificationsRead([el.dataset.id]).catch(() => {});
+                await refreshNotifBadge();
+            });
+        });
+        document.getElementById('notif-mark-all-btn')?.addEventListener('click', async () => {
+            await markNotificationsRead(notifs.map(n => n.notification_id)).catch(() => {});
+            panel.style.display = 'none';
+            _setBellBadge(0);
+        });
+    } catch {
+        panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-danger)">Gagal memuat notifikasi.</p>';
+    }
 }
 
 function generateTempPassword() {
@@ -2391,6 +2471,16 @@ async function renderExportPanel() {
 
     document.getElementById('dashboard-school-name').textContent = schoolName;
     document.getElementById('dashboard-user-name').textContent = `Masuk sebagai ${userRow.full_name}`;
+
+    document.getElementById('notif-bell-btn')?.addEventListener('click', openNotifDropdown);
+    document.addEventListener('click', e => {
+        if (!e.target.closest('#notif-bell-btn') && !e.target.closest('#notif-dropdown')) {
+            const d = document.getElementById('notif-dropdown');
+            if (d) d.style.display = 'none';
+        }
+    });
+    refreshNotifBadge();
+    startNotifPolling();
     // Delegasi klik Reset PW untuk semua panel non-staf (siswa, ortu, dudi, stakeholder)
     panelContent.addEventListener('click', async e => {
         const btn = e.target.closest('.user-reset-pw-btn');
