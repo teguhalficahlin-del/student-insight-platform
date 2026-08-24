@@ -317,7 +317,7 @@ body.has-login-banner .app-header { margin-top: 94px; }
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 640px) {
-    .app-header h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .app-header h2 { flex-basis: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wk-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
     .date-row-actions { display: flex; gap: 8px; }
 }

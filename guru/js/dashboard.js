@@ -297,6 +297,11 @@ async function init() {
         : 'Guru';
     document.getElementById('hdr-role').textContent = roleLabel;
 
+    document.getElementById('logout-btn')?.addEventListener('click', async () => {
+        await logout();
+        window.location.replace(getLoginUrl());
+    });
+
     await buildTabs();
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display     = 'block';
