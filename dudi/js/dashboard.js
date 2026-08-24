@@ -533,7 +533,10 @@ logoutBtn.addEventListener('click', async () => {
 
 // ── Helpers ───────────────────────────────────────────────────
 function todayStr() {
-    return new Date().toISOString().slice(0, 10);
+    // DUD-09: pakai tanggal LOKAL, bukan UTC. Di WIB (UTC+7) antara pukul
+    // 00:00-07:00, toISOString() mengembalikan tanggal kemarin.
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 function formatDate(d) {

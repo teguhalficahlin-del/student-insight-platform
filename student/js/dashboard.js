@@ -194,6 +194,8 @@ async function loadTabContent(key) {
         case 'pkl':       if (!pklLoaded) await loadPkl(); break;
         case 'forum':     await initForumTab(); break;
         case 'nilai':     await initNilaiTab(); break;
+        default:
+            console.warn('[student] unknown tab key:', key);
     }
 }
 
@@ -940,9 +942,14 @@ async function openForumDetail(post) {
                 .createSignedUrl(post.attachment_path, 172800);
             if (signed?.signedUrl) attachmentHref = signed.signedUrl;
         }
-        attEl.innerHTML = `<a href="${esc(attachmentHref)}" target="_blank"
-            class="btn btn-secondary" style="font-size:13px">
-            📎 ${esc(post.attachment_name ?? 'Unduh Lampiran')}</a>`;
+        if (attachmentHref) {
+            attEl.innerHTML = `<a href="${esc(attachmentHref)}" target="_blank"
+                class="btn btn-secondary" style="font-size:13px">
+                📎 ${esc(post.attachment_name ?? 'Unduh Lampiran')}</a>`;
+        } else {
+            // SIS-06: signed URL gagal — jangan render <a href="null">.
+            attEl.innerHTML = '<p class="hint" style="font-size:13px">Gagal memuat lampiran.</p>';
+        }
     } else {
         attEl.innerHTML = '';
     }
