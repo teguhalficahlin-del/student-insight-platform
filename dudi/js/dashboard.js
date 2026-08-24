@@ -496,15 +496,16 @@ obsForm.addEventListener('submit', async (e) => {
 
     try {
         let audienceWarning = null;
+        let recipientCount = 0;
         try {
-            const { recipientCount } = await saveObservation({
+            ({ recipientCount } = await saveObservation({
                 studentId:  obsStudentEl.value,
                 sentiment:  obsSentimentEl.value,
                 dimension:  obsDimensionEl.value,
                 content:    obsContentEl.value.trim(),
                 userId:     currentUser.user_id,
                 schoolId:   currentUser.school_id,
-            });
+            }));
         } catch (err) {
             // DUD-02: partial success. Catatannya SUDAH tersimpan, yang gagal
             // cuma daftar penerima — jadi jangan bilang "gagal menyimpan",
