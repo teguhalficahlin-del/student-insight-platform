@@ -428,6 +428,13 @@ export async function addForumSekolahAck(postId, userId, schoolId) {
     if (error) throw error;
 }
 
+export async function getWaliKelasUserId(classId) {
+    const { data, error } = await supabase
+        .rpc('fn_get_wali_kelas_user_id', { p_class_id: classId });
+    if (error) throw error;
+    return data; // uuid | null
+}
+
 /**
  * Resolve penerima otomatis untuk posting ortu berdasarkan anak yang dipilih.
  * Penerima: Wali Kelas + Guru BK + Guru Wali + Guru yang mengajar hari ini.
@@ -445,14 +452,9 @@ export async function getParentForumRecipients(classId, schoolId) {
     if (enrollErr) throw enrollErr;
     const studentIds = (enrollData ?? []).map(r => r.student_id);
 
-    const [waliRes, bkRes, guruWaliRes, jadwalRes] = await Promise.all([
-        // Wali Kelas
-        supabase.from('users')
-            .select('user_id')
-            .eq('wali_kelas_class_id', classId)
-            .eq('school_id', schoolId)
-            .eq('is_active', true)
-            .maybeSingle(),
+    const [waliUserId, bkRes, guruWaliRes, jadwalRes] = await Promise.all([
+        // Wali Kelas — via RPC (tenant diambil dari fn_current_school_id() di server)
+        getWaliKelasUserId(classId),
 
         // Guru BK yang menangani kelas ini
         supabase.from('bk_class_assignments')
@@ -479,7 +481,7 @@ export async function getParentForumRecipients(classId, schoolId) {
     ]);
 
     const ids = new Set();
-    if (waliRes.data?.user_id) ids.add(waliRes.data.user_id);
+    if (waliUserId) ids.add(waliUserId);
     (bkRes.data ?? []).forEach(r => ids.add(r.bk_user_id));
     (guruWaliRes.data ?? []).forEach(r => ids.add(r.guru_user_id));
     (jadwalRes.data ?? []).forEach(r => {
