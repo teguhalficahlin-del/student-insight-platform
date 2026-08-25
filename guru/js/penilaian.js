@@ -1220,7 +1220,7 @@ async function openAsmtModal(editAsmt) {
         '<label>Tujuan / Keterangan</label>' +
         '<textarea id="pai-tujuan" rows="2" maxlength="500" placeholder="Tujuan penilaian ini…">' + esc(editAsmt?.tujuan || '') + '</textarea>' +
         '<hr style="margin:12px 0;border:none;border-top:1px solid var(--color-border)">' +
-        '<div id="pai-instrumen-body"></div>' +
+        '<div id="pai-instrumen-body"' + (initJenis === 'SUMATIF' ? ' style="display:none"' : '') + '></div>' +
         '<div id="pai-siswa-section" style="margin-top:10px">' + (initJenis === 'SUMATIF' ? SUM_HTML : '') + '</div>' +
         '<hr style="margin:12px 0;border:none;border-top:1px solid var(--color-border)">' +
         '<label>Refleksi Guru</label>' +
@@ -1244,7 +1244,9 @@ async function openAsmtModal(editAsmt) {
             const tanggal   = _ov.querySelector('#pai-tanggal').value || null;
 
             const instrBody = _ov.querySelector('#pai-instrumen-body');
-            const konten = collectBodyInstrumen(instrBody, teknik, instrumen);
+            const konten = jenis === 'SUMATIF'
+                ? null
+                : collectBodyInstrumen(instrBody, teknik, instrumen);
 
             const payload = {
                 jenis, teknik, instrumen, tujuan: tujuan || null,
@@ -1291,7 +1293,15 @@ async function openAsmtModal(editAsmt) {
     const instrBody = modal.querySelector('#pai-instrumen-body');
     const siswaSec  = modal.querySelector('#pai-siswa-section');
 
+    const _isSum = () => jenisSel.value === 'SUMATIF';
+
     function rebuildInstrBody() {
+        if (_isSum()) {
+            instrBody.style.display = 'none';
+            instrBody.innerHTML = '';
+            return;
+        }
+        instrBody.style.display = '';
         renderBodyInstrumen(teknikSel.value, instrSel.value, instrBody);
         wireBodyInstrumen(instrBody);
         if (editAsmt && editAsmt.teknik === teknikSel.value && editAsmt.instrumen === instrSel.value) {
@@ -1312,6 +1322,7 @@ async function openAsmtModal(editAsmt) {
         } else {
             _sumSiswaContainer = null;
         }
+        rebuildInstrBody();
     }
 
     function wireSumNav(container) {
