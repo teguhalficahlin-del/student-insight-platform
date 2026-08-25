@@ -1198,7 +1198,11 @@ async function openAsmtModal(editAsmt) {
         '<div id="sum-dots" class="sum-dots" style="justify-content:center;margin-bottom:6px"></div>' +
         '<div id="sum-input-panel" class="sum-input-panel" style="display:none;border-top:1px solid var(--color-border);padding-top:10px;margin-top:4px"></div>';
 
+    const today = new Date().toISOString().split('T')[0];
+
     const bodyHtml =
+        '<label class="field-label">Tanggal *</label>' +
+        '<input type="date" id="pai-tanggal" class="input" required value="' + esc(editAsmt?.tanggal ?? today) + '" style="width:100%;margin-bottom:12px;">' +
         '<label>Tujuan Pembelajaran (opsional)</label>' +
         '<select id="pai-tp-sel">' + tpOpts + '</select>' +
         '<label>Jenis <span style="color:var(--color-danger)">*</span></label>' +
@@ -1231,6 +1235,8 @@ async function openAsmtModal(editAsmt) {
             const visS = _ov.querySelector('#pai-vis-siswa').checked;
             const visO = _ov.querySelector('#pai-vis-ortu').checked;
 
+            const tanggal   = _ov.querySelector('#pai-tanggal').value || null;
+
             const instrBody = _ov.querySelector('#pai-instrumen-body');
             const konten = collectBodyInstrumen(instrBody, teknik, instrumen);
 
@@ -1239,6 +1245,7 @@ async function openAsmtModal(editAsmt) {
                 konten, refleksi_guru: refleksi || null,
                 is_visible_siswa: visS, is_visible_ortu: visO,
                 learning_objective_id: tpId,
+                tanggal,
             };
 
             let asmtId;
