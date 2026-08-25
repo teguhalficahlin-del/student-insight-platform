@@ -1,4 +1,5 @@
 import {
+    supabase,
     getCurrentUserRow, getCpForSubject,
     getTps, createTp, updateTp, deleteTp,
     getKktps, createKktp, updateKktp, deleteKktp,
@@ -1870,6 +1871,156 @@ async function renderAll() {
 
     initCollapse();
 }
+
+// ═══════════════════════════════════════════════════════
+// TAB PENILAIAN — logika sub-tab di dalam tab Jurnal
+// ═══════════════════════════════════════════════════════
+
+let _penilaianInit = false;
+let _penilaianCtx  = { kelasId: null, subjectId: null, year: null, semester: null, programCode: null, gradeLevel: null };
+
+
+async function initPenilaianTab() {
+    if (_penilaianInit) return;
+    _penilaianInit = true;
+
+    // ── Switching sub-tab jurnal (Catatan ↔ Penilaian) ──
+    document.querySelectorAll('.jurnal-sub-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const sub = btn.dataset.jurnalSub;
+            document.querySelectorAll('.jurnal-sub-btn').forEach(b => {
+                const active = b.dataset.jurnalSub === sub;
+                b.style.fontWeight   = active ? '600' : '400';
+                b.style.borderBottom = active
+                    ? '2px solid var(--color-primary)'
+                    : '2px solid transparent';
+                b.style.color = active
+                    ? 'var(--color-primary)'
+                    : 'var(--color-text-muted)';
+            });
+            document.getElementById('jurnal-sub-catatan').style.display =
+                sub === 'catatan' ? '' : 'none';
+            document.getElementById('jurnal-sub-penilaian').style.display =
+                sub === 'penilaian' ? '' : 'none';
+        });
+    });
+
+    // ── Context selectors ──
+    const selKelas = document.getElementById('penilaian-kelas-select');
+    const selMapel = document.getElementById('penilaian-mapel-select');
+    const selYear  = document.getElementById('penilaian-year-select');
+    const selSem   = document.getElementById('penilaian-semester-select');
+
+    // Populate tahun ajaran (tahun lalu, tahun ini, tahun depan)
+    const yr = new Date().getFullYear();
+    [yr - 1, yr, yr + 1].forEach(y => {
+        const opt = document.createElement('option');
+        opt.value = `${y}/${y + 1}`;
+        opt.textContent = `${y}/${y + 1}`;
+        if (y === yr) opt.selected = true;
+        selYear.appendChild(opt);
+    });
+    _penilaianCtx.year     = selYear.value;
+    _penilaianCtx.semester = parseInt(selSem.value);
+
+    // Populate kelas dari teaching assignments guru
+    await loadPenilaianKelas(selKelas);
+
+    selKelas.addEventListener('change', async () => {
+        _penilaianCtx.kelasId = selKelas.value || null;
+        const selOpt = selKelas.options[selKelas.selectedIndex];
+        _penilaianCtx.gradeLevel  = selOpt?.dataset.gradeLevel  ? Number(selOpt.dataset.gradeLevel)  : null;
+        _penilaianCtx.programCode = selOpt?.dataset.programCode || null;
+        await loadPenilaianMapel(selMapel, selKelas.value);
+        _penilaianCtx.subjectId = null;
+        await onPenilaianContextChange();
+    });
+    selMapel.addEventListener('change', async () => {
+        _penilaianCtx.subjectId = selMapel.value || null;
+        await onPenilaianContextChange();
+    });
+    selYear.addEventListener('change', async () => {
+        _penilaianCtx.year = selYear.value || null;
+        await onPenilaianContextChange();
+    });
+    selSem.addEventListener('change', async () => {
+        _penilaianCtx.semester = parseInt(selSem.value) || null;
+        await onPenilaianContextChange();
+    });
+
+    // Render accordion segera saat tab dibuka, meski konteks belum lengkap
+    await onPenilaianContextChange();
+}
+
+async function loadPenilaianKelas(selEl) {
+    selEl.innerHTML = '<option value="">— Pilih Kelas —</option>';
+    try {
+        await ensureUser();
+        const { data, error } = await supabase
+            .from('teaching_assignments')
+            .select('class_id, classes(name, grade_level, program_id, programs(code))')
+            .eq('school_id', _schoolId)
+            .eq('user_id', _teacherId)
+            .eq('is_active', true)
+            .order('class_id');
+        if (error) throw error;
+        const seen = new Set();
+        (data || []).forEach(row => {
+            if (seen.has(row.class_id)) return;
+            seen.add(row.class_id);
+            const opt = document.createElement('option');
+            opt.value = row.class_id;
+            opt.textContent = row.classes?.name || row.class_id;
+            opt.dataset.gradeLevel  = row.classes?.grade_level  ?? '';
+            opt.dataset.programCode = row.classes?.programs?.code ?? '';
+            selEl.appendChild(opt);
+        });
+    } catch (e) {
+        console.error('loadPenilaianKelas:', e);
+    }
+}
+
+async function loadPenilaianMapel(selEl, kelasId) {
+    selEl.innerHTML = '<option value="">— Pilih Mapel —</option>';
+    if (!kelasId) return;
+    try {
+        await ensureUser();
+        const { data, error } = await supabase
+            .from('teaching_assignments')
+            .select('subject_id, subjects(name)')
+            .eq('school_id', _schoolId)
+            .eq('class_id', kelasId)
+            .eq('user_id', _teacherId)
+            .eq('is_active', true);
+        if (error) throw error;
+        const seen = new Set();
+        (data || []).forEach(row => {
+            if (seen.has(row.subject_id)) return;
+            seen.add(row.subject_id);
+            const opt = document.createElement('option');
+            opt.value = row.subject_id;
+            opt.textContent = row.subjects?.name || row.subject_id;
+            selEl.appendChild(opt);
+        });
+    } catch (e) {
+        console.error('loadPenilaianMapel:', e);
+    }
+}
+
+async function onPenilaianContextChange() {
+    if (window.initPenilaianPanel) {
+        window.initPenilaianPanel(
+            _penilaianCtx.kelasId,
+            _penilaianCtx.subjectId,
+            _penilaianCtx.year,
+            _penilaianCtx.semester,
+            _penilaianCtx.programCode,
+            _penilaianCtx.gradeLevel
+        );
+    }
+}
+
+export { initPenilaianTab };
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
