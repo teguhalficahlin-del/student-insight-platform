@@ -1458,6 +1458,11 @@ async function _renderRecapContent(body) {
             _rosterCache  = roster;
             _sGroupsCache = Object.fromEntries(sGroups.map(g => [g.student_id, g.grup]));
         }
+        // Rekap bisa dibuka tanpa lewat Perencanaan, jadi _tpCache mungkin masih kosong.
+        // Tanpa ini recapTpId jatuh ke null dan guard simpan salah menuduh 'TP belum ada'.
+        if (!_tpCache.length) {
+            _tpCache = await getTps(_kelasId, _subjectId, _year, Number(_semester));
+        }
         // Rekap sebagai proyektor: tampilkan penilaian sesuai jenis yang dipilih.
         // Nilai akhir + KKTP hanya berlaku untuk SUMATIF.
         const isSumatif = _rcJenis === 'SUMATIF';
