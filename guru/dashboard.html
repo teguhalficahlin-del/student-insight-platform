@@ -1332,7 +1332,9 @@
                         <div class="field">
                             <textarea id="journal-content" class="input" rows="5"
                                 placeholder="Tulis catatan mengajar…"
+                                maxlength="5000"
                                 style="resize:vertical; width:100%"></textarea>
+                            <small id="journal-char-count" style="color:var(--color-text-muted)">0 / 5000</small>
                         </div>
                         <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px">
                             <button type="submit" class="btn btn-primary" id="journal-submit-btn" style="flex:1">Simpan</button>
@@ -1340,6 +1342,7 @@
                         </div>
                         <div id="journal-date-row" style="display:none; margin-top:8px">
                             <input type="date" id="journal-date" class="input" style="width:auto">
+                            <small id="journal-date-err" style="display:none; color:var(--color-danger)"></small>
                         </div>
                         <div id="journal-form-msg" style="display:none; margin-top:6px" class="hint"></div>
                     </form>

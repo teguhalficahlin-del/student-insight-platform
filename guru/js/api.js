@@ -4,7 +4,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { saveObservation, saveJournalEntry, saveCase } from './offline.js';
+import { saveObservation, saveJournalEntry, saveCase, deleteJournalEntryOffline } from './offline.js';
 
 // Diekspor agar offline.js dapat memakainya di postEdgeFn tanpa membuat
 // client Supabase duplikat (regresi 6ded3e5: konstanta ini pernah terhapus
@@ -781,11 +781,7 @@ export async function insertJournalEntry(userId, entryDate, content) {
 }
 
 export async function deleteJournalEntry(journalId) {
-    const { error } = await supabase
-        .from('teacher_journals')
-        .delete()
-        .eq('journal_id', journalId);
-    if (error) throw error;
+    return deleteJournalEntryOffline(journalId);
 }
 
 export async function updateJournalEntry(journalId, entryDate, content, userId) {

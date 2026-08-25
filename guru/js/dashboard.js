@@ -4300,7 +4300,39 @@ async function initJurnalTab() {
 
     // Tanggal default hari ini, tersembunyi
     const dateEl = document.getElementById('journal-date');
-    dateEl.value = localDateStr();
+    const today  = localDateStr();
+    dateEl.value = today;
+    dateEl.max   = today;
+    const minDate = new Date();
+    minDate.setFullYear(minDate.getFullYear() - 1);
+    dateEl.min = minDate.toISOString().slice(0, 10);
+
+    const contentEl  = document.getElementById('journal-content');
+    const charCount  = document.getElementById('journal-char-count');
+    const submitBtn  = document.getElementById('journal-submit-btn');
+    const dateErrEl  = document.getElementById('journal-date-err');
+
+    contentEl.addEventListener('input', () => {
+        const len = contentEl.value.length;
+        charCount.textContent = `${len} / 5000`;
+        charCount.style.color = len >= 5000
+            ? 'var(--color-danger)'
+            : len >= 4500
+                ? 'var(--color-warning, orange)'
+                : 'var(--color-text-muted)';
+    });
+
+    const validateDate = () => {
+        const val = dateEl.value;
+        if (!val || val < dateEl.min || val > dateEl.max) {
+            if (dateErrEl) { dateErrEl.textContent = 'Tanggal tidak valid'; dateErrEl.style.display = 'block'; }
+            submitBtn.disabled = true;
+        } else {
+            if (dateErrEl) dateErrEl.style.display = 'none';
+            submitBtn.disabled = false;
+        }
+    };
+    dateEl.addEventListener('change', validateDate);
 
     document.getElementById('journal-date-toggle').addEventListener('click', () => {
         const row = document.getElementById('journal-date-row');
@@ -4312,12 +4344,13 @@ async function initJurnalTab() {
 
     document.getElementById('journal-form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const btn     = document.getElementById('journal-submit-btn');
+        const btn     = submitBtn;
         const msgEl   = document.getElementById('journal-form-msg');
-        const content = document.getElementById('journal-content').value.trim();
-        const date    = document.getElementById('journal-date').value;
+        const content = contentEl.value.trim();
+        const date    = dateEl.value;
 
         if (!content) return;
+        if (!date || date < dateEl.min || date > dateEl.max) return;
 
         btn.disabled = true;
         btn.textContent = 'Menyimpan…';
@@ -4326,7 +4359,9 @@ async function initJurnalTab() {
         try {
             const r = await insertJournalEntry(currentUser.user_id, date, content);
             if (r.status === 'error') throw new Error(r.error);
-            document.getElementById('journal-content').value = '';
+            contentEl.value = '';
+            charCount.textContent = '0 / 5000';
+            charCount.style.color = 'var(--color-text-muted)';
             msgEl.textContent = r.status === 'queued'
                 ? '⏳ Catatan disimpan lokal — akan dikirim saat online.'
                 : 'Catatan berhasil disimpan.';
@@ -4409,18 +4444,26 @@ function renderJurnalEntries(entries, listEl) {
                 askBtn.style.display    = 'inline-flex';
             });
             yesBtn.addEventListener('click', async () => {
-                if (!navigator.onLine) {
-                    errEl.textContent = 'Hapus tidak tersedia saat offline.';
-                    errEl.style.display = 'block';
-                    confirmEl.style.display = 'none';
-                    askBtn.style.display = 'inline-flex';
-                    return;
-                }
                 yesBtn.disabled = true; yesBtn.textContent = 'Menghapus…';
+                const timeout = setTimeout(() => {
+                    yesBtn.disabled = false; yesBtn.textContent = 'Ya, Hapus';
+                    errEl.textContent = 'Koneksi terputus. Coba lagi.';
+                    errEl.style.display = 'block';
+                }, 10000);
                 try {
-                    await deleteJournalEntry(askBtn.dataset.delete);
-                    await loadJurnalList();
+                    const r = await deleteJournalEntry(askBtn.dataset.delete);
+                    clearTimeout(timeout);
+                    if (r?.status === 'queued') {
+                        errEl.textContent = 'Penghapusan dijadwalkan dan akan diproses saat koneksi tersedia.';
+                        errEl.style.display = 'block';
+                        confirmEl.style.display = 'none';
+                        askBtn.style.display = 'inline-flex';
+                        yesBtn.disabled = false; yesBtn.textContent = 'Ya, Hapus';
+                    } else {
+                        await loadJurnalList();
+                    }
                 } catch (err) {
+                    clearTimeout(timeout);
                     errEl.textContent = fe(err, 'h');
                     errEl.style.display = 'block';
                     yesBtn.disabled = false; yesBtn.textContent = 'Ya, Hapus';
@@ -4470,6 +4513,11 @@ async function loadJurnalList() {
     const listEl   = document.getElementById('journal-list');
     const cacheKey = `jurnal-${currentUser.user_id}`;
 
+    const removeStaleBanner = () => {
+        const b = document.getElementById('journal-stale-banner');
+        if (b) b.remove();
+    };
+
     // Tampilkan cache dulu
     const cached = LC.get(cacheKey);
     if (cached) {
@@ -4481,9 +4529,20 @@ async function loadJurnalList() {
     try {
         const entries = await getJournalEntries(currentUser.user_id);
         LC.set(cacheKey, entries);
+        removeStaleBanner();
         renderJurnalEntries(entries, listEl);
     } catch (err) {
-        if (!cached) {
+        if (cached) {
+            // Ada cache tapi fetch gagal — tampilkan banner stale
+            const existing = document.getElementById('journal-stale-banner');
+            if (!existing) {
+                const banner = document.createElement('div');
+                banner.id = 'journal-stale-banner';
+                banner.style.cssText = 'font-size:0.8rem;color:var(--color-text-muted);padding:4px 0;margin-bottom:8px';
+                banner.textContent = '⚠ Menampilkan data terakhir tersimpan. Periksa koneksi internet Anda.';
+                listEl.insertAdjacentElement('beforebegin', banner);
+            }
+        } else {
             listEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
         }
     }
