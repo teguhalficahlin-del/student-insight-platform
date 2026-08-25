@@ -28,6 +28,7 @@ let _sGroupsCache = {};     // { student_id: grup }
 // rekap state
 let _rcSemester = null;
 let _rcYear     = null;
+let _rcJenis    = 'SUMATIF'; // DIAGNOSTIK_NK | DIAGNOSTIK_K | FORMATIF | SUMATIF
 let _rcTeknik   = '';
 let _rcInstrumen = '';
 let _rcMetode   = 'rata';   // 'rata' | 'bobot' | 'terbaik'
@@ -1457,21 +1458,24 @@ async function _renderRecapContent(body) {
             _rosterCache  = roster;
             _sGroupsCache = Object.fromEntries(sGroups.map(g => [g.student_id, g.grup]));
         }
-        const sumatifs = _asmtCache.filter(a => a.jenis === 'SUMATIF'
+        // Rekap sebagai proyektor: tampilkan penilaian sesuai jenis yang dipilih.
+        // Nilai akhir + KKTP hanya berlaku untuk SUMATIF.
+        const isSumatif = _rcJenis === 'SUMATIF';
+        const filtered = _asmtCache.filter(a => a.jenis === _rcJenis
             && (!_rcTeknik   || a.teknik    === _rcTeknik)
             && (!_rcInstrumen || a.instrumen === _rcInstrumen));
 
-        if (!sumatifs.length) {
+        if (!filtered.length) {
             body.innerHTML =
                 _rcFilterBar() +
-                '<p class="pen-placeholder">Tidak ada penilaian Sumatif' + (_rcTeknik ? ' (' + _rcTeknik + ')' : '') + ' untuk ditampilkan.</p>';
+                '<p class="pen-placeholder">Tidak ada penilaian ' + esc(JENIS_LABEL[_rcJenis] ?? _rcJenis) + (_rcTeknik ? ' (' + esc(_rcTeknik) + ')' : '') + ' untuk ditampilkan.</p>';
             _wireRcFilters(body);
             return;
         }
 
         // load all results
         const allResults = {};
-        await Promise.all(sumatifs.map(async a => {
+        await Promise.all(filtered.map(async a => {
             const rows = await getAssessmentResults(a.id);
             allResults[a.id] = Object.fromEntries(rows.map(r => [r.student_id, r]));
         }));
@@ -1482,14 +1486,16 @@ async function _renderRecapContent(body) {
         // compute final values
         const hasilSiswa = {};
         for (const s of roster) {
-            const nilais = sumatifs.map(a => allResults[a.id]?.[s.id]?.nilai ?? null);
+            const nilais = filtered.map(a => allResults[a.id]?.[s.id]?.nilai ?? null);
             let nilai = null;
-            if (_rcMetode === 'rata') {
+            if (!isSumatif) {
+                nilai = null;   // jenis non-SUMATIF tidak dihitung nilai akhirnya
+            } else if (_rcMetode === 'rata') {
                 const valid = nilais.filter(n => n != null);
                 nilai = valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
             } else if (_rcMetode === 'bobot') {
                 let sum = 0, totalBobot = 0;
-                sumatifs.forEach((a, i) => {
+                filtered.forEach((a, i) => {
                     const b = parseFloat(_rcBobots[a.id] || 0);
                     if (nilais[i] != null && b > 0) { sum += nilais[i] * b; totalBobot += b; }
                 });
@@ -1503,7 +1509,7 @@ async function _renderRecapContent(body) {
 
         // pick TP for kktp check
         const linkedTpId = _asmtCache.find(a => a.jenis === 'SUMATIF' && a.learning_objective_id)?.learning_objective_id;
-        const kktpForTp  = linkedTpId ? (await getKktps(linkedTpId)) : [];
+        const kktpForTp  = (isSumatif && linkedTpId) ? (await getKktps(linkedTpId)) : [];
         // TP yang dipakai sebagai anchor rekap. grade_recap.learning_objective_id NOT NULL,
         // jadi tanpa TP sama sekali rekap tidak bisa disimpan.
         const recapTpId  = linkedTpId || _tpCache[0]?.id || null;
@@ -1518,9 +1524,9 @@ async function _renderRecapContent(body) {
         let tableHtml =
             '<table class="rc-table"><thead><tr>' +
             '<th>Nama Siswa</th>' +
-            sumatifs.map(a => '<th>' + esc(a.teknik?.replace(/_/g,'') || '') + ' ' + esc(a.instrumen || '') + '</th>').join('') +
-            '<th>Nilai Akhir</th><th>KKTP</th>' +
-            (_rcMetode === 'bobot' ? '<th>Bobot (%)</th>' : '') +
+            filtered.map(a => '<th>' + esc(a.teknik?.replace(/_/g,'') || '') + ' ' + esc(a.instrumen || '') + '</th>').join('') +
+            (isSumatif ? '<th>Nilai Akhir</th><th>KKTP</th>' : '') +
+            (isSumatif && _rcMetode === 'bobot' ? '<th>Bobot (%)</th>' : '') +
             '</tr></thead><tbody>';
 
         for (const s of roster) {
@@ -1530,19 +1536,18 @@ async function _renderRecapContent(body) {
             const ktTxt = kt == null ? '—' : (kt ? '✓' : '✗');
             tableHtml += '<tr>' +
                 '<td>' + esc(s.nama) + '</td>' +
-                (h.nilais || sumatifs.map(() => null)).map(n => '<td>' + (n != null ? n.toFixed(1) : '—') + '</td>').join('') +
-                '<td><strong>' + nak + '</strong></td>' +
-                '<td>' + ktTxt + '</td>' +
-                (_rcMetode === 'bobot' ? '<td></td>' : '') +
+                (h.nilais || filtered.map(() => null)).map(n => '<td>' + (n != null ? n.toFixed(1) : '—') + '</td>').join('') +
+                (isSumatif ? '<td><strong>' + nak + '</strong></td><td>' + ktTxt + '</td>' : '') +
+                (isSumatif && _rcMetode === 'bobot' ? '<td></td>' : '') +
                 '</tr>';
         }
         tableHtml += '</tbody></table>';
 
         // bobot row
         let bobotHtml = '';
-        if (_rcMetode === 'bobot') {
+        if (isSumatif && _rcMetode === 'bobot') {
             bobotHtml = '<div style="margin:8px 0;font-size:12px"><strong>Set bobot tiap sumatif (total harus 100%):</strong><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">' +
-                sumatifs.map(a => (
+                filtered.map(a => (
                     '<label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:normal">' +
                     esc(a.instrumen || a.teknik) +
                     '<input type="number" class="rc-bobot-input" data-aid="' + esc(a.id) + '" min="0" max="100" value="' + esc(String(_rcBobots[a.id] || 0)) + '">' +
@@ -1553,9 +1558,11 @@ async function _renderRecapContent(body) {
 
         body.innerHTML =
             _rcFilterBar() + bobotHtml +
-            '<div style="display:flex;justify-content:flex-end;margin-bottom:8px">' +
-            '<button class="pen-btn pen-btn-primary" data-action="rc-simpan">Simpan Rekap</button>' +
-            '</div>' +
+            (isSumatif
+                ? '<div style="display:flex;justify-content:flex-end;margin-bottom:8px">' +
+                  '<button class="pen-btn pen-btn-primary" data-action="rc-simpan">Simpan Rekap</button>' +
+                  '</div>'
+                : '') +
             '<div style="overflow-x:auto">' + tableHtml + '</div>';
 
         _wireRcFilters(body);
@@ -1597,19 +1604,30 @@ async function _renderRecapContent(body) {
 }
 
 function _rcFilterBar() {
+    const jenisOpts = JENIS_LIST.map(v =>
+        '<option value="' + v + '"' + (_rcJenis === v ? ' selected' : '') + '>' + esc(JENIS_LABEL[v] ?? v) + '</option>').join('');
     const metodeOpts = [['rata','Rata-rata'],['bobot','Bobot'],['terbaik','Nilai Terbaik']].map(([v, l]) =>
         '<option value="' + v + '"' + (_rcMetode === v ? ' selected' : '') + '>' + l + '</option>').join('');
     const teknikOpts = ['', ...TEKNIK_LIST].map(v =>
         '<option value="' + v + '"' + (_rcTeknik === v ? ' selected' : '') + '>' + (v || 'Semua Teknik') + '</option>').join('');
     return (
         '<div class="rc-filter-bar">' +
-        '<select id="rc-metode">' + metodeOpts + '</select>' +
+        '<select id="rc-jenis">' + jenisOpts + '</select>' +
+        // Metode hanya relevan untuk SUMATIF — jenis lain tidak dihitung nilai akhirnya
+        (_rcJenis === 'SUMATIF' ? '<select id="rc-metode">' + metodeOpts + '</select>' : '') +
         '<select id="rc-teknik">' + teknikOpts + '</select>' +
         '</div>'
     );
 }
 
 function _wireRcFilters(body) {
+    body.querySelector('#rc-jenis')?.addEventListener('change', e => {
+        _rcJenis     = e.target.value;
+        _rcMetode    = 'rata';
+        _rcTeknik    = '';
+        _rcInstrumen = '';
+        _renderRecapContent(body);
+    });
     body.querySelector('#rc-metode')?.addEventListener('change', e => { _rcMetode = e.target.value; _renderRecapContent(body); });
     body.querySelector('#rc-teknik')?.addEventListener('change', e => { _rcTeknik = e.target.value; _rcInstrumen = ''; _renderRecapContent(body); });
 }
@@ -1725,7 +1743,7 @@ async function renderAll() {
         '<div class="pen-section-body" id="pen-pelaksanaan-body"></div></div>' +
 
         '<div class="pen-section"><div class="pen-section-header" id="pen-rekap-header">' +
-        '<span>Rekap Nilai Semester</span><span class="pen-chevron">▼</span></div>' +
+        '<span>Rekap Penilaian</span><span class="pen-chevron">▼</span></div>' +
         '<div class="pen-section-body" id="pen-rekap-body"></div></div>';
 
     if (!_delegInit) {
