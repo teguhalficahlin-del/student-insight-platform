@@ -439,7 +439,7 @@ function confirmDeleteTp(tp, origBtn) {
     const row = origBtn.closest('.pen-tp-row');
     const bar = document.createElement('div');
     bar.className = 'pen-del-bar';
-    bar.innerHTML = '<span style="flex:1;font-size:12px">Hapus "' + esc(tp.kode_tp) + '"? Semua KKTP-nya juga akan terhapus.</span>' +
+    bar.innerHTML = '<span style="flex:1;font-size:12px">Hapus "' + esc(tp.kode_tp) + '"? Semua KKTP dan rekap nilai siswa untuk TP ini ikut terhapus permanen.</span>' +
         '<button class="pen-btn pen-btn-sm pen-btn-danger pen-del-yes">Ya, Hapus</button>' +
         '<button class="pen-btn pen-btn-sm pen-del-no">Tidak</button>';
     row.appendChild(bar);
