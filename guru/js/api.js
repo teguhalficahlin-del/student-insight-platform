@@ -2216,6 +2216,27 @@ export async function upsertGradeRecap(schoolId, classId, studentId, loId, semes
     if (error) throw error;
 }
 
+/**
+ * Batch upsert rekap nilai — satu request untuk seluruh roster.
+ * rows: array of { studentId, payload }. schoolId/classId/loId/semester/year sama untuk semua baris.
+ * Dipakai supaya simpan rekap tidak parsial saat satu baris gagal (semua-atau-tidak per request).
+ */
+export async function upsertGradeRecapBatch(schoolId, classId, loId, semester, year, rows) {
+    if (!rows.length) return;
+    const now = new Date().toISOString();
+    const { error } = await supabase
+        .from('grade_recap')
+        .upsert(
+            rows.map(r => ({
+                school_id: schoolId, class_id: classId, student_id: r.studentId,
+                learning_objective_id: loId, semester, academic_year: year,
+                ...r.payload, updated_at: now,
+            })),
+            { onConflict: 'school_id,class_id,student_id,learning_objective_id,semester,academic_year' }
+        );
+    if (error) throw error;
+}
+
 export async function getGradeRecap(schoolId, classId, semester, year) {
     const { data, error } = await supabase
         .from('grade_recap')

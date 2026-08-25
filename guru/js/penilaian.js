@@ -6,7 +6,7 @@ import {
     getAssessments, createAssessment, updateAssessment, deleteAssessment,
     getAssessmentResults, upsertAssessmentResult,
     getStudentGroups, upsertStudentGroup,
-    upsertGradeRecap, getGradeRecap,
+    upsertGradeRecapBatch, getGradeRecap,
 } from './api.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -1567,15 +1567,18 @@ async function _renderRecapContent(body) {
                 if (!recapTpId) {
                     throw new Error('Rekap butuh Tujuan Pembelajaran. Buat TP dulu di section Perencanaan, lalu tautkan ke penilaian Sumatif.');
                 }
+                const rows = [];
                 for (const s of roster) {
                     const h = hasilSiswa[s.id] || {};
                     if (h.nilai == null) continue;
-                    const kt = kktpTercapai(h.nilai);
-                    await upsertGradeRecap(_schoolId, _kelasId, s.id,
-                        recapTpId,
-                        Number(_semester), _year,
-                        { nilai_akhir: h.nilai, kktp_tercapai: kt, deskripsi_capaian: null });
+                    rows.push({ studentId: s.id, payload: {
+                        nilai_akhir: h.nilai,
+                        kktp_tercapai: kktpTercapai(h.nilai),
+                        deskripsi_capaian: null,
+                    } });
                 }
+                await upsertGradeRecapBatch(_schoolId, _kelasId, recapTpId,
+                    Number(_semester), _year, rows);
                 btn.textContent = 'Tersimpan ✓';
                 setTimeout(() => { btn.disabled = false; btn.textContent = 'Simpan Rekap'; }, 2000);
             } catch (err) {
