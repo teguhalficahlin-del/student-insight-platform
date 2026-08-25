@@ -296,6 +296,9 @@ function renderKktpList(tpId, kktps) {
     listEl.innerHTML = kktps.length
         ? kktps.map(kktpRowHtml).join('')
         : '<p class="pen-placeholder">Belum ada KKTP.</p>';
+    // 1 TP = 1 KKTP — tombol tambah hanya muncul saat TP belum punya KKTP
+    const addEl = document.getElementById('pen-kktp-add-' + tpId);
+    if (addEl) addEl.style.display = kktps.length ? 'none' : '';
 }
 
 async function loadAndRenderKktps(tpId) {
@@ -396,7 +399,8 @@ function tpRowHtml(tp) {
               '<button class="pen-tp-more" data-action="tp-desc-toggle" data-id="' + esc(tp.id) + '">Selengkapnya</button>'
             : '') +
         '<div class="pen-kktp-list" id="' + kktpId + '"><p class="pen-placeholder">Memuat KKTP…</p></div>' +
-        '<div class="pen-add-row"><button class="pen-btn pen-btn-sm" data-action="kktp-add" data-tp-id="' + esc(tp.id) + '">+ Tambah KKTP</button></div>' +
+        '<div class="pen-add-row" id="pen-kktp-add-' + tp.id + '" style="display:none">' +
+        '<button class="pen-btn pen-btn-sm" data-action="kktp-add" data-tp-id="' + esc(tp.id) + '">+ Tambah KKTP</button></div>' +
         '</div></div>'
     );
 }
