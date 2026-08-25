@@ -6,6 +6,7 @@
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { checkMustChangePassword, initChangePassword } from '../../shared/change-password.js';
 import { initLoginGuard } from '../../shared/login-guard.js';
+import { initSessionGuard } from '../../shared/session-guard.js';
 import {
     supabase, logout, getCurrentUserRow, GURU_ROLES,
     listSchoolAdmins, addSchoolAdmin, removeSchoolAdmin,
@@ -317,8 +318,10 @@ async function init() {
     document.getElementById('app').style.display     = 'block';
 
     const defaultTab = isTeacher ? 'guru' : (jabatan[0] ?? 'kasus');
-    activateTab(defaultTab);
-    await loadTabContent(defaultTab);
+    const savedTab   = localStorage.getItem('sip_active_tab_guru');
+    const startTab   = savedTab || defaultTab;
+    activateTab(startTab);
+    await loadTabContent(startTab);
 
     // Offline sync: tampilkan status + kirim absensi tertunda.
     await updateSyncBanner();
@@ -337,6 +340,7 @@ async function init() {
 
     initPWAInstallBanner();
     showPwaBanner({ hasBottomNav: true });
+    initSessionGuard(supabase, getLoginUrl());
 }
 
 function initPWAInstallBanner() {
@@ -459,6 +463,7 @@ async function buildTabs() {
 }
 
 function activateTab(key) {
+    localStorage.setItem('sip_active_tab_guru', key);
     document.querySelectorAll('.tab-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.tab === key));
     document.querySelectorAll('.tab-panel').forEach(p =>

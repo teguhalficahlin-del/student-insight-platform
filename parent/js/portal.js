@@ -8,6 +8,7 @@
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { checkMustChangePassword } from '../../shared/change-password.js';
 import { initLoginGuard, registerLoginDevice } from '../../shared/login-guard.js';
+import { initSessionGuard } from '../../shared/session-guard.js';
 import {
     supabase,
     getCurrentUserRow,
@@ -173,6 +174,7 @@ async function init() {
     initNotifBell();
     await loadChildData(0);
     showPwaBanner({ hasBottomNav: true });
+    initSessionGuard(supabase, getLoginUrl());
 }
 
 function getTabKey(sectionId) {

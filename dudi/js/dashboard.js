@@ -6,6 +6,7 @@
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { checkMustChangePassword } from '../../shared/change-password.js';
 import { initLoginGuard } from '../../shared/login-guard.js';
+import { initSessionGuard } from '../../shared/session-guard.js';
 import {
     supabase,
     getCurrentUserRow,
@@ -320,6 +321,7 @@ async function init() {
     }
 
     showPwaBanner({ hasBottomNav: false });
+    initSessionGuard(supabase, getLoginUrl());
 }
 
 // ── Attendance ────────────────────────────────────────────────

@@ -6,6 +6,7 @@
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { checkMustChangePassword } from '../../shared/change-password.js';
 import { initLoginGuard, registerLoginDevice } from '../../shared/login-guard.js';
+import { initSessionGuard } from '../../shared/session-guard.js';
 import {
     supabase, logout, getCurrentUserRow, STUDENT_ROLES, ACTIVE_STUDENT_STATUSES,
     getMyStudent, getSchoolConfig, getMyClass,
@@ -126,6 +127,7 @@ async function init() {
     activateTab(firstTab);
     await initTab(firstTab);
     showPwaBanner({ hasBottomNav: true });
+    initSessionGuard(supabase, getLoginUrl());
 }
 
 // ─── Tab navigation ──────────────────────────────────────────

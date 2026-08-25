@@ -22,6 +22,7 @@ function _tuHint(msg) {
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { checkMustChangePassword } from '../../shared/change-password.js';
 import { initLoginGuard, registerLoginDevice } from '../../shared/login-guard.js';
+import { initSessionGuard } from '../../shared/session-guard.js';
 import {
     supabase,
     getCurrentUserRow,
@@ -1998,6 +1999,7 @@ async function init() {
     showTab('section-piket');
     await loadPiket();
     showPwaBanner({ hasBottomNav: true });
+    initSessionGuard(supabase, getLoginUrl());
 }
 
 init().catch(err => {

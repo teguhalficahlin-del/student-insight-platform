@@ -6,6 +6,7 @@
  */
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
+import { initSessionGuard } from '../../shared/session-guard.js';
 import { supabase, getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getForumGuruWaliCandidates, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent,
     getDutyStaffCandidates, getDutySchedules, revokeDutySchedule,
     getAdminPanelDudi, getAdminPanelStaff,
@@ -2506,4 +2507,5 @@ async function renderExportPanel() {
     const hashPanel = location.hash.slice(1);
     await navigateToPanel(hashPanel in PANEL_RENDERERS ? hashPanel : 'setup');
     showPwaBanner({ hasBottomNav: true });
+    initSessionGuard(supabase, getLoginUrl());
 })();
