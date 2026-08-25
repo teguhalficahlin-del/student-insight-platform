@@ -1620,11 +1620,18 @@ async function _renderRecapContent(body) {
         // jadi tanpa TP sama sekali rekap tidak bisa disimpan.
         const recapTpId  = linkedTpId || _tpCache[0]?.id || null;
 
-        function kktpTercapai(nilai) {
+        // Kembalikan label predikat (SB/BSH/MB/BB) sesuai rentang KKTP, atau null
+        // bila nilai kosong / KKTP belum ada / nilai di luar semua rentang.
+        function kktpPredikat(nilai) {
             if (nilai == null || !kktpForTp.length) return null;
-            const bsh = kktpForTp[0]?.rentang?.BSH;
-            if (!bsh) return null;
-            return nilai >= bsh[0];
+            const rentang = kktpForTp[0]?.rentang;
+            if (!rentang) return null;
+            for (const pred of ['SB', 'BSH', 'MB', 'BB']) {   // tertinggi -> terendah
+                const range = rentang[pred];
+                if (!range) continue;
+                if (nilai >= range[0] && nilai <= range[1]) return pred;
+            }
+            return null;
         }
 
         let tableHtml =
@@ -1638,8 +1645,7 @@ async function _renderRecapContent(body) {
         for (const s of roster) {
             const h    = hasilSiswa[s.id] || {};
             const nak  = h.nilai != null ? h.nilai.toFixed(1) : '—';
-            const kt   = kktpTercapai(h.nilai);
-            const ktTxt = kt == null ? '—' : (kt ? '✓' : '✗');
+            const ktTxt = kktpPredikat(h.nilai) ?? '—';
             tableHtml += '<tr>' +
                 '<td>' + esc(s.nama) + '</td>' +
                 (h.nilais || filtered.map(() => null)).map(n => '<td>' + (n != null ? n.toFixed(1) : '—') + '</td>').join('') +
@@ -1688,9 +1694,12 @@ async function _renderRecapContent(body) {
                 for (const s of roster) {
                     const h = hasilSiswa[s.id] || {};
                     if (h.nilai == null) continue;
+                    // Tercapai bila predikat MB ke atas; BB = belum tercapai;
+                    // null bila KKTP belum ada sehingga tidak bisa dinilai.
+                    const pred = kktpPredikat(h.nilai);
                     rows.push({ studentId: s.id, payload: {
                         nilai_akhir: h.nilai,
-                        kktp_tercapai: kktpTercapai(h.nilai),
+                        kktp_tercapai: pred != null ? pred !== 'BB' : null,
                         deskripsi_capaian: null,
                     } });
                 }
