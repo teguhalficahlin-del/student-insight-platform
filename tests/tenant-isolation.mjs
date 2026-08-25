@@ -923,274 +923,243 @@ async function main() {
     // ══════════════════════════════════════════════════════
     // CHECK 17 — Forum Kelas: isolasi per-aktor & per-kelas
     // ══════════════════════════════════════════════════════
-    // Skenario yang diuji (semua via BEGIN...ROLLBACK):
-    // F4: Guru penulis bisa baca posting di kelasnya sendiri
-    // F5: Guru mapel di kelas itu (bukan penulis) bisa baca
-    // F6: Guru yang TIDAK ditugaskan di kelas itu tidak bisa baca
-    // F7: Ortu siswa di kelas itu bisa baca (jika PARENT_VISIBLE)
-    // F8: Ortu siswa dari kelas LAIN tidak bisa baca
-    // F9: Siswa yang sudah is_withdrawn tidak bisa baca
-    // F10: INSERT post oleh non-anggota forum ditolak (guru kelas lain)
-    log.head('CHECK 17 — Forum Kelas: isolasi per-aktor (guru/ortu/siswa withdrawn) & INSERT guard');
+    // MANDIRI — tidak bergantung pada data produksi berskop kelas.
+    // Membuat posting sintetis berskop KELAS di dalam satu transaksi
+    // BEGIN...ROLLBACK (pola CHECK 8 / CHECK 13), menjalankan F4–F10
+    // dari konteks beberapa aktor, lalu ROLLBACK — DB tidak tercemar.
+    //
+    // Mengapa mandiri: seluruh forum_posts produksi berskop 'SEKOLAH'
+    // (class_id NULL), sehingga F4–F10 sebelumnya SKIP total dan
+    // isolasi forum per-kelas tidak teruji sama sekali.
+    //
+    // Skenario:
+    // F4 : Guru penulis bisa baca posting di kelasnya sendiri      → cnt 1
+    // F5 : Guru mapel lain di kelas yang SAMA bisa baca            → cnt 1
+    // F6 : Guru yang TIDAK terhubung ke kelas itu tidak bisa baca  → cnt 0
+    // F7 : Ortu siswa kelas itu tidak bisa baca posting INTERNAL   → cnt 0
+    // F9 : Siswa withdrawn tidak bisa baca walau ada di audience   → cnt 0
+    // F10: INSERT posting oleh guru luar kelas ditolak RLS         → 42501
+    //
+    // Catatan F10: forum_posts tidak punya policy INSERT sama sekali
+    // (default-deny). Baris uji sengaja dibuat VALID PENUH — termasuk
+    // title (NOT NULL, len>=3) dan pasangan scope_type/class_id yang
+    // memenuhi chk_forum_posts_scope — agar penolakan yang terukur
+    // benar-benar berasal dari RLS (42501), bukan dari constraint.
+    log.head('CHECK 17 — Forum Kelas: isolasi per-aktor via data sintetis (BEGIN...ROLLBACK)');
     {
-        // ── Setup: ambil data dinamis dari DB ──
+        // ── Setup: pilih aktor dari DB, tanpa menulis apa pun ──
+        // Kelas target = kelas mana pun yang punya >= 2 guru mapel aktif,
+        // supaya F4 (penulis) dan F5 (guru sekelas) dua orang berbeda.
         const d17 = await mgmtQuery(`
-            WITH target_post AS (
-                SELECT fp.post_id, fp.class_id, fp.school_id,
-                       fp.academic_year, fp.author_user_id, fp.visibility
-                FROM forum_posts fp
-                -- F4-F10 dirancang untuk forum berskop KELAS. Posting berskop
-                -- SEKOLAH (class_id NULL) membuat semua NOT EXISTS di
-                -- guru_diff_class trivially true -> guru sembarang terpilih.
-                WHERE fp.class_id IS NOT NULL
-                  AND fp.scope_type <> 'SEKOLAH'
-                ORDER BY fp.created_at DESC
+            WITH tgt AS (
+                SELECT ta.class_id, ta.academic_year, ta.school_id
+                FROM teaching_assignments ta
+                JOIN users u ON u.user_id = ta.user_id AND u.school_id = ta.school_id
+                WHERE ta.is_active AND u.is_active AND u.auth_user_id IS NOT NULL
+                  AND u.role_type = 'GURU' AND u.deleted_at IS NULL
+                GROUP BY 1,2,3
+                HAVING COUNT(DISTINCT ta.user_id) >= 2
+                ORDER BY ta.class_id
                 LIMIT 1
             ),
-            author_info AS (
-                SELECT u.auth_user_id AS guru_auth, u.user_id AS guru_uid
-                FROM users u
-                JOIN target_post tp ON u.user_id = tp.author_user_id
+            cls AS (
+                SELECT c.class_id, c.program_id
+                FROM classes c JOIN tgt ON c.class_id = tgt.class_id
             ),
-            -- Guru lain yang mengajar di kelas yang SAMA (bukan penulis)
-            guru_same_class AS (
-                SELECT u.auth_user_id, u.user_id
-                FROM teaching_schedules ts
-                JOIN users u ON u.user_id = ts.scheduled_teacher_id
-                JOIN target_post tp ON ts.class_id = tp.class_id
-                   AND ts.academic_year = tp.academic_year
-                   AND ts.school_id     = tp.school_id
-                WHERE u.user_id != tp.author_user_id
-                  AND u.auth_user_id IS NOT NULL
-                  AND u.is_active
+            gurus AS (
+                SELECT DISTINCT u.user_id, u.auth_user_id
+                FROM teaching_assignments ta
+                JOIN users u ON u.user_id = ta.user_id AND u.school_id = ta.school_id
+                JOIN tgt ON ta.class_id      = tgt.class_id
+                        AND ta.academic_year = tgt.academic_year
+                        AND ta.school_id     = tgt.school_id
+                WHERE ta.is_active AND u.is_active AND u.auth_user_id IS NOT NULL
+                  AND u.role_type = 'GURU' AND u.deleted_at IS NULL
+            ),
+            ranked AS (
+                SELECT g.*, row_number() OVER (ORDER BY g.user_id) AS rn FROM gurus g
+            ),
+            -- Guru "luar kelas": dikecualikan dari SEMUA cabang
+            -- fn_can_read_forum_post yang bisa memberi akses —
+            -- teaching_assignments, wali kelas, kaprodi (program_id /
+            -- kaprodi_program_id), flag kepsek/waka, dan BK kelas ini.
+            outsider AS (
+                SELECT u.user_id, u.auth_user_id
+                FROM users u, tgt, cls
+                WHERE u.school_id = tgt.school_id AND u.role_type = 'GURU'
+                  AND u.is_active AND u.deleted_at IS NULL AND u.auth_user_id IS NOT NULL
+                  AND COALESCE(u.is_kepsek, false)         = false
+                  AND COALESCE(u.is_waka_kesiswaan, false) = false
+                  AND u.wali_kelas_class_id IS DISTINCT FROM tgt.class_id
+                  AND (cls.program_id IS NULL
+                       OR (u.program_id         IS DISTINCT FROM cls.program_id
+                       AND u.kaprodi_program_id IS DISTINCT FROM cls.program_id))
+                  AND NOT EXISTS (
+                      SELECT 1 FROM teaching_assignments t2
+                      WHERE t2.user_id       = u.user_id
+                        AND t2.class_id      = tgt.class_id
+                        AND t2.academic_year = tgt.academic_year
+                        AND t2.is_active)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM bk_class_assignments b
+                      WHERE b.bk_user_id = u.user_id
+                        AND b.class_id   = tgt.class_id
+                        AND b.is_active)
+                ORDER BY u.user_id
                 LIMIT 1
             ),
-            -- Guru yang tidak ada di kelas target sama sekali
-            guru_diff_class AS (
-                SELECT u.auth_user_id, u.user_id
-                FROM users u
-                JOIN target_post tp ON u.school_id = tp.school_id
-                WHERE u.role_type = 'GURU'
-                  AND u.is_active
-                  AND u.auth_user_id IS NOT NULL
-                  AND u.user_id != tp.author_user_id
-                  AND NOT EXISTS (
-                      SELECT 1 FROM teaching_schedules ts2
-                      WHERE ts2.scheduled_teacher_id = u.user_id
-                        AND ts2.class_id     = tp.class_id
-                        AND ts2.academic_year = tp.academic_year
-                  )
-                  AND NOT EXISTS (
-                      SELECT 1 FROM bk_class_assignments bk
-                      WHERE bk.bk_user_id = u.user_id
-                        AND bk.class_id   = tp.class_id
-                        AND bk.is_active
-                  )
-                  AND NOT EXISTS (
-                      SELECT 1 FROM guru_wali_assignments gw
-                      JOIN class_enrollments ce ON ce.student_id = gw.student_id
-                      WHERE gw.guru_user_id = u.user_id
-                        AND ce.class_id     = tp.class_id
-                        AND gw.is_active
-                  )
-                LIMIT 1
-            ),
-            -- Ortu siswa aktif di kelas target
-            ortu_same_class AS (
-                SELECT u.auth_user_id, u.user_id
+            ortu_in AS (
+                SELECT u.auth_user_id
                 FROM class_enrollments ce
+                JOIN tgt ON ce.class_id = tgt.class_id AND ce.academic_year = tgt.academic_year
                 JOIN student_parents sp ON sp.student_id = ce.student_id
+                                       AND sp.school_id  = tgt.school_id
                 JOIN users u ON u.user_id = sp.parent_user_id
-                JOIN target_post tp ON ce.class_id = tp.class_id
-                   AND ce.academic_year = tp.academic_year
-                WHERE ce.withdrawn_at IS NULL
-                  AND u.auth_user_id IS NOT NULL
-                  AND u.is_active
-                LIMIT 1
+                WHERE ce.withdrawn_at IS NULL AND u.is_active AND u.auth_user_id IS NOT NULL
+                ORDER BY u.user_id LIMIT 1
             ),
-            -- Ortu siswa dari kelas LAIN
-            ortu_diff_class AS (
-                SELECT u.auth_user_id, u.user_id
+            siswa_wd AS (
+                SELECT u.user_id, u.auth_user_id
                 FROM class_enrollments ce
-                JOIN student_parents sp ON sp.student_id = ce.student_id
-                JOIN users u ON u.user_id = sp.parent_user_id
-                JOIN target_post tp ON ce.class_id != tp.class_id
-                   AND ce.academic_year = tp.academic_year
-                   AND u.school_id      = tp.school_id
-                WHERE ce.withdrawn_at IS NULL
-                  AND u.auth_user_id IS NOT NULL
-                  AND u.is_active
-                LIMIT 1
-            ),
-            -- Siswa withdrawn dari kelas target
-            siswa_withdrawn AS (
-                SELECT u.auth_user_id, u.user_id
-                FROM class_enrollments ce
+                JOIN tgt ON ce.class_id = tgt.class_id AND ce.academic_year = tgt.academic_year
                 JOIN students s ON s.student_id = ce.student_id
                 JOIN users u ON u.user_id = s.user_id
-                JOIN target_post tp ON ce.class_id = tp.class_id
-                   AND ce.academic_year = tp.academic_year
-                WHERE ce.withdrawn_at IS NOT NULL
-                  AND u.auth_user_id IS NOT NULL
-                LIMIT 1
+                WHERE ce.withdrawn_at IS NOT NULL AND u.auth_user_id IS NOT NULL
+                ORDER BY u.user_id LIMIT 1
             )
-            SELECT
-                tp.post_id, tp.class_id, tp.school_id,
-                tp.academic_year, tp.visibility,
-                ai.guru_auth, ai.guru_uid,
-                gsc.auth_user_id AS guru_same_auth, gsc.user_id AS guru_same_uid,
-                gdc.auth_user_id AS guru_diff_auth, gdc.user_id AS guru_diff_uid,
-                osc.auth_user_id AS ortu_same_auth,
-                odc.auth_user_id AS ortu_diff_auth,
-                sw.auth_user_id  AS withdrawn_auth
-            FROM target_post tp
-            LEFT JOIN author_info     ai  ON true
-            LEFT JOIN guru_same_class gsc ON true
-            LEFT JOIN guru_diff_class gdc ON true
-            LEFT JOIN ortu_same_class osc ON true
-            LEFT JOIN ortu_diff_class odc ON true
-            LEFT JOIN siswa_withdrawn sw  ON true
-            LIMIT 1;
+            SELECT tgt.class_id::text  AS class_id,
+                   tgt.academic_year   AS academic_year,
+                   tgt.school_id::text AS school_id,
+                   a.user_id::text       AS author_uid, a.auth_user_id::text  AS author_auth,
+                   b.user_id::text       AS same_uid,   b.auth_user_id::text  AS same_auth,
+                   o.user_id::text       AS out_uid,    o.auth_user_id::text  AS out_auth,
+                   oi.auth_user_id::text AS ortu_auth,
+                   sw.user_id::text      AS wd_uid,     sw.auth_user_id::text AS wd_auth
+            FROM tgt
+            LEFT JOIN ranked   a  ON a.rn = 1
+            LEFT JOIN ranked   b  ON b.rn = 2
+            LEFT JOIN outsider o  ON true
+            LEFT JOIN ortu_in  oi ON true
+            LEFT JOIN siswa_wd sw ON true;
         `);
 
         const d = d17[0];
-        if (!d?.post_id) {
-            console.log('  ⚠ SKIP — tidak ada forum post berskop kelas di database (F4–F10)');
+        if (!d?.class_id || !d.author_auth) {
+            log.warn('CHECK 17 SKIP — tidak ada kelas dengan >= 2 guru mapel aktif untuk data sintetis');
         } else {
-            const postId   = d.post_id;
-            const schoolId = d.school_id;
-            const vis      = d.visibility;
+            const POST = '00000000-0000-0000-0000-0000000f1700'; // posting sintetis
+            const BAD  = '00000000-0000-0000-0000-0000000f1710'; // percobaan INSERT terlarang
 
-            const asUser = async (authUid, sql) => {
-                const claims = `{"sub":"${authUid}","role":"authenticated"}`;
-                return mgmtQuery(
-                    `BEGIN; SET LOCAL ROLE authenticated;` +
-                    ` SELECT set_config('request.jwt.claims', $c$${claims}$c$, true);` +
-                    ` SELECT set_config('request.jwt.claim.sub', '${authUid}', true);` +
-                    ` ${sql}` +
-                    ` ROLLBACK;`
+            const claims = (auid) =>
+                ` select set_config('request.jwt.claims', $c$` +
+                `{"sub":"${auid}","role":"authenticated"}$c$, true);`;
+
+            // Ukur satu aktor: catat COUNT posting yang terlihat olehnya.
+            const probe = (key, auid) =>
+                claims(auid) +
+                ` insert into _f17 select '${key}', count(*)::text` +
+                ` from forum_posts where post_id = '${POST}';`;
+
+            // Satu transaksi utuh:
+            //   INSERT sintetis sebagai postgres (bypass RLS)
+            //   → SET ROLE authenticated (RLS aktif) → probe tiap aktor
+            //   → ROLLBACK (DB bersih).
+            // Hasil tiap probe ditampung di temp table karena Management API
+            // hanya mengembalikan hasil statement TERAKHIR.
+            let rows = null;
+            try {
+                rows = await mgmtQuery(
+                    `begin;` +
+                    ` create temp table _f17 (k text primary key, v text) on commit drop;` +
+                    ` grant all on _f17 to authenticated;` +
+
+                    // (1) Posting sintetis berskop KELAS di kelas target
+                    ` insert into forum_posts` +
+                    `   (post_id, school_id, class_id, academic_year, author_user_id,` +
+                    `    title, body, visibility, scope_type, audience_type)` +
+                    ` values` +
+                    `   ('${POST}', '${d.school_id}', '${d.class_id}', '${d.academic_year}',` +
+                    `    '${d.author_uid}', 'Uji Isolasi Forum CHECK 17',` +
+                    `    'data sintetis tenant-isolation - dirollback',` +
+                    `    'INTERNAL', 'KELAS', 'SEMUA_GURU_KELAS');` +
+
+                    // (2) Siswa withdrawn dimasukkan ke audience EKSPLISIT.
+                    //     Tanpa ini F9 lulus vacuously (siswa gagal di syarat
+                    //     audience, bukan di syarat enrollment aktif).
+                    (d.wd_uid
+                        ? ` insert into forum_post_audience (post_id, user_id, school_id)` +
+                          ` values ('${POST}', '${d.wd_uid}', '${d.school_id}');`
+                        : ``) +
+
+                    // Mulai konteks authenticated — RLS aktif sejak titik ini
+                    ` set local role authenticated;` +
+
+                    probe('F4', d.author_auth) +
+                    (d.same_auth ? probe('F5', d.same_auth) : ``) +
+                    (d.out_auth  ? probe('F6', d.out_auth)  : ``) +
+                    (d.ortu_auth ? probe('F7', d.ortu_auth) : ``) +
+                    (d.wd_auth   ? probe('F9', d.wd_auth)   : ``) +
+
+                    // F10: INSERT oleh guru luar kelas. Dibungkus DO block agar
+                    // error RLS ditangkap savepoint implisit PL/pgSQL dan
+                    // transaksi tidak ikut abort.
+                    (d.out_auth
+                        ? claims(d.out_auth) +
+                          ` do $b$ begin` +
+                          `   insert into forum_posts` +
+                          `     (post_id, school_id, class_id, academic_year, author_user_id,` +
+                          `      title, body, visibility, scope_type, audience_type)` +
+                          `   values` +
+                          `     ('${BAD}', '${d.school_id}', '${d.class_id}', '${d.academic_year}',` +
+                          `      '${d.out_uid}', 'Uji INSERT Terlarang',` +
+                          `      'harus ditolak RLS', 'INTERNAL', 'KELAS', 'SEMUA_GURU_KELAS');` +
+                          `   insert into _f17 values ('F10', 'BREACH');` +
+                          ` exception when others then` +
+                          `   insert into _f17 values ('F10', sqlstate);` +
+                          ` end $b$;`
+                        : ``) +
+
+                    ` select k, v from _f17 order by k;` +
+                    ` rollback;`
                 );
-            };
-
-            const countPost = `SELECT COUNT(*)::int AS cnt FROM forum_posts WHERE post_id = '${postId}';`;
-
-            // F4: Guru penulis bisa baca posting sendiri
-            if (d.guru_auth) {
-                let ok = false, err = '';
-                try {
-                    const r = await asUser(d.guru_auth, countPost);
-                    ok = r[0]?.cnt === 1;
-                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'}`;
-                } catch(e) { err = e.message.slice(0,120); }
-                if (ok) log.pass('F4: guru penulis bisa baca posting forum miliknya sendiri');
-                else    log.fail(`F4: guru penulis tidak bisa baca posting sendiri — ${err}`);
+            } catch (e) {
+                log.fail(`CHECK 17 — Transaksi sintetis gagal: ${e.message.slice(0, 200)}`);
             }
 
-            // F5: Guru mapel di kelas yang sama bisa baca
-            if (d.guru_same_auth) {
-                let ok = false, err = '';
-                try {
-                    const r = await asUser(d.guru_same_auth, countPost);
-                    ok = r[0]?.cnt === 1;
-                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'}`;
-                } catch(e) { err = e.message.slice(0,120); }
-                if (ok) log.pass('F5: guru mapel kelas yang sama bisa baca posting forum');
-                else    log.fail(`F5: guru mapel kelas sama tidak bisa baca — ${err}`);
-            } else {
-                console.log('  ⚠ F5: SKIP — tidak ada guru lain di kelas yang sama');
-            }
+            if (rows) {
+                const R = Object.fromEntries(rows.map((r) => [r.k, r.v]));
 
-            // F6: Guru yang tidak ditugaskan di kelas ini tidak bisa baca
-            if (d.guru_diff_auth) {
-                let ok = false, err = '';
-                try {
-                    const r = await asUser(d.guru_diff_auth, countPost);
-                    ok = r[0]?.cnt === 0;
-                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'} — ISOLATION BREACH`;
-                } catch(e) { err = e.message.slice(0,120); }
-                if (ok) log.pass('F6: guru tidak ditugaskan di kelas ini tidak bisa baca posting (isolasi per-kelas)');
-                else    log.fail(`F6: guru kelas lain bisa baca posting — ${err}`);
-            } else {
-                console.log('  ⚠ F6: SKIP — tidak ditemukan guru yang tidak ada di kelas ini');
-            }
+                // Assertion: nilai terukur harus sama persis dengan yang diharapkan.
+                const expect = (key, want, msgOk, msgFail, skipMsg) => {
+                    if (R[key] === undefined) { log.warn(`${key}: SKIP — ${skipMsg}`); return; }
+                    if (R[key] === want) log.pass(`${key}: ${msgOk}`);
+                    else                 log.fail(`${key}: ${msgFail} (terukur=${R[key]}, diharapkan=${want})`);
+                };
 
-            // F7: Ortu siswa di kelas ini bisa baca (jika PARENT_VISIBLE)
-            if (d.ortu_same_auth) {
-                if (vis === 'PARENT_VISIBLE') {
-                    let ok = false, err = '';
-                    try {
-                        const r = await asUser(d.ortu_same_auth, countPost);
-                        ok = r[0]?.cnt === 1;
-                        if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'}`;
-                    } catch(e) { err = e.message.slice(0,120); }
-                    if (ok) log.pass('F7: ortu siswa di kelas ini bisa baca posting PARENT_VISIBLE');
-                    else    log.fail(`F7: ortu siswa kelas ini tidak bisa baca posting PARENT_VISIBLE — ${err}`);
-                } else {
-                    let ok = false, err = '';
-                    try {
-                        const r = await asUser(d.ortu_same_auth, countPost);
-                        ok = r[0]?.cnt === 0;
-                        if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'} — ortu bisa baca posting non-PARENT_VISIBLE`;
-                    } catch(e) { err = e.message.slice(0,120); }
-                    if (ok) log.pass(`F7: ortu siswa kelas ini tidak bisa baca posting visibility=${vis} (bukan PARENT_VISIBLE — benar)`);
-                    else    log.fail(`F7: ortu siswa bisa baca posting ${vis} — ISOLATION BREACH: ${err}`);
-                }
-            } else {
-                console.log('  ⚠ F7: SKIP — tidak ada ortu siswa di kelas ini');
-            }
-
-            // F8: Ortu siswa dari kelas lain tidak bisa baca
-            if (d.ortu_diff_auth) {
-                let ok = false, err = '';
-                try {
-                    const r = await asUser(d.ortu_diff_auth, countPost);
-                    ok = r[0]?.cnt === 0;
-                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'} — ISOLATION BREACH`;
-                } catch(e) { err = e.message.slice(0,120); }
-                if (ok) log.pass('F8: ortu siswa kelas lain tidak bisa baca posting (isolasi per-kelas)');
-                else    log.fail(`F8: ortu kelas lain bisa baca posting — ${err}`);
-            } else {
-                console.log('  ⚠ F8: SKIP — tidak ada ortu dari kelas lain');
-            }
-
-            // F9: Siswa withdrawn tidak bisa baca
-            if (d.withdrawn_auth) {
-                let ok = false, err = '';
-                try {
-                    const r = await asUser(d.withdrawn_auth, countPost);
-                    ok = r[0]?.cnt === 0;
-                    if (!ok) err = `cnt=${r[0]?.cnt ?? 'null'} — withdrawn siswa masih bisa baca`;
-                } catch(e) { err = e.message.slice(0,120); }
-                if (ok) log.pass('F9: siswa withdrawn dari kelas ini tidak bisa baca posting forum');
-                else    log.fail(`F9: siswa withdrawn masih bisa baca forum — ISOLATION BREACH: ${err}`);
-            } else {
-                console.log('  ⚠ F9: SKIP — tidak ada siswa withdrawn di kelas ini');
-            }
-
-            // F10: INSERT post oleh guru yang tidak di kelas ini ditolak
-            if (d.guru_diff_auth && d.guru_diff_uid && d.class_id && d.class_id !== 'null') {
-                let ok = false, err = '';
-                const fakeId = '00000000-0000-0000-0000-000000000088';
-                const ay     = d.academic_year;
-                try {
-                    await asUser(d.guru_diff_auth,
-                        `INSERT INTO forum_posts (post_id, school_id, class_id, academic_year,
-                             author_user_id, body, visibility)
-                         VALUES ('${fakeId}','${schoolId}','${d.class_id}','${ay}',
-                                 '${d.guru_diff_uid}','test isolasi insert','INTERNAL');`);
-                    err = 'INSERT tidak ditolak — ISOLATION BREACH';
-                } catch(e) {
-                    if (e.message.includes('42501') || e.message.includes('permission') ||
-                        e.message.includes('violates') || e.message.includes('new row')) {
-                        ok = true;
-                    } else {
-                        err = e.message.slice(0,120);
-                    }
-                }
-                if (ok) log.pass('F10: guru tidak ditugaskan di kelas ini ditolak INSERT post forum');
-                else    log.fail(`F10: guru kelas lain bisa INSERT post — RLS BYPASS: ${err}`);
-            } else {
-                console.log('  ⚠ F10: SKIP — tidak ada guru luar kelas untuk uji INSERT');
+                expect('F4', '1',
+                    'guru penulis bisa baca posting kelasnya sendiri',
+                    'guru penulis TIDAK bisa baca posting sendiri',
+                    'penulis tidak tersedia');
+                expect('F5', '1',
+                    'guru mapel di kelas yang sama bisa baca posting',
+                    'guru mapel kelas sama TIDAK bisa baca',
+                    'tidak ada guru kedua di kelas ini');
+                expect('F6', '0',
+                    'guru di luar kelas ini tidak bisa baca posting (isolasi per-kelas)',
+                    'guru luar kelas BISA baca posting — ISOLATION BREACH',
+                    'tidak ada guru luar kelas');
+                expect('F7', '0',
+                    'ortu siswa kelas ini tidak bisa baca posting INTERNAL',
+                    'ortu BISA baca posting INTERNAL — kebocoran visibility',
+                    'tidak ada ortu siswa di kelas ini');
+                expect('F9', '0',
+                    'siswa withdrawn tidak bisa baca walau terdaftar di audience',
+                    'siswa withdrawn BISA baca — guard enrollment tidak aktif',
+                    'tidak ada siswa withdrawn di kelas ini');
+                expect('F10', '42501',
+                    'guru luar kelas ditolak RLS saat INSERT posting (42501)',
+                    'INSERT guru luar kelas TIDAK ditolak RLS — RLS BYPASS',
+                    'tidak ada guru luar kelas untuk uji INSERT');
             }
         }
     }
