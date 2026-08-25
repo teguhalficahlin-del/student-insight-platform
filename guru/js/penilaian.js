@@ -1444,6 +1444,74 @@ async function renderRecap() {
     await _renderRecapContent(body);
 }
 
+function extractLabelSiswa(konten, teknik, instrumen) {
+    // Membaca konten JSONB assessment non-SUMATIF (instrumen-centric:
+    // tiap kategori memuat array student_id) dan membaliknya jadi
+    // peta { student_id: label } — kategori tertinggi yang dicapai siswa.
+    const map = {};
+    if (!konten) return map;
+
+    const PRIO_PRED = ['SB', 'BSH', 'MB', 'BB'];
+    function setByPredikat(sid, val) {
+        if (!map[sid] || PRIO_PRED.indexOf(val) < PRIO_PRED.indexOf(map[sid])) map[sid] = val;
+    }
+    function setFirstWins(sid, label) {
+        // dipakai untuk daftar yang sudah urut prioritas tinggi → rendah
+        if (!map[sid]) map[sid] = label;
+    }
+
+    if (teknik === 'OBSERVASI') {
+        if (instrumen === 'Lembar Observasi') {
+            const PRIO  = ['terlihat_jelas', 'terlihat', 'belum_terlihat'];
+            const LABEL = {
+                terlihat_jelas: 'Terlihat Jelas',
+                terlihat:       'Terlihat',
+                belum_terlihat: 'Belum Terlihat',
+            };
+            (konten.aspeks || []).forEach(aspek => {
+                PRIO.forEach(key => {
+                    (aspek[key] || []).forEach(sid => {
+                        if (!map[sid] || PRIO.indexOf(key) < PRIO.indexOf(map[sid])) map[sid] = key;
+                    });
+                });
+            });
+            Object.keys(map).forEach(sid => { map[sid] = LABEL[map[sid]] || map[sid]; });
+        } else if (instrumen === 'Catatan Anekdot') {
+            // mode per_siswa: catatan[].siswa = string; per_kejadian: array
+            (konten.catatan || []).forEach(c => {
+                const sids = Array.isArray(c.siswa) ? c.siswa : [c.siswa];
+                sids.filter(Boolean).forEach(sid => { map[sid] = 'Tercatat'; });
+            });
+        } else if (instrumen === 'Checklist') {
+            (konten.items || []).forEach(item => {
+                (item.siswa || []).forEach(sid => { map[sid] = 'Tercapai'; });
+            });
+        }
+    } else if (teknik === 'TES' || (teknik === 'TES_LISAN' && instrumen === 'Wawancara')) {
+        // deskriptor[] sudah urut: 0 = tertinggi, 2 = terendah
+        (konten.deskriptor || []).forEach((d, i) => {
+            (d.siswa || []).forEach(sid => setFirstWins(sid, d.label || ('Deskriptor ' + (i + 1))));
+        });
+    } else if (teknik === 'TES_LISAN') {
+        (konten.predikat || []).forEach(p => {
+            (p.siswa || []).forEach(sid => setByPredikat(sid, p.val));
+        });
+    } else if (['PENUGASAN', 'PROYEK', 'PORTOFOLIO', 'UNJUK_KERJA'].includes(teknik)) {
+        if (instrumen === 'Rubrik') {
+            (konten.aspeks || []).forEach(aspek => {
+                (aspek.predikat || []).forEach(p => {
+                    (p.siswa || []).forEach(sid => setByPredikat(sid, p.val));
+                });
+            });
+        } else if (instrumen === 'Checklist') {
+            (konten.items || []).forEach(item => {
+                (item.siswa || []).forEach(sid => { map[sid] = 'Tercapai'; });
+            });
+        }
+    }
+    return map;
+}
+
 async function _renderRecapContent(body) {
     try {
         await ensureUser();
@@ -1474,6 +1542,39 @@ async function _renderRecapContent(body) {
             body.innerHTML =
                 _rcFilterBar() +
                 '<p class="pen-placeholder">Tidak ada penilaian ' + esc(JENIS_LABEL[_rcJenis] ?? _rcJenis) + (_rcTeknik ? ' (' + esc(_rcTeknik) + ')' : '') + ' untuk ditampilkan.</p>';
+            _wireRcFilters(body);
+            return;
+        }
+
+        // Non-SUMATIF: nilai siswa tidak ada di assessment_results — datanya
+        // instrumen-centric di kolom konten JSONB. Tampilkan label kategori,
+        // tanpa nilai akhir, tanpa KKTP, tanpa tombol Simpan Rekap.
+        if (!isSumatif) {
+            const labelMaps = {};
+            filtered.forEach(a => {
+                labelMaps[a.id] = extractLabelSiswa(a.konten, a.teknik, a.instrumen);
+            });
+
+            let nsTable =
+                '<table class="rc-table"><thead><tr>' +
+                '<th>Nama Siswa</th>' +
+                filtered.map(a =>
+                    '<th>' + esc(a.teknik?.replace(/_/g, ' ') || '') +
+                    ' — ' + esc(a.instrumen || '') + '</th>'
+                ).join('') +
+                '</tr></thead><tbody>';
+
+            for (const s of _rosterCache) {
+                nsTable += '<tr><td>' + esc(s.nama) + '</td>' +
+                    filtered.map(a => {
+                        const lbl = labelMaps[a.id]?.[s.id];
+                        return '<td>' + (lbl ? esc(lbl) : '—') + '</td>';
+                    }).join('') +
+                    '</tr>';
+            }
+            nsTable += '</tbody></table>';
+
+            body.innerHTML = _rcFilterBar() + '<div style="overflow-x:auto">' + nsTable + '</div>';
             _wireRcFilters(body);
             return;
         }
