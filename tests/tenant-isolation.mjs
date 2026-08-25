@@ -939,6 +939,11 @@ async function main() {
                 SELECT fp.post_id, fp.class_id, fp.school_id,
                        fp.academic_year, fp.author_user_id, fp.visibility
                 FROM forum_posts fp
+                -- F4-F10 dirancang untuk forum berskop KELAS. Posting berskop
+                -- SEKOLAH (class_id NULL) membuat semua NOT EXISTS di
+                -- guru_diff_class trivially true -> guru sembarang terpilih.
+                WHERE fp.class_id IS NOT NULL
+                  AND fp.scope_type <> 'SEKOLAH'
                 ORDER BY fp.created_at DESC
                 LIMIT 1
             ),
@@ -1050,7 +1055,7 @@ async function main() {
 
         const d = d17[0];
         if (!d?.post_id) {
-            console.log('  ⚠ SKIP — tidak ada forum post di database');
+            console.log('  ⚠ SKIP — tidak ada forum post berskop kelas di database (F4–F10)');
         } else {
             const postId   = d.post_id;
             const schoolId = d.school_id;
@@ -1163,7 +1168,7 @@ async function main() {
             }
 
             // F10: INSERT post oleh guru yang tidak di kelas ini ditolak
-            if (d.guru_diff_auth && d.guru_diff_uid) {
+            if (d.guru_diff_auth && d.guru_diff_uid && d.class_id && d.class_id !== 'null') {
                 let ok = false, err = '';
                 const fakeId = '00000000-0000-0000-0000-000000000088';
                 const ay     = d.academic_year;
