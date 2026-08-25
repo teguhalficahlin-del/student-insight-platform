@@ -56,7 +56,13 @@ const PREDIKAT_RUBRIK = [
 
 const DEFAULT_RENTANG = { BB: [0, 54], MB: [55, 69], BSH: [70, 84], SB: [85, 100] };
 
-const JENIS_LIST   = ['DIAGNOSTIK', 'FORMATIF', 'SUMATIF'];
+const JENIS_LIST   = ['DIAGNOSTIK_NK', 'DIAGNOSTIK_K', 'FORMATIF', 'SUMATIF'];
+const JENIS_LABEL  = {
+    DIAGNOSTIK_NK : 'Diagnostik Non-Kognitif',
+    DIAGNOSTIK_K  : 'Diagnostik Kognitif',
+    FORMATIF      : 'Formatif',
+    SUMATIF       : 'Sumatif',
+};
 const TEKNIK_LIST  = ['OBSERVASI', 'TES', 'PENUGASAN', 'PROYEK', 'PORTOFOLIO', 'UNJUK_KERJA', 'TES_LISAN'];
 const INSTRUMEN_MAP = {
     OBSERVASI:   ['Lembar Observasi', 'Catatan Anekdot', 'Checklist'],
@@ -1167,7 +1173,7 @@ async function openAsmtModal(editAsmt) {
         rows.forEach(r => { existingSumResults[r.student_id] = r; });
     }
 
-    const initJenis     = editAsmt?.jenis     || 'DIAGNOSTIK';
+    const initJenis     = editAsmt?.jenis     || 'DIAGNOSTIK_NK';
     const initTeknik    = editAsmt?.teknik    || 'OBSERVASI';
     const initInstrumen = editAsmt?.instrumen || (INSTRUMEN_MAP.OBSERVASI[0]);
 
@@ -1184,7 +1190,7 @@ async function openAsmtModal(editAsmt) {
         '<option value="' + esc(t.id) + '"' + (editAsmt?.learning_objective_id === t.id ? ' selected' : '') + '>' + esc(t.kode_tp) + '</option>'
     )).join('');
 
-    const jenisOpts  = JENIS_LIST.map(j => '<option value="' + j + '"' + (initJenis === j ? ' selected' : '') + '>' + j + '</option>').join('');
+    const jenisOpts  = JENIS_LIST.map(j => '<option value="' + j + '"' + (initJenis === j ? ' selected' : '') + '>' + (JENIS_LABEL[j] ?? j) + '</option>').join('');
     const teknikOpts = TEKNIK_LIST.map(t => '<option value="' + t + '"' + (initTeknik === t ? ' selected' : '') + '>' + t.replace(/_/g, ' ') + '</option>').join('');
     const instrOpts  = (INSTRUMEN_MAP[initTeknik] || []).map(i => '<option value="' + i + '"' + (initInstrumen === i ? ' selected' : '') + '>' + i + '</option>').join('');
 
@@ -1346,7 +1352,8 @@ async function openAsmtModal(editAsmt) {
 }
 
 function asmtRowHtml(a) {
-    const jLetter  = a.jenis?.[0] || 'D';
+    const JENIS_SHORT = { DIAGNOSTIK_NK: 'D-NK', DIAGNOSTIK_K: 'D-K', FORMATIF: 'F', SUMATIF: 'S' };
+    const jLetter  = JENIS_SHORT[a.jenis] ?? a.jenis?.[0] ?? 'D';
     const badgeCls = 'pen-asmt-badge pen-asmt-badge-' + jLetter;
     return (
         '<div class="pen-asmt-row" data-asmt-id="' + esc(a.id) + '">' +
