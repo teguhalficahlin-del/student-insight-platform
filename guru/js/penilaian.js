@@ -1500,6 +1500,9 @@ async function _renderRecapContent(body) {
         // pick TP for kktp check
         const linkedTpId = _asmtCache.find(a => a.jenis === 'SUMATIF' && a.learning_objective_id)?.learning_objective_id;
         const kktpForTp  = linkedTpId ? (await getKktps(linkedTpId)) : [];
+        // TP yang dipakai sebagai anchor rekap. grade_recap.learning_objective_id NOT NULL,
+        // jadi tanpa TP sama sekali rekap tidak bisa disimpan.
+        const recapTpId  = linkedTpId || _tpCache[0]?.id || null;
 
         function kktpTercapai(nilai) {
             if (nilai == null || !kktpForTp.length) return null;
@@ -1561,12 +1564,15 @@ async function _renderRecapContent(body) {
             const btn = body.querySelector('[data-action="rc-simpan"]');
             btn.disabled = true; btn.textContent = 'Menyimpan…';
             try {
+                if (!recapTpId) {
+                    throw new Error('Rekap butuh Tujuan Pembelajaran. Buat TP dulu di section Perencanaan, lalu tautkan ke penilaian Sumatif.');
+                }
                 for (const s of roster) {
                     const h = hasilSiswa[s.id] || {};
                     if (h.nilai == null) continue;
                     const kt = kktpTercapai(h.nilai);
                     await upsertGradeRecap(_schoolId, _kelasId, s.id,
-                        linkedTpId || _tpCache[0]?.id,
+                        recapTpId,
                         Number(_semester), _year,
                         { nilai_akhir: h.nilai, kktp_tercapai: kt, deskripsi_capaian: null });
                 }
