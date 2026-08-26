@@ -262,6 +262,8 @@ function openModal({ title, bodyHtml, onSave, wide }) {
         const act = e.target.closest('[data-action]')?.dataset.action;
         if (act === 'modal-close') closeModal();
         if (act === 'modal-save') {
+            if (_nilaiSedangDisimpan) return;
+            _nilaiSedangDisimpan = true;
             const saveBtn = overlay.querySelector('[data-action="modal-save"]');
             saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan…';
             let errEl = overlay.querySelector('.pen-modal-err');
@@ -270,6 +272,8 @@ function openModal({ title, bodyHtml, onSave, wide }) {
             Promise.resolve().then(() => onSave(overlay, closeModal)).catch(err => {
                 errEl.textContent = err.message || 'Terjadi kesalahan.';
                 saveBtn.disabled = false; saveBtn.textContent = 'Simpan';
+            }).finally(() => {
+                _nilaiSedangDisimpan = false;
             });
         }
         if (e.target === overlay) closeModal();
