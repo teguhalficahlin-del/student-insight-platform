@@ -7,7 +7,7 @@ import {
     getAssessments, createAssessment, updateAssessment, deleteAssessment,
     getAssessmentResults, upsertAssessmentResult,
     getStudentGroups, upsertStudentGroup,
-    upsertGradeRecapBatch, getGradeRecap,
+    upsertGradeRecapBatch, getGradeRecap, hitungRekapTp, hapusRekapTp,
 } from './api.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -467,15 +467,26 @@ function openTpModal(tp) {
     });
 }
 
-function confirmDeleteTp(tp, origBtn) {
+async function confirmDeleteTp(tp, origBtn) {
     origBtn.style.display = 'none';
     const row = origBtn.closest('.pen-tp-row');
     const bar = document.createElement('div');
     bar.className = 'pen-del-bar';
-    bar.innerHTML = '<span style="flex:1;font-size:12px">Hapus "' + esc(tp.kode_tp) + '"? Semua KKTP dan rekap nilai siswa untuk TP ini ikut terhapus permanen.</span>' +
-        '<button class="pen-btn pen-btn-sm pen-btn-danger pen-del-yes">Ya, Hapus</button>' +
+    bar.innerHTML = '<span style="flex:1;font-size:12px">Menghitung rekap nilai…</span>' +
+        '<button class="pen-btn pen-btn-sm pen-btn-danger pen-del-yes" disabled>Ya, Hapus</button>' +
         '<button class="pen-btn pen-btn-sm pen-del-no">Tidak</button>';
     row.appendChild(bar);
+    let rekapCount = 0;
+    try {
+        rekapCount = await hitungRekapTp(tp.id);
+    } catch (_) { /* tampilkan konfirmasi tanpa count jika gagal */ }
+    const msgSpan = bar.querySelector('span');
+    if (msgSpan) {
+        msgSpan.textContent = 'Hapus "' + tp.kode_tp + '"? Semua KKTP dan ' +
+            (rekapCount > 0 ? rekapCount + ' rekap nilai siswa' : 'rekap nilai siswa') +
+            ' untuk TP ini ikut terhapus permanen.';
+    }
+    bar.querySelector('.pen-del-yes').disabled = false;
     bar.querySelector('.pen-del-yes').addEventListener('click', async function () {
         this.disabled = true; this.textContent = 'Menghapus…';
         try { await deleteTp(tp.id); await renderPerencanaan(); }

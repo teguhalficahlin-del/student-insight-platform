@@ -2251,3 +2251,19 @@ export async function getGradeRecap(schoolId, classId, semester, year) {
     return data ?? [];
 }
 
+export async function hitungRekapTp(tpId) {
+    const { count, error } = await supabase
+        .from('grade_recap')
+        .select('id', { count: 'exact', head: true })
+        .eq('learning_objective_id', tpId);
+    if (error) throw error;
+    return count ?? 0;
+}
+
+export async function hapusRekapTp(tpId) {
+    const { error } = await supabase
+        .from('grade_recap')
+        .delete()
+        .eq('learning_objective_id', tpId);
+    if (error) throw error;
+}
