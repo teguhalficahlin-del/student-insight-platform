@@ -1277,8 +1277,9 @@ export async function getForumSekolahPostById(postId, schoolId, callerId) {
         .eq('school_id', schoolId)
         .is('deleted_at', null)
         .eq('forum_post_audience.user_id', callerId)
-        .single();
+        .maybeSingle();
     if (error) throw error;
+    if (!data) throw new Error('Posting tidak ditemukan');
     const { audience: _a, ...rest } = data;
     return rest;
 }
@@ -1301,8 +1302,9 @@ export async function getForumSekolahSentPostById(postId, schoolId, callerId) {
         .eq('scope_type', 'SEKOLAH')
         .eq('school_id', schoolId)
         .eq('author_user_id', callerId)
-        .single();
+        .maybeSingle();
     if (error) throw error;
+    if (!data) throw new Error('Posting tidak ditemukan');
     return data;
 }
 
