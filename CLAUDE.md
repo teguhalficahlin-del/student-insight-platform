@@ -352,6 +352,15 @@ gagal: STOP dan laporkan.
 - **Privilege kolom**: `REVOKE UPDATE (kolom)` tidak efektif jika masih ada grant UPDATE
   penuh di level tabel — lindungi dengan trigger `BEFORE UPDATE` allowlist default-deny.
 
+### Accepted Risk — fn_resolve_login_email (Aug 2026)
+`fn_resolve_login_email` sengaja dibiarkan anon-accessible karena diperlukan
+untuk login flow pre-auth di 7 portal: user memasukkan NIP/NISN →
+sistem lookup email Supabase Auth → signInWithPassword.
+Risiko: account enumeration jika attacker tahu NIP/NISN + school_id UUID.
+Mitigasi saat ini: school_id tidak trivially guessable; email ter-expose
+tidak memberi akses password.
+Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security berikutnya.
+
 ---
 
 ## 8. SCHEMA DATABASE
