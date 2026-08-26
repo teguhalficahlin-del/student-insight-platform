@@ -4404,6 +4404,7 @@ async function initForumTab() {
     document.getElementById('btn-forum-comment-submit').addEventListener('click', submitForumComment);
     document.getElementById('btn-forum-edit').addEventListener('click', () => {
         const postId = document.getElementById('modal-forum-detail').dataset.postId;
+        closeForumDetail();
         openForumModal(postId);
     });
     document.getElementById('btn-forum-delete').addEventListener('click', async () => {
