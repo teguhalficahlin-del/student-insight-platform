@@ -967,8 +967,10 @@ function nilaiTengah(pred, rent) {
 
 function kktpStatText(nilai, rent) {
     if (nilai == null || !rent) return '';
-    for (const [p, r] of Object.entries(rent)) {
-        if (nilai >= r[0] && nilai <= r[1]) return p;
+    // Iterasi SB→BB; return pertama di mana nilai >= batas_bawah (eksklusif atas)
+    for (const p of ['SB', 'BSH', 'MB', 'BB']) {
+        const r = rent[p];
+        if (r && nilai >= r[0]) return p;
     }
     return '';
 }
@@ -1627,10 +1629,11 @@ async function _renderRecapContent(body) {
             if (nilai == null || !kktpForTp.length) return null;
             const rentang = kktpForTp[0]?.rentang;
             if (!rentang) return null;
-            for (const pred of ['SB', 'BSH', 'MB', 'BB']) {   // tertinggi -> terendah
+            // Iterasi SB→BB; return pertama di mana nilai >= batas_bawah (eksklusif atas)
+            for (const pred of ['SB', 'BSH', 'MB', 'BB']) {
                 const range = rentang[pred];
                 if (!range) continue;
-                if (nilai >= range[0] && nilai <= range[1]) return pred;
+                if (nilai >= range[0]) return pred;
             }
             return null;
         }
@@ -1695,12 +1698,12 @@ async function _renderRecapContent(body) {
                 for (const s of roster) {
                     const h = hasilSiswa[s.id] || {};
                     if (h.nilai == null) continue;
-                    // Tercapai bila predikat MB ke atas; BB = belum tercapai;
+                    // Tercapai bila predikat BSH ke atas; MB dan BB = belum tercapai;
                     // null bila KKTP belum ada sehingga tidak bisa dinilai.
                     const pred = kktpPredikat(h.nilai);
                     rows.push({ studentId: s.id, payload: {
                         nilai_akhir: h.nilai,
-                        kktp_tercapai: pred != null ? pred !== 'BB' : null,
+                        kktp_tercapai: pred != null ? (pred === 'BSH' || pred === 'SB') : null,
                         deskripsi_capaian: null,
                     } });
                 }
