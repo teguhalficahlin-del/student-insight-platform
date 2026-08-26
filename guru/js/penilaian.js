@@ -36,6 +36,11 @@ let _rcMetode   = 'rata';   // 'rata' | 'bobot' | 'terbaik'
 let _rcBobots   = {};       // { asmt_id: number }
 let _rcLastSumatifIds = [];
 let _rcHasil    = null;
+let _rcPage     = 0;        // halaman aktif paginasi siswa di rekap
+
+const RC_SISWA_PER_HAL = 20;
+
+let _nilaiSedangDisimpan = false; // guard double-submit simpan rekap
 
 let _delegInit  = false;
 let _userReady  = false;
@@ -86,6 +91,19 @@ function esc(s) {
     return String(s ?? '')
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function toast(msg, ok = true) {
+    const t = document.createElement('div');
+    t.style.cssText =
+        'position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;pointer-events:none;' +
+        'padding:.5rem 1.25rem;border-radius:.5rem;font-size:13px;line-height:1.4;' +
+        'max-width:320px;word-break:break-word;box-shadow:0 2px 8px rgba(0,0,0,.25);' +
+        'background:' + (ok ? 'var(--color-success,#2d6a4f)' : 'var(--color-danger,#c0392b)') + ';' +
+        'color:#fff;animation:pen-toast-in .2s ease';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
 }
 
 function ctxOk() {
@@ -212,6 +230,11 @@ function injectStyles() {
 .rc-table th,.rc-table td { padding:7px 10px; border:1px solid var(--color-border); text-align:left }
 .rc-table th { background:var(--color-surface); font-weight:600 }
 .rc-bobot-input { width:50px; text-align:center; padding:3px; border:1px solid var(--color-border); border-radius:3px }
+/* rekap paginasi */
+.rc-nav { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:12px }
+.rc-nav-info { flex:1; color:var(--color-text-muted); text-align:center }
+/* toast */
+@keyframes pen-toast-in { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
 `;
     document.head.appendChild(s);
 }
@@ -1443,6 +1466,7 @@ async function renderRecap() {
     if (!body) return;
     if (!ctxOk()) { body.innerHTML = '<p class="pen-placeholder">Pilih kelas, mapel, tahun, dan semester.</p>'; return; }
 
+    _rcPage = 0;  // reset halaman saat rekap dibuka ulang (ganti kelas/mapel/tahun)
     body.innerHTML = '<p class="pen-placeholder">Memuat rekap…</p>';
     await _renderRecapContent(body);
 }
@@ -1638,6 +1662,11 @@ async function _renderRecapContent(body) {
             return null;
         }
 
+        // Paginasi: hitung slice halaman aktif; upsert simpan tetap pakai roster penuh
+        const totalHal = Math.ceil(roster.length / RC_SISWA_PER_HAL);
+        if (_rcPage >= totalHal) _rcPage = Math.max(0, totalHal - 1);
+        const rosterHal = roster.slice(_rcPage * RC_SISWA_PER_HAL, (_rcPage + 1) * RC_SISWA_PER_HAL);
+
         let tableHtml =
             '<table class="rc-table"><thead><tr>' +
             '<th>Nama Siswa</th>' +
@@ -1646,7 +1675,7 @@ async function _renderRecapContent(body) {
             (isSumatif && _rcMetode === 'bobot' ? '<th>Bobot (%)</th>' : '') +
             '</tr></thead><tbody>';
 
-        for (const s of roster) {
+        for (const s of rosterHal) {  // hanya siswa di halaman aktif
             const h    = hasilSiswa[s.id] || {};
             const nak  = h.nilai != null ? h.nilai.toFixed(1) : '—';
             const ktTxt = kktpPredikat(h.nilai) ?? '—';
@@ -1658,6 +1687,14 @@ async function _renderRecapContent(body) {
                 '</tr>';
         }
         tableHtml += '</tbody></table>';
+
+        const navHtml = totalHal > 1
+            ? '<div class="rc-nav">' +
+              '<button class="pen-btn pen-btn-sm" data-action="rc-prev"' + (_rcPage === 0 ? ' disabled' : '') + '>‹ Prev</button>' +
+              '<span class="rc-nav-info">Halaman ' + (_rcPage + 1) + ' dari ' + totalHal + ' (' + roster.length + ' siswa)</span>' +
+              '<button class="pen-btn pen-btn-sm" data-action="rc-next"' + (_rcPage >= totalHal - 1 ? ' disabled' : '') + '>Next ›</button>' +
+              '</div>'
+            : '';
 
         // bobot row
         let bobotHtml = '';
@@ -1679,15 +1716,21 @@ async function _renderRecapContent(body) {
                   '<button class="pen-btn pen-btn-primary" data-action="rc-simpan">Simpan Rekap</button>' +
                   '</div>'
                 : '') +
-            '<div style="overflow-x:auto">' + tableHtml + '</div>';
+            '<div style="overflow-x:auto">' + tableHtml + '</div>' +
+            navHtml;
 
         _wireRcFilters(body);
+
+        body.querySelector('[data-action="rc-prev"]')?.addEventListener('click', () => { _rcPage--; _renderRecapContent(body); });
+        body.querySelector('[data-action="rc-next"]')?.addEventListener('click', () => { _rcPage++; _renderRecapContent(body); });
 
         body.querySelectorAll('.rc-bobot-input').forEach(inp => {
             inp.addEventListener('change', () => { _rcBobots[inp.dataset.aid] = parseFloat(inp.value) || 0; _renderRecapContent(body); });
         });
 
         body.querySelector('[data-action="rc-simpan"]')?.addEventListener('click', async () => {
+            if (_nilaiSedangDisimpan) return;
+            _nilaiSedangDisimpan = true;
             const btn = body.querySelector('[data-action="rc-simpan"]');
             btn.disabled = true; btn.textContent = 'Menyimpan…';
             try {
@@ -1695,7 +1738,7 @@ async function _renderRecapContent(body) {
                     throw new Error('Rekap butuh Tujuan Pembelajaran. Buat TP dulu di section Perencanaan, lalu tautkan ke penilaian Sumatif.');
                 }
                 const rows = [];
-                for (const s of roster) {
+                for (const s of roster) {  // iterate semua siswa, bukan hanya halaman aktif
                     const h = hasilSiswa[s.id] || {};
                     if (h.nilai == null) continue;
                     // Tercapai bila predikat BSH ke atas; MB dan BB = belum tercapai;
@@ -1709,11 +1752,12 @@ async function _renderRecapContent(body) {
                 }
                 await upsertGradeRecapBatch(_schoolId, _kelasId, recapTpId,
                     Number(_semester), _year, rows);
-                btn.textContent = 'Tersimpan ✓';
-                setTimeout(() => { btn.disabled = false; btn.textContent = 'Simpan Rekap'; }, 2000);
+                toast('Rekap berhasil disimpan');
             } catch (err) {
+                toast('Gagal simpan: ' + (err.message || 'Terjadi kesalahan'), false);
+            } finally {
+                _nilaiSedangDisimpan = false;
                 btn.disabled = false; btn.textContent = 'Simpan Rekap';
-                alert('Gagal simpan: ' + err.message);
             }
         });
     } catch (err) {
@@ -1745,10 +1789,11 @@ function _wireRcFilters(body) {
         _rcMetode    = 'rata';
         _rcTeknik    = '';
         _rcInstrumen = '';
+        _rcPage      = 0;
         _renderRecapContent(body);
     });
-    body.querySelector('#rc-metode')?.addEventListener('change', e => { _rcMetode = e.target.value; _renderRecapContent(body); });
-    body.querySelector('#rc-teknik')?.addEventListener('change', e => { _rcTeknik = e.target.value; _rcInstrumen = ''; _renderRecapContent(body); });
+    body.querySelector('#rc-metode')?.addEventListener('change', e => { _rcMetode = e.target.value; _rcPage = 0; _renderRecapContent(body); });
+    body.querySelector('#rc-teknik')?.addEventListener('change', e => { _rcTeknik = e.target.value; _rcInstrumen = ''; _rcPage = 0; _renderRecapContent(body); });
 }
 
 // ── Event delegation ──────────────────────────────────────────────────────────
