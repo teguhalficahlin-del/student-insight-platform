@@ -5722,6 +5722,7 @@ async function submitForumPost() {
     try {
         let attachmentUrl  = null;
         let attachmentName = null;
+        let path           = null;
 
         if (fileEl.files[0]) {
             const file = fileEl.files[0];
@@ -5730,7 +5731,7 @@ async function submitForumPost() {
                 errEl.style.display = 'block'; return;
             }
             const ext  = file.name.split('.').pop();
-            const path = `${currentUser.school_id}/${Date.now()}.${ext}`;
+            path = `${currentUser.school_id}/${Date.now()}.${ext}`;
             const { error: upErr } = await supabase.storage
                 .from('forum-attachments')
                 .upload(path, file, { upsert: false });
