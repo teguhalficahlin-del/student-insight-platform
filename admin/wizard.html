@@ -9,6 +9,32 @@
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="SIP" />
   <script src="js/sw-guard.js"></script>
+  <!-- Sentry error tracking — T1-05 GO-LIVE-READINESS -->
+  <!-- beforeBreadcrumb: hapus query string dari URL agar PII siswa (NISN, NIP, email) -->
+  <!-- tidak tersimpan di server Sentry. Stack trace dan error message tetap lengkap. -->
+  <script
+    src="https://js.sentry-cdn.com/6c79989b30d4d99e63b7776b3dbf2189.min.js"
+    crossorigin="anonymous"
+  ></script>
+  <script>
+  Sentry.onLoad(function() {
+    Sentry.init({
+      dsn: "https://6c79989b30d4d99e63b7776b3dbf2189@o4511977154347008.ingest.us.sentry.io/4511977172369408",
+      environment: "production",
+      sendDefaultPii: false,
+      beforeBreadcrumb: function(breadcrumb) {
+        if (breadcrumb.data && breadcrumb.data.url) {
+          try {
+            var u = new URL(breadcrumb.data.url);
+            u.search = '';
+            breadcrumb.data.url = u.toString();
+          } catch(e) {}
+        }
+        return breadcrumb;
+      }
+    });
+  });
+  </script>
 <script>(function(){var last=location.pathname.split("/").filter(Boolean).pop();if(["admin","guru","student","parent","dudi","stakeholder","superadmin"].indexOf(last)>-1){var b=document.createElement("base");b.href=location.pathname.endsWith("/")?location.pathname:location.pathname+"/";document.head.appendChild(b);}})();</script>
     <link rel="stylesheet" href="css/admin.css" />
   <link rel="manifest" href="manifest.json">
