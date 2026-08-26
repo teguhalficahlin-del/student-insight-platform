@@ -361,6 +361,18 @@ Mitigasi saat ini: school_id tidak trivially guessable; email ter-expose
 tidak memberi akses password.
 Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security berikutnya.
 
+### Accepted Risk — app.coaching_sync_active GUC (Aug 2026)
+GUC `app.coaching_sync_active` dapat disetel oleh user authenticated manapun via `set_config()`.
+Ini memungkinkan UPDATE langsung ke `coaching_cases`/`coaching_case_handlers` tanpa melewati
+alur event resmi (bypass audit trail kasus BK).
+Mitigasi saat ini: `student_id` immutable via `trg_coaching_case_immutable_creator`;
+tenant isolation terjaga via `school_id` guard di USING clause; WITH CHECK sekarang juga
+memvalidasi `fn_student_in_current_school(student_id)` (T1-07).
+Opsi teknis yang sudah diuji dan tidak feasible: token acak per-transaksi (LOCAL GUC tidak
+visible setelah SET LOCAL ROLE authenticated), `pg_trigger_depth()` (selalu 0 di level RLS).
+Kandidat: refactor semua write `coaching_cases`/`handlers` ke RPC SECURITY DEFINER di sprint
+security berikutnya — menghapus kebutuhan GUC sepenuhnya.
+
 ---
 
 ## 8. SCHEMA DATABASE
