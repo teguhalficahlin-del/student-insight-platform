@@ -24,30 +24,32 @@
  *   6. View exposure     — SEMUA view public wajib security_invoker=true
  *                          (menegakkan RLS penanya) DAN anon tak boleh membaca
  *                          barisnya. Menutup SEC-1 (view bypass RLS ke anon).
- *   7. Kunci eskalasi    — target DECISION_ESCALATE wajib salah satu 6 peran
- *                          internal kasus (tolak SISWA/ORTU/STAKEHOLDER/dst),
- *                          dan DUDI hanya boleh eskalasi ke KAPRODI (E3-1 /
- *                          desain kasus Langkah A).
+ *   7. Kunci eskalasi    — trigger trg_validate_escalation: target eskalasi wajib
+ *                          salah satu 8 peran internal kasus (GURU, BK, WALI_KELAS,
+ *                          WAKA_KESISWAAN, WAKA_KURIKULUM, WAKA_HUMAS, KEPSEK,
+ *                          KAPRODI), DUDI hanya boleh → KAPRODI, dan payload
+ *                          ESCALATED wajib memuat new_handler_user_id (E3-1).
  *   8. PKL ortu x-tenant — ortu Sekolah A TIDAK bisa baca pkl_placements /
  *                          pkl_attendance Sekolah B, bahkan dengan anomali
  *                          student_parents lintas-sekolah (mig 190000).
  *   9. rls_schedules_read_parent  — ce.school_id eksplisit & regression ortu.
  *  10. rls_schedules_read_student — ce.school_id eksplisit & regression siswa.
- *  11. rls_cases_insert  — guard student ↔ school & regression INSERT guru.
- *  12. Struktural 5 policy read-path case_events/student_updates (mig 20260709010000):
- *                          fn_can_see_case guard, filter privacy_level STUDENT_VISIBLE,
- *                          role exclusion SISWA/ORTU pada rls_case_events_read_staff.
- *  13. Behavioral read-path siswa/ortu — data sintetis BEGIN...ROLLBACK (T1–T7,
- *                          T11–T12, regresi-f): audience members bisa baca
- *                          STUDENT_VISIBLE saja; non-member 0; GURU creator
- *                          tetap bisa baca SEMUA (termasuk INTERNAL_SCHOOL).
- *  14. Write-path kasus (regression FINDING 2 + fix rls_cases_update_audience) —
- *                          fn_matches_case_handler + fn_is_internal_case_actor
- *                          EXECUTE tersedia untuk authenticated; added_by_user_id
- *                          guard aktif di rls_cam_insert; cross-tenant write
- *                          isolation; audience member biasa TIDAK bisa UPDATE cases
- *                          (W2, mig 20260709020000); creator kasus bisa UPDATE
- *                          walaupun bukan handler (W2c).
+ *  11. rls_cc_insert     — guard fn_student_in_current_school (student ↔ school),
+ *                          role exclusion SISWA/ORTU/STAKEHOLDER, & regression
+ *                          INSERT kasus oleh guru untuk siswa sekolahnya sendiri.
+ *  12. Struktural read-path coaching_case_events — rls_cce_read_student /
+ *                          rls_cce_read_parent memfilter is_visible_to_student +
+ *                          is_shared_to_student/parent; rls_cce_read_staff
+ *                          mengecualikan SISWA/ORTU/STAKEHOLDER; student_updates
+ *                          default-deny untuk siswa/ortu; predikat RLS anon-tertutup.
+ *  13. Behavioral read-path siswa/ortu — data sintetis BEGIN...ROLLBACK (F1–F8):
+ *                          siswa/ortu subjek baca kasus yang dibagikan + event
+ *                          is_visible_to_student=true saja; siswa lain 0; GURU
+ *                          creator baca SEMUA event; student_updates tertutup.
+ *  14. Write-path kasus  — trg_coaching_case_guard menolak UPDATE langsung kolom
+ *                          state (P0003); rls_cc_update menutup UPDATE via RLS;
+ *                          INSERT coaching_case_events ditolak untuk non-handler,
+ *                          kasus CLOSED, dan lintas-sekolah; handler sah tetap bisa.
  *
  * CARA JALANKAN:
  *   SUPABASE_ACCESS_TOKEN=sbp_xxx node tests/tenant-isolation.mjs
@@ -308,13 +310,181 @@ async function main() {
     }
 
     // ── CHECK 7: Kunci eskalasi kasus (E3-1 / Langkah A) ─────────
-    // Bukti PERILAKU trigger trg_case_validate_escalate: target eskalasi
-    // wajib salah satu 6 peran internal kasus; DUDI hanya boleh → KAPRODI.
-    // Uji via INSERT DECISION_ESCALATE dalam transaksi yang di-ROLLBACK
-    // (as postgres → RLS dilewati, jadi yang teruji murni triggernya).
+    // Bukti PERILAKU trigger trg_validate_escalation: target eskalasi wajib
+    // salah satu 8 peran internal kasus (GURU, BK, WALI_KELAS, WAKA_KESISWAAN,
+    // WAKA_KURIKULUM, WAKA_HUMAS, KEPSEK, KAPRODI); DUDI hanya boleh → KAPRODI;
+    // payload ESCALATED wajib memuat new_handler_user_id.
+    // Diuji via INSERT coaching_case_events ESCALATED dalam transaksi yang
+    // di-ROLLBACK (as postgres → RLS dilewati, jadi yang teruji murni triggernya).
     log.head('CHECK 7 — kunci eskalasi: target internal-only & DUDI→Kaprodi');
-    log.pass('SKIP — menunggu penulisan ulang untuk schema coaching_cases (Sprint C)');
-    log.pass('SKIP — menunggu penulisan ulang untuk schema coaching_cases (Sprint C)');
+    {
+        const C7_CASE = 'ffffffff-ffff-ffff-ffff-000000000007'; // sentinel case_id
+
+        // Pre-query: (a) sekolah ber-GURU + BK + siswa; (b) user berperan TIDAK sah
+        // sebagai target eskalasi di sekolah yang sama; (c) sekolah ber-DUDI + GURU + siswa.
+        const c7pre = await mgmtQuery(`
+            with
+            sch as (
+                select u.school_id
+                from users u
+                where u.role_type = 'GURU' and u.is_active and u.deleted_at is null
+                  and exists (select 1 from users b where b.school_id = u.school_id
+                                and b.role_type = 'BK' and b.is_active and b.deleted_at is null)
+                  and exists (select 1 from students st where st.school_id = u.school_id)
+                group by u.school_id order by u.school_id limit 1
+            ),
+            guru as (
+                select u.user_id from users u
+                where u.school_id = (select school_id from sch)
+                  and u.role_type = 'GURU' and u.is_active and u.deleted_at is null
+                order by u.user_id limit 1
+            ),
+            bk as (
+                select u.user_id from users u
+                where u.school_id = (select school_id from sch)
+                  and u.role_type = 'BK' and u.is_active and u.deleted_at is null
+                order by u.user_id limit 1
+            ),
+            bad as (
+                select u.user_id, u.role_type::text as role_type from users u
+                where u.school_id = (select school_id from sch)
+                  and u.is_active and u.deleted_at is null
+                  and u.role_type not in ('GURU','BK','WALI_KELAS','WAKA_KESISWAAN',
+                                          'WAKA_KURIKULUM','WAKA_HUMAS','KEPSEK','KAPRODI')
+                order by u.user_id limit 1
+            ),
+            stu as (
+                select st.student_id from students st
+                where st.school_id = (select school_id from sch)
+                order by st.student_id limit 1
+            ),
+            dsch as (
+                select u.school_id from users u
+                where u.role_type = 'DUDI' and u.is_active and u.deleted_at is null
+                  and exists (select 1 from users g where g.school_id = u.school_id
+                                and g.role_type = 'GURU' and g.is_active and g.deleted_at is null)
+                  and exists (select 1 from students st where st.school_id = u.school_id)
+                group by u.school_id order by u.school_id limit 1
+            ),
+            dudi as (
+                select u.user_id from users u
+                where u.school_id = (select school_id from dsch)
+                  and u.role_type = 'DUDI' and u.is_active and u.deleted_at is null
+                order by u.user_id limit 1
+            ),
+            dguru as (
+                select u.user_id from users u
+                where u.school_id = (select school_id from dsch)
+                  and u.role_type = 'GURU' and u.is_active and u.deleted_at is null
+                order by u.user_id limit 1
+            ),
+            dstu as (
+                select st.student_id from students st
+                where st.school_id = (select school_id from dsch)
+                order by st.student_id limit 1
+            )
+            select
+                (select school_id::text  from sch)   as school_id,
+                (select user_id::text    from guru)  as guru_uid,
+                (select user_id::text    from bk)    as bk_uid,
+                (select user_id::text    from bad)   as bad_uid,
+                (select role_type        from bad)   as bad_role,
+                (select student_id::text from stu)   as student_id,
+                (select school_id::text  from dsch)  as d_school,
+                (select user_id::text    from dudi)  as dudi_uid,
+                (select user_id::text    from dguru) as dguru_uid,
+                (select student_id::text from dstu)  as d_student`);
+
+        const d7 = c7pre[0] || {};
+        const c7Case = (school, student, creator, handler) =>
+            ` insert into coaching_cases` +
+            `   (case_id, school_id, student_id, created_by_user_id, title, description,` +
+            `    current_handler_user_id)` +
+            ` values ('${C7_CASE}', '${school}', '${student}', '${creator}',` +
+            `   'Uji CHECK 7', 'Deskripsi uji eskalasi minimal dua puluh karakter.', '${handler}');`;
+        const c7Esc = (school, author, payload) =>
+            ` insert into coaching_case_events` +
+            `   (case_id, school_id, event_type, author_user_id, payload)` +
+            ` values ('${C7_CASE}', '${school}', 'ESCALATED', '${author}', '${payload}'::jsonb);`;
+
+        // Semua sub-test dijalankan sebagai postgres (RLS dilewati) supaya yang teruji
+        // murni trigger trg_validate_escalation. Kasus sintetis dibuat di dalam
+        // transaksi yang sama lalu di-ROLLBACK — DB tidak berubah.
+        const c7base = !d7.guru_uid    ? 'tidak ada sekolah dengan GURU+BK+siswa'
+                     : !d7.bk_uid      ? 'tidak ada BK aktif di sekolah tersebut'
+                     : !d7.student_id  ? 'tidak ada siswa di sekolah tersebut' : null;
+
+        if (c7base) {
+            log.pass(`CHECK 7 SKIP — ${c7base} (tidak menggagalkan)`);
+        } else {
+            // F1: target berperan di luar 8 peran sah → trigger menolak (P0001)
+            if (!d7.bad_uid) {
+                log.pass('CHECK 7 F1 SKIP — tidak ada user berperan non-eskalasi di sekolah tersebut');
+            } else {
+                let f1 = false, f1err = '';
+                try {
+                    await mgmtQuery(
+                        `begin;` + c7Case(d7.school_id, d7.student_id, d7.guru_uid, d7.guru_uid) +
+                        c7Esc(d7.school_id, d7.guru_uid, `{"new_handler_user_id":"${d7.bad_uid}"}`) +
+                        ` rollback;`);
+                    f1err = 'INSERT ESCALATED diterima (seharusnya ditolak)';
+                } catch (e) {
+                    if (e.message.includes('escalation_guard') || e.message.includes('P0001')) f1 = true;
+                    else f1err = e.message;
+                }
+                if (f1) log.pass(`F1: eskalasi ke peran "${d7.bad_role}" ditolak trigger (P0001 escalation_guard)`);
+                else log.fail(`F1: eskalasi ke peran "${d7.bad_role}" TIDAK ditolak — kunci eskalasi bocor${f1err ? ': ' + f1err.slice(0, 160) : ''}`);
+            }
+
+            // F2: DUDI eskalasi ke GURU (bukan KAPRODI) → trigger menolak (P0001)
+            if (!d7.dudi_uid || !d7.dguru_uid || !d7.d_student) {
+                log.pass('CHECK 7 F2 SKIP — tidak ada sekolah dengan DUDI+GURU+siswa');
+            } else {
+                let f2 = false, f2err = '';
+                try {
+                    await mgmtQuery(
+                        `begin;` + c7Case(d7.d_school, d7.d_student, d7.dguru_uid, d7.dguru_uid) +
+                        c7Esc(d7.d_school, d7.dudi_uid, `{"new_handler_user_id":"${d7.dguru_uid}"}`) +
+                        ` rollback;`);
+                    f2err = 'INSERT ESCALATED oleh DUDI ke GURU diterima (seharusnya ditolak)';
+                } catch (e) {
+                    if (e.message.includes('DUDI hanya boleh eskalasi') || e.message.includes('P0001')) f2 = true;
+                    else f2err = e.message;
+                }
+                if (f2) log.pass('F2: DUDI → GURU ditolak trigger (DUDI hanya boleh eskalasi ke KAPRODI)');
+                else log.fail(`F2: DUDI → GURU TIDAK ditolak — aturan DUDI→KAPRODI bocor${f2err ? ': ' + f2err.slice(0, 160) : ''}`);
+            }
+
+            // F3 (regresi positif): GURU → BK harus LOLOS dan handler berpindah
+            let f3 = false, f3err = '';
+            try {
+                const r = await mgmtQuery(
+                    `begin;` + c7Case(d7.school_id, d7.student_id, d7.guru_uid, d7.guru_uid) +
+                    c7Esc(d7.school_id, d7.guru_uid, `{"new_handler_user_id":"${d7.bk_uid}"}`) +
+                    ` select current_handler_user_id::text as h from coaching_cases where case_id = '${C7_CASE}';` +
+                    ` rollback;`);
+                f3 = r[0]?.h === d7.bk_uid;
+                if (!f3) f3err = `handler=${r[0]?.h ?? 'null'} (harusnya ${d7.bk_uid})`;
+            } catch (e) { f3err = e.message; }
+            if (f3) log.pass('F3: GURU → BK lolos & current_handler_user_id berpindah ke BK — uji tidak vacuous');
+            else log.fail(`F3: eskalasi sah GURU → BK gagal — trigger terlalu ketat${f3err ? ': ' + f3err.slice(0, 160) : ''}`);
+
+            // F4: payload ESCALATED tanpa new_handler_user_id → ditolak (P0001)
+            let f4 = false, f4err = '';
+            try {
+                await mgmtQuery(
+                    `begin;` + c7Case(d7.school_id, d7.student_id, d7.guru_uid, d7.guru_uid) +
+                    c7Esc(d7.school_id, d7.guru_uid, '{}') +
+                    ` rollback;`);
+                f4err = 'INSERT ESCALATED tanpa new_handler_user_id diterima';
+            } catch (e) {
+                if (e.message.includes('escalation_guard') || e.message.includes('P0001')) f4 = true;
+                else f4err = e.message;
+            }
+            if (f4) log.pass('F4: ESCALATED tanpa payload.new_handler_user_id ditolak (P0001)');
+            else log.fail(`F4: ESCALATED tanpa new_handler_user_id TIDAK ditolak${f4err ? ': ' + f4err.slice(0, 160) : ''}`);
+        }
+    }
     log.head('CHECK 8 — PKL ortu cross-tenant: ortu Sekolah A TIDAK bisa baca PKL Sekolah B (sintetis, ROLLBACK)');
 
     // Cari 2 sekolah dengan ortu aktif + siswa + user DUDI (untuk INSERT sintetis)
@@ -591,26 +761,565 @@ async function main() {
         }
     }
 
-    // ── CHECK 11: rls_cases_insert cross-tenant write guard ──────
-    // Memverifikasi fix fase 2.2 Kelompok C — celah INSERT kasus untuk
-    // student dari sekolah lain (school_id=A, student_id=B).
-    //
-    // (a) Struktural: with_check harus mengandung EXISTS student school guard.
-    // (b) Serangan: staff sekolah A TIDAK bisa INSERT kasus untuk siswa B.
-    // (c) Regression: staff sekolah A MASIH bisa INSERT kasus untuk siswa A.
+    // Helper konteks RLS: jalankan sisa transaksi sebagai user `authenticated`
+    // tertentu (cara auth.uid() dievaluasi Supabase). Dipakai CHECK 11/13/14.
+    const asAuth = (auth) =>
+        ` set local role authenticated;` +
+        ` select set_config('request.jwt.claims','{"sub":"${auth}","role":"authenticated"}',true);` +
+        ` select set_config('request.jwt.claim.sub','${auth}',true);`;
+
+    // ── CHECK 11: rls_cc_insert cross-tenant write guard ─────────
+    // Memverifikasi guard fn_student_in_current_school di WITH CHECK
+    // rls_cc_insert (commit db71576):
+    //   F1 serangan   : GURU sekolah A INSERT kasus untuk siswa sekolah B → 42501.
+    //   F2 regresi    : GURU sekolah A INSERT kasus untuk siswa sekolah A → lolos.
+    //   F3 role       : SISWA INSERT kasus → ditolak (role exclusion).
+    //   F4 struktural : with_check memanggil fn_student_in_current_school.
     // Semua INSERT dalam transaksi yang di-ROLLBACK — DB tidak berubah.
-    log.head('CHECK 11 — rls_cases_insert: guard student ↔ school & regression INSERT guru-sekolah-sendiri');
-    log.pass('SKIP — menunggu penulisan ulang untuk schema coaching_cases (Sprint C)');
-    log.pass('SKIP — menunggu penulisan ulang untuk schema coaching_cases (Sprint C)');
-    log.head('CHECK 12 — Struktural: 5 policy read-path case_events/student_updates siswa/ortu (migration 20260709010000)');
-    log.pass('SKIP — menunggu penulisan ulang untuk schema coaching_cases (Sprint C)');
-    log.pass('SKIP — menunggu penulisan ulang untuk schema coaching_cases (Sprint C)');
-    log.head('CHECK 13 — Behavioral: read-path siswa/ortu case_events/student_updates (T1–T7, T11–T12, regresi-f)');
-    log.pass('SKIP — menunggu penulisan ulang untuk schema coaching_cases (Sprint C)');
-    log.pass('SKIP — menunggu penulisan ulang untuk schema coaching_cases (Sprint C)');
-    log.head('CHECK 14 — Write-path kasus: fn_matches_case_handler + fn_is_internal_case_actor EXECUTE tersedia untuk authenticated, added_by_user_id guard aktif, cross-tenant write isolation, rls_cases_update_audience tidak bocor ke audience member biasa');
-    log.pass('SKIP — menunggu penulisan ulang untuk schema coaching_cases (Sprint C)');
-    log.pass('SKIP — menunggu penulisan ulang untuk schema coaching_cases (Sprint C)');
+    log.head('CHECK 11 — rls_cc_insert: guard student ↔ school & regression INSERT guru-sekolah-sendiri');
+    {
+        const C11_CASE = 'ffffffff-ffff-ffff-ffff-00000000000b'; // sentinel case_id
+
+        const c11pre = await mgmtQuery(`
+            with
+            sa as (
+                select u.school_id from users u
+                where u.role_type = 'GURU' and u.is_active and u.deleted_at is null
+                  and u.auth_user_id is not null
+                  and exists (select 1 from students st where st.school_id = u.school_id)
+                group by u.school_id order by u.school_id limit 1
+            ),
+            sb as (
+                select u.school_id from users u
+                where u.role_type = 'GURU' and u.is_active and u.deleted_at is null
+                  and u.auth_user_id is not null
+                  and u.school_id <> (select school_id from sa)
+                  and exists (select 1 from students st where st.school_id = u.school_id)
+                group by u.school_id order by u.school_id limit 1
+            ),
+            ga as (
+                select u.user_id, u.auth_user_id from users u
+                where u.school_id = (select school_id from sa)
+                  and u.role_type = 'GURU' and u.is_active and u.deleted_at is null
+                  and u.auth_user_id is not null
+                order by u.user_id limit 1
+            ),
+            sta as (
+                select st.student_id from students st
+                where st.school_id = (select school_id from sa) order by st.student_id limit 1
+            ),
+            stb as (
+                select st.student_id from students st
+                where st.school_id = (select school_id from sb) order by st.student_id limit 1
+            ),
+            siswa as (
+                select u.user_id, u.auth_user_id from users u
+                where u.school_id = (select school_id from sa)
+                  and u.role_type = 'SISWA' and u.is_active and u.deleted_at is null
+                  and u.auth_user_id is not null
+                order by u.user_id limit 1
+            )
+            select
+                (select school_id::text     from sa)    as sa_school,
+                (select school_id::text     from sb)    as sb_school,
+                (select user_id::text       from ga)    as ga_uid,
+                (select auth_user_id::text  from ga)    as ga_auth,
+                (select student_id::text    from sta)   as sta_id,
+                (select student_id::text    from stb)   as stb_id,
+                (select user_id::text       from siswa) as siswa_uid,
+                (select auth_user_id::text  from siswa) as siswa_auth`);
+
+        const d11 = c11pre[0] || {};
+        const c11Ins = (school, student, actor) =>
+            ` insert into coaching_cases` +
+            `   (case_id, school_id, student_id, created_by_user_id, title, description,` +
+            `    current_handler_user_id)` +
+            ` values ('${C11_CASE}', '${school}', '${student}', '${actor}',` +
+            `   'Uji CHECK 11', 'Deskripsi uji insert guard minimal dua puluh karakter.', '${actor}');`;
+
+        const c11skip = !d11.ga_uid    ? 'tidak ada GURU aktif ber-auth_user_id di sekolah berdata siswa'
+                      : !d11.sb_school ? 'hanya ada 1 sekolah dengan GURU + siswa (butuh ≥2)'
+                      : !d11.sta_id || !d11.stb_id ? 'siswa tidak lengkap di kedua sekolah' : null;
+
+        if (c11skip) {
+            log.pass(`CHECK 11 SKIP — ${c11skip} (tidak menggagalkan)`);
+        } else {
+            // F1: GURU sekolah A INSERT kasus untuk siswa sekolah B → harus 42501
+            let f1 = false, f1err = '';
+            try {
+                await mgmtQuery(
+                    `begin;` + asAuth(d11.ga_auth) +
+                    c11Ins(d11.sa_school, d11.stb_id, d11.ga_uid) +
+                    ` rollback;`);
+                f1err = 'INSERT lintas-sekolah diterima (seharusnya ditolak)';
+            } catch (e) {
+                if (e.message.includes('42501') || e.message.includes('row-level security')) f1 = true;
+                else f1err = e.message;
+            }
+            if (f1) log.pass('F1: GURU sekolah A ditolak INSERT kasus untuk siswa sekolah B (42501)');
+            else log.fail(`F1: INSERT kasus lintas-sekolah TIDAK ditolak — guard student↔school bocor${f1err ? ': ' + f1err.slice(0, 160) : ''}`);
+
+            // F2 (regresi positif): GURU sekolah A INSERT kasus untuk siswa sekolah A → lolos
+            let f2 = false, f2err = '';
+            try {
+                const r = await mgmtQuery(
+                    `begin;` + asAuth(d11.ga_auth) +
+                    c11Ins(d11.sa_school, d11.sta_id, d11.ga_uid) +
+                    ` select count(*)::int as cnt from coaching_cases where case_id = '${C11_CASE}';` +
+                    ` rollback;`);
+                f2 = r[0]?.cnt === 1;
+                if (!f2) f2err = `cnt=${r[0]?.cnt ?? 'null'}`;
+            } catch (e) { f2err = e.message; }
+            if (f2) log.pass('F2: GURU sekolah A bisa INSERT kasus untuk siswa sekolahnya sendiri (cnt=1) — uji tidak vacuous');
+            else log.fail(`F2: INSERT kasus sekolah sendiri GAGAL — policy terlalu ketat${f2err ? ': ' + f2err.slice(0, 160) : ''}`);
+
+            // F3: SISWA mencoba INSERT kasus → role exclusion harus menolak
+            if (!d11.siswa_uid) {
+                log.pass('CHECK 11 F3 SKIP — tidak ada user SISWA ber-auth_user_id di sekolah A');
+            } else {
+                let f3 = false, f3err = '';
+                try {
+                    await mgmtQuery(
+                        `begin;` + asAuth(d11.siswa_auth) +
+                        c11Ins(d11.sa_school, d11.sta_id, d11.siswa_uid) +
+                        ` rollback;`);
+                    f3err = 'INSERT oleh SISWA diterima (seharusnya ditolak)';
+                } catch (e) {
+                    if (e.message.includes('42501') || e.message.includes('row-level security')) f3 = true;
+                    else f3err = e.message;
+                }
+                if (f3) log.pass('F3: SISWA ditolak INSERT coaching_cases (role exclusion, 42501)');
+                else log.fail(`F3: SISWA bisa INSERT coaching_cases — role exclusion bocor${f3err ? ': ' + f3err.slice(0, 160) : ''}`);
+            }
+        }
+
+        // F4 (struktural): with_check rls_cc_insert memanggil fn_student_in_current_school
+        const c11pol = await mgmtQuery(`
+            select coalesce(with_check, '') as wc
+            from pg_policies
+            where schemaname = 'public' and tablename = 'coaching_cases'
+              and policyname = 'rls_cc_insert';`);
+        if (c11pol.length === 0)
+            log.fail('F4: policy rls_cc_insert tidak ditemukan — guard INSERT hilang');
+        else if (c11pol[0].wc.includes('fn_student_in_current_school'))
+            log.pass('F4: with_check rls_cc_insert memanggil fn_student_in_current_school (struktural)');
+        else
+            log.fail('F4: with_check rls_cc_insert TIDAK memanggil fn_student_in_current_school — guard hilang');
+    }
+
+    // ── CHECK 12: struktural read-path siswa/ortu ────────────────
+    // Murni pemeriksaan katalog (pg_policies / pg_proc) — tidak butuh data sintetis.
+    log.head('CHECK 12 — Struktural: policy read-path coaching_case_events siswa/ortu + default-deny student_updates');
+    {
+        const pols = await mgmtQuery(`
+            select tablename, policyname, cmd,
+                   coalesce(qual, '') as qual, coalesce(with_check, '') as wc, roles::text as roles
+            from pg_policies
+            where schemaname = 'public'
+              and tablename in ('coaching_case_events', 'student_updates')
+            order by tablename, policyname;`);
+        const byName = Object.fromEntries(pols.map((p) => [p.policyname, p]));
+
+        // S1: rls_cce_read_student — is_visible_to_student + is_shared_to_student
+        const s1 = byName['rls_cce_read_student'];
+        if (!s1) log.fail('S1: policy rls_cce_read_student TIDAK ADA — read-path siswa hilang');
+        else if (s1.qual.includes('is_visible_to_student = true') && s1.qual.includes('is_shared_to_student = true'))
+            log.pass('S1: rls_cce_read_student memfilter is_visible_to_student=true & is_shared_to_student=true');
+        else log.fail(`S1: rls_cce_read_student tidak memfilter kedua flag privasi — qual: ${s1.qual.replace(/\s+/g, ' ').slice(0, 200)}`);
+
+        // S2: rls_cce_read_parent — is_visible_to_student + is_shared_to_parent
+        const s2 = byName['rls_cce_read_parent'];
+        if (!s2) log.fail('S2: policy rls_cce_read_parent TIDAK ADA — read-path ortu hilang');
+        else if (s2.qual.includes('is_visible_to_student = true') && s2.qual.includes('is_shared_to_parent = true'))
+            log.pass('S2: rls_cce_read_parent memfilter is_visible_to_student=true & is_shared_to_parent=true');
+        else log.fail(`S2: rls_cce_read_parent tidak memfilter kedua flag privasi — qual: ${s2.qual.replace(/\s+/g, ' ').slice(0, 200)}`);
+
+        // S3: rls_cce_read_staff — exclusion SISWA/ORTU/STAKEHOLDER + fn_can_see_coaching_case
+        const s3 = byName['rls_cce_read_staff'];
+        const s3ok = s3 && ['SISWA', 'ORTU', 'STAKEHOLDER'].every((r) => s3.qual.includes(r))
+                     && s3.qual.includes('fn_can_see_coaching_case');
+        if (s3ok) log.pass('S3: rls_cce_read_staff mengecualikan SISWA/ORTU/STAKEHOLDER & memanggil fn_can_see_coaching_case');
+        else if (!s3) log.fail('S3: policy rls_cce_read_staff TIDAK ADA');
+        else log.fail(`S3: rls_cce_read_staff kehilangan role exclusion atau fn_can_see_coaching_case — qual: ${s3.qual.replace(/\s+/g, ' ').slice(0, 200)}`);
+
+        // S4: student_updates default-deny untuk SISWA/ORTU (by design — tidak ada policy)
+        const suRead = pols.filter((p) => p.tablename === 'student_updates' && (p.cmd === 'SELECT' || p.cmd === 'ALL'));
+        const suLeak = suRead.filter((p) => /'SISWA'|'ORTU'/.test(p.qual));
+        if (suRead.length === 0)
+            log.fail('S4: student_updates tidak punya policy SELECT sama sekali — staf pun tak bisa baca (bug fungsional)');
+        else if (suLeak.length === 0)
+            log.pass(`S4: student_updates default-deny untuk SISWA/ORTU (policy SELECT: ${suRead.map((p) => p.policyname).join(', ')})`);
+        else
+            log.fail(`S4: student_updates punya policy yang menyebut SISWA/ORTU: ${suLeak.map((p) => p.policyname).join(', ')}`);
+
+        // S5: predikat RLS callable authenticated, TIDAK callable anon
+        const fns = await mgmtQuery(`
+            select p.proname,
+                   bool_and(has_function_privilege('authenticated', p.oid, 'EXECUTE')) as auth_exec,
+                   bool_or(has_function_privilege('anon', p.oid, 'EXECUTE'))           as anon_exec
+            from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public'
+              and p.proname in ('fn_matches_case_handler', 'fn_can_see_coaching_case',
+                                'fn_student_in_current_school')
+            group by p.proname order by p.proname;`);
+        for (const fn of ['fn_matches_case_handler', 'fn_can_see_coaching_case', 'fn_student_in_current_school']) {
+            const r = fns.find((x) => x.proname === fn);
+            if (!r) log.fail(`S5: ${fn} tidak ditemukan di DB (regresi/hilang?)`);
+            else if (r.auth_exec === true && r.anon_exec === false)
+                log.pass(`S5: ${fn} — authenticated EXECUTE ✓, anon ✗`);
+            else
+                log.fail(`S5: ${fn} — auth_exec=${r.auth_exec}, anon_exec=${r.anon_exec} (harus true/false)`);
+        }
+
+        // S6 (regresi): fn_is_internal_case_actor sudah di-drop, jangan muncul lagi
+        const legacy = await mgmtQuery(`
+            select count(*)::int as c from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public' and p.proname = 'fn_is_internal_case_actor';`);
+        if (legacy[0]?.c === 0) log.pass('S6: fn_is_internal_case_actor (schema lama) tetap absen — tidak ada regresi');
+        else log.fail(`S6: fn_is_internal_case_actor muncul kembali (${legacy[0]?.c} signature) — sisa schema lama`);
+    }
+
+    // ── CHECK 13: behavioral read-path siswa/ortu ────────────────
+    // Kasus sintetis dibagikan ke siswa & ortu, dengan 2 event (visible & hidden)
+    // dan 1 student_updates. Tiap sub-test = transaksi sendiri, di-ROLLBACK.
+    log.head('CHECK 13 — Behavioral: read-path siswa/ortu coaching_cases + coaching_case_events + student_updates');
+    {
+        const C13_CASE = 'ffffffff-ffff-ffff-ffff-00000000000d'; // sentinel case_id
+        const C13_VIS  = 'ffffffff-ffff-ffff-ffff-0000000000d1'; // event visible
+        const C13_HID  = 'ffffffff-ffff-ffff-ffff-0000000000d2'; // event hidden
+        const C13_SU   = 'ffffffff-ffff-ffff-ffff-0000000000d3'; // student_updates
+
+        const c13pre = await mgmtQuery(`
+            with base as (
+                select st.student_id, st.school_id,
+                       us.auth_user_id as siswa_auth,
+                       up.auth_user_id as ortu_auth
+                from students st
+                join users us on us.user_id = st.user_id
+                             and us.role_type = 'SISWA' and us.is_active and us.auth_user_id is not null
+                join student_parents sp on sp.student_id = st.student_id
+                join users up on up.user_id = sp.parent_user_id
+                             and up.role_type = 'ORTU' and up.is_active and up.auth_user_id is not null
+                where st.student_status = 'AKTIF'
+                  and exists (select 1 from users g where g.school_id = st.school_id
+                                and g.role_type = 'GURU' and g.is_active and g.auth_user_id is not null)
+                order by st.student_id limit 1
+            ),
+            guru as (
+                select u.user_id, u.auth_user_id from users u
+                where u.school_id = (select school_id from base)
+                  and u.role_type = 'GURU' and u.is_active and u.auth_user_id is not null
+                order by u.user_id limit 1
+            ),
+            lain as (
+                select us.auth_user_id from students st
+                join users us on us.user_id = st.user_id
+                             and us.role_type = 'SISWA' and us.is_active and us.auth_user_id is not null
+                where st.school_id = (select school_id from base)
+                  and st.student_id <> (select student_id from base)
+                order by st.student_id limit 1
+            )
+            select
+                (select student_id::text   from base) as student_id,
+                (select school_id::text    from base) as school_id,
+                (select siswa_auth::text   from base) as siswa_auth,
+                (select ortu_auth::text    from base) as ortu_auth,
+                (select user_id::text      from guru) as guru_uid,
+                (select auth_user_id::text from guru) as guru_auth,
+                (select auth_user_id::text from lain) as lain_auth`);
+
+        const d13 = c13pre[0] || {};
+        const c13Setup =
+            ` insert into coaching_cases` +
+            `   (case_id, school_id, student_id, created_by_user_id, title, description,` +
+            `    current_handler_user_id, is_shared_to_student, is_shared_to_parent)` +
+            ` values ('${C13_CASE}', '${d13.school_id}', '${d13.student_id}', '${d13.guru_uid}',` +
+            `   'Uji CHECK 13', 'Deskripsi uji read-path minimal dua puluh karakter.',` +
+            `   '${d13.guru_uid}', true, true);` +
+            ` insert into coaching_case_events` +
+            `   (event_id, case_id, school_id, event_type, author_user_id, is_visible_to_student)` +
+            ` values ('${C13_VIS}', '${C13_CASE}', '${d13.school_id}', 'NOTE_ADDED', '${d13.guru_uid}', true),` +
+            `        ('${C13_HID}', '${C13_CASE}', '${d13.school_id}', 'NOTE_ADDED', '${d13.guru_uid}', false);` +
+            ` insert into student_updates (update_id, case_id, school_id, author_user_id, content)` +
+            ` values ('${C13_SU}', '${C13_CASE}', '${d13.school_id}', '${d13.guru_uid}',` +
+            `   'Catatan uji CHECK 13 untuk student_updates.');`;
+
+        const c13skip = !d13.student_id ? 'tidak ada siswa AKTIF ber-user_id + auth_user_id yang punya ortu ber-auth_user_id'
+                      : !d13.guru_uid   ? 'tidak ada GURU aktif ber-auth_user_id di sekolah siswa tersebut' : null;
+
+        if (c13skip) {
+            log.pass(`CHECK 13 SKIP — ${c13skip} (tidak menggagalkan)`);
+        } else {
+            // Sanity: data sintetis valid (tanpa RLS)
+            let c13ok = false;
+            try {
+                const s = await mgmtQuery(
+                    `begin;` + c13Setup +
+                    ` select (select count(*)::int from coaching_cases where case_id='${C13_CASE}')` +
+                    `      + (select count(*)::int from coaching_case_events where case_id='${C13_CASE}')` +
+                    `      + (select count(*)::int from student_updates where update_id='${C13_SU}') as n;` +
+                    ` rollback;`);
+                // 3 event = 2 sentinel + 1 OPENED otomatis dari trg_coaching_case_log_create
+                c13ok = s[0]?.n === 5;
+                if (c13ok) log.pass('CHECK 13 setup: 1 kasus + 3 event (2 sentinel + 1 OPENED otomatis) + 1 student_update — data valid');
+                else log.fail(`CHECK 13 setup gagal: n=${s[0]?.n ?? 'null'} (harusnya 5)`);
+            } catch (e) { log.fail(`CHECK 13 setup error: ${e.message.slice(0, 200)}`); }
+
+            if (c13ok) {
+                const probe = async (label, auth, sql, expect, okMsg, failMsg) => {
+                    let cnt = null, err = '';
+                    try {
+                        const r = await mgmtQuery(`begin;` + c13Setup + asAuth(auth) + sql + ` rollback;`);
+                        cnt = r[0]?.cnt ?? null;
+                    } catch (e) { err = e.message; }
+                    if (cnt === expect) log.pass(`${label}: ${okMsg} (cnt=${cnt})`);
+                    else log.fail(`${label}: ${failMsg} (cnt=${cnt}, harusnya ${expect})${err ? ' — ' + err.slice(0, 160) : ''}`);
+                };
+
+                const selCase  = ` select count(*)::int as cnt from coaching_cases where case_id = '${C13_CASE}';`;
+                const selVis   = ` select count(*)::int as cnt from coaching_case_events where event_id = '${C13_VIS}';`;
+                const selHid   = ` select count(*)::int as cnt from coaching_case_events where event_id = '${C13_HID}';`;
+                const selAllEv = ` select count(*)::int as cnt from coaching_case_events where case_id = '${C13_CASE}';`;
+                const selSu    = ` select count(*)::int as cnt from student_updates where update_id = '${C13_SU}';`;
+
+                await probe('F1', d13.siswa_auth, selCase, 1,
+                    'siswa subjek bisa baca kasus yang dibagikan (is_shared_to_student=true)',
+                    'siswa subjek TIDAK bisa baca kasus yang dibagikan — read-path siswa rusak');
+                await probe('F2', d13.siswa_auth, selVis, 1,
+                    'siswa subjek bisa baca event is_visible_to_student=true',
+                    'siswa subjek TIDAK bisa baca event yang ditandai visible — read-path rusak');
+                await probe('F3', d13.siswa_auth, selHid, 0,
+                    'siswa subjek TIDAK bisa baca event is_visible_to_student=false',
+                    'BOCOR: siswa membaca event internal (is_visible_to_student=false)');
+                if (!d13.lain_auth) log.pass('CHECK 13 F4 SKIP — tidak ada siswa lain ber-auth_user_id di sekolah yang sama');
+                else await probe('F4', d13.lain_auth, selCase, 0,
+                    'siswa lain TIDAK bisa baca kasus siswa subjek — isolasi per-siswa OK',
+                    'BOCOR: siswa lain membaca kasus milik siswa subjek');
+                await probe('F5', d13.ortu_auth, selCase, 1,
+                    'ortu siswa subjek bisa baca kasus (is_shared_to_parent=true)',
+                    'ortu siswa subjek TIDAK bisa baca kasus yang dibagikan — read-path ortu rusak');
+                await probe('F6', d13.ortu_auth, selVis, 1,
+                    'ortu siswa subjek bisa baca event is_visible_to_student=true',
+                    'ortu siswa subjek TIDAK bisa baca event visible — read-path ortu rusak');
+                await probe('F7', d13.guru_auth, selAllEv, 3,
+                    'GURU creator bisa baca SEMUA event (tidak dibatasi is_visible_to_student)',
+                    'GURU creator tidak melihat seluruh event kasusnya');
+                await probe('F8', d13.siswa_auth, selSu, 0,
+                    'siswa TIDAK bisa baca student_updates — default-deny terkonfirmasi',
+                    'BOCOR: siswa membaca student_updates (harusnya default-deny)');
+            }
+        }
+    }
+
+    // ── CHECK 14: write-path kasus ───────────────────────────────
+    // W1 struktural; W2a trigger fn_coaching_case_guard (P0003); W2b RLS rls_cc_update;
+    // W3 non-handler ditolak; W4 kasus CLOSED; W5 cross-tenant; W6 regresi positif.
+    log.head('CHECK 14 — Write-path kasus: guard UPDATE langsung, INSERT event non-handler / kasus CLOSED / cross-tenant');
+    {
+        const C14_OPEN   = 'ffffffff-ffff-ffff-ffff-00000000000e'; // kasus OPEN sekolah A
+        const C14_CLOSED = 'ffffffff-ffff-ffff-ffff-0000000000e2'; // kasus CLOSED sekolah A
+        const C14_B      = 'ffffffff-ffff-ffff-ffff-0000000000e3'; // kasus sekolah B
+
+        // W1 (struktural): fn_matches_case_handler tersedia untuk authenticated saja,
+        // dan fn_is_internal_case_actor (schema lama) tetap absen.
+        const w1 = await mgmtQuery(`
+            select
+                (select bool_and(has_function_privilege('authenticated', p.oid, 'EXECUTE'))
+                   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                  where n.nspname = 'public' and p.proname = 'fn_matches_case_handler') as auth_exec,
+                (select bool_or(has_function_privilege('anon', p.oid, 'EXECUTE'))
+                   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                  where n.nspname = 'public' and p.proname = 'fn_matches_case_handler') as anon_exec,
+                (select count(*)::int
+                   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                  where n.nspname = 'public' and p.proname = 'fn_is_internal_case_actor') as legacy_cnt`);
+        const r14 = w1[0] || {};
+        if (r14.auth_exec === true && r14.anon_exec === false)
+            log.pass('W1: fn_matches_case_handler — authenticated EXECUTE ✓, anon ✗');
+        else
+            log.fail(`W1: fn_matches_case_handler auth_exec=${r14.auth_exec}, anon_exec=${r14.anon_exec} (harus true/false)`);
+        if (r14.legacy_cnt === 0) log.pass('W1: fn_is_internal_case_actor (schema lama) absen — tidak ada regresi');
+        else log.fail(`W1: fn_is_internal_case_actor muncul kembali (${r14.legacy_cnt} signature)`);
+
+        const c14pre = await mgmtQuery(`
+            with
+            sa as (
+                select u.school_id from users u
+                where u.role_type = 'GURU' and u.is_active and u.deleted_at is null
+                  and u.auth_user_id is not null
+                  and exists (select 1 from students st where st.school_id = u.school_id)
+                group by u.school_id having count(*) >= 2 order by u.school_id limit 1
+            ),
+            sb as (
+                select u.school_id from users u
+                where u.role_type = 'GURU' and u.is_active and u.deleted_at is null
+                  and u.auth_user_id is not null
+                  and u.school_id <> (select school_id from sa)
+                  and exists (select 1 from students st where st.school_id = u.school_id)
+                group by u.school_id order by u.school_id limit 1
+            ),
+            ga as (
+                select u.user_id, u.auth_user_id from users u
+                where u.school_id = (select school_id from sa)
+                  and u.role_type = 'GURU' and u.is_active and u.auth_user_id is not null
+                order by u.user_id limit 1
+            ),
+            ga2 as (
+                select u.user_id, u.auth_user_id from users u
+                where u.school_id = (select school_id from sa)
+                  and u.role_type = 'GURU' and u.is_active and u.auth_user_id is not null
+                  and u.user_id <> (select user_id from ga)
+                order by u.user_id limit 1
+            ),
+            gb as (
+                select u.user_id from users u
+                where u.school_id = (select school_id from sb)
+                  and u.role_type = 'GURU' and u.is_active and u.auth_user_id is not null
+                order by u.user_id limit 1
+            ),
+            sta as (select st.student_id from students st
+                    where st.school_id = (select school_id from sa) order by st.student_id limit 1),
+            stb as (select st.student_id from students st
+                    where st.school_id = (select school_id from sb) order by st.student_id limit 1)
+            select
+                (select school_id::text    from sa)  as sa_school,
+                (select school_id::text    from sb)  as sb_school,
+                (select user_id::text      from ga)  as ga_uid,
+                (select auth_user_id::text from ga)  as ga_auth,
+                (select user_id::text      from ga2) as ga2_uid,
+                (select auth_user_id::text from ga2) as ga2_auth,
+                (select user_id::text      from gb)  as gb_uid,
+                (select student_id::text   from sta) as sta_id,
+                (select student_id::text   from stb) as stb_id`);
+
+        const d14 = c14pre[0] || {};
+        const caseOpen =
+            ` insert into coaching_cases` +
+            `   (case_id, school_id, student_id, created_by_user_id, title, description,` +
+            `    current_handler_user_id)` +
+            ` values ('${C14_OPEN}', '${d14.sa_school}', '${d14.sta_id}', '${d14.ga_uid}',` +
+            `   'Uji CHECK 14 open', 'Deskripsi uji write-path minimal dua puluh karakter.', '${d14.ga_uid}');`;
+        const caseClosed =
+            ` insert into coaching_cases` +
+            `   (case_id, school_id, student_id, created_by_user_id, title, description,` +
+            `    current_handler_user_id, status, closed_at, closed_by_user_id)` +
+            ` values ('${C14_CLOSED}', '${d14.sa_school}', '${d14.sta_id}', '${d14.ga_uid}',` +
+            `   'Uji CHECK 14 closed', 'Deskripsi uji kasus tertutup minimal dua puluh karakter.',` +
+            `   '${d14.ga_uid}', 'CLOSED', now(), '${d14.ga_uid}');`;
+        const caseOther =
+            ` insert into coaching_cases` +
+            `   (case_id, school_id, student_id, created_by_user_id, title, description,` +
+            `    current_handler_user_id)` +
+            ` values ('${C14_B}', '${d14.sb_school}', '${d14.stb_id}', '${d14.gb_uid}',` +
+            `   'Uji CHECK 14 sekolah B', 'Deskripsi uji cross-tenant minimal dua puluh karakter.', '${d14.gb_uid}');`;
+        const evNote = (caseId, school, author) =>
+            ` insert into coaching_case_events (case_id, school_id, event_type, author_user_id)` +
+            ` values ('${caseId}', '${school}', 'NOTE_ADDED', '${author}');`;
+
+        const c14skip = !d14.ga_uid  ? 'tidak ada sekolah dengan ≥2 GURU aktif ber-auth_user_id + siswa'
+                      : !d14.ga2_uid ? 'tidak ada GURU kedua di sekolah A (butuh staf non-handler)'
+                      : !d14.gb_uid  ? 'tidak ada sekolah kedua dengan GURU + siswa' : null;
+
+        if (c14skip) {
+            log.pass(`CHECK 14 SKIP (W2–W6) — ${c14skip} (tidak menggagalkan)`);
+        } else {
+            // W2a: UPDATE langsung kolom terjaga sebagai postgres → trigger P0003
+            let w2a = false, w2aerr = '';
+            try {
+                await mgmtQuery(
+                    `begin;` + caseOpen +
+                    ` update coaching_cases set status = 'UNDER_REVIEW' where case_id = '${C14_OPEN}';` +
+                    ` rollback;`);
+                w2aerr = 'UPDATE langsung diterima (seharusnya ditolak trigger)';
+            } catch (e) {
+                if (e.message.includes('integrity_guard') || e.message.includes('P0003')) w2a = true;
+                else w2aerr = e.message;
+            }
+            if (w2a) log.pass('W2a: UPDATE langsung coaching_cases.status ditolak trg_coaching_case_guard (P0003)');
+            else log.fail(`W2a: UPDATE langsung kolom terjaga TIDAK ditolak — integrity guard bocor${w2aerr ? ': ' + w2aerr.slice(0, 160) : ''}`);
+
+            // W2b: GURU creator UPDATE kolom terjaga lewat RLS → 0 baris (rls_cc_update menuntut sync flag)
+            let w2b = null, w2berr = '';
+            try {
+                const r = await mgmtQuery(
+                    `begin;` + caseOpen + asAuth(d14.ga_auth) +
+                    ` update coaching_cases set status = 'UNDER_REVIEW' where case_id = '${C14_OPEN}';` +
+                    ` select count(*)::int as cnt from coaching_cases` +
+                    `  where case_id = '${C14_OPEN}' and status = 'UNDER_REVIEW';` +
+                    ` rollback;`);
+                w2b = r[0]?.cnt ?? null;
+            } catch (e) {
+                // Bila trigger sempat menyala lebih dulu, itu juga penolakan yang benar.
+                if (e.message.includes('integrity_guard') || e.message.includes('P0003')) w2b = 0;
+                else w2berr = e.message;
+            }
+            if (w2b === 0) log.pass('W2b: GURU creator TIDAK bisa UPDATE status langsung via RLS (0 baris berubah)');
+            else log.fail(`W2b: UPDATE status oleh GURU creator BERHASIL (cnt=${w2b}) — rls_cc_update bocor${w2berr ? ': ' + w2berr.slice(0, 160) : ''}`);
+
+            // W3: staf non-handler INSERT event → 42501 (rls_cce_insert menuntut handler)
+            let w3 = false, w3err = '';
+            try {
+                await mgmtQuery(
+                    `begin;` + caseOpen + asAuth(d14.ga2_auth) +
+                    evNote(C14_OPEN, d14.sa_school, d14.ga2_uid) +
+                    ` rollback;`);
+                w3err = 'INSERT event oleh non-handler diterima';
+            } catch (e) {
+                if (e.message.includes('42501') || e.message.includes('row-level security')) w3 = true;
+                else w3err = e.message;
+            }
+            if (w3) log.pass('W3: staf non-handler ditolak INSERT coaching_case_events (42501)');
+            else log.fail(`W3: staf non-handler bisa INSERT event kasus orang lain — rls_cce_insert bocor${w3err ? ': ' + w3err.slice(0, 160) : ''}`);
+
+            // W4: INSERT event ke kasus CLOSED → ditolak (trigger P0001 atau RLS 42501)
+            let w4 = false, w4code = '', w4err = '';
+            try {
+                await mgmtQuery(
+                    `begin;` + caseClosed + asAuth(d14.ga_auth) +
+                    evNote(C14_CLOSED, d14.sa_school, d14.ga_uid) +
+                    ` rollback;`);
+                w4err = 'INSERT event ke kasus CLOSED diterima';
+            } catch (e) {
+                if (e.message.includes('case_closed') || e.message.includes('P0001')) { w4 = true; w4code = 'P0001 case_closed'; }
+                else if (e.message.includes('42501') || e.message.includes('row-level security')) { w4 = true; w4code = '42501 RLS'; }
+                else w4err = e.message;
+            }
+            if (w4) log.pass(`W4: INSERT event ke kasus CLOSED ditolak (${w4code})`);
+            else log.fail(`W4: INSERT event ke kasus CLOSED TIDAK ditolak${w4err ? ': ' + w4err.slice(0, 160) : ''}`);
+
+            // W5: GURU sekolah A INSERT event ke kasus sekolah B → 42501
+            let w5 = false, w5err = '';
+            try {
+                await mgmtQuery(
+                    `begin;` + caseOther + asAuth(d14.ga_auth) +
+                    evNote(C14_B, d14.sb_school, d14.ga_uid) +
+                    ` rollback;`);
+                w5err = 'INSERT event lintas-sekolah diterima';
+            } catch (e) {
+                if (e.message.includes('42501') || e.message.includes('row-level security')) w5 = true;
+                else w5err = e.message;
+            }
+            if (w5) log.pass('W5: GURU sekolah A ditolak INSERT event ke kasus sekolah B (42501)');
+            else log.fail(`W5: INSERT event lintas-sekolah TIDAK ditolak — isolasi write bocor${w5err ? ': ' + w5err.slice(0, 160) : ''}`);
+
+            // W6 (regresi positif): handler sah INSERT event ke kasusnya sendiri → lolos
+            let w6 = false, w6err = '';
+            try {
+                const r = await mgmtQuery(
+                    `begin;` + caseOpen + asAuth(d14.ga_auth) +
+                    evNote(C14_OPEN, d14.sa_school, d14.ga_uid) +
+                    ` select count(*)::int as cnt from coaching_case_events` +
+                    `  where case_id = '${C14_OPEN}' and event_type = 'NOTE_ADDED';` +
+                    ` rollback;`);
+                w6 = r[0]?.cnt === 1;
+                if (!w6) w6err = `cnt=${r[0]?.cnt ?? 'null'}`;
+            } catch (e) { w6err = e.message; }
+            if (w6) log.pass('W6: handler sah bisa INSERT event ke kasusnya sendiri (cnt=1) — uji tidak vacuous');
+            else log.fail(`W6: handler sah GAGAL INSERT event kasusnya sendiri — policy terlalu ketat${w6err ? ': ' + w6err.slice(0, 160) : ''}`);
+        }
+    }
     log.head('CHECK 15 — Forum Kelas RLS isolation: penulis bisa baca, cross-tenant ditolak, anon 0');
 
     const C15_POST = 'ffffffff-ffff-ffff-ffff-000000000015'; // sentinel post_id
