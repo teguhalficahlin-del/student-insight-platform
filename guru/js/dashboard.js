@@ -256,8 +256,12 @@ function fe(err, ctx = 'muat') {
     }
     if (m.includes('fetch') || m.includes('network') || m.includes('failed to fetch')) return 'Tidak ada koneksi. Periksa jaringan.';
     if (m.includes('security policy') || m.includes('permission') || m.includes('forbidden')) return 'Tidak memiliki izin.';
-    // Pesan spesifik dari server (PostgrestError memiliki err.code) — tampilkan langsung
-    if (err?.code && String(err.message ?? '').trim()) return String(err.message).trim();
+    // Jangan expose kode/pesan raw SQL ke UI — kategorikan berdasarkan kode error
+    if (err?.code) {
+        const code = String(err.code);
+        if (code === 'PGRST116') return 'Data tidak ditemukan.';
+        if (code.startsWith('23')) return ctx === 's' ? 'Data duplikat atau tidak valid.' : 'Terjadi kesalahan data.';
+    }
     return ctx === 's' ? 'Gagal menyimpan. Silakan coba lagi.'
          : ctx === 'h' ? 'Gagal menghapus. Silakan coba lagi.'
          : 'Gagal memuat data. Silakan coba lagi.';

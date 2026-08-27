@@ -1344,7 +1344,8 @@ export async function getForumSekolahComments(postId) {
             author:users!forum_post_comments_author_user_id_fkey(user_id, full_name, role_type)
         `)
         .eq('post_id', postId)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: true })
+        .limit(100);
     if (error) throw error;
     return data ?? [];
 }
