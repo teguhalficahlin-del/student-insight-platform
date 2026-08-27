@@ -1046,7 +1046,27 @@ async function renderStaffPanel() {
                     const nama = b.closest('tr').querySelector('td').textContent;
                     if (!confirm(`Hapus PERMANEN ${nama}?\n\nTindakan ini tidak bisa dibatalkan.`)) return;
                     b.disabled = true; b.textContent = '…';
-                    try { await purgeUser(b.dataset.uid); await renderStaffPanel(); }
+                    try {
+                        let resumeFrom = null;
+                        while (true) {
+                            const result = await purgeUser(b.dataset.uid, resumeFrom);
+                            if (result.status === 'partial' || result.status === 'timeout') {
+                                const lanjut = confirm(
+                                    `Proses selesai sebagian (${result.deleted} dari ${result.total} dihapus). Lanjutkan?`
+                                );
+                                if (!lanjut) {
+                                    b.disabled = false;
+                                    b.textContent = 'Lanjutkan Purge';
+                                    return;
+                                }
+                                resumeFrom = result.resume_from;
+                                continue;
+                            }
+                            alert(`${nama} berhasil dihapus permanen.`);
+                            await renderStaffPanel();
+                            break;
+                        }
+                    }
                     catch (e) { alert(`Gagal: ${e.message}`); b.disabled = false; b.textContent = 'Purge'; }
                 }));
             }

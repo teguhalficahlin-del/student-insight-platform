@@ -700,28 +700,6 @@ export async function finalizeReapplyJob(jobId) {
 // DEPRECATED — digantikan oleh runBatchLoop + finalizeReapplyJob
 // ─────────────────────────────────────────────────────────────
 
-/**
- * @deprecated Gunakan checkActiveReapplyJob / prepareReapplyJob /
- * runReapplyBatch / finalizeReapplyJob untuk alur batch baru.
- */
-export async function reapplyScheduleTemplates() {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-    if (!token) throw new Error('Sesi login tidak ditemukan. Silakan login ulang.');
-
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/apply-schedule-templates?mode=reapply`, {
-        method:  'POST',
-        headers: {
-            'Authorization':    `Bearer ${token}`,
-            'x-schema-version': '1.0.0',
-        },
-    });
-
-    const body = await res.json();
-    if (!res.ok) throw new Error(body?.error?.message ?? 'Gagal menerapkan ulang jadwal');
-    return body.data;
-}
-
 export async function applyScheduleTemplates() {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
@@ -806,8 +784,8 @@ export async function restoreUser(user_id) {
 }
 
 /** Hard-delete permanen — hanya untuk user yang sudah di-soft-delete. */
-export async function purgeUser(user_id) {
-    return callEdge('DELETE', 'purge-user', { user_id });
+export async function purgeUser(user_id, resume_from = null) {
+    return callEdge('DELETE', 'purge-user', { user_id, ...(resume_from && { resume_from }) });
 }
 
 /** Ambil daftar user yang soft-deleted di sekolah ini. */

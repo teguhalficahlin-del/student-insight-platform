@@ -53,6 +53,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const url  = new URL(req.url);
         const mode = url.searchParams.get('mode');
 
+        if (mode === 'reapply') {
+            return new Response(JSON.stringify({
+                error: {
+                    message: 'Endpoint reapply legacy sudah dihentikan. Gunakan batch API prepareReapplyJob, runReapplyBatch, lalu finalizeReapplyJob.',
+                },
+            }), {
+                status: 410,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+        }
+
         // ── Mode finalize: FASE 3 batch reapply ──────────────────────────────
         // Dipanggil setelah FASE 1+2 (client langsung via .rpc()) selesai.
         // Body: { job_id: string }
@@ -105,8 +116,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
             });
         }
 
-        const isReapply = mode === 'reapply';
-
         // Periode aktif: academic_year dari fn_current_academic_year (SSoT),
         // semester dari school_config.
         const { data: config, error: configErr } = await admin
@@ -123,8 +132,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const academicYear = (authYear as string) || config.current_academic_year;
         const semester     = config.current_semester;
 
-        const rpcName = isReapply ? 'fn_reapply_schedule_templates' : 'fn_apply_schedule_templates';
-        const { data: result, error: rpcErr } = await admin.rpc(rpcName, {
+        const { data: result, error: rpcErr } = await admin.rpc('fn_apply_schedule_templates', {
             p_academic_year: academicYear,
             p_semester:      semester,
             p_school_id:     user.school_id,
@@ -255,7 +263,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
             assignments_upserted: result.assignments_upserted,
             schedules_total:      result.schedules_generated,
             schedules_generated:  result.schedules_generated,
-            ...(isReapply && { sessions_deleted: result.sessions_deleted }),
         });
 
     } catch (err) {

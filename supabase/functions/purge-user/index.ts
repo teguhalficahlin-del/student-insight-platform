@@ -42,14 +42,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return forbidden('Hanya ADMINISTRATIVE yang dapat menghapus permanen pengguna');
         }
 
-        let body: { user_id?: string };
+        let body: {
+            user_id?: string;
+            resume_from?: { table?: string; last_id?: string | null; deleted_count?: number };
+        };
         try {
             body = await req.json();
         } catch {
             return badRequest('Body harus berformat JSON: { "user_id": "<uuid>" }');
         }
 
-        const { user_id } = body;
+        const { user_id, resume_from } = body;
         if (!user_id) return badRequest('Field user_id wajib diisi');
         if (user_id === user.user_id) {
             return forbidden('Tidak dapat menghapus akun Anda sendiri');
@@ -73,38 +76,107 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return forbidden('Akun ADMINISTRATIVE tidak dapat dihapus permanen melalui panel ini');
         }
 
-        // Hapus Auth account
-        if (targetUser.auth_user_id) {
-            const { error: authErr } = await admin.auth.admin.deleteUser(targetUser.auth_user_id);
-            if (authErr) {
-                if (!authErr.message?.includes('not found') && !authErr.message?.includes('User not found')) {
-                    console.error('[purge-user] Auth delete failed:', authErr);
-                    return internalError(authErr);
-                }
-            }
-        }
-
         // Hapus byproduct impor (bukan data transaksional historis)
-        const byproducts: { table: string; column: string }[] = [];
+        const byproducts: { table: string; column: string; primaryKey: string }[] = [];
         if (targetUser.role_type === 'ORTU') {
-            byproducts.push({ table: 'student_parents', column: 'parent_user_id' });
+            byproducts.push({ table: 'student_parents', column: 'parent_user_id', primaryKey: 'id' });
         }
         if (['GURU', 'WALI_KELAS'].includes(targetUser.role_type)) {
             byproducts.push(
-                { table: 'teaching_assignments', column: 'user_id' },
-                { table: 'schedule_templates',   column: 'teacher_id' },
+                { table: 'teaching_assignments', column: 'user_id',    primaryKey: 'assignment_id' },
+                { table: 'schedule_templates',   column: 'teacher_id', primaryKey: 'template_id' },
             );
         }
-        for (const bp of byproducts) {
-            const { error: bpErr } = await admin.from(bp.table).delete().eq(bp.column, user_id);
-            if (bpErr) return internalError(bpErr);
+
+        const BATCH_SIZE = 200;
+        const DEADLINE_MS = 25_000;
+        const startedAt = Date.now();
+        const resumeTable = resume_from?.table ?? byproducts[0]?.table ?? 'users';
+        const startIndex = resumeTable === 'users'
+            ? byproducts.length
+            : byproducts.findIndex(bp => bp.table === resumeTable);
+        if (startIndex < 0) return badRequest('resume_from.table tidak valid');
+
+        let deleted = Number.isFinite(resume_from?.deleted_count)
+            ? Math.max(0, Number(resume_from?.deleted_count))
+            : 0;
+        let total = deleted + 1;
+        for (let i = startIndex; i < byproducts.length; i++) {
+            const bp = byproducts[i];
+            const { count, error: countErr } = await admin
+                .from(bp.table)
+                .select(bp.primaryKey, { count: 'exact', head: true })
+                .eq(bp.column, user_id);
+            if (countErr) return internalError(countErr);
+            total += count ?? 0;
+        }
+
+        for (let i = startIndex; i < byproducts.length; i++) {
+            const bp = byproducts[i];
+            let lastId = i === startIndex ? (resume_from?.last_id ?? null) : null;
+
+            while (true) {
+                let selectQuery = admin
+                    .from(bp.table)
+                    .select(bp.primaryKey)
+                    .eq(bp.column, user_id)
+                    .order(bp.primaryKey, { ascending: true })
+                    .limit(BATCH_SIZE);
+                if (lastId) selectQuery = selectQuery.gt(bp.primaryKey, lastId);
+
+                const { data: rows, error: selectErr } = await selectQuery;
+                if (selectErr) return internalError(selectErr);
+                if (!rows?.length) break;
+
+                const ids = rows.map(row => (row as unknown as Record<string, string>)[bp.primaryKey]);
+                const { error: bpErr } = await admin
+                    .from(bp.table)
+                    .delete()
+                    .in(bp.primaryKey, ids)
+                    .limit(BATCH_SIZE);
+                if (bpErr) return internalError(bpErr);
+
+                deleted += ids.length;
+                lastId = ids[ids.length - 1];
+                if (Date.now() - startedAt > DEADLINE_MS) {
+                    return ok({
+                        deleted,
+                        total,
+                        status: 'timeout',
+                        resume_from: { table: bp.table, last_id: lastId, deleted_count: deleted },
+                    });
+                }
+                if (ids.length < BATCH_SIZE) break;
+            }
         }
 
         // Hard-delete baris users
-        const { error: deleteErr } = await admin.from('users').delete().eq('user_id', user_id);
+        const { error: deleteErr } = await admin
+            .from('users')
+            .delete()
+            .eq('user_id', user_id)
+            .limit(1);
         if (deleteErr) return internalError(deleteErr);
+        deleted += 1;
 
-        return ok({ purged: true, user_id, full_name: targetUser.full_name });
+        // Auth dihapus paling akhir agar operasi yang timeout tetap dapat dilanjutkan.
+        if (targetUser.auth_user_id) {
+            const { error: authErr } = await admin.auth.admin.deleteUser(targetUser.auth_user_id);
+            if (authErr && !authErr.message?.includes('not found') && !authErr.message?.includes('User not found')) {
+                console.error('[purge-user] Auth delete failed:', authErr);
+                return internalError(authErr);
+            }
+        }
+
+        return ok({
+            purged: true,
+            user_id,
+            full_name: targetUser.full_name,
+            deleted,
+            total,
+            status: 'complete',
+            resume_from: { table: 'users', last_id: user_id },
+        });
 
     } catch (err) {
         return internalError(err);
