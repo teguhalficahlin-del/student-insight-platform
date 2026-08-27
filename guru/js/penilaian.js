@@ -1448,8 +1448,9 @@ async function renderPelaksanaan() {
         _sGroupsCache = Object.fromEntries(sGroups.map(g => [g.student_id, g.grup]));
 
         body.innerHTML =
-            '<div class="pen-add-row" style="margin-bottom:10px">' +
+            '<div class="pen-add-row" style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap">' +
             '<button class="pen-btn pen-btn-primary" data-action="asmt-add">+ Tambah Penilaian</button>' +
+            '<button class="pen-btn" data-action="asmt-download-excel" style="margin-left:auto">⬇ Unduh Excel</button>' +
             '</div>' +
             (asmts.length ? asmts.map(asmtRowHtml).join('') : '<p class="pen-placeholder">Belum ada entri penilaian.</p>');
     } catch (err) {
@@ -1874,6 +1875,235 @@ async function handleClick(e) {
         return;
     }
     if (act === 'asmt-delete') { confirmDeleteAsmt(btn.dataset.id, btn); return; }
+    if (act === 'asmt-download-excel') { await downloadPenilaianExcel(); return; }
+}
+
+// ── Download Excel ────────────────────────────────────────────────────────────
+
+async function downloadPenilaianExcel() {
+    if (!ctxOk()) { alert('Pilih kelas, mapel, tahun, dan semester terlebih dahulu.'); return; }
+    if (typeof XLSX === 'undefined') { alert('Library Excel belum dimuat. Muat ulang halaman.'); return; }
+
+    const namaKelas  = document.getElementById('penilaian-kelas-select')?.selectedOptions[0]?.textContent?.trim() || _kelasId;
+    const namaMapel  = document.getElementById('penilaian-mapel-select')?.selectedOptions[0]?.textContent?.trim() || _subjectId;
+
+    try {
+        await ensureUser();
+
+        // ── Fetch data ─────────────────────────────────────────────────────────
+
+        const [asmts, roster] = await Promise.all([
+            getAssessments(_schoolId, _kelasId, _subjectId, _year, Number(_semester)),
+            getStudentsForClass(_kelasId),
+        ]);
+
+        const asmtIds = asmts.map(a => a.id);
+
+        // Nilai numerik (SUMATIF / DIAGNOSTIK_K)
+        let resultsRows = [];
+        if (asmtIds.length) {
+            const { data, error } = await supabase
+                .from('assessment_results')
+                .select('assessment_id, student_id, nilai, status, tindak_lanjut')
+                .in('assessment_id', asmtIds)
+                .eq('school_id', _schoolId);
+            if (error) throw error;
+            resultsRows = data || [];
+        }
+
+        // Rekap nilai akhir per TP per siswa
+        const { data: gradeRecapRows, error: grErr } = await supabase
+            .from('grade_recap')
+            .select('student_id, learning_objective_id, nilai_akhir, kktp_tercapai, deskripsi_capaian')
+            .eq('class_id', _kelasId)
+            .eq('school_id', _schoolId)
+            .eq('academic_year', _year)
+            .eq('semester', Number(_semester));
+        if (grErr) throw grErr;
+
+        // TP cache (sudah ada di _tpCache, tapi pastikan terisi)
+        let tpCache = _tpCache;
+        if (!tpCache.length && _kelasId && _subjectId) {
+            try { tpCache = await getTps(_kelasId, _subjectId, _year, Number(_semester)); } catch {}
+        }
+
+        // Indeks helper: assessment_id → student_id → baris hasil
+        const resultsByAsmt = {};
+        resultsRows.forEach(r => {
+            if (!resultsByAsmt[r.assessment_id]) resultsByAsmt[r.assessment_id] = {};
+            resultsByAsmt[r.assessment_id][r.student_id] = r;
+        });
+        const tpById = Object.fromEntries(tpCache.map(t => [t.id, t]));
+
+        // ── Sheet 1: Rekap Penilaian ───────────────────────────────────────────
+
+        const s1Header = ['Tanggal', 'Jenis', 'Teknik', 'Instrumen', 'TP', 'Keterangan', 'Nama Siswa', 'NIS', 'Nilai / Hasil', 'Status/Predikat', 'Tindak Lanjut'];
+        const s1Rows   = [];
+
+        const jenisLabel = {
+            DIAGNOSTIK_NK : 'Diagnostik Non-Kognitif',
+            DIAGNOSTIK_K  : 'Diagnostik Kognitif',
+            FORMATIF      : 'Formatif',
+            SUMATIF       : 'Sumatif',
+        };
+
+        for (const asmt of asmts) {
+            const tglStr   = asmt.tanggal || '';
+            const jenis    = jenisLabel[asmt.jenis] || asmt.jenis;
+            const teknik   = asmt.teknik  || '';
+            const instrumen = asmt.instrumen || '';
+            const tp       = tpById[asmt.learning_objective_id];
+            const tpStr    = tp ? (tp.kode_tp + ' – ' + tp.deskripsi_tp) : '';
+            const tujuan   = asmt.tujuan  || '';
+            const konten   = asmt.konten;
+
+            // Cek format konten JSONB
+            const hasNilaiAngka = !!(resultsByAsmt[asmt.id] && Object.keys(resultsByAsmt[asmt.id]).length);
+            const hasAspeks     = konten?.aspeks?.length;
+
+            if (hasNilaiAngka) {
+                // Format SUMATIF / DIAGNOSTIK_K: nilai numerik di assessment_results
+                for (const siswa of roster) {
+                    const r = resultsByAsmt[asmt.id]?.[siswa.id];
+                    s1Rows.push([
+                        tglStr, jenis, teknik, instrumen, tpStr, tujuan,
+                        siswa.nama || siswa.full_name || '',
+                        siswa.nis || '',
+                        r?.nilai ?? '',
+                        r?.status ?? '',
+                        r?.tindak_lanjut ?? '',
+                    ]);
+                }
+            } else if (hasAspeks) {
+                // Format FORMATIF: konten.aspeks[].predikat[].siswa[]
+                // Format DIAGNOSTIK_NK: konten.aspeks[].terlihat_jelas/terlihat/belum_terlihat[]
+                const firstAspek = konten.aspeks[0];
+                const isObservasi = Array.isArray(firstAspek?.terlihat_jelas) || Array.isArray(firstAspek?.terlihat) || Array.isArray(firstAspek?.belum_terlihat);
+
+                // Bangun peta student_id → hasil dari semua aspek
+                const hasilBySiswa = {};
+
+                if (isObservasi) {
+                    // DIAGNOSTIK_NK
+                    konten.aspeks.forEach((aspek, ai) => {
+                        const aspekNama = aspek.nama || ('Aspek ' + (ai + 1));
+                        (aspek.terlihat_jelas || []).forEach(sid => {
+                            if (!hasilBySiswa[sid]) hasilBySiswa[sid] = {};
+                            hasilBySiswa[sid][aspekNama] = 'Terlihat Jelas';
+                        });
+                        (aspek.terlihat || []).forEach(sid => {
+                            if (!hasilBySiswa[sid]) hasilBySiswa[sid] = {};
+                            hasilBySiswa[sid][aspekNama] = 'Terlihat';
+                        });
+                        (aspek.belum_terlihat || []).forEach(sid => {
+                            if (!hasilBySiswa[sid]) hasilBySiswa[sid] = {};
+                            hasilBySiswa[sid][aspekNama] = 'Belum Terlihat';
+                        });
+                    });
+
+                    for (const siswa of roster) {
+                        const hasil = hasilBySiswa[siswa.id] || {};
+                        const hasilStr = Object.entries(hasil).map(([k, v]) => k + ': ' + v).join('; ') || '';
+                        s1Rows.push([
+                            tglStr, jenis, teknik, instrumen, tpStr, tujuan,
+                            siswa.nama || siswa.full_name || '',
+                            siswa.nis || '',
+                            '', hasilStr, '',
+                        ]);
+                    }
+                } else {
+                    // FORMATIF: predikat per siswa
+                    konten.aspeks.forEach((aspek, ai) => {
+                        const aspekNama = aspek.nama || ('Aspek ' + (ai + 1));
+                        (aspek.predikat || []).forEach(p => {
+                            (p.siswa || []).forEach(sid => {
+                                if (!hasilBySiswa[sid]) hasilBySiswa[sid] = {};
+                                hasilBySiswa[sid][aspekNama] = p.label || p.val;
+                            });
+                        });
+                    });
+
+                    for (const siswa of roster) {
+                        const hasil = hasilBySiswa[siswa.id] || {};
+                        const hasilStr = Object.entries(hasil).map(([k, v]) => k + ': ' + v).join('; ') || '';
+                        s1Rows.push([
+                            tglStr, jenis, teknik, instrumen, tpStr, tujuan,
+                            siswa.nama || siswa.full_name || '',
+                            siswa.nis || '',
+                            '', hasilStr, '',
+                        ]);
+                    }
+                }
+            } else {
+                // Assessment ada tapi belum ada data → satu baris kosong per siswa
+                for (const siswa of roster) {
+                    s1Rows.push([
+                        tglStr, jenis, teknik, instrumen, tpStr, tujuan,
+                        siswa.nama || siswa.full_name || '',
+                        siswa.nis || '',
+                        '', '', '',
+                    ]);
+                }
+            }
+        }
+
+        // ── Sheet 2: e-Rapor ──────────────────────────────────────────────────
+
+        const s2Header = ['NO', 'NIS', 'NAMA PESERTA DIDIK', 'NILAI AKHIR', 'KETERCAPAIAN KOMPETENSI'];
+        const s2Rows   = [];
+
+        // Kelompokkan grade_recap per siswa (ambil rata-rata atau semua baris per siswa)
+        // Format: satu baris per siswa, ambil nilai akhir tertinggi (jika banyak TP)
+        // atau buat satu baris per TP jika ada banyak TP
+        const recapBySiswa = {};
+        (gradeRecapRows || []).forEach(r => {
+            if (!recapBySiswa[r.student_id]) recapBySiswa[r.student_id] = [];
+            recapBySiswa[r.student_id].push(r);
+        });
+
+        const sortedRoster = [...roster].sort((a, b) =>
+            (a.nama || a.full_name || '').localeCompare(b.nama || b.full_name || '', 'id')
+        );
+
+        let no = 1;
+        for (const siswa of sortedRoster) {
+            const recaps = recapBySiswa[siswa.id];
+            if (recaps && recaps.length) {
+                // Satu baris per TP
+                for (const r of recaps) {
+                    const nilaiAkhir = r.nilai_akhir ?? '';
+                    const ketercapaian = r.kktp_tercapai === true ? 1 : r.kktp_tercapai === false ? 0 : '';
+                    s2Rows.push([no, siswa.nis || '', siswa.nama || siswa.full_name || '', nilaiAkhir, ketercapaian]);
+                    no++;
+                }
+            } else {
+                // Siswa belum ada rekap → baris kosong
+                s2Rows.push([no, siswa.nis || '', siswa.nama || siswa.full_name || '', '', '']);
+                no++;
+            }
+        }
+
+        // ── Build workbook ────────────────────────────────────────────────────
+
+        const wb = XLSX.utils.book_new();
+
+        const ws1 = XLSX.utils.aoa_to_sheet([s1Header, ...s1Rows]);
+        ws1['!cols'] = s1Header.map((h, i) => ({ wch: i < 6 ? 18 : i < 8 ? 22 : 16 }));
+        XLSX.utils.book_append_sheet(wb, ws1, 'Rekap Penilaian');
+
+        const ws2 = XLSX.utils.aoa_to_sheet([s2Header, ...s2Rows]);
+        ws2['!cols'] = [{ wch: 5 }, { wch: 14 }, { wch: 28 }, { wch: 14 }, { wch: 24 }];
+        XLSX.utils.book_append_sheet(wb, ws2, 'e-Rapor');
+
+        const filename = (namaMapel + '_' + namaKelas + '_Penilaian.xlsx')
+            .replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+
+        XLSX.writeFile(wb, filename);
+        toast('File Excel berhasil diunduh: ' + filename);
+
+    } catch (err) {
+        alert('Gagal mengunduh Excel: ' + err.message);
+    }
 }
 
 // ── Collapse helpers ──────────────────────────────────────────────────────────
