@@ -488,7 +488,8 @@ export async function getParentForumRecipients(classId, schoolId) {
 /**
  * Buat posting Forum Sekolah dari ortu ke guru terkait anak.
  */
-export async function createParentForumPost(title, body, classId, academicYear, schoolId) {
+export async function createParentForumPost(title, body, classId, academicYear, schoolId,
+                                            idempotencyKey = null) {
     const recipientIds = await getParentForumRecipients(classId, schoolId);
 
     if (recipientIds.length === 0) {
@@ -507,6 +508,7 @@ export async function createParentForumPost(title, body, classId, academicYear, 
         p_specific_user_ids_2: [],
         p_scope_type:          'SEKOLAH',
         p_title:               title,
+        p_idempotency_key:     idempotencyKey,   // FUNC-03
     });
     if (error) throw error;
     return data;

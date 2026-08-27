@@ -1353,10 +1353,18 @@ export async function getForumSekolahComments(postId) {
 /**
  * Buat posting Forum Sekolah baru.
  * recipientUserIds: array user_id yang sudah di-resolve di sisi client.
+ *
+ * FUNC-01: lampiran TIDAK lagi dipasang di sini. Versi lama memanggil
+ * .update() tanpa memeriksa `error`, sehingga kegagalan pemasangan
+ * lampiran hilang diam-diam dan file di storage jadi orphan permanen.
+ * Pemasangan lampiran sekarang lewat setForumAttachment() yang melempar,
+ * supaya pemanggil bisa membersihkan file yang terlanjur ter-upload.
+ *
+ * FUNC-03: idempotencyKey (UUID dari klien) membuat retry/double-click
+ * mengembalikan posting yang sama, bukan duplikat.
  */
 export async function createForumSekolahPost(
-    title, body, recipientUserIds, academicYear,
-    { attachmentUrl = null, attachmentName = null, attachmentPath = null } = {}
+    title, body, recipientUserIds, academicYear, idempotencyKey = null
 ) {
     const { data, error } = await supabase.rpc('fn_create_forum_post', {
         p_class_id:            null,
@@ -1370,17 +1378,23 @@ export async function createForumSekolahPost(
         p_specific_user_ids_2: [],
         p_scope_type:          'SEKOLAH',
         p_title:               title,
+        p_idempotency_key:     idempotencyKey,
     });
     if (error) throw error;
-    // Update attachment jika ada
-    if (attachmentUrl && data) {
-        await supabase
-            .from('forum_posts')
-            .update({ attachment_url: attachmentUrl, attachment_name: attachmentName,
-                      attachment_path: attachmentPath })
-            .eq('post_id', data);
-    }
     return data;
+}
+
+/**
+ * FUNC-01: pasang lampiran ke post_id yang pasti — dipakai jalur buat
+ * maupun jalur edit. Error sengaja dilempar supaya pemanggil bisa
+ * membersihkan file yang terlanjur ter-upload (rollback orphan).
+ */
+export async function setForumAttachment(postId, url, name, path) {
+    const { error } = await supabase
+        .from('forum_posts')
+        .update({ attachment_url: url, attachment_name: name, attachment_path: path })
+        .eq('post_id', postId);
+    if (error) throw error;
 }
 
 /**

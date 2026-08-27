@@ -37,6 +37,9 @@ import {
     updateForumSekolahPost, deleteForumSekolahPost, getForumRecipientCandidates,
 } from './api.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
+import {
+    initAckQueue, registerAckHandler, ackWithRetry,
+} from '../../shared/ack-queue.js';
 
 // ── DOM refs ───────────────────────────────────────────────────
 const portalTitle    = document.getElementById('portal-title');
@@ -585,8 +588,23 @@ function renderForumCard(post) {
     return card;
 }
 
+// FUNC-03: kunci idempotensi per DRAFT (bukan per klik). Dibuat saat modal
+// dibuka dan dipertahankan selama modal terbuka — double-click maupun retry
+// setelah error jaringan memakai kunci sama, server mengembalikan posting
+// yang sama alih-alih membuat duplikat.
+let _forumIdemKey = null;
+
+function newIdemKey() {
+    try { return crypto.randomUUID(); } catch { /* fallback di bawah */ }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+
 function openForumModal(postId = null) {
     _forumEditPostId = postId;
+    _forumIdemKey    = postId ? null : newIdemKey();   // FUNC-03
     _forumRecipients.clear();
     _forumGroupLabels.clear();
     _forumGroupBtns.clear();
@@ -608,6 +626,7 @@ function openForumModal(postId = null) {
 function closeForumModal() {
     document.getElementById('modal-forum-post').style.display = 'none';
     _forumEditPostId = null;
+    _forumIdemKey    = null;                          // FUNC-03
     _forumRecipients.clear(); _forumGroupLabels.clear();
     _forumGroupBtns.clear();  _forumGroupUids.clear();
 }
@@ -1813,8 +1832,9 @@ async function submitForumPost() {
             // menempelkan lampiran ke "posting terakhir milik penulis"
             // (author_user_id + order created_at desc + limit 1) — salah sasaran bila
             // penulis mengirim dua posting hampir bersamaan dari dua tab/perangkat.
+            // FUNC-03: kunci idempotensi ikut dikirim ke RPC.
             const newPostId = await createForumSekolahPost(title, body, recipientIds,
-                schoolConfig?.current_academic_year ?? '');
+                schoolConfig?.current_academic_year ?? '', _forumIdemKey);
             postSaved = true;
             if (uploadedPath) {
                 if (!newPostId) throw new Error('Server tidak mengembalikan ID posting.');
@@ -1888,7 +1908,11 @@ async function openForumDetail(post) {
     document.getElementById('forum-comment-error').style.display = 'none';
     document.getElementById('forum-comment-input').value = '';
     if (_forumMode === 'masuk') {
-        addForumSekolahAck(post.post_id, currentUser.user_id, currentUser.school_id).catch(() => {});
+        // NOTIF-01: kegagalan ack tidak lagi dibuang — masuk antrean retry.
+        ackWithRetry(
+            'forum_ack',
+            { postId: post.post_id, userId: currentUser.user_id, schoolId: currentUser.school_id },
+            `forum_ack:${post.post_id}:${currentUser.user_id}`);
     }
     await loadForumComments(post.post_id);
 }
@@ -1999,6 +2023,11 @@ async function init() {
     showTab('section-piket');
     await loadPiket();
     showPwaBanner({ hasBottomNav: true });
+    // NOTIF-01: antrean retry ack "posting sudah dibaca".
+    registerAckHandler('forum_ack', p =>
+        addForumSekolahAck(p.postId, p.userId, p.schoolId));
+    initAckQueue({ userId: currentUser.user_id });
+
     initSessionGuard(supabase, getLoginUrl());
 }
 

@@ -30,6 +30,9 @@ import {
     getChildExits,
 } from './api.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
+import {
+    initAckQueue, registerAckHandler, ackWithRetry,
+} from '../../shared/ack-queue.js';
 
 const portalTitle    = document.getElementById('portal-title');
 const portalUserName = document.getElementById('portal-user-name');
@@ -172,6 +175,16 @@ async function init() {
     loadingEl.style.display = 'none';
 
     initNotifBell();
+
+    // NOTIF-01: ack yang gagal (jaringan/timeout) masuk antrean persisten dan
+    // dicoba ulang saat online / tab aktif / halaman dimuat ulang. Badge
+    // di-refresh setiap flush supaya rollback langsung terlihat.
+    registerAckHandler('notif_read', ids => markNotificationsRead(ids));
+    registerAckHandler('forum_ack',  p =>
+        addForumSekolahAck(p.postId, p.userId, p.schoolId));
+    window.addEventListener('sip:ack-flushed', () => { refreshNotifBadge(); });
+    initAckQueue({ userId: currentUser.user_id });
+
     await loadChildData(0);
     showPwaBanner({ hasBottomNav: true });
     initSessionGuard(supabase, getLoginUrl());
@@ -695,13 +708,17 @@ async function openNotifDropdown() {
         notifDropdown.querySelectorAll('.notif-item').forEach(el => {
             el.addEventListener('click', async () => {
                 notifDropdown.style.display = 'none';
-                await markNotificationsRead([el.dataset.id]).catch(() => {});
+                // NOTIF-01: tidak lagi .catch(() => {}) — kegagalan masuk antrean retry.
+                await ackWithRetry('notif_read', [el.dataset.id],
+                    `notif_read:${el.dataset.id}`);
                 await refreshNotifBadge();
             });
         });
         document.getElementById('notif-mark-all-btn')?.addEventListener('click', async () => {
             const ids = notifs.map(n => n.notification_id);
-            await markNotificationsRead(ids).catch(() => {});
+            // NOTIF-01: badge tetap di-nol-kan optimistic; retry ditangani antrean.
+            await ackWithRetry('notif_read', ids,
+                `notif_read:batch:${[...ids].sort().join(',')}`);
             notifDropdown.style.display = 'none';
             notifBellBtn?.querySelector('.notif-badge-count')?.remove();
         });
@@ -952,9 +969,12 @@ async function openForumDetail(post) {
     }
 
     // Acknowledge otomatis saat dibuka (hanya untuk inbox)
+    // NOTIF-01: kegagalan ack tidak lagi dibuang — masuk antrean retry.
     if (_forumMode === 'masuk') {
-        addForumSekolahAck(post.post_id, currentUser.user_id, currentUser.school_id)
-            .catch(() => {});
+        ackWithRetry(
+            'forum_ack',
+            { postId: post.post_id, userId: currentUser.user_id, schoolId: currentUser.school_id },
+            `forum_ack:${post.post_id}:${currentUser.user_id}`);
     }
 }
 
@@ -964,15 +984,31 @@ function closeForumDetail() {
 
 // ─── Modal Buat Posting ────────────────────────────────────────
 
+// FUNC-03: kunci idempotensi per DRAFT (bukan per klik). Dibuat saat modal
+// dibuka dan dipertahankan selama modal terbuka — double-click maupun retry
+// setelah error jaringan memakai kunci sama, server mengembalikan posting
+// yang sama alih-alih membuat duplikat.
+let _forumIdemKey = null;
+
+function newIdemKey() {
+    try { return crypto.randomUUID(); } catch { /* fallback di bawah */ }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+
 function openForumBuat() {
     document.getElementById('forum-input-title').value = '';
     document.getElementById('forum-input-body').value  = '';
     document.getElementById('forum-buat-error').style.display = 'none';
     document.getElementById('modal-forum-buat').style.display = 'flex';
+    _forumIdemKey = newIdemKey();                     // FUNC-03
 }
 
 function closeForumBuat() {
     document.getElementById('modal-forum-buat').style.display = 'none';
+    _forumIdemKey = null;                             // FUNC-03
 }
 
 async function submitForumBuat() {
@@ -1003,11 +1039,13 @@ async function submitForumBuat() {
     btnEl.textContent = 'Mengirim…';
 
     try {
+        // FUNC-03: kunci idempotensi ikut dikirim ke RPC.
         await createParentForumPost(
             title, body,
             child.class_id,
             child.academic_year,
-            currentUser.school_id
+            currentUser.school_id,
+            _forumIdemKey
         );
         closeForumBuat();
         _forumMode = 'terkirim';

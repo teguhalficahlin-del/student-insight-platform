@@ -29,6 +29,9 @@ import {
     clearOfflineQueue,
 } from './offline.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
+import {
+    initAckQueue, registerAckHandler, ackWithRetry,
+} from '../../shared/ack-queue.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
 const offlineBannerEl   = document.getElementById('offline-banner');
@@ -225,12 +228,17 @@ async function openNotifDropdown() {
             el.addEventListener('mouseleave', () => { el.style.background = ''; });
             el.addEventListener('click', async () => {
                 panel.style.display = 'none';
-                await markNotificationsRead([el.dataset.id]).catch(() => {});
+                // NOTIF-01: tidak lagi .catch(() => {}) — kegagalan masuk antrean retry.
+                await ackWithRetry('notif_read', [el.dataset.id],
+                    `notif_read:${el.dataset.id}`);
                 await refreshNotifBadge();
             });
         });
         document.getElementById('notif-mark-all-btn')?.addEventListener('click', async () => {
-            await markNotificationsRead(notifs.map(n => n.notification_id)).catch(() => {});
+            // NOTIF-01: badge tetap di-nol-kan optimistic; retry ditangani antrean.
+            const ids = notifs.map(n => n.notification_id);
+            await ackWithRetry('notif_read', ids,
+                `notif_read:batch:${[...ids].sort().join(',')}`);
             panel.style.display = 'none';
             _setBellBadge(0);
         });
@@ -319,6 +327,13 @@ async function init() {
             loadObservationHistory(),
         ]);
     }
+
+    // NOTIF-01: ack yang gagal (jaringan/timeout) masuk antrean persisten dan
+    // dicoba ulang saat online / tab aktif / halaman dimuat ulang. Badge
+    // di-refresh setiap flush supaya rollback langsung terlihat.
+    registerAckHandler('notif_read', ids => markNotificationsRead(ids));
+    window.addEventListener('sip:ack-flushed', () => { refreshNotifBadge(); });
+    initAckQueue({ userId: currentUser.user_id });
 
     showPwaBanner({ hasBottomNav: false });
     initSessionGuard(supabase, getLoginUrl());

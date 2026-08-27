@@ -19,6 +19,9 @@ import {
     getMyExits,
 } from './api.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
+import {
+    initAckQueue, registerAckHandler, ackWithRetry,
+} from '../../shared/ack-queue.js';
 
 // ─── State ───────────────────────────────────────────────────
 let currentUser = null;
@@ -121,6 +124,13 @@ async function init() {
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display     = 'block';
     initNotifBell();
+
+    // NOTIF-01: ack yang gagal (jaringan/timeout) masuk antrean persisten dan
+    // dicoba ulang saat online / tab aktif / halaman dimuat ulang.
+    registerAckHandler('notif_read', ids => markNotificationsRead(ids));
+    registerAckHandler('forum_ack',  p =>
+        addForumSekolahAck(p.postId, p.userId, p.schoolId));
+    initAckQueue({ userId: currentUser.user_id });
 
     // Default ke tab pertama yang tersedia (Jadwal disembunyikan saat PKL).
     const firstTab = tabs[0]?.key ?? 'kehadiran';
@@ -767,6 +777,10 @@ function initNotifBell() {
         } catch {}
     }
 
+    // NOTIF-01: badge di-refresh setiap flush antrean supaya rollback (ack yang
+    // habis jatah percobaan) langsung terlihat sebagai unread lagi.
+    window.addEventListener('sip:ack-flushed', () => { refresh(); });
+
     async function openDropdown() {
         dropdown.style.display = 'block';
         dropdown.innerHTML = '<div class="notif-empty">Memuat…</div>';
@@ -785,7 +799,9 @@ function initNotifBell() {
             dropdown.querySelectorAll('.notif-item').forEach(el => {
                 el.addEventListener('click', async () => {
                     dropdown.style.display = 'none';
-                    await markNotificationsRead([el.dataset.id]).catch(() => {});
+                    // NOTIF-01: tidak lagi .catch(() => {}) — kegagalan masuk antrean retry.
+                    await ackWithRetry('notif_read', [el.dataset.id],
+                        `notif_read:${el.dataset.id}`);
                     await refresh();
                 });
             });
@@ -957,8 +973,11 @@ async function openForumDetail(post) {
     }
 
     // Acknowledge otomatis saat dibuka
-    addForumSekolahAck(post.post_id, currentUser.user_id, currentUser.school_id)
-        .catch(() => {});
+    // NOTIF-01: kegagalan ack tidak lagi dibuang — masuk antrean retry.
+    ackWithRetry(
+        'forum_ack',
+        { postId: post.post_id, userId: currentUser.user_id, schoolId: currentUser.school_id },
+        `forum_ack:${post.post_id}:${currentUser.user_id}`);
 }
 
 function closeForumDetail() {

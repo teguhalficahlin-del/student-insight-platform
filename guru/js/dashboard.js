@@ -38,7 +38,7 @@ import {
     getForumSekolahPostById, getForumSekolahSentPostById,
     getForumSekolahComments, createForumSekolahPost, updateForumSekolahPost,
     deleteForumSekolahPost, addForumSekolahComment, deleteForumSekolahComment,
-    addForumSekolahAcknowledgement,
+    addForumSekolahAcknowledgement, setForumAttachment,
     getCorePhases, getCoreSubjectsDirect, getMyTeachingCoreSubjects,
     getMyTeacherDocuments, createTeacherDocument,
     updateDocumentStatus, deleteTeacherDocument, getPendingDocApprovals, wakaApproveDoc,
@@ -53,6 +53,9 @@ import {
 import { saveAttendanceBatch, flushPending, pendingCount, clearOfflineQueue } from './offline.js';
 import { initJurnalTab } from './jurnal.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
+import {
+    initAckQueue, registerAckHandler, ackWithRetry,
+} from '../../shared/ack-queue.js';
 
 // ─── Notifikasi lonceng ───────────────────────────────────────
 // Menggantikan badge localStorage. Sumber kebenaran = tabel notifications.
@@ -119,7 +122,9 @@ async function openNotifDropdown() {
             el.addEventListener('mouseleave', () => { el.style.background = ''; });
             el.addEventListener('click', async () => {
                 panel.style.display = 'none';
-                await markNotificationsRead([el.dataset.id]).catch(() => {});
+                // NOTIF-01: tidak lagi .catch(() => {}) — kegagalan masuk antrean retry.
+                await ackWithRetry('notif_read', [el.dataset.id],
+                    `notif_read:${el.dataset.id}`);
                 await refreshNotifBadge();
                 if (el.dataset.case) openKasusDetail(el.dataset.case);
             });
@@ -127,7 +132,9 @@ async function openNotifDropdown() {
 
         document.getElementById('notif-mark-all-btn')?.addEventListener('click', async () => {
             const ids = notifs.map(n => n.notification_id);
-            await markNotificationsRead(ids).catch(() => {});
+            // NOTIF-01: badge tetap di-nol-kan optimistic; retry ditangani antrean.
+            await ackWithRetry('notif_read', ids,
+                `notif_read:batch:${[...ids].sort().join(',')}`);
             panel.style.display = 'none';
             _setBellBadge(0);
         });
@@ -343,6 +350,16 @@ async function init() {
     // Notifikasi: cek unread count lalu poll tiap 1 menit.
     refreshNotifBadge();
     startNotifPolling();
+
+    // NOTIF-01: ack yang gagal (jaringan/timeout) masuk antrean persisten
+    // dan dicoba ulang saat online / tab aktif / halaman dimuat ulang.
+    // Badge di-refresh setiap flush supaya rollback (ack yang habis jatah
+    // percobaan) langsung terlihat sebagai unread lagi.
+    registerAckHandler('notif_read', ids => markNotificationsRead(ids));
+    registerAckHandler('forum_ack',  p =>
+        addForumSekolahAcknowledgement(p.postId, p.userId, p.schoolId));
+    window.addEventListener('sip:ack-flushed', () => { refreshNotifBadge(); });
+    initAckQueue({ userId: currentUser.user_id });
 
     initPWAInstallBanner();
     showPwaBanner({ hasBottomNav: true });
@@ -4311,6 +4328,19 @@ let _forumHasMore     = false;
 let _forumTabInit     = false;
 let _forumScope       = null;      // dari fn_get_user_forum_scope
 let _forumEditPostId  = null;      // null = buat baru, uuid = edit
+// FUNC-03: kunci idempotensi per DRAFT (bukan per klik). Dibuat saat modal
+// dibuka, dipertahankan selama modal masih terbuka — jadi double-click dan
+// retry setelah error jaringan memakai kunci yang sama dan server
+// mengembalikan posting yang sama, bukan duplikat.
+let _forumIdemKey     = null;
+
+function newIdemKey() {
+    try { return crypto.randomUUID(); } catch { /* fallback di bawah */ }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
 
 // State panel pilih penerima
 let _forumRecipients  = new Map(); // user_id → { user_id, full_name, role_label }
@@ -4501,6 +4531,7 @@ function wireForumCards() {
 // ─── Modal Buat/Edit ─────────────────────────────────────────
 function openForumModal(postId = null) {
     _forumEditPostId = postId;
+    _forumIdemKey    = postId ? null : newIdemKey();   // FUNC-03
     _forumRecipients.clear();
     _forumGroupLabels.clear();
     _forumGroupBtns.clear();
@@ -4525,6 +4556,7 @@ function openForumModal(postId = null) {
 function closeForumModal() {
     document.getElementById('modal-forum-post').style.display = 'none';
     _forumEditPostId = null;
+    _forumIdemKey    = null;                          // FUNC-03
     _forumRecipients.clear();
     _forumGroupLabels.clear();
     _forumGroupBtns.clear();
@@ -5724,10 +5756,15 @@ async function submitForumPost() {
     btnEl.disabled = true;
     btnEl.textContent = 'Mengirim\u2026';
 
+    // FUNC-01: path file yang sudah ter-upload tapi BELUM tereferensi posting
+    // manapun. Selama nilainya tidak null, file itu masih calon orphan dan
+    // wajib dihapus lagi kalau ada langkah berikutnya yang gagal.
+    let uploadedPath = null;
+    let postSaved    = false;
+
     try {
         let attachmentUrl  = null;
         let attachmentName = null;
-        let path           = null;
 
         if (fileEl.files[0]) {
             const file = fileEl.files[0];
@@ -5736,11 +5773,13 @@ async function submitForumPost() {
                 errEl.style.display = 'block'; return;
             }
             const ext  = file.name.split('.').pop();
-            path = `${currentUser.school_id}/${Date.now()}.${ext}`;
+            const path = `${currentUser.school_id}/${Date.now()}.${ext}`;
             const { error: upErr } = await supabase.storage
                 .from('forum-attachments')
                 .upload(path, file, { upsert: false });
+            // FUNC-01 poin 2: upload gagal → keluar sebelum menyentuh DB.
             if (upErr) throw upErr;
+            uploadedPath = path;
             const { data: urlData } = supabase.storage
                 .from('forum-attachments')
                 .getPublicUrl(path);
@@ -5749,11 +5788,44 @@ async function submitForumPost() {
         }
 
         if (_forumEditPostId) {
+            // FUNC-01: jalur edit sebelumnya meng-upload file baru tapi TIDAK
+            // pernah memasangnya ke posting — orphan permanen di bucket.
+            // Ambil path lama dulu supaya file yang digantikan ikut dibersihkan.
+            let oldPath = null;
+            if (uploadedPath) {
+                const { data: oldRow, error: oldErr } = await supabase
+                    .from('forum_posts')
+                    .select('attachment_path')
+                    .eq('post_id', _forumEditPostId)
+                    .maybeSingle();
+                if (oldErr) throw oldErr;
+                oldPath = oldRow?.attachment_path ?? null;
+            }
             await updateForumSekolahPost(_forumEditPostId, title, body);
+            postSaved = true;
+            if (uploadedPath) {
+                const newPath = uploadedPath;
+                await setForumAttachment(_forumEditPostId, attachmentUrl,
+                    attachmentName, newPath);
+                uploadedPath = null;   // sudah tereferensi posting — bukan orphan lagi
+                if (oldPath && oldPath !== newPath) {
+                    supabase.storage.from('forum-attachments').remove([oldPath])
+                        .catch(e => console.warn('[forum] hapus lampiran lama gagal:', e));
+                }
+            }
         } else {
             const recipientIds = [..._forumRecipients.keys()];
-            await createForumSekolahPost(title, body, recipientIds,
-                config.current_academic_year, { attachmentUrl, attachmentName, attachmentPath: path });
+            // FUNC-03: kunci idempotensi ikut dikirim; retry dengan kunci sama
+            // mengembalikan post_id yang sama, tidak membuat duplikat.
+            const newPostId = await createForumSekolahPost(title, body, recipientIds,
+                config.current_academic_year, _forumIdemKey);
+            postSaved = true;
+            if (uploadedPath) {
+                if (!newPostId) throw new Error('Server tidak mengembalikan ID posting.');
+                await setForumAttachment(newPostId, attachmentUrl,
+                    attachmentName, uploadedPath);
+                uploadedPath = null;   // sudah tereferensi posting — bukan orphan lagi
+            }
         }
 
         closeForumModal();
@@ -5763,8 +5835,24 @@ async function submitForumPost() {
         _forumOffset = 0;
         loadForumPosts();
     } catch (err) {
-        errEl.textContent = fe(err);
-        errEl.style.display = 'block';
+        // FUNC-01 poin 1: file yang terlanjur ter-upload tapi tidak jadi
+        // tereferensi posting manapun dihapus lagi dari storage.
+        if (uploadedPath) {
+            supabase.storage.from('forum-attachments').remove([uploadedPath])
+                .catch(e => console.warn('[forum] cleanup orphan gagal:', e));
+            uploadedPath = null;
+        }
+        // FUNC-01 poin 3: bedakan "gagal kirim" dari "terkirim, lampiran gagal".
+        // Menyamakan keduanya membuat penulis mengirim ulang → posting ganda.
+        if (postSaved) {
+            closeForumModal();
+            alert('Posting tersimpan, tetapi lampiran gagal dipasang. ' +
+                  'Buka posting lalu edit untuk melampirkan ulang.');
+            loadForumPosts();
+        } else {
+            errEl.textContent = fe(err);
+            errEl.style.display = 'block';
+        }
     } finally {
         btnEl.disabled = false;
         btnEl.textContent = 'Kirim';
@@ -5814,7 +5902,11 @@ async function openForumDetail(postId) {
                 </a>`;
         }
 
-        await addForumSekolahAcknowledgement(postId, currentUser.user_id, currentUser.school_id);
+        // NOTIF-01: ack "posting sudah dibaca" ikut antrean retry.
+        await ackWithRetry(
+            'forum_ack',
+            { postId, userId: currentUser.user_id, schoolId: currentUser.school_id },
+            `forum_ack:${postId}:${currentUser.user_id}`);
 
         if (post.author_user_id === currentUser.user_id) {
             document.getElementById('forum-author-actions').style.display = 'block';

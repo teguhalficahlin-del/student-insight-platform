@@ -288,7 +288,12 @@ export async function addForumSekolahAck(postId, userId, schoolId) {
     if (error) throw error;
 }
 
-export async function createForumSekolahPost(title, body, recipientUserIds, academicYear) {
+/**
+ * FUNC-03: idempotencyKey (UUID dari klien) membuat double-click / retry
+ * mengembalikan posting yang sama, bukan duplikat.
+ */
+export async function createForumSekolahPost(title, body, recipientUserIds, academicYear,
+                                             idempotencyKey = null) {
     const { data, error } = await supabase.rpc('fn_create_forum_post', {
         p_class_id:            null,
         p_academic_year:       academicYear,
@@ -301,6 +306,7 @@ export async function createForumSekolahPost(title, body, recipientUserIds, acad
         p_specific_user_ids_2: [],
         p_scope_type:          'SEKOLAH',
         p_title:               title,
+        p_idempotency_key:     idempotencyKey,
     });
     if (error) throw error;
     return data;
