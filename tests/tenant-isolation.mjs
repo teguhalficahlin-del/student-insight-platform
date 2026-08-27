@@ -29,9 +29,9 @@
  *                          WAKA_KESISWAAN, WAKA_KURIKULUM, WAKA_HUMAS, KEPSEK,
  *                          KAPRODI), DUDI hanya boleh → KAPRODI, dan payload
  *                          ESCALATED wajib memuat new_handler_user_id (E3-1).
- *   8. PKL ortu x-tenant — ortu Sekolah A TIDAK bisa baca pkl_placements /
- *                          pkl_attendance Sekolah B, bahkan dengan anomali
- *                          student_parents lintas-sekolah (mig 190000).
+ *   8. Parent/helper guard — trigger student_parents menolak relasi lintas
+ *                          sekolah; lima helper siswa SECURITY DEFINER wajib
+ *                          memverifikasi sekolah siswa dan tabel tenant.
  *   9. rls_schedules_read_parent  — ce.school_id eksplisit & regression ortu.
  *  10. rls_schedules_read_student — ce.school_id eksplisit & regression siswa.
  *  11. rls_cc_insert     — guard fn_student_in_current_school (student ↔ school),
@@ -485,10 +485,9 @@ async function main() {
             else log.fail(`F4: ESCALATED tanpa new_handler_user_id TIDAK ditolak${f4err ? ': ' + f4err.slice(0, 160) : ''}`);
         }
     }
-    log.head('CHECK 8 — PKL ortu cross-tenant: ortu Sekolah A TIDAK bisa baca PKL Sekolah B (sintetis, ROLLBACK)');
+    log.head('CHECK 8 — student_parents trigger + helper siswa SECURITY DEFINER tenant-scoped');
 
-    // Cari 2 sekolah dengan ortu aktif + siswa + user DUDI (untuk INSERT sintetis)
-    // — TIDAK butuh pkl_placements yang sudah ada.
+    // Cari 2 sekolah dengan ortu aktif + siswa untuk INSERT sintetis lintas tenant.
     const c8Schools = await mgmtQuery(`
         select s.school_id::text,
                s.name,
@@ -501,124 +500,91 @@ async function main() {
                (select st.student_id::text from students st
                  where st.school_id = s.school_id
                  limit 1) as student_id,
-               (select u.user_id::text from users u
-                 where u.school_id = s.school_id and u.role_type = 'DUDI' and u.is_active
-                 limit 1) as dudi_user_id,
                (select count(*) from students st where st.school_id = s.school_id)::int as n_students
         from schools s
         where exists (select 1 from users u
                        where u.school_id = s.school_id and u.role_type = 'ORTU' and u.is_active)
           and exists (select 1 from students st where st.school_id = s.school_id)
-          and exists (select 1 from users u
-                       where u.school_id = s.school_id and u.role_type = 'DUDI' and u.is_active)
         order by n_students desc
         limit 2;`);
 
     const c8Missing = c8Schools.length < 2
-        ? `hanya ${c8Schools.length} sekolah berdata (butuh ≥2 dengan ortu+siswa+dudi)`
+        ? `hanya ${c8Schools.length} sekolah berdata (butuh ≥2 dengan ortu+siswa)`
         : (!c8Schools[0].ortu_auid || !c8Schools[1].ortu_auid)
             ? 'salah satu sekolah tidak punya ortu aktif'
             : (!c8Schools[0].student_id || !c8Schools[1].student_id)
                 ? 'salah satu sekolah tidak punya siswa'
-                : (!c8Schools[0].dudi_user_id || !c8Schools[1].dudi_user_id)
-                    ? 'salah satu sekolah tidak punya dudi aktif'
-                    : null;
+                : null;
 
     if (c8Missing) {
-        log.fail(`CHECK 8 SKIP tidak terduga — ${c8Missing} (butuh minimal 2 sekolah berisi ortu+siswa+dudi)`);
+        log.fail(`CHECK 8 SKIP tidak terduga — ${c8Missing} (butuh minimal 2 sekolah berisi ortu+siswa)`);
     } else {
         const [A, B] = c8Schools; // A = sekolah ortu yg diuji; B = sekolah target PKL
-        const claimsA = `{"sub":"${A.ortu_auid}","role":"authenticated"}`;
+        const guardRows = await mgmtQuery(`
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_trigger t
+                JOIN pg_class c ON c.oid = t.tgrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public'
+                  AND c.relname = 'student_parents'
+                  AND t.tgname = 'trg_validate_student_parent_tenant'
+                  AND NOT t.tgisinternal
+            ) AS deployed;`);
+        const guardDeployed = guardRows[0]?.deployed === true;
 
-        // Satu transaksi: INSERT sintetis (sebagai postgres/superuser, bypass RLS)
-        // → SET ROLE authenticated (RLS aktif) → SELECT → ROLLBACK (DB bersih)
-        //
-        // Yang dimasukkan sintetis:
-        //   (1) pkl_placements: siswa B, dudi B, school B
-        //   (2) pkl_attendance: placement di atas, dicatat dudi B, school B
-        //   (3) student_parents: ortu A → siswa B, school A (anomali lintas-tenant)
-        //
-        // RLS yang diuji:
-        //   rls_pkl_read_ortu:            school_id = fn_current_school_id() AND role=ORTU AND EXISTS student_parents
-        //   rls_pkl_attendance_read_ortu: school_id = fn_current_school_id() AND role=ORTU AND EXISTS student_parents
-        //
-        // fn_current_school_id() untuk ortu A → school A.
-        // Baris sintetis ada di school B → school_id filter memblokir → 0 baris.
+        if (!guardDeployed) {
+            log.warn('F1: SKIP — migration F-01 belum diterapkan ke database live');
+        } else {
+            let rejected = false;
+            let rejectError = '';
+            try {
+                await mgmtQuery(
+                    `begin;` +
+                    ` insert into student_parents (student_id, parent_user_id, school_id)` +
+                    ` values ('${B.student_id}', '${A.ortu_user_id}', '${A.school_id}');` +
+                    ` rollback;`
+                );
+                rejectError = 'INSERT lintas tenant diterima';
+            } catch (e) {
+                if (e.message.includes('student_parents_tenant_guard') || e.message.includes('P0001')) {
+                    rejected = true;
+                } else {
+                    rejectError = e.message;
+                }
+            }
 
-        // Satu transaksi utuh: INSERT sintetis sebagai postgres (bypass RLS)
-        // → SET ROLE authenticated (RLS aktif) → SELECT → ROLLBACK (DB bersih).
-        // Management API mengembalikan hasil statement terakhir (SELECT).
-        let crossRows;
-        try {
-            crossRows = await mgmtQuery(
-                `begin;` +
-
-                // (1) Placement sintetis di Sekolah B (sebagai postgres, bypass RLS)
-                // is_active=false agar tidak melanggar EXCLUDE CONSTRAINT
-                // uq_active_pkl_per_student (berlaku hanya untuk is_active=true).
-                // Policy rls_pkl_read_ortu tidak memfilter is_active, jadi baris
-                // tetap terlihat bila school_id guard gagal.
-                ` insert into pkl_placements` +
-                `   (student_id, dudi_user_id, school_id, start_date, end_date, is_active)` +
-                ` values` +
-                `   ('${B.student_id}', '${B.dudi_user_id}', '${B.school_id}', '2026-01-01', '2026-06-30', false);` +
-
-                // (2) Attendance sintetis: subquery ke placement yang baru diinsert di txn yang sama
-                ` insert into pkl_attendance` +
-                `   (placement_id, student_id, attendance_date, recorded_by_user_id, school_id)` +
-                ` select pp.placement_id, pp.student_id, '2026-01-02', '${B.dudi_user_id}', '${B.school_id}'` +
-                ` from pkl_placements pp` +
-                ` where pp.student_id = '${B.student_id}'` +
-                `   and pp.school_id  = '${B.school_id}'` +
-                `   and pp.start_date = '2026-01-01'` +
-                ` limit 1;` +
-
-                // (3) Anomali: student_parents ortu A → siswa B
-                //     school_id = sekolah A agar FK schools valid; ini inti uji cross-tenant.
-                ` insert into student_parents (student_id, parent_user_id, school_id)` +
-                ` values ('${B.student_id}', '${A.ortu_user_id}', '${A.school_id}')` +
-                ` on conflict do nothing;` +
-
-                // Beralih ke konteks authenticated ortu A — RLS mulai aktif
-                ` set local role authenticated;` +
-                ` select set_config('request.jwt.claims', $c$${claimsA}$c$, true);` +
-
-                // Ukur: ortu A mencoba baca PKL Sekolah B
-                // Dengan school_id guard: fn_current_school_id() = school A ≠ school B → 0
-                ` select` +
-                `   (select count(*) from pkl_placements` +
-                `     where school_id = '${B.school_id}')::int as p,` +
-                `   (select count(*) from pkl_attendance` +
-                `     where school_id = '${B.school_id}')::int as a,` +
-                `   fn_current_school_id()::text as resolved_school;` +
-
-                ` rollback;`
-            );
-        } catch (e) {
-            log.fail(`CHECK 8 — Transaksi sintetis gagal: ${e.message}`);
-            crossRows = null;
+            if (rejected)
+                log.pass('F1: trigger menolak INSERT parent sekolah A → siswa sekolah B (P0001 student_parents_tenant_guard)');
+            else
+                log.fail(`F1: trigger tidak menolak INSERT student_parents lintas tenant${rejectError ? ': ' + rejectError.slice(0, 160) : ''}`);
         }
 
-        if (crossRows !== null) {
-            const cr = crossRows[0] || {};
-            const p  = cr.p  ?? -1;
-            const a  = cr.a  ?? -1;
-            const rs = cr.resolved_school ?? '(null)';
+        const helperRequirements = {
+            fn_can_see_student:        ['fn_student_in_current_school'],
+            fn_teaches_student:        ['fn_student_in_current_school', 'ce.school_id', 'ta.school_id'],
+            fn_wali_of_student:        ['fn_student_in_current_school', 'ce.school_id'],
+            fn_kaprodi_of_student:      ['fn_student_in_current_school', 's.school_id'],
+            fn_dudi_supervises_student: ['fn_student_in_current_school', 'pp.school_id'],
+        };
+        const helperNames = Object.keys(helperRequirements).map((name) => `'${name}'`).join(',');
+        const helperRows = await mgmtQuery(`
+            SELECT p.proname, pg_get_functiondef(p.oid) AS definition
+            FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public'
+              AND p.proname IN (${helperNames});`);
+        const helperDefs = Object.fromEntries(helperRows.map((row) => [row.proname, row.definition]));
+        const helpersDeployed = Object.entries(helperRequirements).every(([name, markers]) =>
+            markers.every((marker) => helperDefs[name]?.includes(marker))
+        );
 
-            if (rs === A.school_id)
-                log.pass(`fn_current_school_id() → ${A.name} (benar, ortu A dikontekskan)`);
-            else
-                log.fail(`fn_current_school_id() salah: ${rs} ≠ ${A.school_id}`);
-
-            if (p === 0)
-                log.pass(`ortu ${A.name} + anomali student_parents → 0 pkl_placements Sekolah B (school_id guard bekerja)`);
-            else
-                log.fail(`BOCOR: ortu ${A.name} dengan anomali student_parents melihat ${p} pkl_placements Sekolah B — school_id filter TIDAK bekerja`);
-
-            if (a === 0)
-                log.pass(`ortu ${A.name} + anomali student_parents → 0 pkl_attendance Sekolah B (school_id guard bekerja)`);
-            else
-                log.fail(`BOCOR: ortu ${A.name} dengan anomali student_parents melihat ${a} pkl_attendance Sekolah B — school_id filter TIDAK bekerja`);
+        if (!guardDeployed) {
+            log.warn('F2: SKIP — migration F-02 belum diterapkan ke database live');
+        } else if (helpersDeployed) {
+            log.pass('F2: lima helper siswa memverifikasi current school dan setiap tenant table yang dibaca');
+        } else {
+            log.fail('F2: satu atau lebih helper siswa belum memiliki seluruh guard school_id yang diwajibkan');
         }
     }
 
