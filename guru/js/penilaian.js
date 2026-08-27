@@ -1448,9 +1448,8 @@ async function renderPelaksanaan() {
         _sGroupsCache = Object.fromEntries(sGroups.map(g => [g.student_id, g.grup]));
 
         body.innerHTML =
-            '<div class="pen-add-row" style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap">' +
+            '<div class="pen-add-row" style="margin-bottom:10px">' +
             '<button class="pen-btn pen-btn-primary" data-action="asmt-add">+ Tambah Penilaian</button>' +
-            '<button class="pen-btn" data-action="asmt-download-excel" style="margin-left:auto">⬇ Unduh Excel</button>' +
             '</div>' +
             (asmts.length ? asmts.map(asmtRowHtml).join('') : '<p class="pen-placeholder">Belum ada entri penilaian.</p>');
     } catch (err) {
@@ -1790,11 +1789,14 @@ function _rcFilterBar() {
     const teknikOpts = ['', ...TEKNIK_LIST].map(v =>
         '<option value="' + v + '"' + (_rcTeknik === v ? ' selected' : '') + '>' + (v || 'Semua Teknik') + '</option>').join('');
     return (
-        '<div class="rc-filter-bar">' +
+        '<div class="rc-filter-bar" style="justify-content:space-between">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
         '<select id="rc-jenis">' + jenisOpts + '</select>' +
         // Metode hanya relevan untuk SUMATIF — jenis lain tidak dihitung nilai akhirnya
         (_rcJenis === 'SUMATIF' ? '<select id="rc-metode">' + metodeOpts + '</select>' : '') +
         '<select id="rc-teknik">' + teknikOpts + '</select>' +
+        '</div>' +
+        '<button class="pen-btn" data-action="asmt-download-excel">⬇ Unduh Excel</button>' +
         '</div>'
     );
 }
