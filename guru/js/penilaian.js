@@ -1939,7 +1939,7 @@ async function downloadPenilaianExcel() {
 
         // ── Sheet 1: Rekap Penilaian ───────────────────────────────────────────
 
-        const s1Header = ['Tanggal', 'Jenis', 'Teknik', 'Instrumen', 'TP', 'Keterangan', 'Nama Siswa', 'NIS', 'Nilai / Hasil', 'Status/Predikat', 'Tindak Lanjut'];
+        const s1Header = ['Tanggal', 'Jenis', 'Teknik', 'Instrumen', 'TP', 'Keterangan', 'Nama Siswa', 'NIS', 'Nilai / Hasil', 'Status/Predikat', 'Tindak Lanjut', 'Refleksi Guru'];
         const s1Rows   = [];
 
         const jenisLabel = {
@@ -1974,6 +1974,7 @@ async function downloadPenilaianExcel() {
                         r?.nilai ?? '',
                         r?.status ?? '',
                         r?.tindak_lanjut ?? '',
+                        '',
                     ]);
                 }
             } else if (hasAspeks) {
@@ -2011,6 +2012,7 @@ async function downloadPenilaianExcel() {
                             siswa.nama || siswa.full_name || '',
                             siswa.nis || '',
                             '', hasilStr, '',
+                            konten?.refleksi || '',
                         ]);
                     }
                 } else {
@@ -2033,6 +2035,7 @@ async function downloadPenilaianExcel() {
                             siswa.nama || siswa.full_name || '',
                             siswa.nis || '',
                             '', hasilStr, '',
+                            konten?.refleksi || '',
                         ]);
                     }
                 }
@@ -2044,6 +2047,7 @@ async function downloadPenilaianExcel() {
                         siswa.nama || siswa.full_name || '',
                         siswa.nis || '',
                         '', '', '',
+                        '',
                     ]);
                 }
             }
