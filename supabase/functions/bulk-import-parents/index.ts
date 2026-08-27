@@ -1,7 +1,7 @@
 /**
  * @file bulk-import-parents/index.ts
  * @edge-function bulk-import-parents
- * @version 1.2.0
+ * @version 1.3.0
  *
  * Bulk-provisions ORTU (parent) accounts and links them to students
  * via student_parents. Idempotent: re-importing the same NIK skips
@@ -30,7 +30,12 @@
  *   3.  Auth: verify JWT + resolve user row
  *   4.  Authorization: caller must be ADMINISTRATIVE
  *   5.  Parse CSV body
- *   6.  Validate each row (nama_ortu/nik/nis_siswa present)
+ *   6.  Validate each row: nama_ortu/nik/nis_siswa terisi, DAN nik harus
+ *       angka murni (^[0-9]+$). Insiden 4 Agt 2026: 99 akun ORTU masuk
+ *       dengan NIK placeholder 'N3-2026-{NIS}' — mengandung huruf dan
+ *       strip, tidak bisa dipakai login, dan NIS-nya milik sekolah lain.
+ *       Baris yang gagal validasi di-skip dan dicatat di errors[];
+ *       import baris lain tetap jalan.
  *   7.  Resolve nis_siswa -> student_id (students.nis)
  *   8.  Batch duplicate check: nik already in users.login_identifier?
  *       (fn_check_niks_exist) — existing accounts skip step 9a.
@@ -144,6 +149,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 errors.push({ row: row.rowNumber, message: `Kolom wajib kosong: ${missing.join(', ')}` });
                 continue;
             }
+
+            // NIK wajib angka murni. login_identifier dipakai apa adanya
+            // sebagai kredensial login (fn_resolve_login_email) dan sebagai
+            // local-part email internal, jadi huruf/strip/spasi membuat akun
+            // tidak bisa dipakai. parseCsv() sudah men-trim tiap field.
+            if (!/^[0-9]+$/.test(row.nik)) {
+                errors.push({
+                    row:     row.rowNumber,
+                    message: `NIK "${row.nik}" tidak valid: harus angka saja, tanpa huruf, strip, atau spasi`,
+                });
+                continue;
+            }
+
             validRows.push(row);
         }
 
