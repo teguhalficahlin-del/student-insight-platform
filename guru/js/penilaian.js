@@ -1939,7 +1939,7 @@ async function downloadPenilaianExcel() {
 
         // ── Sheet 1: Rekap Penilaian ───────────────────────────────────────────
 
-        const s1Header = ['Tanggal', 'Jenis', 'Teknik', 'Instrumen', 'TP', 'Keterangan', 'Nama Siswa', 'NIS', 'Nilai / Hasil', 'Status/Predikat', 'Tindak Lanjut', 'Refleksi Guru'];
+        const s1Header = ['Tanggal', 'Jenis', 'Teknik', 'Instrumen', 'TP', 'Keterangan', 'Aspek', 'Indikator', 'Nama Siswa', 'NIS', 'Nilai / Hasil', 'Status/Predikat', 'Tindak Lanjut', 'Refleksi Guru'];
         const s1Rows   = [];
 
         const jenisLabel = {
@@ -1969,6 +1969,7 @@ async function downloadPenilaianExcel() {
                     const r = resultsByAsmt[asmt.id]?.[siswa.id];
                     s1Rows.push([
                         tglStr, jenis, teknik, instrumen, tpStr, tujuan,
+                        '', '',
                         siswa.nama || siswa.full_name || '',
                         siswa.nis || '',
                         r?.nilai ?? '',
@@ -1983,67 +1984,59 @@ async function downloadPenilaianExcel() {
                 const firstAspek = konten.aspeks[0];
                 const isObservasi = Array.isArray(firstAspek?.terlihat_jelas) || Array.isArray(firstAspek?.terlihat) || Array.isArray(firstAspek?.belum_terlihat);
 
-                // Bangun peta student_id → hasil dari semua aspek
-                const hasilBySiswa = {};
-
                 if (isObservasi) {
-                    // DIAGNOSTIK_NK
+                    // DIAGNOSTIK_NK — satu baris per siswa per aspek
+                    const rosterIdx = Object.fromEntries(roster.map(s => [s.id, s]));
                     konten.aspeks.forEach((aspek, ai) => {
-                        const aspekNama = aspek.nama || ('Aspek ' + (ai + 1));
-                        (aspek.terlihat_jelas || []).forEach(sid => {
-                            if (!hasilBySiswa[sid]) hasilBySiswa[sid] = {};
-                            hasilBySiswa[sid][aspekNama] = 'Terlihat Jelas';
-                        });
-                        (aspek.terlihat || []).forEach(sid => {
-                            if (!hasilBySiswa[sid]) hasilBySiswa[sid] = {};
-                            hasilBySiswa[sid][aspekNama] = 'Terlihat';
-                        });
-                        (aspek.belum_terlihat || []).forEach(sid => {
-                            if (!hasilBySiswa[sid]) hasilBySiswa[sid] = {};
-                            hasilBySiswa[sid][aspekNama] = 'Belum Terlihat';
-                        });
+                        const aspekNama = aspek.nama      || ('Aspek ' + (ai + 1));
+                        const indikator = aspek.indikator || '';
+                        const mapHasil  = {};
+                        (aspek.terlihat_jelas || []).forEach(sid => { mapHasil[sid] = 'Terlihat Jelas'; });
+                        (aspek.terlihat       || []).forEach(sid => { mapHasil[sid] = 'Terlihat'; });
+                        (aspek.belum_terlihat || []).forEach(sid => { mapHasil[sid] = 'Belum Terlihat'; });
+                        for (const [sid, hasil] of Object.entries(mapHasil)) {
+                            const siswa = rosterIdx[sid];
+                            if (!siswa) continue;
+                            s1Rows.push([
+                                tglStr, jenis, teknik, instrumen, tpStr, tujuan,
+                                aspekNama, indikator,
+                                siswa.nama || siswa.full_name || '',
+                                siswa.nis || '',
+                                '', hasil, '',
+                                konten?.refleksi || '',
+                            ]);
+                        }
                     });
-
-                    for (const siswa of roster) {
-                        const hasil = hasilBySiswa[siswa.id] || {};
-                        const hasilStr = Object.entries(hasil).map(([k, v]) => k + ': ' + v).join('; ') || '';
-                        s1Rows.push([
-                            tglStr, jenis, teknik, instrumen, tpStr, tujuan,
-                            siswa.nama || siswa.full_name || '',
-                            siswa.nis || '',
-                            '', hasilStr, '',
-                            konten?.refleksi || '',
-                        ]);
-                    }
                 } else {
-                    // FORMATIF: predikat per siswa
+                    // FORMATIF — satu baris per siswa per aspek
+                    const rosterIdx = Object.fromEntries(roster.map(s => [s.id, s]));
                     konten.aspeks.forEach((aspek, ai) => {
-                        const aspekNama = aspek.nama || ('Aspek ' + (ai + 1));
+                        const aspekNama = aspek.nama      || ('Aspek ' + (ai + 1));
+                        const indikator = aspek.indikator || '';
+                        const mapHasil  = {};
                         (aspek.predikat || []).forEach(p => {
-                            (p.siswa || []).forEach(sid => {
-                                if (!hasilBySiswa[sid]) hasilBySiswa[sid] = {};
-                                hasilBySiswa[sid][aspekNama] = p.label || p.val;
-                            });
+                            (p.siswa || []).forEach(sid => { mapHasil[sid] = p.label || p.val; });
                         });
+                        for (const [sid, hasil] of Object.entries(mapHasil)) {
+                            const siswa = rosterIdx[sid];
+                            if (!siswa) continue;
+                            s1Rows.push([
+                                tglStr, jenis, teknik, instrumen, tpStr, tujuan,
+                                aspekNama, indikator,
+                                siswa.nama || siswa.full_name || '',
+                                siswa.nis || '',
+                                '', hasil, '',
+                                konten?.refleksi || '',
+                            ]);
+                        }
                     });
-
-                    for (const siswa of roster) {
-                        const hasil = hasilBySiswa[siswa.id] || {};
-                        const hasilStr = Object.entries(hasil).map(([k, v]) => k + ': ' + v).join('; ') || '';
-                        s1Rows.push([
-                            tglStr, jenis, teknik, instrumen, tpStr, tujuan,
-                            siswa.nama || siswa.full_name || '',
-                            siswa.nis || '',
-                            '', hasilStr, '',
-                            konten?.refleksi || '',
-                        ]);
-                    }
                 }
             } else {
                 // Assessment ada tapi belum ada data → satu baris kosong per siswa
                 for (const siswa of roster) {
                     s1Rows.push([
                         tglStr, jenis, teknik, instrumen, tpStr, tujuan,
+                        '', '',
                         siswa.nama || siswa.full_name || '',
                         siswa.nis || '',
                         '', '', '',
