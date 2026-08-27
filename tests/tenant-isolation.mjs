@@ -1694,12 +1694,12 @@ async function main() {
                 ORDER BY u.user_id LIMIT 1
             ),
             siswa_wd AS (
-                SELECT u.user_id, u.auth_user_id
+                SELECT u.user_id, u.auth_user_id, ce.student_id
                 FROM class_enrollments ce
                 JOIN tgt ON ce.class_id = tgt.class_id AND ce.academic_year = tgt.academic_year
                 JOIN students s ON s.student_id = ce.student_id
                 JOIN users u ON u.user_id = s.user_id
-                WHERE ce.withdrawn_at IS NOT NULL AND u.auth_user_id IS NOT NULL
+                WHERE ce.withdrawn_at IS NULL AND u.is_active AND u.auth_user_id IS NOT NULL
                 ORDER BY u.user_id LIMIT 1
             )
             SELECT tgt.class_id::text  AS class_id,
@@ -1709,7 +1709,8 @@ async function main() {
                    b.user_id::text       AS same_uid,   b.auth_user_id::text  AS same_auth,
                    o.user_id::text       AS out_uid,    o.auth_user_id::text  AS out_auth,
                    oi.auth_user_id::text AS ortu_auth,
-                   sw.user_id::text      AS wd_uid,     sw.auth_user_id::text AS wd_auth
+                   sw.user_id::text      AS wd_uid,     sw.auth_user_id::text AS wd_auth,
+                   sw.student_id::text   AS wd_student_id
             FROM tgt
             LEFT JOIN ranked   a  ON a.rn = 1
             LEFT JOIN ranked   b  ON b.rn = 2
@@ -1758,11 +1759,14 @@ async function main() {
                     `    'data sintetis tenant-isolation - dirollback',` +
                     `    'INTERNAL', 'KELAS', 'SEMUA_GURU_KELAS');` +
 
-                    // (2) Siswa withdrawn dimasukkan ke audience EKSPLISIT.
-                    //     Tanpa ini F9 lulus vacuously (siswa gagal di syarat
-                    //     audience, bukan di syarat enrollment aktif).
-                    (d.wd_uid
-                        ? ` insert into forum_post_audience (post_id, user_id, school_id)` +
+                    // (2) Siswa aktif di-withdraw secara sintetis lalu dimasukkan ke
+                    //     audience EKSPLISIT — membuktikan guard withdrawal, bukan
+                    //     ketiadaan audience entry.
+                    (d.wd_uid && d.wd_student_id
+                        ? ` update class_enrollments set withdrawn_at = now()` +
+                          ` where class_id = '${d.class_id}' and academic_year = '${d.academic_year}'` +
+                          ` and student_id = '${d.wd_student_id}';` +
+                          ` insert into forum_post_audience (post_id, user_id, school_id)` +
                           ` values ('${POST}', '${d.wd_uid}', '${d.school_id}');`
                         : ``) +
 
@@ -1830,7 +1834,7 @@ async function main() {
                 expect('F9', '0',
                     'siswa withdrawn tidak bisa baca walau terdaftar di audience',
                     'siswa withdrawn BISA baca — guard enrollment tidak aktif',
-                    'tidak ada siswa withdrawn di kelas ini');
+                    'tidak ada siswa aktif di kelas ini');
                 expect('F10', '42501',
                     'guru luar kelas ditolak RLS saat INSERT posting (42501)',
                     'INSERT guru luar kelas TIDAK ditolak RLS — RLS BYPASS',
