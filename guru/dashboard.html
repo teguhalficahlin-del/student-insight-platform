@@ -1338,18 +1338,18 @@
 
             <!-- Sub-tab navigation -->
             <div style="display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid var(--color-border); padding-bottom:0">
-                <button class="jurnal-sub-btn active" data-jurnal-sub="catatan"
+                <button class="jurnal-sub-btn active" data-jurnal-sub="penilaian"
                         style="padding:8px 16px; border:none; background:none; cursor:pointer; font-weight:600; border-bottom:2px solid var(--color-primary); color:var(--color-primary)">
-                    Catatan Jurnal
-                </button>
-                <button class="jurnal-sub-btn" data-jurnal-sub="penilaian"
-                        style="padding:8px 16px; border:none; background:none; cursor:pointer; color:var(--color-text-muted); border-bottom:2px solid transparent">
                     Penilaian
+                </button>
+                <button class="jurnal-sub-btn" data-jurnal-sub="catatan"
+                        style="padding:8px 16px; border:none; background:none; cursor:pointer; color:var(--color-text-muted); border-bottom:2px solid transparent">
+                    Catatan Jurnal
                 </button>
             </div>
 
             <!-- Sub-panel: Catatan Jurnal -->
-            <div id="jurnal-sub-catatan">
+            <div id="jurnal-sub-catatan" style="display:none">
 
                 <!-- Form tulis entri baru -->
                 <div class="section-card">
@@ -1380,10 +1380,24 @@
                     <div id="journal-list"><p class="hint">Memuat…</p></div>
                 </div>
 
+                <!-- Section: Progres Tujuan Pembelajaran -->
+                <div class="section-card">
+                    <h3>Progres Tujuan Pembelajaran</h3>
+                    <div class="field" style="max-width:320px; margin-bottom:16px">
+                        <label class="label">Kelas</label>
+                        <select id="tp-kelas-select" class="input">
+                            <option value="">— Pilih Kelas —</option>
+                        </select>
+                    </div>
+                    <div id="tp-taught-content">
+                        <p class="hint">Pilih kelas untuk melihat progres TP.</p>
+                    </div>
+                </div>
+
             </div><!-- /jurnal-sub-catatan -->
 
             <!-- Sub-panel: Penilaian -->
-            <div id="jurnal-sub-penilaian" style="display:none">
+            <div id="jurnal-sub-penilaian">
 
                 <!-- Selector konteks -->
                 <div class="section-card">

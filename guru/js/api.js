@@ -2009,6 +2009,25 @@ export async function getCpForSubject(subjectId, programCode, gradeLevel) {
     return data;
 }
 
+export async function fnToggleTpTaught(p_class_id, p_tp_id, p_is_taught) {
+    const { data, error } = await supabase.rpc('fn_toggle_tp_taught', {
+        p_class_id,
+        p_tp_id,
+        p_is_taught,
+    });
+    if (error) throw error;
+    return data;
+}
+
+export async function getTpTaughtStatus(classId) {
+    const { data, error } = await supabase
+        .from('tp_taught_status')
+        .select('tp_id, is_taught')
+        .eq('class_id', classId);
+    if (error) throw error;
+    return Object.fromEntries((data || []).map(r => [r.tp_id, r.is_taught]));
+}
+
 export async function checkElementDuplicate(elementId, schoolId, loId) {
     const { data, error } = await supabase.rpc('fn_check_element_duplicate', {
         p_element_id: elementId,

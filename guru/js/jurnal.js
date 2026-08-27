@@ -5,8 +5,11 @@
 
 import { getLoginUrl } from '../../shared/branding.js';
 import {
+    supabase,
     getCurrentUserRow,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
+    getCpForSubject, getTps,
+    fnToggleTpTaught, getTpTaughtStatus,
 } from './api.js';
 import { initPenilaianTab } from './penilaian.js';
 
@@ -70,13 +73,15 @@ function localDateStr(d = new Date()) {
 // ── Sesi pengguna ─────────────────────────────────────────────────────────────
 
 let _userId    = null;
+let _schoolId  = null;
 let _userReady = false;
 
 async function ensureUser() {
     if (_userReady) return;
     const u = await getCurrentUserRow();
     if (!u) throw new Error('Sesi tidak ditemukan. Muat ulang halaman.');
-    _userId    = u.user_id;
+    _userId   = u.user_id;
+    _schoolId = u.school_id;
     _userReady = true;
 }
 
@@ -176,6 +181,8 @@ async function initJurnalTab() {
 
     // Inisialisasi logika sub-tab Penilaian (pasang event listener switching)
     await initPenilaianTab();
+
+    initTpTaughtSection();
 }
 
 function renderJurnalEntries(entries, listEl) {
@@ -338,6 +345,184 @@ async function loadJurnalList() {
         } else {
             listEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
         }
+    }
+}
+
+// ─── Progres Tujuan Pembelajaran ─────────────────────────────────────────────
+
+function showToast(msg, isError = false) {
+    const el = document.createElement('div');
+    el.textContent = msg;
+    el.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+        background:${isError ? 'var(--color-danger)' : '#2d9f6e'};
+        color:#fff;padding:10px 18px;border-radius:6px;z-index:9999;font-size:14px;
+        box-shadow:0 2px 8px rgba(0,0,0,.25);white-space:nowrap`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+}
+
+// Cache kelas yang diajar — { class_id: { name, gradeLevel, programCode } }
+const _tpKelasCache = {};
+
+function initTpTaughtSection() {
+    const sel = document.getElementById('tp-kelas-select');
+    if (!sel) return;
+
+    loadTpKelasOptions(sel);
+
+    sel.addEventListener('change', () => {
+        const classId = sel.value;
+        const content = document.getElementById('tp-taught-content');
+        if (!classId) {
+            content.innerHTML = '<p class="hint">Pilih kelas untuk melihat progres TP.</p>';
+            return;
+        }
+        renderTpProgress(classId, content);
+    });
+}
+
+async function loadTpKelasOptions(sel) {
+    try {
+        await ensureUser();
+        const { data, error } = await supabase
+            .from('teaching_assignments')
+            .select('class_id, classes(name, grade_level, programs(code))')
+            .eq('school_id', _schoolId)
+            .eq('user_id', _userId)
+            .eq('is_active', true)
+            .order('class_id');
+        if (error) throw error;
+        const seen = new Set();
+        (data || []).forEach(row => {
+            if (seen.has(row.class_id)) return;
+            seen.add(row.class_id);
+            _tpKelasCache[row.class_id] = {
+                name        : row.classes?.name || row.class_id,
+                gradeLevel  : row.classes?.grade_level ?? null,
+                programCode : row.classes?.programs?.code ?? '',
+            };
+            const opt = document.createElement('option');
+            opt.value = row.class_id;
+            opt.textContent = row.classes?.name || row.class_id;
+            sel.appendChild(opt);
+        });
+    } catch (e) {
+        console.error('loadTpKelasOptions:', e);
+    }
+}
+
+async function renderTpProgress(classId, container) {
+    container.innerHTML = '<p class="hint">Memuat…</p>';
+    try {
+        await ensureUser();
+
+        // Ambil semua mapel yang diajar di kelas ini
+        const { data: assignments, error: aErr } = await supabase
+            .from('teaching_assignments')
+            .select('subject_id, subjects(name)')
+            .eq('school_id', _schoolId)
+            .eq('user_id', _userId)
+            .eq('class_id', classId)
+            .eq('is_active', true);
+        if (aErr) throw aErr;
+
+        const subjects = [];
+        const seen = new Set();
+        (assignments || []).forEach(a => {
+            if (seen.has(a.subject_id)) return;
+            seen.add(a.subject_id);
+            subjects.push({ id: a.subject_id, name: a.subjects?.name || a.subject_id });
+        });
+
+        if (!subjects.length) {
+            container.innerHTML = '<p class="hint">Tidak ada mapel yang diajar di kelas ini.</p>';
+            return;
+        }
+
+        // Ambil status tp_taught untuk kelas ini (semua mapel sekaligus)
+        const statusMap = await getTpTaughtStatus(classId);
+
+        const { gradeLevel, programCode } = _tpKelasCache[classId] || {};
+        const yr = new Date().getFullYear();
+        const year = `${yr}/${yr + 1}`;
+
+        let html = '';
+        for (const subj of subjects) {
+            html += `<div style="margin-bottom:20px">
+                <h4 style="margin:0 0 8px;font-size:15px">${esc(subj.name)}</h4>`;
+
+            // CP (opsional — tampilkan jika tersedia)
+            try {
+                const cp = await getCpForSubject(subj.id, programCode, gradeLevel);
+                if (cp?.found && cp.elemen?.length) {
+                    html += `<p style="font-size:12px;color:var(--color-text-muted);margin:0 0 8px">
+                        CP: ${esc(cp.core_subject_name || '')}
+                        ${cp.elemen.map(e => `<span style="display:block;padding-left:8px;font-size:12px">• ${esc(e.nama_elemen)}</span>`).join('')}
+                    </p>`;
+                }
+            } catch { /* CP tidak kritis — lanjut tanpa CP */ }
+
+            // TP dari learning_objectives (ambil kedua semester)
+            let tps = [];
+            try {
+                const [s1, s2] = await Promise.all([
+                    getTps(classId, subj.id, year, 1),
+                    getTps(classId, subj.id, year, 2),
+                ]);
+                tps = [...(s1 || []), ...(s2 || [])];
+            } catch { /* skip */ }
+
+            if (!tps.length) {
+                html += `<p class="hint" style="font-size:13px">Belum ada TP untuk mapel ini.</p>`;
+            } else {
+                html += `<div class="tp-taught-list">`;
+                tps.forEach(tp => {
+                    const tpId    = String(tp.id);
+                    const checked = statusMap[tpId] ? 'checked' : '';
+                    html += `<label style="display:flex;align-items:flex-start;gap:10px;
+                            padding:8px 10px;border:1px solid var(--color-border);
+                            border-radius:6px;margin-bottom:6px;cursor:pointer;
+                            font-size:13px;line-height:1.5">
+                        <input type="checkbox" class="tp-taught-cb"
+                            data-class="${esc(classId)}"
+                            data-tp="${esc(tpId)}"
+                            ${checked}
+                            style="margin-top:3px;flex-shrink:0">
+                        <span>
+                            <strong>${esc(tp.kode_tp || '')}</strong>
+                            ${tp.kode_tp ? ' — ' : ''}${esc(tp.deskripsi_tp || '')}
+                        </span>
+                    </label>`;
+                });
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+        }
+
+        container.innerHTML = html;
+
+        // Pasang event listener untuk auto-save
+        container.querySelectorAll('.tp-taught-cb').forEach(cb => {
+            cb.addEventListener('change', async () => {
+                const origChecked = cb.checked;
+                cb.disabled = true;
+                try {
+                    await fnToggleTpTaught(cb.dataset.class, cb.dataset.tp, origChecked);
+                    showToast(origChecked ? 'TP ditandai sudah diajarkan.' : 'Tanda diajarkan dihapus.');
+                } catch (e) {
+                    cb.checked = !origChecked; // rollback
+                    const msg = String(e?.message || '').toLowerCase();
+                    const netErr = msg.includes('fetch') || msg.includes('network');
+                    showToast(netErr ? 'Tidak ada koneksi. Coba lagi.' : 'Gagal menyimpan. Coba lagi.', true);
+                } finally {
+                    cb.disabled = false;
+                }
+            });
+        });
+    } catch (e) {
+        container.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat progres TP.</p>`;
+        console.error('renderTpProgress:', e);
     }
 }
 
