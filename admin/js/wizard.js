@@ -146,82 +146,59 @@ window.toggleWzHint = function(btn) {
 
 const WZ_HINT_TEXT = {
     1: `<ul>
-        <li>Isi nama sekolah lengkap sesuai dokumen resmi (contoh: SMK Negeri 1 Contoh).</li>
-        <li>Alamat digunakan pada laporan dan dokumen resmi — isi selengkap mungkin.</li>
-        <li>Data ini bisa diubah kapan saja melalui pengaturan admin.</li>
-    </ul>`,
+  <li>Isi nama sekolah dan alamat lengkap sesuai dokumen resmi</li>
+  <li>Contoh: SMK Negeri 1 Ujungbatu</li>
+</ul>`,
     2: `<ul>
-        <li>Pilih tahun ajaran dan semester yang sedang berjalan.</li>
-        <li>Tanggal mulai dan selesai akan otomatis terisi — periksa dan sesuaikan jika perlu.</li>
-        <li>Semester Ganjil: Juli–Desember | Semester Genap: Januari–Juni.</li>
-        <li>Setelah periode pertama tersimpan, tahun ajaran hanya bisa diubah via Tutup Semester di dashboard.</li>
-    </ul>`,
+  <li>Tahun ajaran dan semester ditentukan otomatis oleh sistem</li>
+  <li>Pastikan data yang tampil sudah sesuai sebelum melanjutkan</li>
+</ul>`,
     3: `<ul>
-        <li>Unduh template, isi data program keahlian, lalu unggah kembali.</li>
-        <li>Kode program harus unik dan konsisten — dipakai di langkah-langkah berikutnya.</li>
-        <li>Wizard tidak bisa dilanjutkan jika belum ada program yang terdaftar.</li>
-        <li>Lihat sheet PETUNJUK di dalam template untuk format yang benar.</li>
-    </ul>`,
+  <li>Unduh template, isi kode dan nama program, lalu unggah</li>
+  <li>Kode program harus unik — dipakai di langkah Kelas dan Staf</li>
+  <li>Wajib ada minimal 1 program sebelum bisa lanjut</li>
+</ul>`,
     4: `<ul>
-        <li>Unduh template, isi nama kelas dan tingkat (X/XI/XII), lalu unggah.</li>
-        <li>Pastikan kode program di template sesuai dengan yang didaftarkan di Langkah 3.</li>
-        <li>Nama kelas harus konsisten — akan dirujuk oleh siswa, orang tua, dan jadwal.</li>
-        <li>Langkah ini bersifat opsional — boleh dilanjutkan dan dilengkapi kapan saja.</li>
-    </ul>`,
+  <li>Pastikan kode program sesuai dengan yang sudah didaftarkan di Langkah 3</li>
+  <li>Nama kelas harus konsisten — dirujuk oleh data siswa dan jadwal</li>
+</ul>`,
     5: `<ul>
-        <li>Isi NIP/NIK dan kode guru — kode guru dipakai untuk identifikasi di jadwal.</li>
-        <li>Peran (Wali Kelas, BK, Waka, dll) ditentukan di kolom khusus dalam template.</li>
-        <li>Satu staf bisa memiliki lebih dari satu peran sekaligus.</li>
-        <li>Langkah ini bersifat opsional — boleh dilanjutkan dan dilengkapi kapan saja.</li>
-    </ul>`,
+  <li>Kode guru dipakai di template jadwal — isi dengan kode singkat yang mudah dikenali</li>
+  <li>Peran (Wali Kelas, BK, Waka) ditentukan di kolom khusus dalam template</li>
+</ul>`,
     6: `<ul>
-        <li>Isi NISN, nama, dan kelas untuk setiap siswa.</li>
-        <li>Nama kelas harus sama persis dengan yang terdaftar di Langkah 4.</li>
-        <li>NISN akan dipakai sebagai login siswa — pastikan tidak ada duplikat.</li>
-        <li>Langkah ini bersifat opsional — boleh dilanjutkan dan dilengkapi kapan saja.</li>
-    </ul>`,
+  <li>Nama kelas harus sama persis dengan yang terdaftar di Langkah 4</li>
+  <li>NISN dipakai sebagai login siswa — pastikan tidak ada duplikat</li>
+</ul>`,
     7: `<ul>
-        <li>Kolom NISN di template harus sesuai dengan NISN siswa yang sudah terdaftar.</li>
-        <li>Import ulang aman — data lama diperbarui, tidak perlu hapus data lama dulu.</li>
-        <li>Satu siswa bisa memiliki lebih dari satu akun orang tua.</li>
-        <li>Langkah ini bersifat opsional — boleh dilanjutkan dan dilengkapi kapan saja.</li>
-    </ul>`,
+  <li>Kolom NISN harus sesuai dengan NISN siswa yang sudah terdaftar</li>
+  <li>Import ulang aman — data lama diperbarui, tidak perlu hapus dulu</li>
+</ul>`,
     8: `<ul>
-        <li>DUDI (Dunia Usaha &amp; Industri) adalah mitra magang siswa.</li>
-        <li>Login DUDI menggunakan kode khusus yang Anda tentukan di template.</li>
-        <li>DUDI hanya bisa melihat data magang yang relevan — tidak bisa mengubah data.</li>
-        <li>Langkah ini bersifat opsional — bisa ditambah kapan saja setelah wizard selesai.</li>
-    </ul>`,
+  <li>Isi nama dan instansi DUDI sesuai data mitra magang resmi</li>
+  <li>DUDI hanya bisa melihat data magang — tidak bisa mengubah data lain</li>
+</ul>`,
     9: `<ul>
-        <li>Stakeholder (komite, dinas, dll) hanya bisa melihat ringkasan data sekolah.</li>
-        <li>Kode login harus unik — gunakan kode yang mudah diingat (contoh: KOMITE01).</li>
-        <li>Catat kode login dan password awal — password tidak bisa ditampilkan ulang.</li>
-        <li>Langkah ini bersifat opsional — bisa ditambah kapan saja setelah wizard selesai.</li>
-    </ul>`,
+  <li>Stakeholder adalah pihak eksternal yang diberi akses terbatas — isi sesuai kebutuhan</li>
+  <li>Catat kode login dan password awal — password tidak bisa ditampilkan ulang</li>
+</ul>`,
     10: `<ul>
-        <li>Akun TU digunakan untuk melihat rekap piket dan kehadiran siswa.</li>
-        <li>Login menggunakan NIP/NIK yang didaftarkan di sini.</li>
-        <li>Catat password awal — password tidak bisa ditampilkan ulang.</li>
-        <li>Langkah ini bersifat opsional — bisa ditambah kapan saja setelah wizard selesai.</li>
-    </ul>`,
+  <li>Login menggunakan NIP/NIK yang didaftarkan di sini</li>
+  <li>Catat password awal — password tidak bisa ditampilkan ulang</li>
+</ul>`,
     11: `<ul>
-        <li>Klik "Susun Jadwal Visual" untuk membuka pembuat jadwal interaktif.</li>
-        <li>Staf (Langkah 5) dan kelas (Langkah 4) harus sudah ada sebelum menyusun jadwal.</li>
-        <li>Atau unduh template jadwal, isi, lalu impor via panel jadwal visual.</li>
-        <li>Langkah ini bersifat opsional — jadwal bisa disusun kapan saja setelah wizard selesai.</li>
-    </ul>`,
+  <li>Staf dan kelas harus sudah diimpor sebelum menyusun jadwal</li>
+  <li>Gunakan "Susun Jadwal Visual" untuk input manual, atau download template lalu impor</li>
+</ul>`,
     12: `<ul>
-        <li><strong>BK per Kelas</strong>: tugaskan konselor BK untuk setiap kelas.</li>
-        <li><strong>Guru Wali per Siswa</strong>: tugaskan guru wali untuk masing-masing siswa.</li>
-        <li><strong>Guru Piket</strong>: tentukan staf yang bertugas piket setiap hari.</li>
-        <li>Gunakan template yang tersedia atau isi manual via tab di bawah.</li>
-    </ul>`,
+  <li>Tab BK: tugaskan konselor BK per kelas</li>
+  <li>Tab Guru Wali: tugaskan guru wali per siswa</li>
+  <li>Tab Guru Piket: tentukan staf piket per hari</li>
+</ul>`,
     13: `<ul>
-        <li>Tinjau semua langkah — langkah yang belum selesai ditandai dengan "Belum".</li>
-        <li>Platform tetap berfungsi meski ada langkah yang dilewati — isi kapan saja nanti.</li>
-        <li>Klik "Buka Dashboard" untuk masuk ke konsol admin dan mulai menggunakan platform.</li>
-        <li>Semua data yang sudah diisi tersimpan di database dan tidak akan hilang.</li>
-    </ul>`,
+  <li>Langkah yang dilewati tetap bisa dilengkapi kapan saja via dashboard</li>
+  <li>Klik "Buka Dashboard" untuk mulai menggunakan platform</li>
+</ul>`,
 };
 
 function wzHintCard(step) {
