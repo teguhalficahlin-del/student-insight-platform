@@ -1547,16 +1547,203 @@ async function renderScheduleStep() {
         <p class="hint">Susun jadwal mengajar secara visual. Staf (langkah 5) dan kelas (langkah 4) harus sudah ada.</p>
         <p class="hint-success">✓ Langkah ini opsional — bisa dilewati dan disusun nanti setelah wizard selesai.</p>
         <button type="button" class="btn btn-primary" id="wz-open-schedule" style="margin-bottom:16px">Susun Jadwal Visual</button>
+        <button type="button" class="btn btn-outline-secondary" id="btnDownloadTemplateJadwal" style="margin-bottom:16px;margin-left:8px">⬇ Download Template Jadwal</button>
 
         <div id="wz-data-list" style="margin-top:16px"><p class="hint">Memuat data…</p></div>
     `;
 
     document.getElementById('wz-open-schedule').addEventListener('click', () => openScheduleBuilder());
+    document.getElementById('btnDownloadTemplateJadwal').addEventListener('click', downloadTemplateJadwal);
 
 
     await refreshDataList(11);
     nextBtn.disabled = false;
 }
+
+// ─────────────────────────────────────────────────────────────
+// SCHEDULE TEMPLATE DOWNLOAD
+// ─────────────────────────────────────────────────────────────
+
+function _xlsColLetter(n) {
+    let s = '';
+    while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+    return s;
+}
+
+function _buildScheduleWorkbook(slots, classes) {
+    const wb = { SheetNames: ['Jadwal'], Sheets: {} };
+    const ws  = {};
+    const merges = [];
+
+    const HDR_FILL   = { patternType: 'solid', fgColor: { rgb: '1E3A5F' } };
+    const SUB_FILL   = { patternType: 'solid', fgColor: { rgb: '2D5986' } };
+    const BREAK_FILL = { patternType: 'solid', fgColor: { rgb: 'FFF9C4' } };
+    const SEP_FILL   = { patternType: 'solid', fgColor: { rgb: 'DBEAFE' } };
+    const WHITE_FONT = { bold: true, color: { rgb: 'FFFFFF' }, name: 'Arial', sz: 10 };
+    const SEP_FONT   = { bold: true, color: { rgb: '1E3A5F' }, name: 'Arial', sz: 9 };
+
+    const n = classes.length;
+    const totalCols = 3 + n * 2; // A,B,C + 2 per class
+
+    const setCell = (addr, v, t, s) => { ws[addr] = { v, t, s }; };
+
+    // Row 1 — headers
+    setCell('A1', 'HARI',  's', { fill: HDR_FILL, font: WHITE_FONT, alignment: { horizontal: 'center', vertical: 'center' } });
+    setCell('B1', 'JAM',   's', { fill: HDR_FILL, font: WHITE_FONT, alignment: { horizontal: 'center' } });
+    setCell('C1', 'WAKTU', 's', { fill: HDR_FILL, font: WHITE_FONT, alignment: { horizontal: 'center' } });
+    merges.push({ s: { r: 0, c: 0 }, e: { r: 1, c: 0 } });
+    merges.push({ s: { r: 0, c: 1 }, e: { r: 1, c: 1 } });
+    merges.push({ s: { r: 0, c: 2 }, e: { r: 1, c: 2 } });
+
+    classes.forEach((cls, i) => {
+        const mc = 4 + i * 2, gc = 5 + i * 2;
+        setCell(`${_xlsColLetter(mc)}1`, cls.name, 's', { fill: HDR_FILL, font: WHITE_FONT, alignment: { horizontal: 'center' } });
+        merges.push({ s: { r: 0, c: mc - 1 }, e: { r: 0, c: gc - 1 } });
+    });
+
+    // Row 2 — sub-headers
+    setCell('A2', '', 's', {}); setCell('B2', '', 's', {}); setCell('C2', '', 's', {});
+    classes.forEach((cls, i) => {
+        const mc = 4 + i * 2, gc = 5 + i * 2;
+        setCell(`${_xlsColLetter(mc)}2`, 'Mapel', 's', { fill: SUB_FILL, font: WHITE_FONT, alignment: { horizontal: 'center' } });
+        setCell(`${_xlsColLetter(gc)}2`, 'Guru',  's', { fill: SUB_FILL, font: WHITE_FONT, alignment: { horizontal: 'center' } });
+    });
+
+    // Data rows
+    const DAY_ORDER = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
+    const byDay = {};
+    DAY_ORDER.forEach(d => { byDay[d] = []; });
+    slots.forEach(s => { if (byDay[s.day_of_week]) byDay[s.day_of_week].push(s); });
+
+    let row = 3;
+    const firstDataRow = row;
+
+    DAY_ORDER.forEach(day => {
+        const daySlots = byDay[day];
+        if (!daySlots.length) return;
+
+        // Separator row
+        setCell(`A${row}`, day, 's', { fill: SEP_FILL, font: SEP_FONT, alignment: { horizontal: 'left' } });
+        merges.push({ s: { r: row - 1, c: 0 }, e: { r: row - 1, c: totalCols - 1 } });
+        row++;
+
+        const dayStartRow = row;
+        let normalRows = 0;
+
+        daySlots.forEach(slot => {
+            const fmtTime = `${slot.start_time.slice(0,5)} - ${slot.end_time.slice(0,5)}`;
+            if (slot.is_break) {
+                const label = `${slot.break_label || 'ISTIRAHAT'}  (${fmtTime})`;
+                setCell(`A${row}`, label, 's', { fill: BREAK_FILL, font: { bold: true, color: { rgb: '7B5E00' }, name: 'Arial', sz: 10 }, alignment: { horizontal: 'center' } });
+                merges.push({ s: { r: row - 1, c: 0 }, e: { r: row - 1, c: totalCols - 1 } });
+            } else {
+                normalRows++;
+                setCell(`A${row}`, '',                 's', { alignment: { horizontal: 'center', vertical: 'center', wrapText: true } });
+                setCell(`B${row}`, slot.slot_number,   'n', { alignment: { horizontal: 'center' } });
+                setCell(`C${row}`, fmtTime,            's', { alignment: { horizontal: 'center' } });
+                for (let i = 0; i < n; i++) {
+                    setCell(`${_xlsColLetter(4 + i * 2)}${row}`, '', 's', {});
+                    setCell(`${_xlsColLetter(5 + i * 2)}${row}`, '', 's', {});
+                }
+            }
+            row++;
+        });
+
+        // Merge HARI col for this day's rows
+        if (row - 1 >= dayStartRow) {
+            merges.push({ s: { r: dayStartRow - 1, c: 0 }, e: { r: row - 2, c: 0 } });
+            setCell(`A${dayStartRow}`, day, 's', { font: { bold: true, name: 'Arial', sz: 10 }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } });
+        }
+    });
+
+    const lastDataRow = row - 1;
+
+    // Conditional formatting — anti-bentrok guru
+    const guruColLetters = classes.map((_, i) => _xlsColLetter(5 + i * 2));
+    const cfRules = [];
+    const cfPriority = { v: 1 };
+
+    classes.forEach((cls, i) => {
+        const mc = 4 + i * 2, gc = 5 + i * 2;
+        const mLetter = _xlsColLetter(mc), gLetter = _xlsColLetter(gc);
+        const r0 = firstDataRow;
+        const countifSum = guruColLetters.map(g => `COUNTIF($${g}${r0},$${gLetter}${r0})`).join('+');
+        const formula    = `AND($${gLetter}${r0}<>"",(${countifSum})>1)`;
+
+        // Guru col → RED
+        cfRules.push({
+            ref: `${gLetter}${r0}:${gLetter}${lastDataRow}`,
+            rules: [{ type: 'expression', priority: cfPriority.v++, formula: [formula],
+                dxf: { fill: { patternType: 'solid', fgColor: { rgb: 'FCA5A5' } } } }]
+        });
+        // Mapel col → YELLOW
+        cfRules.push({
+            ref: `${mLetter}${r0}:${mLetter}${lastDataRow}`,
+            rules: [{ type: 'expression', priority: cfPriority.v++, formula: [formula],
+                dxf: { fill: { patternType: 'solid', fgColor: { rgb: 'FEF08A' } } } }]
+        });
+    });
+
+    ws['!ref']     = `A1:${_xlsColLetter(totalCols)}${lastDataRow}`;
+    ws['!merges']  = merges;
+    ws['!freeze']  = { xSplit: 3, ySplit: 2 };
+    ws['!condfmt'] = cfRules;
+    ws['!cols']    = [{ wch: 8 }, { wch: 5 }, { wch: 14 },
+                      ...Array.from({ length: n * 2 }, (_, i) => ({ wch: i % 2 === 0 ? 18 : 16 }))];
+
+    wb.Sheets['Jadwal'] = ws;
+    return wb;
+}
+
+async function downloadTemplateJadwal() {
+    const schoolId    = state.schoolId;
+    const academicYear = state.data.academicYear;
+    const semester    = state.data.semester;
+
+    if (!schoolId || !academicYear || !semester) {
+        showError('Lengkapi data sekolah dan periode (langkah 1) terlebih dahulu.');
+        return;
+    }
+
+    const btn = document.getElementById('btnDownloadTemplateJadwal');
+    btn.disabled = true;
+    btn.textContent = '⏳ Memuat data…';
+
+    try {
+        const [{ data: schoolRow, error: e1 }, { data: slots, error: e2 }, { data: classes, error: e3 }] =
+            await Promise.all([
+                supabase.from('schools').select('slug').eq('school_id', schoolId).single(),
+                supabase.from('schedule_time_slots')
+                    .select('slot_number,day_of_week,start_time,end_time,is_break,break_label')
+                    .eq('school_id', schoolId).eq('academic_year', academicYear).eq('semester', semester)
+                    .order('day_of_week').order('slot_number'),
+                supabase.from('classes')
+                    .select('class_id,name,grade_level')
+                    .eq('school_id', schoolId).eq('academic_year', academicYear).eq('is_active', true)
+                    .order('grade_level').order('name'),
+            ]);
+
+        if (e1) throw e1;
+        if (e2) throw e2;
+        if (e3) throw e3;
+        if (!slots?.length)   throw new Error('Belum ada slot waktu untuk periode ini.');
+        if (!classes?.length) throw new Error('Belum ada kelas aktif untuk periode ini.');
+
+        const wb       = _buildScheduleWorkbook(slots, classes);
+        const slug     = schoolRow?.slug || 'sekolah';
+        const yearStr  = academicYear.replace('/', '-');
+        const filename = `template_jadwal_${slug}_${yearStr}_sem${semester}.xlsx`;
+
+        XLSX.writeFile(wb, filename);
+    } catch (err) {
+        showError('Gagal membuat template: ' + (err.message ?? String(err)));
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '⬇ Download Template Jadwal';
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
 
 const STEP_RENDERERS = {
     1: renderStep1,
