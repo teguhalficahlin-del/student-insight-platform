@@ -545,7 +545,7 @@ function openCpElemenModal(elementId, existingNama, existingDesk) {
             } else {
                 if (!_cpId) {
                     const cpUmum = document.getElementById('pen-cp-umum-input')?.value.trim() || '';
-                    _cpId = await upsertCp(_schoolId, _teacherId, _kelasId, _subjectId, _year, Number(_semester), cpUmum);
+                    _cpId = await upsertCp(_schoolId, _teacherId, _kelasId, _subjectId, _year, cpUmum);
                 }
                 const nextUrutan = document.querySelectorAll('#pen-cp-elemen-body [data-element-id]').length;
                 await createCpElemen(_cpId, _schoolId, _teacherId, nama, desk, nextUrutan);
@@ -588,7 +588,7 @@ async function renderPerencanaan() {
     // Load CP dan TP secara paralel
     await ensureUser();
     const [cpResult, tps] = await Promise.allSettled([
-        getCp(_kelasId, _subjectId, _year, Number(_semester)),
+        getCp(_kelasId, _subjectId, _year),
         getTps(_kelasId, _subjectId, _year, Number(_semester)),
     ]);
 
@@ -632,7 +632,7 @@ async function renderPerencanaan() {
             saveBtn.textContent = 'Menyimpan…';
             try {
                 await ensureUser();
-                _cpId = await upsertCp(_schoolId, _teacherId, _kelasId, _subjectId, _year, Number(_semester), val);
+                _cpId = await upsertCp(_schoolId, _teacherId, _kelasId, _subjectId, _year, val);
                 toast('CP disimpan');
             } catch (err) {
                 toast('Gagal menyimpan CP: ' + (err.message || 'Error'), false);

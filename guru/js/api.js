@@ -2313,14 +2313,13 @@ export async function hapusRekapTp(tpId) {
 
 // ─── CP Manual (teaching_cp + teaching_cp_elements) ───────────────────────────
 
-export async function getCp(kelasId, subjectId, year, semester) {
+export async function getCp(kelasId, subjectId, year) {
     const { data: cp, error } = await supabase
         .from('teaching_cp')
         .select('cp_id, cp_umum')
         .eq('class_id', kelasId)
         .eq('subject_id', subjectId)
         .eq('academic_year', year)
-        .eq('semester', semester)
         .maybeSingle();
     if (error) throw error;
     if (!cp) return null;
@@ -2334,7 +2333,7 @@ export async function getCp(kelasId, subjectId, year, semester) {
     return { cp_id: cp.cp_id, cp_umum: cp.cp_umum, elemen: elemen || [] };
 }
 
-export async function upsertCp(schoolId, teacherId, kelasId, subjectId, year, semester, cpUmum) {
+export async function upsertCp(schoolId, teacherId, kelasId, subjectId, year, cpUmum) {
     const { data: existing } = await supabase
         .from('teaching_cp')
         .select('cp_id')
@@ -2343,7 +2342,6 @@ export async function upsertCp(schoolId, teacherId, kelasId, subjectId, year, se
         .eq('class_id', kelasId)
         .eq('subject_id', subjectId)
         .eq('academic_year', year)
-        .eq('semester', semester)
         .maybeSingle();
     if (existing) {
         const { error } = await supabase
@@ -2356,7 +2354,7 @@ export async function upsertCp(schoolId, teacherId, kelasId, subjectId, year, se
     const { data, error } = await supabase
         .from('teaching_cp')
         .insert({ school_id: schoolId, teacher_id: teacherId, class_id: kelasId,
-                  subject_id: subjectId, academic_year: year, semester, cp_umum: cpUmum })
+                  subject_id: subjectId, academic_year: year, cp_umum: cpUmum })
         .select('cp_id')
         .single();
     if (error) throw error;

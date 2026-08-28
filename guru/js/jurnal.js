@@ -446,27 +446,70 @@ async function renderTpProgress(classId, container) {
         const yr = new Date().getFullYear();
         const year = `${yr}/${yr + 1}`;
 
+        // Fetch CP dan TP semua mapel secara paralel
+        const subjData = await Promise.all(subjects.map(async subj => {
+            const [cpResult, s1, s2] = await Promise.allSettled([
+                getCp(classId, subj.id, year),
+                getTps(classId, subj.id, year, 1),
+                getTps(classId, subj.id, year, 2),
+            ]);
+            return {
+                subj,
+                cp  : cpResult.status === 'fulfilled' ? cpResult.value : null,
+                tps : [...(s1.status === 'fulfilled' ? s1.value || [] : []),
+                       ...(s2.status === 'fulfilled' ? s2.value || [] : [])],
+            };
+        }));
+
         let html = '';
-        for (const subj of subjects) {
-            html += `<div style="margin-bottom:20px">
-                <h4 style="margin:0 0 8px;font-size:15px">${esc(subj.name)}</h4>`;
+        subjData.forEach(({ subj, cp, tps }, idx) => {
+            const colId = `pm-col-${idx}`;
 
-            // CP dinonaktifkan di tab Jurnal — ditampilkan via tab Penilaian
+            // ── Header collapse ──────────────────────────────────────────
+            html += `<details style="margin-bottom:12px;border:1px solid var(--color-border);border-radius:6px;overflow:hidden">
+                <summary style="cursor:pointer;padding:10px 14px;font-weight:600;font-size:14px;
+                    background:var(--color-surface);list-style:none;display:flex;align-items:center;gap:8px">
+                    <span style="font-size:11px;color:var(--color-text-muted)">▸</span>
+                    ${esc(subj.name)}
+                </summary>
+                <div style="padding:12px 14px">`;
 
-            // TP dari learning_objectives (ambil kedua semester)
-            let tps = [];
-            try {
-                const [s1, s2] = await Promise.all([
-                    getTps(classId, subj.id, year, 1),
-                    getTps(classId, subj.id, year, 2),
-                ]);
-                tps = [...(s1 || []), ...(s2 || [])];
-            } catch { /* skip */ }
+            // ── Capaian Pembelajaran ─────────────────────────────────────
+            html += `<div style="margin-bottom:12px">
+                <div style="font-size:11px;font-weight:700;color:var(--color-text-muted);
+                    text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">
+                    Capaian Pembelajaran
+                </div>`;
+
+            if (!cp) {
+                html += `<p class="hint" style="font-size:13px;margin:0">Belum ada CP untuk mapel ini.</p>`;
+            } else {
+                if (cp.cp_umum) {
+                    html += `<p style="font-size:13px;margin:0 0 6px;line-height:1.5">${esc(cp.cp_umum)}</p>`;
+                }
+                if (cp.elemen && cp.elemen.length) {
+                    cp.elemen.forEach(el => {
+                        html += `<div style="font-size:13px;padding:4px 0;border-bottom:1px solid var(--color-border);line-height:1.5">
+                            ${esc(el.nama_elemen)} : ${esc(el.deskripsi_cp)}
+                        </div>`;
+                    });
+                } else if (!cp.cp_umum) {
+                    html += `<p class="hint" style="font-size:13px;margin:0">Belum ada CP untuk mapel ini.</p>`;
+                }
+            }
+            html += `</div>`;
+
+            // ── Tujuan Pembelajaran ──────────────────────────────────────
+            html += `<div>
+                <div style="font-size:11px;font-weight:700;color:var(--color-text-muted);
+                    text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">
+                    Tujuan Pembelajaran
+                </div>`;
 
             if (!tps.length) {
-                html += `<p class="hint" style="font-size:13px">Belum ada TP untuk mapel ini.</p>`;
+                html += `<p class="hint" style="font-size:13px;margin:0">Belum ada TP untuk mapel ini.</p>`;
             } else {
-                html += `<p class="hint" style="font-size:12px;margin-bottom:6px">ℹ️ Centang jika TP sudah selesai diajarkan</p>`;
+                html += `<p class="hint" style="font-size:12px;margin:0 0 6px">ℹ️ Centang jika TP sudah selesai diajarkan</p>`;
                 html += `<div class="tp-taught-list">`;
                 tps.forEach(tp => {
                     const tpId    = String(tp.id);
@@ -489,8 +532,8 @@ async function renderTpProgress(classId, container) {
                 html += `</div>`;
             }
 
-            html += `</div>`;
-        }
+            html += `</div></div></details>`;
+        });
 
         container.innerHTML = html;
 
