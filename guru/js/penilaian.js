@@ -2369,6 +2369,7 @@ async function initPenilaianTab() {
     document.querySelectorAll('.jurnal-sub-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
             const sub = btn.dataset.jurnalSub;
+            localStorage.setItem('guru_jurnal_sub_tab', sub);
             document.querySelectorAll('.jurnal-sub-btn').forEach(b => {
                 const active = b.dataset.jurnalSub === sub;
                 b.style.fontWeight   = active ? '600' : '400';
@@ -2385,6 +2386,13 @@ async function initPenilaianTab() {
                 sub === 'penilaian' ? '' : 'none';
         });
     });
+
+    // Restore jurnal sub-tab dari localStorage
+    const savedJurnalSub = localStorage.getItem('guru_jurnal_sub_tab');
+    if (savedJurnalSub === 'catatan' || savedJurnalSub === 'penilaian') {
+        const btn = document.querySelector(`.jurnal-sub-btn[data-jurnal-sub="${savedJurnalSub}"]`);
+        if (btn) btn.click();
+    }
 
     // ── Context selectors ──
     const selKelas = document.getElementById('penilaian-kelas-select');

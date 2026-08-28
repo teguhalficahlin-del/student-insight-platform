@@ -364,7 +364,8 @@ async function init() {
 
     const defaultTab = isTeacher ? 'guru' : (jabatan[0] ?? 'kasus');
     const savedTab   = localStorage.getItem('sip_active_tab_guru');
-    const startTab   = savedTab || defaultTab;
+    const tabExists  = savedTab && !!document.querySelector(`[data-tab="${savedTab}"]`);
+    const startTab   = (tabExists ? savedTab : null) || defaultTab;
     await activateTab(startTab);
     await loadTabContent(startTab);
 
@@ -4478,16 +4479,26 @@ async function initForumTab() {
     // Sub-tab buttons
     document.getElementById('forum-tab-masuk').addEventListener('click', () => {
         _forumMode = 'masuk'; _forumOffset = 0;
+        localStorage.setItem('guru_forum_sub_tab', 'masuk');
         document.getElementById('forum-tab-masuk').className = 'btn btn-primary';
         document.getElementById('forum-tab-terkirim').className = 'btn btn-secondary';
         loadForumPosts();
     });
     document.getElementById('forum-tab-terkirim').addEventListener('click', () => {
         _forumMode = 'terkirim'; _forumOffset = 0;
+        localStorage.setItem('guru_forum_sub_tab', 'terkirim');
         document.getElementById('forum-tab-masuk').className = 'btn btn-secondary';
         document.getElementById('forum-tab-terkirim').className = 'btn btn-primary';
         loadForumPosts();
     });
+
+    // Restore forum sub-tab dari localStorage
+    const savedForumSub = localStorage.getItem('guru_forum_sub_tab');
+    if (savedForumSub === 'terkirim') {
+        _forumMode = 'terkirim';
+        document.getElementById('forum-tab-masuk').className    = 'btn btn-secondary';
+        document.getElementById('forum-tab-terkirim').className = 'btn btn-primary';
+    }
 
     // Buat posting
     document.getElementById('btn-forum-buat').addEventListener('click', () => openForumModal());
