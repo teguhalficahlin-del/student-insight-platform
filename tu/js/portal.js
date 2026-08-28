@@ -434,6 +434,32 @@ let _forumGroupUids   = new Map(); // groupKey → Set<uid>
 let _forumPrograms    = [];
 let _forumClasses     = [];
 
+function isForumModerator() {
+    return ['KEPSEK', 'WAKA_KESISWAAN', 'ADMINISTRATIVE'].includes(currentUser?.role_type)
+        || currentUser?.is_kepsek === true
+        || currentUser?.is_waka_kesiswaan === true;
+}
+
+async function hydrateForumWithdrawnState(posts) {
+    if (!posts.length) return posts;
+    const { data, error } = await supabase
+        .from('forum_posts')
+        .select('post_id, is_withdrawn')
+        .in('post_id', posts.map(post => post.post_id));
+    if (error) throw error;
+    const states = new Map((data ?? []).map(row => [row.post_id, row.is_withdrawn]));
+    return posts.map(post => ({ ...post, is_withdrawn: states.get(post.post_id) === true }));
+}
+
+async function toggleForumPostWithdrawn(postId, withdrawn) {
+    const { data, error } = await supabase.rpc('fn_toggle_forum_post_withdrawn', {
+        p_post_id: postId,
+        p_withdrawn: withdrawn,
+    });
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
+}
+
 // Drill-down picker state
 let _drillType       = null;        // 'SISWA' | 'ORTU'
 let _drillExpanded   = new Set();   // program_id yang ter-expand
@@ -524,6 +550,23 @@ async function initForumSection() {
             loadForumPosts();
         } catch (err) { alert(fe(err)); }
     });
+    document.getElementById('btn-forum-withdraw').addEventListener('click', async e => {
+        const modal = document.getElementById('modal-forum-detail');
+        const withdrawn = modal.dataset.withdrawn === 'true';
+        const action = withdrawn ? 'memulihkan' : 'menarik';
+        if (!confirm(`Yakin ingin ${action} posting ini?`)) return;
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        try {
+            await toggleForumPostWithdrawn(modal.dataset.postId, !withdrawn);
+            closeForumDetail();
+            await loadForumPosts();
+        } catch (err) {
+            alert(fe(err));
+        } finally {
+            btn.disabled = false;
+        }
+    });
 
     document.getElementById('btn-load-more-forum')
         .addEventListener('click', () => loadForumPosts(true));
@@ -542,9 +585,10 @@ async function loadForumPosts(loadMore = false) {
     moreBtn.style.display = 'none';
 
     try {
-        const posts = _forumMode === 'masuk'
+        let posts = _forumMode === 'masuk'
             ? await getForumSekolahPosts(currentUser.school_id, currentUser.user_id, LIMIT, _forumOffset)
             : await getForumSekolahSentPosts(currentUser.school_id, currentUser.user_id, LIMIT, _forumOffset);
+        posts = await hydrateForumWithdrawnState(posts);
 
         loadingEl.style.display = 'none';
         if (!posts.length && _forumOffset === 0) {
@@ -571,10 +615,12 @@ function renderForumCard(post) {
     const author = esc(post.author?.full_name ?? (_forumMode === 'terkirim' ? 'Anda' : '—'));
     const ackCnt = post.acknowledgements?.length ?? 0;
     const edited = post.is_edited ? ' <span class="hint" style="font-size:11px">(diedit)</span>' : '';
+    const withdrawn = post.is_withdrawn
+        ? ' <span style="color:var(--color-danger);font-size:12px">Ditarik</span>' : '';
     const bodyText = post.body ?? '';
     card.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-            <strong>${esc(post.title ?? '')}${edited}</strong>
+            <strong>${esc(post.title ?? '')}${edited}${withdrawn}</strong>
             <span class="hint" style="white-space:nowrap;font-size:12px">${time}</span>
         </div>
         <p class="hint" style="margin:4px 0 8px">${author}</p>
@@ -1881,6 +1927,7 @@ async function submitForumPost() {
 async function openForumDetail(post) {
     const modal = document.getElementById('modal-forum-detail');
     modal.dataset.postId = post.post_id;
+    modal.dataset.withdrawn = String(post.is_withdrawn === true);
     modal.style.display  = 'flex';
     document.getElementById('detail-forum-title').textContent = post.title ?? '';
     document.getElementById('detail-forum-body').textContent  = post.body ?? '';
@@ -1888,7 +1935,7 @@ async function openForumDetail(post) {
         { dateStyle: 'long', timeStyle: 'short' });
     const author = post.author?.full_name ?? (_forumMode === 'terkirim' ? 'Anda' : '—');
     document.getElementById('detail-forum-meta').textContent =
-        `${author} · ${time}${post.is_edited ? ' • diedit' : ''}`;
+        `${author} · ${time}${post.is_edited ? ' • diedit' : ''}${post.is_withdrawn ? ' • Ditarik' : ''}`;
     const attEl = document.getElementById('detail-forum-attachment');
     if (post.attachment_url || post.attachment_path) {
         let attachmentHref = post.attachment_url ?? null;
@@ -1903,8 +1950,17 @@ async function openForumDetail(post) {
     } else {
         attEl.innerHTML = '';
     }
+    const isAuthor = post.author_user_id === currentUser.user_id;
+    const isModerator = isForumModerator();
     document.getElementById('forum-author-actions').style.display =
-        post.author_user_id === currentUser.user_id ? 'block' : 'none';
+        isAuthor || isModerator ? 'block' : 'none';
+    document.getElementById('btn-forum-edit').style.display = isAuthor ? '' : 'none';
+    document.getElementById('btn-forum-delete').style.display = isAuthor ? '' : 'none';
+    const withdrawBtn = document.getElementById('btn-forum-withdraw');
+    const canToggle = !post.is_withdrawn || isModerator;
+    withdrawBtn.style.display = canToggle && (isAuthor || isModerator) ? '' : 'none';
+    withdrawBtn.textContent = post.is_withdrawn ? 'Pulihkan' : 'Tarik Posting';
+    withdrawBtn.className = post.is_withdrawn ? 'btn btn-secondary' : 'btn btn-danger';
     document.getElementById('forum-comment-error').style.display = 'none';
     document.getElementById('forum-comment-input').value = '';
     if (_forumMode === 'masuk') {

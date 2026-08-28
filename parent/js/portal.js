@@ -847,6 +847,15 @@ function initForumListeners() {
     document.getElementById('modal-forum-detail')?.addEventListener('click', e => {
         if (e.target === e.currentTarget) closeForumDetail();
     });
+    const detailBox = document.querySelector('#modal-forum-detail .modal-box');
+    if (detailBox && !document.getElementById('btn-forum-withdraw')) {
+        detailBox.insertAdjacentHTML('beforeend', `
+            <div id="forum-author-actions" style="display:none;margin-top:12px;
+                 border-top:1px solid var(--color-border);padding-top:12px">
+                <button id="btn-forum-withdraw" class="btn btn-danger">Tarik Posting</button>
+            </div>`);
+        document.getElementById('btn-forum-withdraw').addEventListener('click', withdrawParentForumPost);
+    }
 
     // Load more
     document.getElementById('btn-load-more-forum')?.addEventListener('click', () => loadForumPosts(true));
@@ -934,6 +943,16 @@ function renderForumCard(post) {
 async function openForumDetail(post) {
     const modal = document.getElementById('modal-forum-detail');
     modal.style.display = 'flex';
+    modal.dataset.postId = post.post_id;
+
+    const { data: state, error: stateError } = await supabase
+        .from('forum_posts')
+        .select('is_withdrawn')
+        .eq('post_id', post.post_id)
+        .eq('school_id', currentUser.school_id)
+        .maybeSingle();
+    if (stateError) throw stateError;
+    post.is_withdrawn = state?.is_withdrawn === true;
 
     document.getElementById('detail-forum-title').textContent = post.title ?? '(tanpa judul)';
     document.getElementById('detail-forum-body').textContent  = post.body ?? '';
@@ -945,7 +964,9 @@ async function openForumDetail(post) {
         : _forumMode === 'terkirim' ? 'Anda' : '—';
     const edited = post.is_edited ? ' • diedit' : '';
     document.getElementById('detail-forum-meta').textContent =
-        `${author} · ${time}${edited}`;
+        `${author} · ${time}${edited}${post.is_withdrawn ? ' • Ditarik' : ''}`;
+    document.getElementById('forum-author-actions').style.display =
+        post.author_user_id === currentUser.user_id && !post.is_withdrawn ? 'block' : 'none';
 
     const attEl = document.getElementById('detail-forum-attachment');
     if (post.attachment_url || post.attachment_path) {
@@ -975,6 +996,26 @@ async function openForumDetail(post) {
             'forum_ack',
             { postId: post.post_id, userId: currentUser.user_id, schoolId: currentUser.school_id },
             `forum_ack:${post.post_id}:${currentUser.user_id}`);
+    }
+}
+
+async function withdrawParentForumPost(e) {
+    if (!confirm('Yakin ingin menarik posting ini?')) return;
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+        const postId = document.getElementById('modal-forum-detail').dataset.postId;
+        const { error } = await supabase.rpc('fn_toggle_forum_post_withdrawn', {
+            p_post_id: postId,
+            p_withdrawn: true,
+        });
+        if (error) throw error;
+        closeForumDetail();
+        await loadForumPosts();
+    } catch (err) {
+        alert(fe(err));
+    } finally {
+        btn.disabled = false;
     }
 }
 

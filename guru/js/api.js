@@ -1240,7 +1240,7 @@ export async function getForumSekolahPosts(schoolId, callerId, limit = 20, offse
         .from('forum_posts')
         .select(`
             post_id, title, body, attachment_url, attachment_name,
-            is_edited, edited_at, deleted_at, created_at, updated_at,
+            is_edited, is_withdrawn, edited_at, deleted_at, created_at, updated_at,
             author_user_id,
             author:users!forum_posts_author_user_id_fkey(user_id, full_name, role_type),
             comments:forum_post_comments(comment_id),
@@ -1265,7 +1265,7 @@ export async function getForumSekolahPostById(postId, schoolId, callerId) {
         .from('forum_posts')
         .select(`
             post_id, title, body, attachment_url, attachment_name,
-            is_edited, edited_at, deleted_at, created_at, updated_at,
+            is_edited, is_withdrawn, edited_at, deleted_at, created_at, updated_at,
             author_user_id,
             author:users!forum_posts_author_user_id_fkey(user_id, full_name, role_type),
             comments:forum_post_comments(comment_id),
@@ -1292,7 +1292,7 @@ export async function getForumSekolahSentPostById(postId, schoolId, callerId) {
         .from('forum_posts')
         .select(`
             post_id, title, body, attachment_url, attachment_name,
-            is_edited, edited_at, deleted_at, created_at, updated_at,
+            is_edited, is_withdrawn, edited_at, deleted_at, created_at, updated_at,
             author_user_id,
             comments:forum_post_comments(comment_id),
             acknowledgements:forum_post_acknowledgements(user_id),
@@ -1316,7 +1316,7 @@ export async function getForumSekolahSentPosts(schoolId, callerId, limit = 20, o
         .from('forum_posts')
         .select(`
             post_id, title, body, attachment_url, attachment_name,
-            is_edited, edited_at, deleted_at, created_at, updated_at,
+            is_edited, is_withdrawn, edited_at, deleted_at, created_at, updated_at,
             author_user_id,
             comments:forum_post_comments(comment_id),
             acknowledgements:forum_post_acknowledgements(user_id),
@@ -1412,6 +1412,15 @@ export async function updateForumSekolahPost(postId, newTitle, newBody) {
         })
         .eq('post_id', postId);
     if (error) throw error;
+}
+
+export async function toggleForumPostWithdrawn(postId, withdrawn) {
+    const { data, error } = await supabase.rpc('fn_toggle_forum_post_withdrawn', {
+        p_post_id:  postId,
+        p_withdrawn: withdrawn,
+    });
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
 }
 
 /**
