@@ -466,6 +466,7 @@ async function renderTpProgress(classId, container) {
             if (!tps.length) {
                 html += `<p class="hint" style="font-size:13px">Belum ada TP untuk mapel ini.</p>`;
             } else {
+                html += `<p class="hint" style="font-size:12px;margin-bottom:6px">ℹ️ Centang jika TP sudah selesai diajarkan</p>`;
                 html += `<div class="tp-taught-list">`;
                 tps.forEach(tp => {
                     const tpId    = String(tp.id);

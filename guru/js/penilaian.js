@@ -501,6 +501,15 @@ async function renderPerencanaan() {
     const hasCtx = ctxOk();
 
     body.innerHTML =
+        '<div class="pen-sec">' +
+        '<div class="pen-sec-label">Capaian Pembelajaran</div>' +
+        '<div class="pen-sec-body" id="pen-cp-manual-body">' +
+        '<label style="display:block;font-size:12px;font-weight:600;color:var(--color-text-muted);margin:0 0 4px">CP Umum</label>' +
+        '<textarea id="pen-cp-umum-input" rows="4" style="width:100%;padding:8px 10px;border:1px solid var(--color-border);border-radius:5px;font-size:13px;background:var(--color-bg);color:var(--color-text);box-sizing:border-box;resize:vertical" placeholder="Tulis capaian pembelajaran umum…"></textarea>' +
+        '<div class="pen-sec-label" style="margin-top:12px">Elemen CP</div>' +
+        '<div id="pen-cp-elemen-body"></div>' +
+        '<div class="pen-add-row"><button class="pen-btn" onclick="console.log(\'tambah elemen\')">+ Tambah Elemen</button></div>' +
+        '</div></div>' +
         '<div class="pen-sec"><div class="pen-sec-label" id="pen-tp-label">Tujuan Pembelajaran</div>' +
         '<div id="pen-tp-body">' +
         (hasCtx ? '<p class="pen-placeholder">Memuat TP…</p>' : '<p class="pen-placeholder">Pilih kelas, mapel, tahun, dan semester.</p>') +
