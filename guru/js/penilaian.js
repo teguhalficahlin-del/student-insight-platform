@@ -519,7 +519,7 @@ async function refreshCpElemenList() {
     if (!rows.length) { el.innerHTML = '<p class="pen-placeholder">Belum ada elemen CP.</p>'; return; }
     el.innerHTML = rows.map((e, i) => (
         '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--color-border);border-radius:4px;margin-bottom:4px;font-size:13px">' +
-        '<span style="flex:1"><strong>Elemen ' + (i + 1) + '</strong> — ' + esc(e.nama_elemen) + '</span>' +
+        '<span style="flex:1">' + esc(e.nama_elemen) + ' : ' + esc(e.deskripsi_cp) + '</span>' +
         '<button class="pen-btn pen-btn-sm" data-action="cp-elemen-edit" data-element-id="' + e.element_id + '" data-nama="' + esc(e.nama_elemen) + '" data-deskripsi="' + esc(e.deskripsi_cp) + '">Edit</button>' +
         '<button class="pen-btn pen-btn-sm pen-btn-danger" data-action="cp-elemen-delete" data-element-id="' + e.element_id + '">Hapus</button>' +
         '</div>'
@@ -605,7 +605,7 @@ async function renderPerencanaan() {
             } else {
                 elBody.innerHTML = cpData.elemen.map((e, i) => (
                     '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--color-border);border-radius:4px;margin-bottom:4px;font-size:13px">' +
-                    '<span style="flex:1"><strong>Elemen ' + (i + 1) + '</strong> — ' + esc(e.nama_elemen) + '</span>' +
+                    '<span style="flex:1">' + esc(e.nama_elemen) + ' : ' + esc(e.deskripsi_cp) + '</span>' +
                     '<button class="pen-btn pen-btn-sm" data-action="cp-elemen-edit" data-element-id="' + e.element_id + '" data-nama="' + esc(e.nama_elemen) + '" data-deskripsi="' + esc(e.deskripsi_cp) + '">Edit</button>' +
                     '<button class="pen-btn pen-btn-sm pen-btn-danger" data-action="cp-elemen-delete" data-element-id="' + e.element_id + '">Hapus</button>' +
                     '</div>'
