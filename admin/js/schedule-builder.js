@@ -58,6 +58,8 @@ export async function openScheduleBuilder() {
     // karena WAKA/koordinator bisa punya kode guru dan masuk jadwal.
     { const { data } = await supabase.from('v_users_staff_directory')
         .select('user_id, full_name, teacher_code')
+        .eq('school_id', state.schoolId)
+        .is('deleted_at', null)
         .not('teacher_code', 'is', null).neq('teacher_code', '').order('teacher_code');
       state.teachers = data ?? []; }
     state.teacherMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.teacher_code.toUpperCase(), t.user_id]));
@@ -163,6 +165,8 @@ function createOverlay() {
         if (panel === 'kode-guru') {
             const { data } = await supabase.from('v_users_staff_directory')
                 .select('user_id, full_name, teacher_code')
+                .eq('school_id', state.schoolId)
+                .is('deleted_at', null)
                 .not('teacher_code', 'is', null).neq('teacher_code', '').order('teacher_code');
             state.teachers = data ?? [];
             state.teacherMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.teacher_code.toUpperCase(), t.user_id]));
