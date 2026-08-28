@@ -1546,8 +1546,10 @@ async function renderScheduleStep() {
         <h3>Jadwal</h3>
         <p class="hint">Susun jadwal mengajar secara visual. Staf (langkah 5) dan kelas (langkah 4) harus sudah ada.</p>
         <p class="hint-success">✓ Langkah ini opsional — bisa dilewati dan disusun nanti setelah wizard selesai.</p>
-        <button type="button" class="btn btn-primary" id="wz-open-schedule" style="margin-bottom:16px">Susun Jadwal Visual</button>
-        <button type="button" class="btn btn-outline-secondary" id="btnDownloadTemplateJadwal" style="margin-bottom:16px;margin-left:8px">⬇ Download Template Jadwal</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+            <button type="button" class="btn btn-primary" id="wz-open-schedule">Susun Jadwal Visual</button>
+            <button type="button" class="btn btn-outline-secondary" id="btnDownloadTemplateJadwal">⬇ Download Template Jadwal</button>
+        </div>
 
         <div id="wz-data-list" style="margin-top:16px"><p class="hint">Memuat data…</p></div>
     `;
@@ -1658,37 +1660,10 @@ function _buildScheduleWorkbook(slots, classes) {
 
     const lastDataRow = row - 1;
 
-    // Conditional formatting — anti-bentrok guru
-    const guruColLetters = classes.map((_, i) => _xlsColLetter(5 + i * 2));
-    const cfRules = [];
-    const cfPriority = { v: 1 };
-
-    classes.forEach((cls, i) => {
-        const mc = 4 + i * 2, gc = 5 + i * 2;
-        const mLetter = _xlsColLetter(mc), gLetter = _xlsColLetter(gc);
-        const r0 = firstDataRow;
-        const countifSum = guruColLetters.map(g => `COUNTIF($${g}${r0},$${gLetter}${r0})`).join('+');
-        const formula    = `AND($${gLetter}${r0}<>"",(${countifSum})>1)`;
-
-        // Guru col → RED
-        cfRules.push({
-            ref: `${gLetter}${r0}:${gLetter}${lastDataRow}`,
-            rules: [{ type: 'expression', priority: cfPriority.v++, formula: [formula],
-                dxf: { fill: { patternType: 'solid', fgColor: { rgb: 'FCA5A5' } } } }]
-        });
-        // Mapel col → YELLOW
-        cfRules.push({
-            ref: `${mLetter}${r0}:${mLetter}${lastDataRow}`,
-            rules: [{ type: 'expression', priority: cfPriority.v++, formula: [formula],
-                dxf: { fill: { patternType: 'solid', fgColor: { rgb: 'FEF08A' } } } }]
-        });
-    });
-
-    ws['!ref']     = `A1:${_xlsColLetter(totalCols)}${lastDataRow}`;
-    ws['!merges']  = merges;
-    ws['!freeze']  = { xSplit: 3, ySplit: 2 };
-    ws['!condfmt'] = cfRules;
-    ws['!cols']    = [{ wch: 8 }, { wch: 5 }, { wch: 14 },
+    ws['!ref']    = `A1:${_xlsColLetter(totalCols)}${lastDataRow}`;
+    ws['!merges'] = merges;
+    ws['!freeze'] = { xSplit: 3, ySplit: 2 };
+    ws['!cols']   = [{ wch: 8 }, { wch: 5 }, { wch: 14 },
                       ...Array.from({ length: n * 2 }, (_, i) => ({ wch: i % 2 === 0 ? 18 : 16 }))];
 
     wb.Sheets['Jadwal'] = ws;
