@@ -130,4 +130,4 @@ GRANT   EXECUTE ON FUNCTION fn_toggle_tp_taught(uuid, text, boolean) TO authenti
 REVOKE  EXECUTE ON FUNCTION fn_toggle_tp_taught(uuid, text, boolean) FROM anon;
 REVOKE  EXECUTE ON FUNCTION fn_toggle_tp_taught(uuid, text, boolean) FROM PUBLIC;
 
-ROLLBACK;
+COMMIT;
