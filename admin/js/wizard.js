@@ -118,6 +118,124 @@ function showSuccess(msg) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// HINT CARD (collapsible petunjuk per langkah)
+// ─────────────────────────────────────────────────────────────
+
+function initWzHintStyles() {
+    if (document.getElementById('wz-hint-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'wz-hint-styles';
+    style.textContent = [
+        '.wz-hint-card{background:#1E1A00;border:1px solid #78590A;border-radius:8px;margin-bottom:16px;overflow:hidden}',
+        '.wz-hint-toggle{width:100%;text-align:left;background:none;border:none;color:#F5C518;font-size:13px;font-weight:600;padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}',
+        '.wz-hint-toggle:hover{background:rgba(120,89,10,0.15)}',
+        '.wz-hint-body{padding:0 14px 12px;color:#D4B96A;font-size:12px;line-height:1.6}',
+        '.wz-hint-body p{margin:4px 0}',
+        '.wz-hint-body ul{margin:4px 0;padding-left:18px}',
+        '.wz-hint-body li{margin:2px 0}',
+    ].join('');
+    document.head.appendChild(style);
+}
+
+window.toggleWzHint = function(btn) {
+    const body = btn.nextElementSibling;
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    btn.querySelector('.wz-hint-arrow').textContent = open ? '▸' : '▾';
+};
+
+const WZ_HINT_TEXT = {
+    1: `<ul>
+        <li>Isi nama sekolah lengkap sesuai dokumen resmi (contoh: SMK Negeri 1 Contoh).</li>
+        <li>Alamat digunakan pada laporan dan dokumen resmi — isi selengkap mungkin.</li>
+        <li>Data ini bisa diubah kapan saja melalui pengaturan admin.</li>
+    </ul>`,
+    2: `<ul>
+        <li>Pilih tahun ajaran dan semester yang sedang berjalan.</li>
+        <li>Tanggal mulai dan selesai akan otomatis terisi — periksa dan sesuaikan jika perlu.</li>
+        <li>Semester Ganjil: Juli–Desember | Semester Genap: Januari–Juni.</li>
+        <li>Setelah periode pertama tersimpan, tahun ajaran hanya bisa diubah via Tutup Semester di dashboard.</li>
+    </ul>`,
+    3: `<ul>
+        <li>Unduh template, isi data program keahlian, lalu unggah kembali.</li>
+        <li>Kode program harus unik dan konsisten — dipakai di langkah-langkah berikutnya.</li>
+        <li>Wizard tidak bisa dilanjutkan jika belum ada program yang terdaftar.</li>
+        <li>Lihat sheet PETUNJUK di dalam template untuk format yang benar.</li>
+    </ul>`,
+    4: `<ul>
+        <li>Unduh template, isi nama kelas dan tingkat (X/XI/XII), lalu unggah.</li>
+        <li>Pastikan kode program di template sesuai dengan yang didaftarkan di Langkah 3.</li>
+        <li>Nama kelas harus konsisten — akan dirujuk oleh siswa, orang tua, dan jadwal.</li>
+        <li>Langkah ini bersifat opsional — boleh dilanjutkan dan dilengkapi kapan saja.</li>
+    </ul>`,
+    5: `<ul>
+        <li>Isi NIP/NIK dan kode guru — kode guru dipakai untuk identifikasi di jadwal.</li>
+        <li>Peran (Wali Kelas, BK, Waka, dll) ditentukan di kolom khusus dalam template.</li>
+        <li>Satu staf bisa memiliki lebih dari satu peran sekaligus.</li>
+        <li>Langkah ini bersifat opsional — boleh dilanjutkan dan dilengkapi kapan saja.</li>
+    </ul>`,
+    6: `<ul>
+        <li>Isi NISN, nama, dan kelas untuk setiap siswa.</li>
+        <li>Nama kelas harus sama persis dengan yang terdaftar di Langkah 4.</li>
+        <li>NISN akan dipakai sebagai login siswa — pastikan tidak ada duplikat.</li>
+        <li>Langkah ini bersifat opsional — boleh dilanjutkan dan dilengkapi kapan saja.</li>
+    </ul>`,
+    7: `<ul>
+        <li>Kolom NISN di template harus sesuai dengan NISN siswa yang sudah terdaftar.</li>
+        <li>Import ulang aman — data lama diperbarui, tidak perlu hapus data lama dulu.</li>
+        <li>Satu siswa bisa memiliki lebih dari satu akun orang tua.</li>
+        <li>Langkah ini bersifat opsional — boleh dilanjutkan dan dilengkapi kapan saja.</li>
+    </ul>`,
+    8: `<ul>
+        <li>DUDI (Dunia Usaha &amp; Industri) adalah mitra magang siswa.</li>
+        <li>Login DUDI menggunakan kode khusus yang Anda tentukan di template.</li>
+        <li>DUDI hanya bisa melihat data magang yang relevan — tidak bisa mengubah data.</li>
+        <li>Langkah ini bersifat opsional — bisa ditambah kapan saja setelah wizard selesai.</li>
+    </ul>`,
+    9: `<ul>
+        <li>Stakeholder (komite, dinas, dll) hanya bisa melihat ringkasan data sekolah.</li>
+        <li>Kode login harus unik — gunakan kode yang mudah diingat (contoh: KOMITE01).</li>
+        <li>Catat kode login dan password awal — password tidak bisa ditampilkan ulang.</li>
+        <li>Langkah ini bersifat opsional — bisa ditambah kapan saja setelah wizard selesai.</li>
+    </ul>`,
+    10: `<ul>
+        <li>Akun TU digunakan untuk melihat rekap piket dan kehadiran siswa.</li>
+        <li>Login menggunakan NIP/NIK yang didaftarkan di sini.</li>
+        <li>Catat password awal — password tidak bisa ditampilkan ulang.</li>
+        <li>Langkah ini bersifat opsional — bisa ditambah kapan saja setelah wizard selesai.</li>
+    </ul>`,
+    11: `<ul>
+        <li>Klik "Susun Jadwal Visual" untuk membuka pembuat jadwal interaktif.</li>
+        <li>Staf (Langkah 5) dan kelas (Langkah 4) harus sudah ada sebelum menyusun jadwal.</li>
+        <li>Atau unduh template jadwal, isi, lalu impor via panel jadwal visual.</li>
+        <li>Langkah ini bersifat opsional — jadwal bisa disusun kapan saja setelah wizard selesai.</li>
+    </ul>`,
+    12: `<ul>
+        <li><strong>BK per Kelas</strong>: tugaskan konselor BK untuk setiap kelas.</li>
+        <li><strong>Guru Wali per Siswa</strong>: tugaskan guru wali untuk masing-masing siswa.</li>
+        <li><strong>Guru Piket</strong>: tentukan staf yang bertugas piket setiap hari.</li>
+        <li>Gunakan template yang tersedia atau isi manual via tab di bawah.</li>
+    </ul>`,
+    13: `<ul>
+        <li>Tinjau semua langkah — langkah yang belum selesai ditandai dengan "Belum".</li>
+        <li>Platform tetap berfungsi meski ada langkah yang dilewati — isi kapan saja nanti.</li>
+        <li>Klik "Buka Dashboard" untuk masuk ke konsol admin dan mulai menggunakan platform.</li>
+        <li>Semua data yang sudah diisi tersimpan di database dan tidak akan hilang.</li>
+    </ul>`,
+};
+
+function wzHintCard(step) {
+    const text = WZ_HINT_TEXT[step] ?? '';
+    if (!text) return '';
+    return `<div class="wz-hint-card">
+    <button class="wz-hint-toggle" onclick="toggleWzHint(this)">
+        \u{1F4A1} Petunjuk Langkah Ini <span class="wz-hint-arrow">&#9656;</span>
+    </button>
+    <div class="wz-hint-body" style="display:none">${text}</div>
+</div>`;
+}
+
+// ─────────────────────────────────────────────────────────────
 // NAVIGATION / RENDER
 // ─────────────────────────────────────────────────────────────
 
@@ -193,6 +311,7 @@ async function renderStep1() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 1 dari ${TOTAL_STEPS}</div>
         <h3>Profil Sekolah</h3>
+        ${wzHintCard(1)}
         <div class="field">
             <label for="wz-school-name">Nama Sekolah</label>
             <input type="text" id="wz-school-name" class="input"
@@ -241,6 +360,7 @@ async function renderStep2() {
         contentEl.innerHTML = `
             <div class="step-label">Langkah 2 dari ${TOTAL_STEPS}</div>
             <h3>Tahun Ajaran</h3>
+            ${wzHintCard(2)}
             <div class="alert alert-info" style="margin-bottom:20px">
                 <strong>Periode akademik dikelola otomatis.</strong><br>
                 Tahun ajaran berubah melalui <strong>Tutup Semester</strong> dan
@@ -290,6 +410,7 @@ async function renderStep2() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 2 dari ${TOTAL_STEPS}</div>
         <h3>Tahun Ajaran</h3>
+        ${wzHintCard(2)}
         <div class="field">
             <label for="wz-academic-year">Tahun Ajaran</label>
             <select id="wz-academic-year" class="input">${yearOptions.join('')}</select>
@@ -367,6 +488,7 @@ async function renderSummaryStep() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah ${TOTAL_STEPS} dari ${TOTAL_STEPS}</div>
         <h3>Selesai</h3>
+        ${wzHintCard(13)}
         <p>Tinjau status setiap langkah sebelum membuka dashboard.</p>
         ${warningHtml}
         <table class="table"><tbody>${rows.join('')}</tbody></table>
@@ -381,6 +503,7 @@ async function renderStep3() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 3 dari ${TOTAL_STEPS}</div>
         <h3>Program Keahlian</h3>
+        ${wzHintCard(3)}
         <p class="hint">Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.</p>
         ${templateButtonHtml(3)}
         <div id="wz-data-list"></div>
@@ -401,6 +524,7 @@ async function renderStakeholderStep() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 9 dari ${TOTAL_STEPS}</div>
         <h3>Stakeholder</h3>
+        ${wzHintCard(9)}
         <p class="hint">Tambahkan akun stakeholder (komite sekolah, dinas pendidikan, dll). Stakeholder hanya bisa melihat ringkasan data sekolah, tidak bisa mengubah apa pun. Login menggunakan kode khusus yang Anda tentukan.</p>
 
         <div id="wz-data-list"><p class="hint">Memuat data…</p></div>
@@ -468,6 +592,7 @@ async function renderTuStep() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 10 dari ${TOTAL_STEPS}</div>
         <h3>Tata Usaha</h3>
+        ${wzHintCard(10)}
         <p class="hint">Tambahkan akun Tata Usaha (TU). TU dapat melihat rekap piket dan kehadiran siswa. Login menggunakan NIP/NIK.</p>
 
         <div id="wz-data-list"><p class="hint">Memuat data…</p></div>
@@ -838,6 +963,7 @@ async function renderForumAssignmentStep() {
         contentEl.innerHTML = `
             <div class="step-label">Langkah 12 dari ${TOTAL_STEPS}</div>
             <h3>Penugasan Forum Kelas</h3>
+            ${wzHintCard(12)}
             <p class="hint">Tugaskan BK ke kelas, Guru Wali ke siswa, dan Guru Piket ke hari via
                 file Excel/CSV, atau isi manual di tab di bawah.</p>
             <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
@@ -1544,6 +1670,7 @@ async function renderScheduleStep() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
         <h3>Jadwal</h3>
+        ${wzHintCard(11)}
         <p class="hint">Susun jadwal mengajar secara visual. Staf (langkah 5) dan kelas (langkah 4) harus sudah ada.</p>
         <p class="hint-success">✓ Langkah ini opsional — bisa dilewati dan disusun nanti setelah wizard selesai.</p>
         <div style="display:flex;gap:8px;margin-bottom:16px">
@@ -2225,6 +2352,7 @@ async function renderImportStep() {
     contentEl.innerHTML = `
         <div class="step-label">Langkah ${step} dari ${TOTAL_STEPS}</div>
         <h3>${info.title}</h3>
+        ${wzHintCard(step)}
         <p class="hint">${info.desc}</p>
         ${templateButtonHtml(step)}
         <div class="wz-data-list" id="wz-data-list"><p class="hint">Memuat data…</p></div>
@@ -3158,6 +3286,7 @@ window.addEventListener('beforeunload', (e) => {
     const userRow = await getCurrentUserRow();
     if (!requireAdministrativeOrRedirect(userRow)) return;
     state.schoolId = userRow.school_id;
+    initWzHintStyles();
 
     // Restore langkah yang sudah selesai dari localStorage
     try {
