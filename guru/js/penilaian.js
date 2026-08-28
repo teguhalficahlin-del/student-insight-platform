@@ -501,20 +501,13 @@ async function renderPerencanaan() {
     const hasCtx = ctxOk();
 
     body.innerHTML =
-        '<div class="pen-sec"><div class="pen-sec-label">Capaian Pembelajaran</div>' +
-        '<div id="pen-cp-body"><p class="pen-placeholder">Memuat CP…</p></div></div>' +
         '<div class="pen-sec"><div class="pen-sec-label" id="pen-tp-label">Tujuan Pembelajaran</div>' +
         '<div id="pen-tp-body">' +
         (hasCtx ? '<p class="pen-placeholder">Memuat TP…</p>' : '<p class="pen-placeholder">Pilih kelas, mapel, tahun, dan semester.</p>') +
         '</div>' +
         (hasCtx ? '<div class="pen-add-row"><button class="pen-btn" data-action="tp-add">+ Tambah TP</button></div>' : '') +
         '</div>';
-
-    if (_subjectId) {
-        renderCp().then(html => { const el = document.getElementById('pen-cp-body'); if (el) el.innerHTML = html; });
-    } else {
-        document.getElementById('pen-cp-body').innerHTML = '<p class="pen-placeholder">Pilih mapel untuk melihat CP.</p>';
-    }
+    // CP dinonaktifkan — section CP tidak dirender
 
     if (!hasCtx) return;
 
