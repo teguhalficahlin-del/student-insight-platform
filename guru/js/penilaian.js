@@ -45,6 +45,8 @@ let _nilaiSedangDisimpan = false; // guard double-submit simpan rekap
 let _delegInit  = false;
 let _userReady  = false;
 
+let _cpElemenLocal = [];   // state lokal elemen CP (belum ke DB)
+
 // sumatif state
 let _sumPage         = 0;
 let _sumNilai        = {};   // { sid: { nilai, predikat, tl } }
@@ -495,6 +497,42 @@ async function confirmDeleteTp(tp, origBtn) {
     bar.querySelector('.pen-del-no').addEventListener('click', () => { bar.remove(); origBtn.style.display = ''; });
 }
 
+function renderCpElemenList() {
+    const el = document.getElementById('pen-cp-elemen-body');
+    if (!el) return;
+    if (!_cpElemenLocal.length) { el.innerHTML = '<p class="pen-placeholder">Belum ada elemen CP.</p>'; return; }
+    el.innerHTML = _cpElemenLocal.map((e, i) => (
+        '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--color-border);border-radius:4px;margin-bottom:4px;font-size:13px">' +
+        '<span style="flex:1"><strong>Elemen ' + (i + 1) + '</strong> — ' + esc(e.nama) + '</span>' +
+        '<button class="pen-btn pen-btn-sm" data-action="cp-elemen-edit" data-idx="' + i + '">Edit</button>' +
+        '<button class="pen-btn pen-btn-sm pen-btn-danger" data-action="cp-elemen-delete" data-idx="' + i + '">Hapus</button>' +
+        '</div>'
+    )).join('');
+}
+
+function openCpElemenModal(idx) {
+    const existing = idx != null ? _cpElemenLocal[idx] : null;
+    openModal({
+        title: existing ? 'Edit Elemen CP' : 'Tambah Elemen CP',
+        bodyHtml:
+            '<label>Nama Elemen <span style="color:var(--color-danger)">*</span></label>' +
+            '<input type="text" id="pen-cp-el-nama" maxlength="200" placeholder="Nama elemen…" value="' + esc(existing?.nama || '') + '">' +
+            '<label>Deskripsi Elemen <span style="color:var(--color-danger)">*</span></label>' +
+            '<textarea id="pen-cp-el-desk" rows="4" maxlength="2000" placeholder="Deskripsi elemen…">' + esc(existing?.deskripsi || '') + '</textarea>',
+        onSave: (_ov, close) => {
+            const nama = _ov.querySelector('#pen-cp-el-nama').value.trim();
+            const desk = _ov.querySelector('#pen-cp-el-desk').value.trim();
+            if (!nama) throw new Error('Nama Elemen wajib diisi.');
+            if (!desk) throw new Error('Deskripsi Elemen wajib diisi.');
+            console.log('tambah elemen', { nama, deskripsi: desk });
+            if (idx != null) { _cpElemenLocal[idx] = { nama, deskripsi: desk }; }
+            else              { _cpElemenLocal.push({ nama, deskripsi: desk }); }
+            close();
+            renderCpElemenList();
+        },
+    });
+}
+
 async function renderPerencanaan() {
     const body = document.getElementById('pen-perencanaan-body');
     if (!body) return;
@@ -508,7 +546,7 @@ async function renderPerencanaan() {
         '<textarea id="pen-cp-umum-input" rows="4" style="width:100%;padding:8px 10px;border:1px solid var(--color-border);border-radius:5px;font-size:13px;background:var(--color-bg);color:var(--color-text);box-sizing:border-box;resize:vertical" placeholder="Tulis capaian pembelajaran umum…"></textarea>' +
         '<div class="pen-sec-label" style="margin-top:12px">Elemen CP</div>' +
         '<div id="pen-cp-elemen-body"></div>' +
-        '<div class="pen-add-row"><button class="pen-btn" onclick="console.log(\'tambah elemen\')">+ Tambah Elemen</button></div>' +
+        '<div class="pen-add-row"><button class="pen-btn" data-action="cp-elemen-add">+ Tambah Elemen</button></div>' +
         '</div></div>' +
         '<div class="pen-sec"><div class="pen-sec-label" id="pen-tp-label">Tujuan Pembelajaran</div>' +
         '<div id="pen-tp-body">' +
@@ -1823,6 +1861,14 @@ async function handleClick(e) {
     if (!btn) return;
     const act = btn.dataset.action;
 
+    if (act === 'cp-elemen-add')    { openCpElemenModal(null); return; }
+    if (act === 'cp-elemen-edit')   { openCpElemenModal(Number(btn.dataset.idx)); return; }
+    if (act === 'cp-elemen-delete') {
+        const i = Number(btn.dataset.idx);
+        _cpElemenLocal.splice(i, 1);
+        renderCpElemenList();
+        return;
+    }
     if (act === 'tp-add') { openTpModal(null); return; }
     if (act === 'tp-edit') {
         const tp = _tpCache.find(t => t.id === btn.dataset.id);
