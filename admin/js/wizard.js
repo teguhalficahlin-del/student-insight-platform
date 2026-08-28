@@ -1546,9 +1546,9 @@ async function renderScheduleStep() {
         <h3>Jadwal</h3>
         <p class="hint">Susun jadwal mengajar secara visual. Staf (langkah 5) dan kelas (langkah 4) harus sudah ada.</p>
         <p class="hint-success">✓ Langkah ini opsional — bisa dilewati dan disusun nanti setelah wizard selesai.</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-            <button type="button" class="btn btn-primary" id="wz-open-schedule">Susun Jadwal Visual</button>
-            <button type="button" class="btn btn-outline-secondary" id="btnDownloadTemplateJadwal">⬇ Download Template Jadwal</button>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+            <button type="button" class="btn btn-primary" id="wz-open-schedule" style="flex:1;min-width:0">Susun Jadwal Visual</button>
+            <button type="button" class="btn btn-outline-secondary" id="btnDownloadTemplateJadwal" style="flex:1;min-width:0">⬇ Download Template Jadwal</button>
         </div>
 
         <div id="wz-data-list" style="margin-top:16px"><p class="hint">Memuat data…</p></div>
