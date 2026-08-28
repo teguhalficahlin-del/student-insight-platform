@@ -529,6 +529,7 @@ async function save() {
         const allClassIds = new Set(allClasses.map(c => c.class_id));
 
         const templates = [];
+        const unknownCodes = [];
         for (const [key, cell] of state.cells) {
             if (!cell.teacher_code) continue;
             const [slotIdxStr, classId] = key.split('_');
@@ -538,7 +539,10 @@ async function save() {
             if (!allClassIds.has(classId)) continue;
 
             const teacherId = state.teacherMap.get(cell.teacher_code.toUpperCase());
-            if (!teacherId) continue;
+            if (!teacherId) {
+                unknownCodes.push(cell.teacher_code);
+                continue;
+            }
 
             templates.push({
                 start_time: slot.start_time,
@@ -552,8 +556,15 @@ async function save() {
         await saveScheduleTemplates(state.academicYear, state.semester, state.day, templates);
 
         state.dirty = false;
-        statusEl.textContent = `Tersimpan: ${templates.length} slot untuk hari ${DAY_LABELS[state.day]}`;
-        statusEl.style.color = 'var(--color-success)';
+        let saveMsg = `Tersimpan: ${templates.length} slot untuk hari ${DAY_LABELS[state.day]}`;
+        if (unknownCodes.length > 0) {
+            const unique = [...new Set(unknownCodes)];
+            saveMsg += `\nPeringatan: ${unknownCodes.length} slot tidak tersimpan karena kode guru tidak dikenal: ${unique.join(', ')}. Periksa tab Kode Guru untuk melihat kode yang terdaftar.`;
+            statusEl.style.color = 'var(--color-warning, orange)';
+        } else {
+            statusEl.style.color = 'var(--color-success)';
+        }
+        statusEl.textContent = saveMsg;
     } catch (err) {
         statusEl.textContent = `Gagal: ${err.message}`;
         statusEl.style.color = 'var(--color-danger)';

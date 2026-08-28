@@ -163,7 +163,7 @@ const WZ_HINT_TEXT = {
   <li>Nama kelas harus konsisten — dirujuk oleh data siswa dan jadwal</li>
 </ul>`,
     5: `<ul>
-  <li>Kode guru dipakai di template jadwal — isi dengan kode singkat yang mudah dikenali</li>
+  <li>Kode guru dipakai di kolom KG pada grid jadwal visual — isi dengan kode singkat yang mudah dikenali</li>
   <li>Peran (Wali Kelas, BK, Waka) ditentukan di kolom khusus dalam template</li>
 </ul>`,
     6: `<ul>
