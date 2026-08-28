@@ -1696,12 +1696,24 @@ function _buildScheduleWorkbook(slots, classes) {
 }
 
 async function downloadTemplateJadwal() {
-    const schoolId    = state.schoolId;
-    const academicYear = state.data.academicYear;
-    const semester    = state.data.semester;
+    const schoolId     = state.schoolId;
+    let   academicYear = state.data.academicYear;
+    let   semester     = state.data.semester;
 
-    if (!schoolId || !academicYear || !semester) {
-        showError('Lengkapi data sekolah dan periode (langkah 1) terlebih dahulu.');
+    if (!schoolId) {
+        showError('Session belum siap — coba refresh halaman.');
+        return;
+    }
+
+    // Fallback: ambil periode aktif dari school_config jika wizard diakses langsung di #11
+    if (!academicYear || !semester) {
+        const config = await getSchoolConfig().catch(() => null);
+        academicYear = config?.current_academic_year || academicYear;
+        semester     = config?.current_semester      || semester;
+    }
+
+    if (!academicYear || !semester) {
+        showError('Periode aktif belum dikonfigurasi. Selesaikan langkah 1 (Tahun Ajaran) terlebih dahulu.');
         return;
     }
 
