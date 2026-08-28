@@ -568,6 +568,7 @@ async function renderPerencanaan() {
         '<label style="display:block;font-size:12px;font-weight:600;color:var(--color-text-muted);margin:0 0 4px">CP Umum</label>' +
         '<textarea id="pen-cp-umum-input" rows="4" style="width:100%;padding:8px 10px;border:1px solid var(--color-border);border-radius:5px;font-size:13px;background:var(--color-bg);color:var(--color-text);box-sizing:border-box;resize:vertical" placeholder="Tulis capaian pembelajaran umum…"' +
         (hasCtx ? '' : ' disabled') + '></textarea>' +
+        (hasCtx ? '<div style="margin-top:6px;text-align:right"><button class="pen-btn pen-btn-primary" id="pen-cp-save-btn">Simpan CP</button></div>' : '') +
         '<div class="pen-sec-label" style="margin-top:12px">Elemen CP</div>' +
         '<div id="pen-cp-elemen-body"><p class="pen-placeholder">Memuat…</p></div>' +
         (hasCtx ? '<div class="pen-add-row"><button class="pen-btn" data-action="cp-elemen-add">+ Tambah Elemen</button></div>' : '') +
@@ -620,21 +621,25 @@ async function renderPerencanaan() {
         }
     }
 
-    // Wire auto-save cp_umum on blur (debounce 800ms)
-    const ta = document.getElementById('pen-cp-umum-input');
-    if (ta) {
-        let _cpBlurTimer = null;
-        ta.addEventListener('blur', () => {
-            clearTimeout(_cpBlurTimer);
-            _cpBlurTimer = setTimeout(async () => {
-                const val = ta.value.trim();
-                try {
-                    await ensureUser();
-                    _cpId = await upsertCp(_schoolId, _teacherId, _kelasId, _subjectId, _year, Number(_semester), val);
-                } catch (err) {
-                    console.error('Auto-save CP umum gagal:', err);
-                }
-            }, 800);
+    // Wire tombol Simpan CP eksplisit
+    const saveBtn = document.getElementById('pen-cp-save-btn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+            if (saveBtn.disabled) return;
+            const ta = document.getElementById('pen-cp-umum-input');
+            const val = ta ? ta.value.trim() : '';
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Menyimpan…';
+            try {
+                await ensureUser();
+                _cpId = await upsertCp(_schoolId, _teacherId, _kelasId, _subjectId, _year, Number(_semester), val);
+                toast('CP disimpan');
+            } catch (err) {
+                toast('Gagal menyimpan CP: ' + (err.message || 'Error'), false);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Simpan CP';
+            }
         });
     }
 
