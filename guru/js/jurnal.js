@@ -183,6 +183,7 @@ async function initJurnalTab() {
     await initPenilaianTab();
 
     initTpTaughtSection();
+    initSectionCollapse();
 }
 
 function renderJurnalEntries(entries, listEl) {
@@ -361,6 +362,41 @@ function showToast(msg, isError = false) {
     setTimeout(() => el.remove(), 3000);
 }
 
+// ── Collapse helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Wire single-expand behaviour untuk sekumpulan item.
+ * items: array of { hdr, body, arrow } — semua di level yang sama.
+ * Klik header → tutup semua sibling → buka yang diklik (toggle jika sudah terbuka).
+ */
+function wireSingleExpand(items) {
+    items.forEach(item => {
+        if (!item.hdr || !item.body) return;
+        item.hdr.addEventListener('click', () => {
+            const isOpen = item.body.style.display !== 'none';
+            items.forEach(s => {
+                if (s.body) s.body.style.display = 'none';
+                if (s.arrow) s.arrow.textContent = '▶';
+            });
+            if (!isOpen) {
+                item.body.style.display = '';
+                if (item.arrow) item.arrow.textContent = '▼';
+            }
+        });
+    });
+}
+
+function initSectionCollapse() {
+    const secs = document.querySelectorAll('#jurnal-sub-catatan .jrn-sec');
+    wireSingleExpand(
+        Array.from(secs).map(sec => ({
+            hdr  : sec.querySelector('.jrn-sec-hdr'),
+            body : sec.querySelector('.jrn-sec-body'),
+            arrow: sec.querySelector('.jrn-sec-hdr > span'),
+        }))
+    );
+}
+
 // Cache kelas yang diajar — { class_id: { name, gradeLevel, programCode } }
 const _tpKelasCache = {};
 
@@ -462,42 +498,47 @@ async function renderTpProgress(classId, container) {
         }));
 
         let html = '';
-        subjData.forEach(({ subj, cp, tps }, idx) => {
-            const colId = `pm-col-${idx}`;
+        subjData.forEach(({ subj, cp, tps }) => {
 
-            // ── Header collapse ──────────────────────────────────────────
-            html += `<details style="margin-bottom:12px;border:1px solid var(--color-border);border-radius:6px;overflow:hidden">
-                <summary style="cursor:pointer;padding:10px 14px;font-weight:600;font-size:14px;
-                    background:var(--color-surface);list-style:none;display:flex;align-items:center;gap:8px">
-                    <span style="font-size:11px;color:var(--color-text-muted)">▸</span>
+            // ── Mapel collapse ────────────────────────────────────────────
+            html += `<div class="jrn-mapel" style="margin-bottom:12px;border:1px solid var(--color-border);border-radius:6px;overflow:hidden">
+                <div class="jrn-mapel-hdr" style="cursor:pointer;padding:10px 14px;font-weight:600;font-size:14px;background:var(--color-surface);display:flex;align-items:center;gap:8px">
+                    <span class="jrn-arrow" style="font-size:11px;color:var(--color-text-muted)">▶</span>
                     ${esc(subj.name)}
-                </summary>
-                <div style="padding:12px 14px">`;
+                </div>
+                <div class="jrn-mapel-body" style="display:none;padding:12px 14px">`;
 
-            // ── Capaian Pembelajaran ─────────────────────────────────────
-            html += `<div style="margin-bottom:12px">
-                <div style="font-size:11px;font-weight:700;color:var(--color-text-muted);
-                    text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">
+            // ── Capaian Pembelajaran collapse ─────────────────────────────
+            html += `<div class="jrn-cp-row" style="margin-bottom:12px;border:1px solid var(--color-border);border-radius:4px;overflow:hidden">
+                <div class="jrn-cp-hdr" style="cursor:pointer;padding:8px 12px;font-weight:600;font-size:13px;background:var(--color-surface);display:flex;align-items:center;gap:6px">
+                    <span class="jrn-arrow" style="font-size:11px;color:var(--color-text-muted)">▶</span>
                     Capaian Pembelajaran
-                </div>`;
+                </div>
+                <div class="jrn-cp-body" style="display:none;padding:10px 12px">`;
 
             if (!cp) {
                 html += `<p class="hint" style="font-size:13px;margin:0">Belum ada CP untuk mapel ini.</p>`;
             } else {
                 if (cp.cp_umum) {
-                    html += `<p style="font-size:13px;margin:0 0 6px;line-height:1.5">${esc(cp.cp_umum)}</p>`;
+                    html += `<p style="font-size:13px;margin:0 0 8px;line-height:1.5">${esc(cp.cp_umum)}</p>`;
                 }
                 if (cp.elemen && cp.elemen.length) {
                     cp.elemen.forEach(el => {
-                        html += `<div style="font-size:13px;padding:4px 0;border-bottom:1px solid var(--color-border);line-height:1.5">
-                            ${esc(el.nama_elemen)} : ${esc(el.deskripsi_cp)}
+                        html += `<div class="jrn-el-row" style="margin-bottom:4px;border:1px solid var(--color-border);border-radius:4px;overflow:hidden">
+                            <div class="jrn-el-hdr" style="cursor:pointer;padding:6px 10px;font-size:13px;background:var(--color-surface);display:flex;align-items:center;gap:6px">
+                                <span class="jrn-arrow" style="font-size:11px;color:var(--color-text-muted)">▶</span>
+                                ${esc(el.nama_elemen)}
+                            </div>
+                            <div class="jrn-el-body" style="display:none;padding:8px 10px;font-size:13px;line-height:1.5">
+                                ${esc(el.deskripsi_cp)}
+                            </div>
                         </div>`;
                     });
                 } else if (!cp.cp_umum) {
                     html += `<p class="hint" style="font-size:13px;margin:0">Belum ada CP untuk mapel ini.</p>`;
                 }
             }
-            html += `</div>`;
+            html += `</div></div>`;  // close jrn-cp-body, jrn-cp-row
 
             // ── Tujuan Pembelajaran ──────────────────────────────────────
             html += `<div>
@@ -532,12 +573,41 @@ async function renderTpProgress(classId, container) {
                 html += `</div>`;
             }
 
-            html += `</div></div></details>`;
+            html += `</div></div></div>`;  // close TP div, jrn-mapel-body, jrn-mapel
         });
 
         container.innerHTML = html;
 
-        // Pasang event listener untuk auto-save
+        // Wire single-expand untuk mapel
+        wireSingleExpand(
+            Array.from(container.querySelectorAll(':scope > .jrn-mapel')).map(el => ({
+                hdr  : el.querySelector('.jrn-mapel-hdr'),
+                body : el.querySelector('.jrn-mapel-body'),
+                arrow: el.querySelector('.jrn-mapel-hdr > .jrn-arrow'),
+            }))
+        );
+
+        // Wire CP dan elemen dalam setiap mapel
+        container.querySelectorAll('.jrn-mapel').forEach(mapel => {
+            wireSingleExpand(
+                Array.from(mapel.querySelectorAll('.jrn-mapel-body > .jrn-cp-row')).map(el => ({
+                    hdr  : el.querySelector('.jrn-cp-hdr'),
+                    body : el.querySelector('.jrn-cp-body'),
+                    arrow: el.querySelector('.jrn-cp-hdr > .jrn-arrow'),
+                }))
+            );
+            mapel.querySelectorAll('.jrn-cp-row').forEach(cpRow => {
+                wireSingleExpand(
+                    Array.from(cpRow.querySelectorAll('.jrn-el-row')).map(el => ({
+                        hdr  : el.querySelector('.jrn-el-hdr'),
+                        body : el.querySelector('.jrn-el-body'),
+                        arrow: el.querySelector('.jrn-el-hdr > .jrn-arrow'),
+                    }))
+                );
+            });
+        });
+
+        // Wire checkbox auto-save
         container.querySelectorAll('.tp-taught-cb').forEach(cb => {
             cb.addEventListener('change', async () => {
                 const origChecked = cb.checked;
@@ -546,7 +616,7 @@ async function renderTpProgress(classId, container) {
                     await fnToggleTpTaught(cb.dataset.class, cb.dataset.tp, origChecked);
                     showToast(origChecked ? 'TP ditandai sudah diajarkan.' : 'Tanda diajarkan dihapus.');
                 } catch (e) {
-                    cb.checked = !origChecked; // rollback
+                    cb.checked = !origChecked;
                     const msg = String(e?.message || '').toLowerCase();
                     const netErr = msg.includes('fetch') || msg.includes('network');
                     showToast(netErr ? 'Tidak ada koneksi. Coba lagi.' : 'Gagal menyimpan. Coba lagi.', true);

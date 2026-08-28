@@ -1354,46 +1354,61 @@
             <div id="jurnal-sub-catatan" style="display:none">
 
                 <!-- Section: Progress Mengajar -->
-                <div class="section-card">
-                    <h3>Progress Mengajar</h3>
-                    <div class="field" style="max-width:320px; margin-bottom:16px">
-                        <label class="label">Kelas</label>
-                        <select id="tp-kelas-select" class="input">
-                            <option value="">— Pilih Kelas —</option>
-                        </select>
+                <div class="section-card jrn-sec">
+                    <div class="jrn-sec-hdr" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+                        <h3 style="margin:0">Progress Mengajar</h3>
+                        <span style="font-size:11px;color:var(--color-text-muted)">▶</span>
                     </div>
-                    <div id="tp-taught-content">
-                        <p class="hint">Pilih kelas untuk melihat progres TP.</p>
+                    <div class="jrn-sec-body" style="display:none;padding-top:12px">
+                        <div class="field" style="max-width:320px; margin-bottom:16px">
+                            <label class="label">Kelas</label>
+                            <select id="tp-kelas-select" class="input">
+                                <option value="">— Pilih Kelas —</option>
+                            </select>
+                        </div>
+                        <div id="tp-taught-content">
+                            <p class="hint">Pilih kelas untuk melihat progres TP.</p>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Form tulis entri baru -->
-                <div class="section-card">
-                    <h3>Tulis Catatan</h3>
-                    <form id="journal-form">
-                        <div class="field">
-                            <textarea id="journal-content" class="input" rows="5"
-                                placeholder="Tulis catatan mengajar…"
-                                maxlength="5000"
-                                style="resize:vertical; width:100%"></textarea>
-                            <small id="journal-char-count" style="color:var(--color-text-muted)">0 / 5000</small>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px">
-                            <button type="submit" class="btn btn-primary" id="journal-submit-btn" style="flex:1">Simpan</button>
-                            <button type="button" id="journal-date-toggle" style="font-size:0.85em; color:var(--color-text-muted); cursor:pointer; text-decoration:underline; background:none; border:none; padding:4px 0; min-height:44px">Ubah tanggal</button>
-                        </div>
-                        <div id="journal-date-row" style="display:none; margin-top:8px">
-                            <input type="date" id="journal-date" class="input" style="width:auto">
-                            <small id="journal-date-err" style="display:none; color:var(--color-danger)"></small>
-                        </div>
-                        <div id="journal-form-msg" style="display:none; margin-top:6px" class="hint"></div>
-                    </form>
+                <div class="section-card jrn-sec">
+                    <div class="jrn-sec-hdr" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+                        <h3 style="margin:0">Tulis Catatan</h3>
+                        <span style="font-size:11px;color:var(--color-text-muted)">▶</span>
+                    </div>
+                    <div class="jrn-sec-body" style="display:none;padding-top:12px">
+                        <form id="journal-form">
+                            <div class="field">
+                                <textarea id="journal-content" class="input" rows="5"
+                                    placeholder="Tulis catatan mengajar…"
+                                    maxlength="5000"
+                                    style="resize:vertical; width:100%"></textarea>
+                                <small id="journal-char-count" style="color:var(--color-text-muted)">0 / 5000</small>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px">
+                                <button type="submit" class="btn btn-primary" id="journal-submit-btn" style="flex:1">Simpan</button>
+                                <button type="button" id="journal-date-toggle" style="font-size:0.85em; color:var(--color-text-muted); cursor:pointer; text-decoration:underline; background:none; border:none; padding:4px 0; min-height:44px">Ubah tanggal</button>
+                            </div>
+                            <div id="journal-date-row" style="display:none; margin-top:8px">
+                                <input type="date" id="journal-date" class="input" style="width:auto">
+                                <small id="journal-date-err" style="display:none; color:var(--color-danger)"></small>
+                            </div>
+                            <div id="journal-form-msg" style="display:none; margin-top:6px" class="hint"></div>
+                        </form>
+                    </div>
                 </div>
 
                 <!-- Daftar entri -->
-                <div class="section-card">
-                    <h3>Riwayat Jurnal</h3>
-                    <div id="journal-list"><p class="hint">Memuat…</p></div>
+                <div class="section-card jrn-sec">
+                    <div class="jrn-sec-hdr" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+                        <h3 style="margin:0">Riwayat Jurnal</h3>
+                        <span style="font-size:11px;color:var(--color-text-muted)">▶</span>
+                    </div>
+                    <div class="jrn-sec-body" style="display:none;padding-top:12px">
+                        <div id="journal-list"><p class="hint">Memuat…</p></div>
+                    </div>
                 </div>
 
             </div><!-- /jurnal-sub-catatan -->
