@@ -436,10 +436,12 @@ const deleteError        = document.getElementById('delete-error');
 
 let _deleteSchoolId   = null;
 let _deleteSchoolName = null;
+let _deleteResumeFrom = null;
 
 function openDeleteModal(schoolId, schoolName) {
     _deleteSchoolId   = schoolId;
     _deleteSchoolName = schoolName;
+    _deleteResumeFrom = null;
     deleteModalSchool.textContent = schoolName;
     deleteConfirmInput.value      = '';
     deleteConfirmBtn.disabled     = true;
@@ -452,6 +454,7 @@ function closeDeleteModal() {
     deleteModal.style.display = 'none';
     _deleteSchoolId   = null;
     _deleteSchoolName = null;
+    _deleteResumeFrom = null;
     deleteConfirmInput.value  = '';
     deleteConfirmBtn.disabled = true;
 }
@@ -481,11 +484,30 @@ deleteConfirmBtn.addEventListener('click', async () => {
                 'Content-Type':     'application/json',
                 'x-superadmin-key': saKey,
             },
-            body: JSON.stringify({ school_id: _deleteSchoolId }),
+            body: JSON.stringify({
+                school_id: _deleteSchoolId,
+                ...(_deleteResumeFrom && { resume_from: _deleteResumeFrom }),
+            }),
         });
         const json = await res.json();
         if (!res.ok) throw new Error(
             json?.error ?? json?.message ?? 'Gagal menghapus');
+
+        if (json.status === 'partial' || json.status === 'timeout') {
+            if (!json.resume_from) throw new Error('Server tidak mengirim checkpoint lanjutan');
+            _deleteResumeFrom = json.resume_from;
+            const lanjut = confirm(
+                `Proses selesai sebagian (${json.deleted} dari ${json.total}). Lanjutkan?`
+            );
+            deleteConfirmBtn.disabled = false;
+            deleteConfirmBtn.textContent = 'Lanjutkan Penghapusan';
+            if (lanjut) deleteConfirmBtn.click();
+            return;
+        }
+
+        if (json.status !== 'complete') {
+            throw new Error(`Status penghapusan tidak dikenal: ${json.status ?? 'kosong'}`);
+        }
         closeDeleteModal();
         await loadSchools();
         const hintEl = document.getElementById('schools-hint');
