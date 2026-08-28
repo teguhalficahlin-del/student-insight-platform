@@ -198,6 +198,32 @@ function esc(s) {
     return el.innerHTML;
 }
 
+// -- Animasi keluar overlay (transitions.css) ----------------
+// display:none ditunda selama SIP_EXIT_MS supaya @keyframes sipModalOut
+// sempat berjalan. Handle timeout disimpan DI elemen, bukan di variabel
+// modul, karena beberapa overlay bisa menutup bersamaan.
+//
+// sipPrepareOpen() wajib dipanggil di SETIAP jalur buka. Tanpa itu ada dua
+// kegagalan nyata: (1) timeout basi dari penutupan sebelumnya menyetel
+// display:none pada modal yang baru dibuka, dan (2) kelas sip-exit yang
+// masih menempel membuat modal terbuka pada opacity 0 dengan
+// pointer-events:none - terlihat kosong dan tidak bisa diklik.
+const SIP_EXIT_MS = 150;
+function sipCloseOverlay(el) {
+    if (!el) return;
+    clearTimeout(el._exitT);
+    el.classList.add('sip-exit');
+    el._exitT = setTimeout(() => {
+        el.classList.remove('sip-exit');
+        el.style.display = 'none';
+    }, SIP_EXIT_MS);
+}
+function sipPrepareOpen(el) {
+    if (!el) return;
+    clearTimeout(el._exitT);
+    el.classList.remove('sip-exit');
+}
+
 // CHECK-A: pengganti prompt() — mengembalikan Promise<string|null>
 function showInputModal(message, { placeholder = '', defaultValue = '', okClass = 'btn-primary' } = {}) {
     return new Promise(resolve => {
@@ -210,10 +236,11 @@ function showInputModal(message, { placeholder = '', defaultValue = '', okClass 
         input.value = defaultValue;
         input.placeholder = placeholder;
         btnOk.className = 'btn ' + okClass;
+        sipPrepareOpen(modal);
         modal.style.display = 'flex';
         input.focus();
         const done = (val) => {
-            modal.style.display = 'none';
+            sipCloseOverlay(modal);
             input.removeEventListener('keydown', onKey);
             btnOk.removeEventListener('click', onOk);
             btnCan.removeEventListener('click', onCan);
@@ -238,9 +265,13 @@ function _showToast(msg) {
         document.body.appendChild(toast);
     }
     toast.textContent = msg;
+    // Toast bisa dipanggil beruntun. sipPrepareOpen membatalkan exit yang
+    // masih menggantung dan melepas .sip-exit, supaya pesan baru tidak
+    // muncul pada opacity 0 milik animasi keluar pesan sebelumnya.
+    sipPrepareOpen(toast);
     toast.style.display = 'block';
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => { toast.style.display = 'none'; }, 3500);
+    toast._t = setTimeout(() => { sipCloseOverlay(toast); }, 3500);
 }
 
 /** Pesan error ramah pengguna — detail teknis ke console saja. */
@@ -333,7 +364,7 @@ async function init() {
     const defaultTab = isTeacher ? 'guru' : (jabatan[0] ?? 'kasus');
     const savedTab   = localStorage.getItem('sip_active_tab_guru');
     const startTab   = savedTab || defaultTab;
-    activateTab(startTab);
+    await activateTab(startTab);
     await loadTabContent(startTab);
 
     // Offline sync: tampilkan status + kirim absensi tertunda.
@@ -478,19 +509,48 @@ async function buildTabs() {
     const handler = async (e) => {
         const key = e.target.closest('[data-tab]')?.dataset?.tab;
         if (!key) return;
-        activateTab(key);
+        await activateTab(key);
         await loadTabContent(key);
     };
     nav.addEventListener('click', handler);
     botNav.addEventListener('click', handler);
 }
 
+// Sekuensial, bukan tumpang tindih: panel lama diberi .sip-exit dan tetap
+// terender selama SIP_EXIT_MS (dijaga display:block !important di
+// transitions.css), baru sesudah itu .active berpindah ke panel baru.
+// Kalau keduanya aktif bersamaan, dua elemen block ikut alur normal dan
+// halaman melompat memanjang selama animasi berlangsung.
+//
+// Mengembalikan Promise supaya loadTabContent() menunggu - penanganan
+// errornya menyeleksi '.tab-panel.active .page-body', yang selama jeda
+// masih menunjuk panel lama.
 function activateTab(key) {
     localStorage.setItem('sip_active_tab_guru', key);
     document.querySelectorAll('.tab-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.tab === key));
-    document.querySelectorAll('.tab-panel').forEach(p =>
-        p.classList.toggle('active', p.id === `tab-${key}`));
+
+    const panels   = document.querySelectorAll('.tab-panel');
+    const incoming = document.getElementById(`tab-${key}`);
+    const outgoing = [...panels].find(p => p.classList.contains('active') && p !== incoming);
+
+    // Batalkan exit yang masih menggantung dari klik sebelumnya. Tanpa ini,
+    // klik tab cepat berturut-turut membuat timeout basi melepas .active
+    // dari panel yang baru saja dipasang.
+    panels.forEach(p => { clearTimeout(p._exitT); p.classList.remove('sip-exit'); });
+
+    const show = () => panels.forEach(p => p.classList.toggle('active', p === incoming));
+
+    if (!outgoing) { show(); return Promise.resolve(); }
+
+    outgoing.classList.add('sip-exit');
+    return new Promise(resolve => {
+        outgoing._exitT = setTimeout(() => {
+            outgoing.classList.remove('sip-exit');
+            show();
+            resolve();
+        }, SIP_EXIT_MS);
+    });
 }
 
 async function loadTabContent(key) {
@@ -835,13 +895,14 @@ function openAttModal(btn) {
     document.getElementById('att-modal-body').innerHTML =
         (isPast ? '<p class="hint" style="background:var(--color-bg-alt);padding:8px 10px;border-radius:6px;margin-bottom:12px">Data kehadiran sebelumnya sudah ditampilkan. Ubah jika perlu lalu klik Simpan.</p>' : '') +
         '<p class="hint">Memuat daftar siswa…</p>';
+    sipPrepareOpen(modal);
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
     loadAttModalContent(btn.dataset.schedule, btn.dataset.class, btn.dataset.classname);
 }
 
 function closeAttModal() {
-    document.getElementById('att-modal').style.display = 'none';
+    sipCloseOverlay(document.getElementById('att-modal'));
     document.body.style.overflow = '';
 }
 
@@ -3516,10 +3577,11 @@ function openKasusModal() {
     document.getElementById('kasus-c-student-id').value = '';
     document.getElementById('kasus-create-msg').style.display = 'none';
     document.getElementById('kasus-c-student-list').style.display = 'none';
+    sipPrepareOpen(modal);
     modal.style.display = 'flex';
 }
 function closeKasusModal() {
-    document.getElementById('kasus-create-modal').style.display = 'none';
+    sipCloseOverlay(document.getElementById('kasus-create-modal'));
 }
 
 async function loadKasusList(append = false, ctx = kasusCtxDefault) {
@@ -4550,11 +4612,12 @@ function openForumModal(postId = null) {
     document.getElementById('forum-filter-kelas-wrap').style.display   = 'none';
     document.getElementById('forum-filter-hari-wrap').style.display    = 'none';
     buildRecipientGroupButtons();
+    sipPrepareOpen(modal);
     modal.style.display = 'flex';
 }
 
 function closeForumModal() {
-    document.getElementById('modal-forum-post').style.display = 'none';
+    sipCloseOverlay(document.getElementById('modal-forum-post'));
     _forumEditPostId = null;
     _forumIdemKey    = null;                          // FUNC-03
     _forumRecipients.clear();
@@ -5863,6 +5926,7 @@ async function submitForumPost() {
 async function openForumDetail(postId) {
     const modal = document.getElementById('modal-forum-detail');
     modal.dataset.postId = postId;
+    sipPrepareOpen(modal);
     modal.style.display  = 'flex';
 
     document.getElementById('detail-forum-title').textContent  = 'Memuat\u2026';
@@ -5921,7 +5985,7 @@ async function openForumDetail(postId) {
 }
 
 function closeForumDetail() {
-    document.getElementById('modal-forum-detail').style.display = 'none';
+    sipCloseOverlay(document.getElementById('modal-forum-detail'));
 }
 
 async function loadForumComments(postId) {

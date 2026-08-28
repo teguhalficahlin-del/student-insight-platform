@@ -1,0 +1,234 @@
+/* ===========================================================
+ * transitions.css — Cinematic CSS Transitions, Portal Guru
+ *
+ * Dimuat SETELAH guru.css. Berisi animasi saja — tidak ada
+ * satupun aturan layout, warna, atau ukuran. Menghapus file ini
+ * mengembalikan portal ke perilaku sebelumnya tanpa sisa.
+ *
+ * PRINSIP YANG DIJAGA
+ *
+ * 1. Hanya opacity + transform yang dianimasikan. Tidak ada
+ *    width/height/top/left — keduanya memicu layout reflow dan
+ *    berat di Android kelas bawah.
+ *
+ * 2. opacity:0 HANYA hidup di dalam @keyframes from, tidak pernah
+ *    jadi state dasar selektor. Konsekuensinya: kalau animasi
+ *    tidak jalan (browser lama, prefers-reduced-motion, CSS gagal
+ *    dimuat), elemen tetap tampil penuh. Konten tidak pernah
+ *    bergantung pada animasi untuk terlihat.
+ *
+ * 3. Tidak ada animation-fill-mode: forwards/both pada panel,
+ *    modal, dan toast. Alasannya konkret: transform yang menetap
+ *    pada ancestor membuat containing block baru, sehingga
+ *    position:fixed keturunannya jadi relatif ke ancestor itu.
+ *    #kasus-create-modal berada di dalam .tab-panel — kalau
+ *    .tab-panel.active menahan transform, modal itu salah posisi.
+ *    Tanpa fill-mode, transform lenyap begitu animasi selesai.
+ *    backwards dipakai hanya untuk stagger kartu (dibutuhkan
+ *    selama masa delay) dan tidak mempertahankan state akhir.
+ *
+ * 4. Animasi masuk dipicu oleh perubahan display none -> block/flex
+ *    yang sudah dilakukan JS existing. CSS animation me-restart
+ *    sendiri saat elemen kembali dirender, jadi tidak ada satu pun
+ *    baris JS yang perlu diubah.
+ * =========================================================== */
+
+:root {
+    --dur-fast:   150ms;
+    --dur-normal: 250ms;
+    --dur-slow:   400ms;
+    --ease-out:   cubic-bezier(0.16, 1, 0.32, 1);
+    --ease-in:    cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* ── 1. Tab utama (Beranda, Pembinaan Siswa, dll) ─────────────
+ * .tab-panel.active dipasang oleh activateTab(). Panel masuk
+ * naik dari bawah, melanjutkan arah panel yang keluar. */
+@keyframes sipTabIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.tab-panel.active {
+    animation: sipTabIn var(--dur-normal) var(--ease-out);
+}
+
+/* ── 2. Sub-tab Jurnal (Catatan Jurnal / Penilaian) ───────────
+ * Dipindah lewat style.display di penilaian.js:2193-2196.
+ * Sumbu X, bukan Y — membedakan navigasi sekunder dari primer. */
+@keyframes sipSubtabIn {
+    from { opacity: 0; transform: translateX(8px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+#jurnal-sub-catatan,
+#jurnal-sub-penilaian {
+    animation: sipSubtabIn var(--dur-normal) var(--ease-out);
+}
+
+/* ── 3. Modal ────────────────────────────────────────────────
+ * Berlaku untuk tiga cara buka yang dipakai portal ini:
+ * .modal-overlay.is-open (CSS), style.display='flex' (JS), dan
+ * .pen-overlay yang dibuat runtime lalu di-append oleh
+ * penilaian.js:246 — append memicu animasi sama seperti
+ * perubahan display.
+ * Overlay memudar, kotaknya membesar dari 0.96 — dua elemen
+ * berbeda supaya scale tidak ikut menarik latar gelapnya. */
+@keyframes sipOverlayIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes sipModalBoxIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+}
+.modal-overlay,
+.pen-overlay {
+    animation: sipOverlayIn var(--dur-fast) var(--ease-out);
+}
+.modal-overlay > .modal-box,
+.pen-overlay > .pen-modal {
+    animation: sipModalBoxIn var(--dur-normal) var(--ease-out);
+}
+
+/* ── 4. Kartu — stagger 50ms ─────────────────────────────────
+ * Hanya anak langsung .page-body. Section-card bersarang
+ * sengaja dilewati supaya tidak dianimasikan dua kali oleh
+ * induknya sendiri.
+ *
+ * backwards dibutuhkan di sini: tanpanya kartu tampil penuh
+ * dulu selama masa delay lalu mengedip ke opacity 0 saat
+ * animasinya mulai. Fill backwards tidak mempertahankan state
+ * akhir, jadi tidak ada transform yang menetap. */
+@keyframes sipCardIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.page-body > .section-card {
+    animation: sipCardIn var(--dur-normal) var(--ease-out) backwards;
+}
+.page-body > .section-card:nth-child(1) { animation-delay: 0ms; }
+.page-body > .section-card:nth-child(2) { animation-delay: 50ms; }
+.page-body > .section-card:nth-child(3) { animation-delay: 100ms; }
+.page-body > .section-card:nth-child(4) { animation-delay: 150ms; }
+.page-body > .section-card:nth-child(5) { animation-delay: 200ms; }
+.page-body > .section-card:nth-child(6) { animation-delay: 250ms; }
+/* Kartu ke-7 dan seterusnya berbagi delay maksimum — tanpa batas
+ * ini tab berisi 12 kartu butuh 600ms sebelum kartu terakhir
+ * mulai muncul, dan itu terbaca sebagai lambat, bukan sinematik. */
+.page-body > .section-card:nth-child(n+7) { animation-delay: 300ms; }
+
+/* ── 5. Toast ────────────────────────────────────────────────
+ * #_guru-toast dibuat runtime oleh showToast() dengan inline
+ * cssText yang memakai transform:translateX(-50%) untuk
+ * menengahkan diri. translateX(-50%) WAJIB ikut ditulis di
+ * kedua keyframe — kalau tidak, toast melompat ke kanan selama
+ * animasi karena animasi menimpa transform inline.
+ * Pola yang sama sudah dipakai @keyframes pwaSlideUp. */
+@keyframes sipToastIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(16px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+#_guru-toast {
+    animation: sipToastIn var(--dur-normal) var(--ease-out);
+}
+
+/* ── 6. Skeleton shimmer ─────────────────────────────────────
+ * Utilitas opt-in: pasang class sip-skeleton pada placeholder.
+ * Kilaunya digeser dengan transform, bukan background-position,
+ * supaya tetap di jalur compositor.
+ * translateZ(0) memaksa layer sendiri — pada GPU Android kelas
+ * bawah ini mencegah repaint seluruh kartu tiap frame. */
+@keyframes sipShimmer {
+    from { transform: translateX(-100%) translateZ(0); }
+    to   { transform: translateX(100%)  translateZ(0); }
+}
+.sip-skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--color-surface-alt);
+    border-radius: var(--radius);
+}
+.sip-skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.06) 50%,
+        transparent 100%
+    );
+    animation: sipShimmer 1.4s linear infinite;
+}
+
+/* ── 7. Animasi KELUAR ───────────────────────────────────────
+ * Dipasangkan dengan sipCloseOverlay() / activateTab() di
+ * guru/js/dashboard.js, yang menunda display:none selama 150ms
+ * (SIP_EXIT_MS) supaya keyframe di bawah sempat berjalan.
+ *
+ * forwards dipakai di sini — beda dari animasi masuk, dan aman
+ * justru karena elemennya memang sedang menuju display:none.
+ * State akhir opacity:0 hanya perlu bertahan sampai elemen
+ * disembunyikan; JS melepas .sip-exit di timeout yang sama,
+ * jadi tidak ada transform yang menetap sesudahnya.
+ *
+ * Syarat aman forwards: SETIAP jalur buka memanggil
+ * sipPrepareOpen() lebih dulu. Kalau .sip-exit sempat tertinggal
+ * saat elemen dibuka lagi, forwards akan menahannya di opacity 0
+ * dan pointer-events:none — modal terlihat kosong dan tidak bisa
+ * diklik. Lima modal yang ditambal semuanya punya pasangan
+ * buka/tutup tunggal, sehingga syarat ini terpenuhi penuh. */
+
+@keyframes sipTabOut {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(-8px); }
+}
+/* display:block !important menahan panel tetap terender selama
+ * animasi. Tanpa ini .tab-panel yang kehilangan .active langsung
+ * kena display:none dari guru.css:120 dan animasinya tidak pernah
+ * terlihat. Ini deklarasi statis, bukan properti yang dianimasikan
+ * — tidak ada reflow per frame. */
+.tab-panel.sip-exit {
+    display: block !important;
+    animation: sipTabOut var(--dur-fast) var(--ease-in) forwards;
+}
+
+@keyframes sipModalOut {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+}
+.modal-overlay.sip-exit,
+.pen-overlay.sip-exit {
+    animation: sipModalOut var(--dur-fast) var(--ease-in) forwards;
+    pointer-events: none;
+}
+
+@keyframes sipToastOut {
+    from { opacity: 1; transform: translateX(-50%) translateY(0); }
+    to   { opacity: 0; transform: translateX(-50%) translateY(16px); }
+}
+#_guru-toast.sip-exit {
+    animation: sipToastOut var(--dur-fast) var(--ease-in) forwards;
+}
+
+/* ── 8. prefers-reduced-motion ───────────────────────────────
+ * Dimatikan total, bukan dipercepat. Karena tidak ada opacity:0
+ * sebagai state dasar, mematikan animasi mengembalikan semua
+ * elemen ke tampilan penuh — bukan menyembunyikannya. */
+@media (prefers-reduced-motion: reduce) {
+    .tab-panel.active,
+    #jurnal-sub-catatan,
+    #jurnal-sub-penilaian,
+    .modal-overlay,
+    .pen-overlay,
+    .modal-overlay > .modal-box,
+    .pen-overlay > .pen-modal,
+    .page-body > .section-card,
+    #_guru-toast,
+    .sip-skeleton::after,
+    .tab-panel.sip-exit,
+    .modal-overlay.sip-exit,
+    .pen-overlay.sip-exit,
+    #_guru-toast.sip-exit {
+        animation: none;
+    }
+}
