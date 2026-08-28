@@ -204,7 +204,7 @@ export async function getRetentionCandidates() {
 }
 
 /** Hapus permanen siswa yang sudah melewati masa retensi 6 bulan. */
-export async function purgeExpiredStudents(studentIds) {
+export async function purgeExpiredStudents(studentIds, resumeFrom = null) {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
     if (!token) throw new Error('Sesi login tidak ditemukan. Silakan login ulang.');
@@ -216,7 +216,10 @@ export async function purgeExpiredStudents(studentIds) {
             'Content-Type':     'application/json',
             'x-schema-version': '1.0.0',
         },
-        body: JSON.stringify({ student_ids: studentIds }),
+        body: JSON.stringify({
+            student_ids: studentIds,
+            ...(resumeFrom && { resume_from: resumeFrom }),
+        }),
     });
     const body = await res.json();
     if (!res.ok) throw new Error(body?.error?.message ?? 'Gagal menghapus data siswa');

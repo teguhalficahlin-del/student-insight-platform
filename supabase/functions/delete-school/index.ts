@@ -88,6 +88,7 @@ const DELETE_MANIFEST: ManifestEntry[] = [
     table('teacher_journals', 'journal_id'),
     table('teacher_piket_assignments', 'assignment_id'),
     table('teacher_profiles', 'profile_id'),
+    table('pending_auth_deletions', 'queue_id'),
     table('academic_periods', 'id'),
     table('assessments', 'id'),
     table('students', 'student_id'),

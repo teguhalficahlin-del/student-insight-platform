@@ -1709,6 +1709,23 @@ async function renderAlumniPanel() {
                         </button>
                     </div>`;
 
+                const purgeWithRecovery = async studentIds => {
+                    let resumeFrom = null;
+                    while (true) {
+                        const result = await purgeExpiredStudents(studentIds, resumeFrom);
+                        if (result.status === 'complete') return result;
+                        if (result.status !== 'partial' && result.status !== 'timeout') {
+                            throw new Error(`Status penghapusan tidak dikenal: ${result.status ?? 'kosong'}`);
+                        }
+                        if (!result.resume_from) throw new Error('Server tidak mengirim checkpoint lanjutan');
+                        resumeFrom = result.resume_from;
+                        const lanjut = confirm(
+                            `Proses selesai sebagian (${result.deleted} dari ${result.total} siswa). Lanjutkan?`
+                        );
+                        if (!lanjut) return null;
+                    }
+                };
+
                 // Hapus satu per satu
                 resultDiv.querySelectorAll('.purge-student-btn').forEach(ab => {
                     ab.addEventListener('click', async () => {
@@ -1724,7 +1741,12 @@ async function renderAlumniPanel() {
                         }
                         ab.disabled = true; ab.textContent = 'Menghapus…';
                         try {
-                            await purgeExpiredStudents([ab.dataset.studentId]);
+                            const result = await purgeWithRecovery([ab.dataset.studentId]);
+                            if (!result) {
+                                ab.disabled = false;
+                                ab.textContent = 'Lanjutkan Penghapusan';
+                                return;
+                            }
                             ab.closest('tr').remove();
                             const remaining = resultDiv.querySelectorAll('.purge-student-btn').length;
                             if (remaining === 0) resultDiv.innerHTML = '<p class="hint-success">✓ Semua kandidat telah dihapus.</p>';
@@ -1749,8 +1771,12 @@ async function renderAlumniPanel() {
                     if (allBtn) { allBtn.disabled = true; allBtn.textContent = 'Menghapus…'; }
                     try {
                         const ids = candidates.map(c => c.student_id);
-                        const result = await purgeExpiredStudents(ids);
-                        resultDiv.innerHTML = `<p class="hint-success">✓ ${result.purged} siswa berhasil dihapus permanen.</p>`;
+                        const result = await purgeWithRecovery(ids);
+                        if (!result) {
+                            if (allBtn) { allBtn.disabled = false; allBtn.textContent = 'Lanjutkan Penghapusan'; }
+                            return;
+                        }
+                        resultDiv.innerHTML = `<p class="hint-success">✓ ${result.deleted} siswa berhasil dihapus permanen.</p>`;
                     } catch (err) {
                         alert(`Gagal: ${err.message}`);
                         if (allBtn) { allBtn.disabled = false; allBtn.textContent = `Hapus Semua (${n}) — Tidak Dapat Dipulihkan`; }
