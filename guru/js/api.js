@@ -2310,3 +2310,82 @@ export async function hapusRekapTp(tpId) {
         .eq('learning_objective_id', tpId);
     if (error) throw error;
 }
+
+// ─── CP Manual (teaching_cp + teaching_cp_elements) ───────────────────────────
+
+export async function getCp(kelasId, subjectId, year, semester) {
+    const { data: cp, error } = await supabase
+        .from('teaching_cp')
+        .select('cp_id, cp_umum')
+        .eq('class_id', kelasId)
+        .eq('subject_id', subjectId)
+        .eq('academic_year', year)
+        .eq('semester', semester)
+        .maybeSingle();
+    if (error) throw error;
+    if (!cp) return null;
+    const { data: elemen, error: err2 } = await supabase
+        .from('teaching_cp_elements')
+        .select('element_id, nama_elemen, deskripsi_cp, urutan')
+        .eq('cp_id', cp.cp_id)
+        .order('urutan', { ascending: true })
+        .order('created_at', { ascending: true });
+    if (err2) throw err2;
+    return { cp_id: cp.cp_id, cp_umum: cp.cp_umum, elemen: elemen || [] };
+}
+
+export async function upsertCp(schoolId, teacherId, kelasId, subjectId, year, semester, cpUmum) {
+    const { data: existing } = await supabase
+        .from('teaching_cp')
+        .select('cp_id')
+        .eq('school_id', schoolId)
+        .eq('teacher_id', teacherId)
+        .eq('class_id', kelasId)
+        .eq('subject_id', subjectId)
+        .eq('academic_year', year)
+        .eq('semester', semester)
+        .maybeSingle();
+    if (existing) {
+        const { error } = await supabase
+            .from('teaching_cp')
+            .update({ cp_umum: cpUmum })
+            .eq('cp_id', existing.cp_id);
+        if (error) throw error;
+        return existing.cp_id;
+    }
+    const { data, error } = await supabase
+        .from('teaching_cp')
+        .insert({ school_id: schoolId, teacher_id: teacherId, class_id: kelasId,
+                  subject_id: subjectId, academic_year: year, semester, cp_umum: cpUmum })
+        .select('cp_id')
+        .single();
+    if (error) throw error;
+    return data.cp_id;
+}
+
+export async function createCpElemen(cpId, schoolId, teacherId, namaElemen, deskripsiCp, urutan) {
+    const { data, error } = await supabase
+        .from('teaching_cp_elements')
+        .insert({ cp_id: cpId, school_id: schoolId, teacher_id: teacherId,
+                  nama_elemen: namaElemen, deskripsi_cp: deskripsiCp, urutan })
+        .select('element_id')
+        .single();
+    if (error) throw error;
+    return data.element_id;
+}
+
+export async function updateCpElemen(elementId, namaElemen, deskripsiCp) {
+    const { error } = await supabase
+        .from('teaching_cp_elements')
+        .update({ nama_elemen: namaElemen, deskripsi_cp: deskripsiCp })
+        .eq('element_id', elementId);
+    if (error) throw error;
+}
+
+export async function deleteCpElemen(elementId) {
+    const { error } = await supabase
+        .from('teaching_cp_elements')
+        .delete()
+        .eq('element_id', elementId);
+    if (error) throw error;
+}

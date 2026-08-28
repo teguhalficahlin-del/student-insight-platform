@@ -8,6 +8,7 @@ import {
     getAssessmentResults, upsertAssessmentResult,
     getStudentGroups, upsertStudentGroup,
     upsertGradeRecapBatch, getGradeRecap, hitungRekapTp, hapusRekapTp,
+    getCp, upsertCp, createCpElemen, updateCpElemen, deleteCpElemen,
 } from './api.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -45,7 +46,7 @@ let _nilaiSedangDisimpan = false; // guard double-submit simpan rekap
 let _delegInit  = false;
 let _userReady  = false;
 
-let _cpElemenLocal = [];   // state lokal elemen CP (belum ke DB)
+let _cpId = null;   // cp_id dari teaching_cp — null jika belum ada record di DB
 
 // sumatif state
 let _sumPage         = 0;
@@ -497,38 +498,60 @@ async function confirmDeleteTp(tp, origBtn) {
     bar.querySelector('.pen-del-no').addEventListener('click', () => { bar.remove(); origBtn.style.display = ''; });
 }
 
-function renderCpElemenList() {
+async function refreshCpElemenList() {
     const el = document.getElementById('pen-cp-elemen-body');
     if (!el) return;
-    if (!_cpElemenLocal.length) { el.innerHTML = '<p class="pen-placeholder">Belum ada elemen CP.</p>'; return; }
-    el.innerHTML = _cpElemenLocal.map((e, i) => (
+    if (!_cpId) { el.innerHTML = '<p class="pen-placeholder">Belum ada elemen CP.</p>'; return; }
+    let rows;
+    try {
+        const { data, error } = await supabase
+            .from('teaching_cp_elements')
+            .select('element_id, nama_elemen, deskripsi_cp, urutan')
+            .eq('cp_id', _cpId)
+            .order('urutan', { ascending: true })
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+        rows = data || [];
+    } catch (err) {
+        el.innerHTML = '<p class="pen-placeholder" style="color:var(--color-danger)">Gagal memuat elemen: ' + esc(err.message) + '</p>';
+        return;
+    }
+    if (!rows.length) { el.innerHTML = '<p class="pen-placeholder">Belum ada elemen CP.</p>'; return; }
+    el.innerHTML = rows.map((e, i) => (
         '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--color-border);border-radius:4px;margin-bottom:4px;font-size:13px">' +
-        '<span style="flex:1"><strong>Elemen ' + (i + 1) + '</strong> — ' + esc(e.nama) + '</span>' +
-        '<button class="pen-btn pen-btn-sm" data-action="cp-elemen-edit" data-idx="' + i + '">Edit</button>' +
-        '<button class="pen-btn pen-btn-sm pen-btn-danger" data-action="cp-elemen-delete" data-idx="' + i + '">Hapus</button>' +
+        '<span style="flex:1"><strong>Elemen ' + (i + 1) + '</strong> — ' + esc(e.nama_elemen) + '</span>' +
+        '<button class="pen-btn pen-btn-sm" data-action="cp-elemen-edit" data-element-id="' + e.element_id + '" data-nama="' + esc(e.nama_elemen) + '" data-deskripsi="' + esc(e.deskripsi_cp) + '">Edit</button>' +
+        '<button class="pen-btn pen-btn-sm pen-btn-danger" data-action="cp-elemen-delete" data-element-id="' + e.element_id + '">Hapus</button>' +
         '</div>'
     )).join('');
 }
 
-function openCpElemenModal(idx) {
-    const existing = idx != null ? _cpElemenLocal[idx] : null;
+function openCpElemenModal(elementId, existingNama, existingDesk) {
     openModal({
-        title: existing ? 'Edit Elemen CP' : 'Tambah Elemen CP',
+        title: elementId ? 'Edit Elemen CP' : 'Tambah Elemen CP',
         bodyHtml:
             '<label>Nama Elemen <span style="color:var(--color-danger)">*</span></label>' +
-            '<input type="text" id="pen-cp-el-nama" maxlength="200" placeholder="Nama elemen…" value="' + esc(existing?.nama || '') + '">' +
+            '<input type="text" id="pen-cp-el-nama" maxlength="200" placeholder="Nama elemen…" value="' + esc(existingNama || '') + '">' +
             '<label>Deskripsi Elemen <span style="color:var(--color-danger)">*</span></label>' +
-            '<textarea id="pen-cp-el-desk" rows="4" maxlength="2000" placeholder="Deskripsi elemen…">' + esc(existing?.deskripsi || '') + '</textarea>',
-        onSave: (_ov, close) => {
+            '<textarea id="pen-cp-el-desk" rows="4" maxlength="2000" placeholder="Deskripsi elemen…">' + esc(existingDesk || '') + '</textarea>',
+        onSave: async (_ov, close) => {
             const nama = _ov.querySelector('#pen-cp-el-nama').value.trim();
             const desk = _ov.querySelector('#pen-cp-el-desk').value.trim();
             if (!nama) throw new Error('Nama Elemen wajib diisi.');
             if (!desk) throw new Error('Deskripsi Elemen wajib diisi.');
-            console.log('tambah elemen', { nama, deskripsi: desk });
-            if (idx != null) { _cpElemenLocal[idx] = { nama, deskripsi: desk }; }
-            else              { _cpElemenLocal.push({ nama, deskripsi: desk }); }
+            await ensureUser();
+            if (elementId) {
+                await updateCpElemen(elementId, nama, desk);
+            } else {
+                if (!_cpId) {
+                    const cpUmum = document.getElementById('pen-cp-umum-input')?.value.trim() || '';
+                    _cpId = await upsertCp(_schoolId, _teacherId, _kelasId, _subjectId, _year, Number(_semester), cpUmum);
+                }
+                const nextUrutan = document.querySelectorAll('#pen-cp-elemen-body [data-element-id]').length;
+                await createCpElemen(_cpId, _schoolId, _teacherId, nama, desk, nextUrutan);
+            }
             close();
-            renderCpElemenList();
+            await refreshCpElemenList();
         },
     });
 }
@@ -543,10 +566,11 @@ async function renderPerencanaan() {
         '<div class="pen-sec-label">Capaian Pembelajaran</div>' +
         '<div class="pen-sec-body" id="pen-cp-manual-body">' +
         '<label style="display:block;font-size:12px;font-weight:600;color:var(--color-text-muted);margin:0 0 4px">CP Umum</label>' +
-        '<textarea id="pen-cp-umum-input" rows="4" style="width:100%;padding:8px 10px;border:1px solid var(--color-border);border-radius:5px;font-size:13px;background:var(--color-bg);color:var(--color-text);box-sizing:border-box;resize:vertical" placeholder="Tulis capaian pembelajaran umum…"></textarea>' +
+        '<textarea id="pen-cp-umum-input" rows="4" style="width:100%;padding:8px 10px;border:1px solid var(--color-border);border-radius:5px;font-size:13px;background:var(--color-bg);color:var(--color-text);box-sizing:border-box;resize:vertical" placeholder="Tulis capaian pembelajaran umum…"' +
+        (hasCtx ? '' : ' disabled') + '></textarea>' +
         '<div class="pen-sec-label" style="margin-top:12px">Elemen CP</div>' +
-        '<div id="pen-cp-elemen-body"></div>' +
-        '<div class="pen-add-row"><button class="pen-btn" data-action="cp-elemen-add">+ Tambah Elemen</button></div>' +
+        '<div id="pen-cp-elemen-body"><p class="pen-placeholder">Memuat…</p></div>' +
+        (hasCtx ? '<div class="pen-add-row"><button class="pen-btn" data-action="cp-elemen-add">+ Tambah Elemen</button></div>' : '') +
         '</div></div>' +
         '<div class="pen-sec"><div class="pen-sec-label" id="pen-tp-label">Tujuan Pembelajaran</div>' +
         '<div id="pen-tp-body">' +
@@ -554,28 +578,84 @@ async function renderPerencanaan() {
         '</div>' +
         (hasCtx ? '<div class="pen-add-row"><button class="pen-btn" data-action="tp-add">+ Tambah TP</button></div>' : '') +
         '</div>';
-    // CP dinonaktifkan — section CP tidak dirender
 
-    if (!hasCtx) return;
-
-    let tps;
-    try { tps = await getTps(_kelasId, _subjectId, _year, Number(_semester)); }
-    catch (err) {
-        const el = document.getElementById('pen-tp-body');
-        if (el) el.innerHTML = '<p class="pen-placeholder" style="color:var(--color-danger)">Gagal memuat TP: ' + esc(err.message) + '</p>';
+    if (!hasCtx) {
+        document.getElementById('pen-cp-elemen-body').innerHTML = '<p class="pen-placeholder">Pilih kelas, mapel, tahun, dan semester.</p>';
         return;
     }
-    _tpCache = tps;
+
+    // Load CP dan TP secara paralel
+    await ensureUser();
+    const [cpResult, tps] = await Promise.allSettled([
+        getCp(_kelasId, _subjectId, _year, Number(_semester)),
+        getTps(_kelasId, _subjectId, _year, Number(_semester)),
+    ]);
+
+    // Populate CP section
+    if (cpResult.status === 'fulfilled' && cpResult.value) {
+        const cpData = cpResult.value;
+        _cpId = cpData.cp_id;
+        const ta = document.getElementById('pen-cp-umum-input');
+        if (ta) ta.value = cpData.cp_umum || '';
+        const elBody = document.getElementById('pen-cp-elemen-body');
+        if (elBody) {
+            if (!cpData.elemen.length) {
+                elBody.innerHTML = '<p class="pen-placeholder">Belum ada elemen CP.</p>';
+            } else {
+                elBody.innerHTML = cpData.elemen.map((e, i) => (
+                    '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--color-border);border-radius:4px;margin-bottom:4px;font-size:13px">' +
+                    '<span style="flex:1"><strong>Elemen ' + (i + 1) + '</strong> — ' + esc(e.nama_elemen) + '</span>' +
+                    '<button class="pen-btn pen-btn-sm" data-action="cp-elemen-edit" data-element-id="' + e.element_id + '" data-nama="' + esc(e.nama_elemen) + '" data-deskripsi="' + esc(e.deskripsi_cp) + '">Edit</button>' +
+                    '<button class="pen-btn pen-btn-sm pen-btn-danger" data-action="cp-elemen-delete" data-element-id="' + e.element_id + '">Hapus</button>' +
+                    '</div>'
+                )).join('');
+            }
+        }
+    } else {
+        _cpId = null;
+        const elBody = document.getElementById('pen-cp-elemen-body');
+        if (elBody) elBody.innerHTML = '<p class="pen-placeholder">Belum ada elemen CP.</p>';
+        if (cpResult.status === 'rejected') {
+            console.error('Gagal memuat CP:', cpResult.reason);
+        }
+    }
+
+    // Wire auto-save cp_umum on blur (debounce 800ms)
+    const ta = document.getElementById('pen-cp-umum-input');
+    if (ta) {
+        let _cpBlurTimer = null;
+        ta.addEventListener('blur', () => {
+            clearTimeout(_cpBlurTimer);
+            _cpBlurTimer = setTimeout(async () => {
+                const val = ta.value.trim();
+                try {
+                    await ensureUser();
+                    _cpId = await upsertCp(_schoolId, _teacherId, _kelasId, _subjectId, _year, Number(_semester), val);
+                } catch (err) {
+                    console.error('Auto-save CP umum gagal:', err);
+                }
+            }, 800);
+        });
+    }
+
+    // Populate TP section
+    if (tps.status === 'rejected') {
+        const el = document.getElementById('pen-tp-body');
+        if (el) el.innerHTML = '<p class="pen-placeholder" style="color:var(--color-danger)">Gagal memuat TP: ' + esc(tps.reason.message) + '</p>';
+        return;
+    }
+    const tpData = tps.value;
+    _tpCache = tpData;
     const tpLabel = document.getElementById('pen-tp-label');
-    if (tpLabel) tpLabel.textContent = 'Tujuan Pembelajaran (' + tps.length + ')';
+    if (tpLabel) tpLabel.textContent = 'Tujuan Pembelajaran (' + tpData.length + ')';
     const tpBody = document.getElementById('pen-tp-body');
     if (!tpBody) return;
-    if (!tps.length) {
+    if (!tpData.length) {
         tpBody.innerHTML = '<p class="pen-placeholder">Belum ada TP. Klik "+ Tambah TP" untuk mulai.</p>';
         return;
     }
-    tpBody.innerHTML = tps.map(tpRowHtml).join('');
-    tps.forEach(tp => loadAndRenderKktps(tp.id));
+    tpBody.innerHTML = tpData.map(tpRowHtml).join('');
+    tpData.forEach(tp => loadAndRenderKktps(tp.id));
 }
 
 // ── Section 2: Pelaksanaan ────────────────────────────────────────────────────
@@ -1861,12 +1941,13 @@ async function handleClick(e) {
     if (!btn) return;
     const act = btn.dataset.action;
 
-    if (act === 'cp-elemen-add')    { openCpElemenModal(null); return; }
-    if (act === 'cp-elemen-edit')   { openCpElemenModal(Number(btn.dataset.idx)); return; }
+    if (act === 'cp-elemen-add')    { openCpElemenModal(null, null, null); return; }
+    if (act === 'cp-elemen-edit')   { openCpElemenModal(btn.dataset.elementId, btn.dataset.nama, btn.dataset.deskripsi); return; }
     if (act === 'cp-elemen-delete') {
-        const i = Number(btn.dataset.idx);
-        _cpElemenLocal.splice(i, 1);
-        renderCpElemenList();
+        const eid = btn.dataset.elementId;
+        btn.disabled = true;
+        try { await deleteCpElemen(eid); await refreshCpElemenList(); }
+        catch (err) { btn.disabled = false; alert('Gagal hapus elemen: ' + err.message); }
         return;
     }
     if (act === 'tp-add') { openTpModal(null); return; }
@@ -2377,6 +2458,7 @@ window.initPenilaianPanel = function (kelasId, subjectId, year, semester, progra
     _rosterCache  = [];
     _rcSemester   = null;
     _rcYear       = null;
+    _cpId         = null;
 
     injectStyles();
     renderAll();
