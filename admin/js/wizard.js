@@ -142,6 +142,7 @@ window.toggleWzHint = function(btn) {
     const open = body.style.display !== 'none';
     body.style.display = open ? 'none' : 'block';
     btn.querySelector('.wz-hint-arrow').textContent = open ? '▸' : '▾';
+    if (!open && body.querySelector('#wz-hint-guru-list')) loadHintGuruKelas();
 };
 
 const WZ_HINT_TEXT = {
@@ -186,10 +187,9 @@ const WZ_HINT_TEXT = {
   <li>Login menggunakan NIP/NIK yang didaftarkan di sini</li>
   <li>Catat password awal — password tidak bisa ditampilkan ulang</li>
 </ul>`,
-    11: `<ul>
-  <li>Staf dan kelas harus sudah diimpor sebelum menyusun jadwal</li>
-  <li>Gunakan "Susun Jadwal Visual" untuk input manual, atau download template lalu impor</li>
-</ul>`,
+    11: `<p style="margin-bottom:8px">Gunakan template jadwal yang tersedia. Sebelum mengisi, perhatikan daftar kode guru dan nama kelas berikut — gunakan persis seperti tertera.</p>
+<div id="wz-hint-guru-list"><p class="hint">Memuat daftar guru…</p></div>
+<div id="wz-hint-kelas-list"><p class="hint">Memuat daftar kelas…</p></div>`,
     12: `<ul>
   <li>Tab BK: tugaskan konselor BK per kelas</li>
   <li>Tab Guru Wali: tugaskan guru wali per siswa</li>
@@ -1654,14 +1654,12 @@ async function renderScheduleStep() {
             <button type="button" class="btn btn-outline-secondary" id="btnDownloadTemplateJadwal" style="flex:1;min-width:0">⬇ Download Template Jadwal</button>
         </div>
 
-        <div id="wz-schedule-guide" style="margin-bottom:16px"><p class="hint">Memuat panduan…</p></div>
         <div id="wz-data-list" style="margin-top:16px"><p class="hint">Memuat data…</p></div>
     `;
 
     document.getElementById('wz-open-schedule').addEventListener('click', () => openScheduleBuilder());
     document.getElementById('btnDownloadTemplateJadwal').addEventListener('click', downloadTemplateJadwal);
 
-    loadScheduleGuide();
     await refreshDataList(11);
     nextBtn.disabled = false;
 }
@@ -1673,12 +1671,14 @@ async function downloadTemplateJadwal() {
     a.click();
 }
 
-async function loadScheduleGuide() {
-    const guideEl = document.getElementById('wz-schedule-guide');
-    if (!guideEl) return;
+async function loadHintGuruKelas() {
+    const guruEl  = document.getElementById('wz-hint-guru-list');
+    const kelasEl = document.getElementById('wz-hint-kelas-list');
+    if (!guruEl || !kelasEl) return;
+    // Sudah ter-load — cek apakah masih placeholder
+    if (!guruEl.querySelector('.hint') && !kelasEl.querySelector('.hint')) return;
 
-    const schoolId     = state.schoolId;
-    const academicYear = state.data.academicYear;
+    const schoolId = state.schoolId;
 
     let guruRows = [], kelasRows = [];
     try {
@@ -1696,7 +1696,6 @@ async function loadScheduleGuide() {
                 .from('classes')
                 .select('name, grade_level')
                 .eq('school_id', schoolId)
-                .eq('academic_year', academicYear)
                 .eq('is_active', true)
                 .order('grade_level', { ascending: true })
                 .order('name', { ascending: true }),
@@ -1706,37 +1705,32 @@ async function loadScheduleGuide() {
         guruRows  = guruRes.data  ?? [];
         kelasRows = kelasRes.data ?? [];
     } catch (err) {
-        guideEl.innerHTML = `<div class="alert alert-danger">${esc(err.message)}</div>`;
+        guruEl.innerHTML  = `<div class="alert alert-danger">${esc(err.message)}</div>`;
+        kelasEl.innerHTML = '';
         return;
     }
 
-    const guruRows_html = guruRows.length
-        ? guruRows.map(g => `<tr><td style="font-family:monospace">${esc(g.teacher_code)}</td><td>${esc(g.full_name)}</td></tr>`).join('')
-        : '<tr><td colspan="2" style="color:#94a3b8">Belum ada guru aktif dengan kode guru.</td></tr>';
+    const guruTbody = guruRows.length
+        ? guruRows.map(g => `<tr><td style="font-family:monospace;padding:3px 8px">${esc(g.teacher_code)}</td><td style="padding:3px 8px">${esc(g.full_name)}</td></tr>`).join('')
+        : '<tr><td colspan="2" style="color:#94a3b8;padding:3px 8px">Belum ada guru aktif dengan kode guru.</td></tr>';
 
-    const kelasRows_html = kelasRows.length
+    guruEl.innerHTML = `
+<p style="margin:8px 0 4px"><strong>Kode Guru</strong></p>
+<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px">
+    <thead><tr>
+        <th style="text-align:left;padding:3px 8px;border-bottom:1px solid #2d3f6b;color:#e2e8f0">Kode</th>
+        <th style="text-align:left;padding:3px 8px;border-bottom:1px solid #2d3f6b;color:#e2e8f0">Nama Lengkap</th>
+    </tr></thead>
+    <tbody>${guruTbody}</tbody>
+</table>`;
+
+    const kelasList = kelasRows.length
         ? kelasRows.map(k => `<li>${esc(k.name)}</li>`).join('')
         : '<li style="color:#94a3b8">Belum ada kelas aktif.</li>';
 
-    guideEl.innerHTML = `
-<div class="wz-hint-card">
-    <button class="wz-hint-toggle" onclick="toggleWzHint(this)">
-        📋 Panduan Pengisian Jadwal <span class="wz-hint-arrow">&#9656;</span>
-    </button>
-    <div class="wz-hint-body" style="display:none">
-        <p>Gunakan template jadwal yang tersedia. Sebelum mengisi, perhatikan daftar kode guru dan nama kelas berikut — gunakan persis seperti tertera.</p>
-        <p><strong>Kode Guru</strong></p>
-        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px">
-            <thead><tr>
-                <th style="text-align:left;padding:4px 8px;border-bottom:1px solid #2d3f6b;color:#e2e8f0">Kode</th>
-                <th style="text-align:left;padding:4px 8px;border-bottom:1px solid #2d3f6b;color:#e2e8f0">Nama Lengkap</th>
-            </tr></thead>
-            <tbody>${guruRows_html}</tbody>
-        </table>
-        <p><strong>Nama Kelas</strong></p>
-        <ul style="margin:4px 0;padding-left:18px">${kelasRows_html}</ul>
-    </div>
-</div>`;
+    kelasEl.innerHTML = `
+<p style="margin:4px 0"><strong>Nama Kelas</strong></p>
+<ul style="margin:4px 0;padding-left:18px">${kelasList}</ul>`;
 }
 
 // ─────────────────────────────────────────────────────────────
