@@ -451,16 +451,7 @@ async function renderTpProgress(classId, container) {
             html += `<div style="margin-bottom:20px">
                 <h4 style="margin:0 0 8px;font-size:15px">${esc(subj.name)}</h4>`;
 
-            // CP (opsional — tampilkan jika tersedia)
-            try {
-                const cp = await getCpForSubject(subj.id, programCode, gradeLevel);
-                if (cp?.found && cp.elemen?.length) {
-                    html += `<p style="font-size:12px;color:var(--color-text-muted);margin:0 0 8px">
-                        CP: ${esc(cp.core_subject_name || '')}
-                        ${cp.elemen.map(e => `<span style="display:block;padding-left:8px;font-size:12px">• ${esc(e.nama_elemen)}</span>`).join('')}
-                    </p>`;
-                }
-            } catch { /* CP tidak kritis — lanjut tanpa CP */ }
+            // CP dinonaktifkan di tab Jurnal — ditampilkan via tab Penilaian
 
             // TP dari learning_objectives (ambil kedua semester)
             let tps = [];
