@@ -1666,10 +1666,88 @@ async function renderScheduleStep() {
 }
 
 async function downloadTemplateJadwal() {
-    const a = document.createElement('a');
-    a.href = 'template_jadwal_sip_smk_v2.xlsx';
-    a.download = 'template_jadwal_sip_smk_v2.xlsx';
-    a.click();
+    if (typeof XLSX === 'undefined') {
+        showError('SheetJS belum termuat. Coba refresh halaman.');
+        return;
+    }
+
+    const schoolId     = state.schoolId;
+    const academicYear = state.data.academicYear;
+
+    let slug, guruRows, kelasRows;
+    try {
+        const [schoolRes, guruRes, kelasRes] = await Promise.all([
+            supabase.from('schools').select('slug').single(),
+            supabase
+                .from('users')
+                .select('teacher_code, full_name')
+                .eq('school_id', schoolId)
+                .eq('role_type', 'GURU')
+                .eq('is_active', true)
+                .is('deleted_at', null)
+                .not('teacher_code', 'is', null)
+                .order('teacher_code', { ascending: true }),
+            supabase
+                .from('classes')
+                .select('name, grade_level')
+                .eq('school_id', schoolId)
+                .eq('academic_year', academicYear)
+                .eq('is_active', true)
+                .order('grade_level', { ascending: true })
+                .order('name', { ascending: true }),
+        ]);
+        if (schoolRes.error) throw new Error('Gagal fetch slug sekolah: ' + schoolRes.error.message);
+        if (guruRes.error)   throw new Error('Gagal fetch daftar guru: '  + guruRes.error.message);
+        if (kelasRes.error)  throw new Error('Gagal fetch daftar kelas: ' + kelasRes.error.message);
+        slug      = schoolRes.data.slug ?? 'sekolah';
+        guruRows  = guruRes.data  ?? [];
+        kelasRows = kelasRes.data ?? [];
+    } catch (err) {
+        showError(err.message);
+        return;
+    }
+
+    // Sheet 1 "Panduan" — teks panduan verbatim + daftar guru + daftar kelas
+    const panduan = [
+        ['PANDUAN PENGGUNAAN TEMPLATE JADWAL'],
+        [],
+        ['1. Kode guru ini dibuat berdasarkan data staff dan peran yang anda import pada langkah staff dan peran. Lihat daftar Kode Guru di bawah — gunakan kode persis seperti tertera'],
+        ['2. Nama kelas ini dibuat berdasarkan data kelas dan rombel yang anda import pada langkah kelas dan rombel. Lihat daftar Nama Kelas di bawah — gunakan nama persis seperti tertera'],
+        ['3. Isi Sheet 2 (Jadwal) dengan kode guru dan nama kelas yang sesuai. Kesalahan penulisan kode guru dan nama kelas menyebabkan import jadwal ditolak.'],
+        ['4. Selesaikan semua bentrok (sel merah) sebelum upload'],
+        ['5. Upload file ke SIP SMK via tombol Upload Jadwal'],
+        [],
+        ['KODE GURU'],
+        ['Kode', 'Nama Lengkap'],
+        ...guruRows.map(g => [g.teacher_code, g.full_name]),
+        [],
+        ['NAMA KELAS'],
+        ['Nama Kelas'],
+        ...kelasRows.map(k => [k.name]),
+    ];
+    const wsPanduan = XLSX.utils.aoa_to_sheet(panduan);
+
+    // Sheet 2 "Jadwal" — salin dari file statis v2
+    let wsJadwal;
+    try {
+        const resp = await fetch('template_jadwal_sip_smk_v2.xlsx');
+        if (!resp.ok) throw new Error('Gagal mengunduh template statis (HTTP ' + resp.status + ')');
+        const buf   = await resp.arrayBuffer();
+        const wbSrc = XLSX.read(buf, { type: 'array' });
+        const sheetName = wbSrc.SheetNames.find(n => n === 'Jadwal') ?? wbSrc.SheetNames[0];
+        wsJadwal = wbSrc.Sheets[sheetName];
+    } catch (err) {
+        showError('Gagal memuat template statis: ' + err.message);
+        return;
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsPanduan, 'Panduan');
+    XLSX.utils.book_append_sheet(wb, wsJadwal,  'Jadwal');
+
+    const safeSlug = slug.replace(/[^a-z0-9_-]/gi, '_');
+    const safeYear = academicYear.replace(/\//g, '-');
+    XLSX.writeFile(wb, `template_jadwal_${safeSlug}_${safeYear}.xlsx`);
 }
 
 // ─────────────────────────────────────────────────────────────
