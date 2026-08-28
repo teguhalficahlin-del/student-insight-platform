@@ -8,7 +8,7 @@ import {
     supabase,
     getCurrentUserRow,
     getJournalEntries, insertJournalEntry, deleteJournalEntry, updateJournalEntry,
-    getCpForSubject, getTps,
+    getCpForSubject, getCp, getTps,
     fnToggleTpTaught, getTpTaughtStatus,
 } from './api.js';
 import { initPenilaianTab } from './penilaian.js';
