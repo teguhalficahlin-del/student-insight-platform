@@ -1654,30 +1654,35 @@ async function renderScheduleStep() {
             <button type="button" class="btn btn-outline-secondary" id="btnDownloadTemplateJadwal" style="flex:1;min-width:0">⬇ Download Template Jadwal</button>
         </div>
 
+        <div id="wz-schedule-guide" style="margin-bottom:16px"><p class="hint">Memuat panduan…</p></div>
         <div id="wz-data-list" style="margin-top:16px"><p class="hint">Memuat data…</p></div>
     `;
 
     document.getElementById('wz-open-schedule').addEventListener('click', () => openScheduleBuilder());
     document.getElementById('btnDownloadTemplateJadwal').addEventListener('click', downloadTemplateJadwal);
 
-
+    loadScheduleGuide();
     await refreshDataList(11);
     nextBtn.disabled = false;
 }
 
 async function downloadTemplateJadwal() {
-    if (typeof XLSX === 'undefined') {
-        showError('SheetJS belum termuat. Coba refresh halaman.');
-        return;
-    }
+    const a = document.createElement('a');
+    a.href = 'template_jadwal_sip_smk_v2.xlsx';
+    a.download = 'template_jadwal_sip_smk_v2.xlsx';
+    a.click();
+}
+
+async function loadScheduleGuide() {
+    const guideEl = document.getElementById('wz-schedule-guide');
+    if (!guideEl) return;
 
     const schoolId     = state.schoolId;
     const academicYear = state.data.academicYear;
 
-    let slug, guruRows, kelasRows;
+    let guruRows = [], kelasRows = [];
     try {
-        const [schoolRes, guruRes, kelasRes] = await Promise.all([
-            supabase.from('schools').select('slug').single(),
+        const [guruRes, kelasRes] = await Promise.all([
             supabase
                 .from('users')
                 .select('teacher_code, full_name')
@@ -1696,58 +1701,42 @@ async function downloadTemplateJadwal() {
                 .order('grade_level', { ascending: true })
                 .order('name', { ascending: true }),
         ]);
-        if (schoolRes.error) throw new Error('Gagal fetch slug sekolah: ' + schoolRes.error.message);
-        if (guruRes.error)   throw new Error('Gagal fetch daftar guru: '  + guruRes.error.message);
-        if (kelasRes.error)  throw new Error('Gagal fetch daftar kelas: ' + kelasRes.error.message);
-        slug      = schoolRes.data.slug ?? 'sekolah';
+        if (guruRes.error)  throw new Error('Gagal fetch daftar guru: '  + guruRes.error.message);
+        if (kelasRes.error) throw new Error('Gagal fetch daftar kelas: ' + kelasRes.error.message);
         guruRows  = guruRes.data  ?? [];
         kelasRows = kelasRes.data ?? [];
     } catch (err) {
-        showError(err.message);
+        guideEl.innerHTML = `<div class="alert alert-danger">${esc(err.message)}</div>`;
         return;
     }
 
-    // Sheet 1 "Panduan" — teks panduan verbatim + daftar guru + daftar kelas
-    const panduan = [
-        ['PANDUAN PENGGUNAAN TEMPLATE JADWAL'],
-        [],
-        ['1. Kode guru ini dibuat berdasarkan data staff dan peran yang anda import pada langkah staff dan peran. Lihat daftar Kode Guru di bawah — gunakan kode persis seperti tertera'],
-        ['2. Nama kelas ini dibuat berdasarkan data kelas dan rombel yang anda import pada langkah kelas dan rombel. Lihat daftar Nama Kelas di bawah — gunakan nama persis seperti tertera'],
-        ['3. Isi Sheet 2 (Jadwal) dengan kode guru dan nama kelas yang sesuai. Kesalahan penulisan kode guru dan nama kelas menyebabkan import jadwal ditolak.'],
-        ['4. Selesaikan semua bentrok (sel merah) sebelum upload'],
-        ['5. Upload file ke SIP SMK via tombol Upload Jadwal'],
-        [],
-        ['KODE GURU'],
-        ['Kode', 'Nama Lengkap'],
-        ...guruRows.map(g => [g.teacher_code, g.full_name]),
-        [],
-        ['NAMA KELAS'],
-        ['Nama Kelas'],
-        ...kelasRows.map(k => [k.name]),
-    ];
-    const wsPanduan = XLSX.utils.aoa_to_sheet(panduan);
+    const guruRows_html = guruRows.length
+        ? guruRows.map(g => `<tr><td style="font-family:monospace">${esc(g.teacher_code)}</td><td>${esc(g.full_name)}</td></tr>`).join('')
+        : '<tr><td colspan="2" style="color:#94a3b8">Belum ada guru aktif dengan kode guru.</td></tr>';
 
-    // Sheet 2 "Jadwal" — salin dari file statis v2
-    let wsJadwal;
-    try {
-        const resp = await fetch('template_jadwal_sip_smk_v2.xlsx');
-        if (!resp.ok) throw new Error('Gagal mengunduh template statis (HTTP ' + resp.status + ')');
-        const buf   = await resp.arrayBuffer();
-        const wbSrc = XLSX.read(buf, { type: 'array' });
-        const sheetName = wbSrc.SheetNames.find(n => n === 'Jadwal') ?? wbSrc.SheetNames[0];
-        wsJadwal = wbSrc.Sheets[sheetName];
-    } catch (err) {
-        showError('Gagal memuat template statis: ' + err.message);
-        return;
-    }
+    const kelasRows_html = kelasRows.length
+        ? kelasRows.map(k => `<li>${esc(k.name)}</li>`).join('')
+        : '<li style="color:#94a3b8">Belum ada kelas aktif.</li>';
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, wsPanduan, 'Panduan');
-    XLSX.utils.book_append_sheet(wb, wsJadwal,  'Jadwal');
-
-    const safeSlug = slug.replace(/[^a-z0-9_-]/gi, '_');
-    const safeYear = academicYear.replace(/\//g, '-');
-    XLSX.writeFile(wb, `template_jadwal_${safeSlug}_${safeYear}.xlsx`);
+    guideEl.innerHTML = `
+<div class="wz-hint-card">
+    <button class="wz-hint-toggle" onclick="toggleWzHint(this)">
+        📋 Panduan Pengisian Jadwal <span class="wz-hint-arrow">&#9656;</span>
+    </button>
+    <div class="wz-hint-body" style="display:none">
+        <p>Gunakan template jadwal yang tersedia. Sebelum mengisi, perhatikan daftar kode guru dan nama kelas berikut — gunakan persis seperti tertera.</p>
+        <p><strong>Kode Guru</strong></p>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px">
+            <thead><tr>
+                <th style="text-align:left;padding:4px 8px;border-bottom:1px solid #2d3f6b;color:#e2e8f0">Kode</th>
+                <th style="text-align:left;padding:4px 8px;border-bottom:1px solid #2d3f6b;color:#e2e8f0">Nama Lengkap</th>
+            </tr></thead>
+            <tbody>${guruRows_html}</tbody>
+        </table>
+        <p><strong>Nama Kelas</strong></p>
+        <ul style="margin:4px 0;padding-left:18px">${kelasRows_html}</ul>
+    </div>
+</div>`;
 }
 
 // ─────────────────────────────────────────────────────────────
