@@ -126,10 +126,10 @@ function initWzHintStyles() {
     const style = document.createElement('style');
     style.id = 'wz-hint-styles';
     style.textContent = [
-        '.wz-hint-card{background:#1E1A00;border:1px solid #78590A;border-radius:8px;margin-bottom:16px;overflow:hidden}',
-        '.wz-hint-toggle{width:100%;text-align:left;background:none;border:none;color:#F5C518;font-size:13px;font-weight:600;padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}',
-        '.wz-hint-toggle:hover{background:rgba(120,89,10,0.15)}',
-        '.wz-hint-body{padding:0 14px 12px;color:#D4B96A;font-size:12px;line-height:1.6}',
+        '.wz-hint-card{background:#1a2744;border:1px solid #2d3f6b;border-radius:8px;margin-bottom:16px;overflow:hidden}',
+        '.wz-hint-toggle{width:100%;text-align:left;background:none;border:none;color:#e2e8f0;font-size:13px;font-weight:600;padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}',
+        '.wz-hint-toggle:hover{background:#223060}',
+        '.wz-hint-body{padding:0 14px 12px;color:#94a3b8;font-size:12px;line-height:1.6}',
         '.wz-hint-body p{margin:4px 0}',
         '.wz-hint-body ul{margin:4px 0;padding-left:18px}',
         '.wz-hint-body li{margin:2px 0}',
