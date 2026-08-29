@@ -1816,7 +1816,14 @@ async function parseAndValidateJadwal(file) {
             const brkSrc  = waktuRaw || colASrc; // fallback ke kolom A jika kolom C kosong
             const brkMatch = brkSrc.match(TIME_RE);
             const label = brkSrc.includes('(') ? brkSrc.replace(/\s*\(.*\)$/, '').trim() : colASrc;
-            const hari = currentHari;
+            let hari = currentHari;
+            if (!VALID_DAYS.has(hari)) {
+                // Lookahead: cari hari dari baris berikutnya jika currentHari belum terisi
+                for (let ahead = rowIdx + 1; ahead < Math.min(rowIdx + 4, aoa.length); ahead++) {
+                    const nextHari = String(aoa[ahead]?.[0] ?? '').trim().toUpperCase();
+                    if (VALID_DAYS.has(nextHari)) { hari = nextHari; break; }
+                }
+            }
             if (label && brkMatch && VALID_DAYS.has(hari)) {
                 const padT = t => t.length === 5 ? t + ':00' : t;
                 breakRows.push({
