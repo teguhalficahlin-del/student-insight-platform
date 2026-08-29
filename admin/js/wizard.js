@@ -34,6 +34,7 @@ import {
     wizardResetStudents, wizardResetSchedules,
     logout,
     getCoreSubjectsForSchedule,
+    bulkReplaceScheduleTemplates,
 } from './api.js';
 
 import { openScheduleBuilder } from './schedule-builder.js';
@@ -1652,6 +1653,7 @@ async function renderScheduleStep() {
         <div style="display:flex;gap:8px;margin-bottom:16px">
             <button type="button" class="btn btn-primary" id="wz-open-schedule" style="flex:1;min-width:0">Susun Jadwal Visual</button>
             <button type="button" class="btn btn-outline-secondary" id="btnDownloadTemplateJadwal" style="flex:1;min-width:0">⬇ Download Template Jadwal</button>
+            <button type="button" class="btn btn-outline-primary" id="btnUploadJadwal" style="flex:1;min-width:0">⬆ Upload Jadwal</button>
         </div>
 
         <div id="wz-data-list" style="margin-top:16px"><p class="hint">Memuat data…</p></div>
@@ -1659,6 +1661,7 @@ async function renderScheduleStep() {
 
     document.getElementById('wz-open-schedule').addEventListener('click', () => openScheduleBuilder());
     document.getElementById('btnDownloadTemplateJadwal').addEventListener('click', downloadTemplateJadwal);
+    document.getElementById('btnUploadJadwal').addEventListener('click', () => triggerUploadJadwal());
 
     await refreshDataList(11);
     nextBtn.disabled = false;
@@ -1669,6 +1672,261 @@ async function downloadTemplateJadwal() {
     a.href = 'template_jadwal_sip_smk_v2.xlsx';
     a.download = 'template_jadwal_sip_smk_v2.xlsx';
     a.click();
+}
+
+function triggerUploadJadwal() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx,.xls';
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        parseAndValidateJadwal(file);
+    };
+    input.click();
+}
+
+async function parseAndValidateJadwal(file) {
+    if (typeof XLSX === 'undefined') {
+        alert('Library XLSX belum tersedia. Coba muat ulang halaman.');
+        return;
+    }
+
+    const schoolId     = state.schoolId;
+    const academicYear = state.data.academicYear;
+    const semester     = state.data.semester || '1';
+
+    // Baca file
+    let workbook;
+    try {
+        const buffer = await file.arrayBuffer();
+        workbook = XLSX.read(buffer, { type: 'array' });
+    } catch {
+        alert('File tidak dapat dibaca. Pastikan file tidak rusak.');
+        return;
+    }
+
+    const sheetName = workbook.SheetNames.find(n => n.trim() === 'Jadwal');
+    if (!sheetName) {
+        alert("Sheet 'Jadwal' tidak ditemukan. Pastikan menggunakan template resmi.");
+        return;
+    }
+    const ws = workbook.Sheets[sheetName];
+
+    // Fetch lookup data
+    let teacherMap, classMap, slotMap;
+    try {
+        const [guruRes, kelasRes, slotRes] = await Promise.all([
+            supabase.from('users')
+                .select('teacher_code, user_id')
+                .eq('school_id', schoolId)
+                .eq('is_active', true)
+                .is('deleted_at', null)
+                .not('teacher_code', 'is', null),
+            supabase.from('classes')
+                .select('name, class_id')
+                .eq('school_id', schoolId)
+                .eq('is_active', true),
+            supabase.from('schedule_time_slots')
+                .select('day_of_week, start_time, end_time')
+                .eq('school_id', schoolId)
+                .order('day_of_week')
+                .order('slot_number'),
+        ]);
+        if (guruRes.error)  throw new Error('Gagal fetch data guru: ' + guruRes.error.message);
+        if (kelasRes.error) throw new Error('Gagal fetch data kelas: ' + kelasRes.error.message);
+        if (slotRes.error)  throw new Error('Gagal fetch time slots: ' + slotRes.error.message);
+
+        teacherMap = new Map((guruRes.data ?? []).map(r => [r.teacher_code.toUpperCase(), r.user_id]));
+        classMap   = new Map((kelasRes.data ?? []).map(r => [r.name.trim().toUpperCase(), r.class_id]));
+        slotMap    = new Map((slotRes.data ?? []).map(r => [
+            `${r.day_of_week}|${r.start_time}|${r.end_time}`,
+            { start_time: r.start_time, end_time: r.end_time },
+        ]));
+    } catch (err) {
+        alert('Gagal mengambil data referensi: ' + err.message);
+        return;
+    }
+
+    // Parse sheet ke array of arrays (dengan header)
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    if (aoa.length < 3) {
+        alert('Sheet Jadwal terlalu pendek — tidak ada data.');
+        return;
+    }
+
+    // Row 0 = header kelas (kolom D+ = index 3+, setiap kelas 2 kolom)
+    const headerRow = aoa[0];
+    const errors    = [];
+    const validRows = [];
+
+    // Identifikasi kelas dari header row (index 3, 5, 7, ...)
+    const classes = [];
+    for (let c = 3; c < headerRow.length; c += 2) {
+        const raw = String(headerRow[c] ?? '').trim();
+        if (!raw) break;
+        const key = raw.toUpperCase();
+        if (!classMap.has(key)) {
+            errors.push(`Header: Nama kelas '${raw}' tidak ditemukan di DB`);
+        }
+        classes.push({ name: raw, key, colIdx: c });
+    }
+
+    // Skip row 1 (sub-header Mapel/Guru), parse mulai row 2
+    const VALID_DAYS = new Set(['SENIN','SELASA','RABU','KAMIS','JUMAT','SABTU']);
+    let currentHari = '';
+
+    for (let rowIdx = 2; rowIdx < aoa.length; rowIdx++) {
+        const row = aoa[rowIdx];
+        const excelRow = rowIdx + 1; // untuk pesan error (1-based)
+
+        const hariRaw = String(row[0] ?? '').trim().toUpperCase();
+        const jamRaw  = row[1];
+        const waktuRaw = String(row[2] ?? '').trim();
+
+        // Update current hari jika kolom A ada nilai
+        if (hariRaw) currentHari = hariRaw;
+
+        // Skip baris istirahat: JAM (Col B) kosong atau bukan angka
+        if (jamRaw === '' || jamRaw === null || jamRaw === undefined || isNaN(Number(jamRaw))) continue;
+
+        // Skip baris separator: seluruh baris kosong
+        if (!hariRaw && !jamRaw && !waktuRaw && classes.every(cl => !String(row[cl.colIdx] ?? '').trim())) continue;
+
+        // Validasi HARI
+        const hari = currentHari;
+        if (!VALID_DAYS.has(hari)) {
+            errors.push(`Baris ${excelRow}: HARI tidak valid '${hari}'`);
+            continue;
+        }
+
+        // Resolve start_time / end_time dari kolom WAKTU
+        let startTime = '', endTime = '';
+        const waktuMatch = waktuRaw.match(/^(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})$/);
+        if (waktuMatch) {
+            const pad = t => t.length === 5 ? t + ':00' : t;
+            startTime = pad(waktuMatch[1]);
+            endTime   = pad(waktuMatch[2]);
+        }
+
+        // Parse setiap kelas
+        for (const cl of classes) {
+            const mapel = String(row[cl.colIdx]     ?? '').trim();
+            const guru  = String(row[cl.colIdx + 1] ?? '').trim().toUpperCase();
+
+            if (!mapel && !guru) continue; // slot kosong untuk kelas ini
+
+            if (!mapel && guru) {
+                errors.push(`Baris ${excelRow}, Kelas ${cl.name}: Mapel kosong tapi Guru diisi`);
+                continue;
+            }
+
+            if (guru && !teacherMap.has(guru)) {
+                errors.push(`Baris ${excelRow}, Kelas ${cl.name}: Kode guru '${guru}' tidak dikenal`);
+                continue;
+            }
+
+            const classId  = classMap.get(cl.key);
+            const teacherId = guru ? teacherMap.get(guru) : null;
+
+            validRows.push({
+                school_id:     schoolId,
+                academic_year: academicYear,
+                semester:      semester,
+                day_of_week:   hari,
+                start_time:    startTime || null,
+                end_time:      endTime   || null,
+                class_id:      classId,
+                teacher_id:    teacherId,
+                subject_label: mapel || null,
+                subject_id:    null,
+            });
+        }
+    }
+
+    showPreviewModal(validRows, errors, schoolId, academicYear, semester);
+}
+
+async function showPreviewModal(validRows, errors, schoolId, academicYear, semester) {
+    // Hapus modal lama jika ada
+    document.getElementById('wz-upload-modal')?.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'wz-upload-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center';
+
+    if (errors.length > 0) {
+        const shown = errors.slice(0, 20);
+        const extra = errors.length > 20 ? `<p style="color:#94a3b8;margin-top:8px">...dan ${errors.length - 20} error lainnya.</p>` : '';
+        modal.innerHTML = `
+<div style="background:#1e2a4a;border-radius:12px;padding:24px;max-width:540px;width:90%;max-height:80vh;overflow-y:auto">
+  <h4 style="margin:0 0 16px;color:#f87171">❌ File Ditolak</h4>
+  <ul style="margin:0;padding-left:20px;font-size:13px;color:#fca5a5;line-height:1.7">
+    ${shown.map(e => `<li>${esc(e)}</li>`).join('')}
+  </ul>
+  ${extra}
+  <div style="margin-top:20px;text-align:right">
+    <button id="wz-upload-modal-close" class="btn btn-outline-secondary">Tutup</button>
+  </div>
+</div>`;
+        document.body.appendChild(modal);
+        document.getElementById('wz-upload-modal-close').addEventListener('click', () => modal.remove());
+        return;
+    }
+
+    // Hitung data lama
+    let oldCount = 0;
+    try {
+        const { count } = await supabase
+            .from('schedule_templates')
+            .select('template_id', { count: 'exact', head: true })
+            .eq('school_id', schoolId)
+            .eq('academic_year', academicYear)
+            .eq('semester', semester);
+        oldCount = count ?? 0;
+    } catch { /* abaikan, tampilkan ? */ }
+
+    const hariSet = [...new Set(validRows.map(r => r.day_of_week))].join(', ');
+    const kelasSet = new Set(validRows.map(r => r.class_id)).size;
+
+    modal.innerHTML = `
+<div style="background:#1e2a4a;border-radius:12px;padding:24px;max-width:480px;width:90%">
+  <h4 style="margin:0 0 16px;color:#e2e8f0">Preview Import Jadwal</h4>
+  <p style="color:#4ade80;margin:0 0 12px">✅ File valid</p>
+  <table style="width:100%;font-size:13px;border-collapse:collapse">
+    <tr><td style="padding:4px 8px;color:#94a3b8">Total slot</td><td style="padding:4px 8px;color:#e2e8f0;font-weight:600">${validRows.length}</td></tr>
+    <tr><td style="padding:4px 8px;color:#94a3b8">Kelas</td><td style="padding:4px 8px;color:#e2e8f0">${kelasSet}</td></tr>
+    <tr><td style="padding:4px 8px;color:#94a3b8">Hari</td><td style="padding:4px 8px;color:#e2e8f0">${esc(hariSet)}</td></tr>
+    <tr><td style="padding:4px 8px;color:#f59e0b">Data lama</td><td style="padding:4px 8px;color:#f59e0b">${oldCount} slot (akan diganti)</td></tr>
+  </table>
+  <div style="margin-top:20px;display:flex;gap:8px;justify-content:flex-end">
+    <button id="wz-upload-modal-cancel" class="btn btn-outline-secondary">Batal</button>
+    <button id="wz-upload-modal-confirm" class="btn btn-primary">Konfirmasi Import</button>
+  </div>
+</div>`;
+    document.body.appendChild(modal);
+
+    document.getElementById('wz-upload-modal-cancel').addEventListener('click', () => modal.remove());
+    document.getElementById('wz-upload-modal-confirm').addEventListener('click', async () => {
+        const confirmBtn = document.getElementById('wz-upload-modal-confirm');
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Mengimpor…';
+        try {
+            await doImportJadwal(validRows, schoolId, academicYear, semester);
+            modal.remove();
+        } catch (err) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Konfirmasi Import';
+            alert('Import gagal: ' + err.message);
+        }
+    });
+}
+
+async function doImportJadwal(rows, schoolId, academicYear, semester) {
+    await bulkReplaceScheduleTemplates(schoolId, academicYear, semester, rows);
+    alert(`${rows.length} slot berhasil diimport`);
+    await refreshDataList(11);
+    openScheduleBuilder();
 }
 
 async function loadHintGuruKelas() {
