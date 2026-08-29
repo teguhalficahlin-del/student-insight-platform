@@ -2021,13 +2021,16 @@ async function doImportJadwal(rows, schoolId, academicYear, semester, breakRows 
             });
         });
     }
+    const breakSlotCounters = new Map(); // day_of_week → next negative slot_number
     for (const br of breakRows) {
+        const next = (breakSlotCounters.get(br.day_of_week) ?? 0) - 1;
+        breakSlotCounters.set(br.day_of_week, next);
         timeSlots.push({
             school_id:     schoolId,
             academic_year: academicYear,
             semester:      semester,
             day_of_week:   br.day_of_week,
-            slot_number:   0,
+            slot_number:   next,
             start_time:    br.start_time,
             end_time:      br.end_time,
             is_break:      true,
