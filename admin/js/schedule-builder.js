@@ -15,7 +15,6 @@ import {
     applyScheduleTemplates,
     checkActiveReapplyJob, prepareReapplyJob, runReapplyBatch, finalizeReapplyJob,
     getCoreSubjectsForSchedule,
-    getSubjectCodeAliases, upsertSubjectCodeAlias, deleteSubjectCodeAlias,
 } from './api.js';
 
 const DAYS = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
@@ -39,7 +38,6 @@ let state = {
     parallelCodes: new Set(), // teacher_code (upper) yang boleh paralel
     cells: new Map(),  // `${slotIdx}_${classId}` → { mapel, teacher_code }
     coreSubjects: [], // { name, code } dari v_core_subjects untuk datalist
-    aliases: [],      // { kode } dari subject_code_aliases untuk validasi visual
     dirty: false,
 };
 
@@ -68,7 +66,6 @@ export async function openScheduleBuilder() {
         .eq('school_id', state.schoolId).eq('allow_parallel_teaching', true).not('teacher_code', 'is', null);
       state.parallelCodes = new Set((pr ?? []).map(r => r.teacher_code.toUpperCase())); }
     try { state.coreSubjects = await getCoreSubjectsForSchedule(); } catch (_) { state.coreSubjects = []; }
-    try { state.aliases = await getSubjectCodeAliases(); } catch (_) { state.aliases = []; }
 
     createOverlay();
     checkAndShowResumeBanner(); // fire-and-forget: non-fatal, modifies #sched-status
@@ -88,10 +85,6 @@ function createOverlay() {
     background:var(--color-surface); font-size:13px; font-weight:600; cursor:pointer; }
 .sched-ptab[data-panel="jadwal"]      { color:#3b82f6; border-color:#3b82f6; }
 .sched-ptab[data-panel="jadwal"].active      { background:#3b82f6; color:#fff; }
-.sched-ptab[data-panel="kode-mapel"]  { color:#ca8a04; border-color:#ca8a04; }
-.sched-ptab[data-panel="kode-mapel"].active  { background:#ca8a04; color:#fff; }
-.sched-ptab[data-panel="kode-guru"]   { color:#ef4444; border-color:#ef4444; }
-.sched-ptab[data-panel="kode-guru"].active   { background:#ef4444; color:#fff; }
 .sched-kg-invalid { background:#fee2e2!important; border-color:#ef4444!important; color:#ef4444!important; }
 .sched-mapel-invalid { background:#fef9c3!important; border-color:#ca8a04!important; }
 .sched-cell-kg input { background:#1e2a3a; color:#e2e8f0; border-color:#2d3f6b; cursor:default; }
@@ -111,8 +104,6 @@ function createOverlay() {
 
             <div class="sched-panel-tabs">
                 <button type="button" class="sched-ptab active" data-panel="jadwal">📅 Jadwal</button>
-                <button type="button" class="sched-ptab" data-panel="kode-mapel">🗺 Kode Mapel</button>
-                <button type="button" class="sched-ptab" data-panel="kode-guru">👤 Kode Guru</button>
             </div>
 
             <div id="sched-panel-jadwal">
@@ -120,12 +111,8 @@ function createOverlay() {
                     <div class="sched-grade-tabs" id="sched-grade-tabs">
                         ${GRADES.map(g => `<button type="button" class="sched-tab ${g === state.grade ? 'active' : ''}" data-grade="${g}">${GRADE_LABELS[g]}</button>`).join('')}
                     </div>
-                    <button type="button" class="btn btn-secondary" id="sched-add-slot" style="padding:6px 12px">+ Slot Mengajar</button>
-                    <button type="button" class="btn btn-secondary" id="sched-add-break" style="padding:6px 12px">+ Istirahat/Kegiatan</button>
                     <span class="sched-conflict-count" id="sched-conflict-count"></span>
-                    <button type="button" class="btn btn-primary" id="sched-save" style="padding:6px 16px;margin-left:auto">Simpan</button>
-                    <button type="button" class="btn btn-success" id="sched-apply" style="padding:6px 16px" title="Generate jadwal harian dari template yang sudah disimpan. Tidak mengubah sesi yang sudah ada.">Terapkan Jadwal</button>
-                    <button type="button" class="btn btn-warning" id="sched-reapply" style="padding:6px 16px" title="Hapus sesi masa depan (tanpa absensi) lalu generate ulang dari template terkini. Gunakan setelah ganti guru atau ubah slot jadwal.">Terapkan Ulang</button>
+                    <button type="button" class="btn btn-success" id="sched-apply" style="padding:6px 16px;margin-left:auto" title="Generate jadwal harian dari template yang sudah disimpan. Tidak mengubah sesi yang sudah ada.">Terapkan Jadwal</button>
                 </div>
 
                 <div class="sched-body">
@@ -143,13 +130,6 @@ function createOverlay() {
                 </div>
             </div>
 
-            <div id="sched-panel-kode-mapel" style="display:none;padding:20px">
-                <p class="hint" style="text-align:center">Memuat...</p>
-            </div>
-
-            <div id="sched-panel-kode-guru" style="display:none;padding:20px">
-                <p class="hint" style="text-align:center">Memuat...</p>
-            </div>
         </div>
     `;
 
@@ -163,27 +143,8 @@ function createOverlay() {
         overlayEl.querySelectorAll('.sched-ptab').forEach(t => t.classList.toggle('active', t.dataset.panel === panel));
         overlayEl.querySelectorAll('[id^="sched-panel-"]').forEach(p => { p.style.display = 'none'; });
         overlayEl.querySelector(`#sched-panel-${panel}`).style.display = '';
-        if (panel === 'kode-mapel') renderKodeMapelPanel();
-        if (panel === 'kode-guru') {
-            const { data } = await supabase.from('v_users_staff_directory')
-                .select('user_id, full_name, teacher_code')
-                .eq('school_id', state.schoolId)
-                .is('deleted_at', null)
-                .not('teacher_code', 'is', null).neq('teacher_code', '').order('teacher_code');
-            state.teachers = data ?? [];
-            state.teacherMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.teacher_code.toUpperCase(), t.user_id]));
-            state.teacherIdMap = new Map(state.teachers.filter(t => t.teacher_code).map(t => [t.user_id, t.teacher_code]));
-            { const { data: pr } = await supabase.from('v_users_staff_directory').select('teacher_code')
-                .eq('school_id', state.schoolId).eq('allow_parallel_teaching', true).not('teacher_code', 'is', null);
-              state.parallelCodes = new Set((pr ?? []).map(r => r.teacher_code.toUpperCase())); }
-            renderKodeGuruPanel();
-        }
     });
-    overlayEl.querySelector('#sched-add-slot').addEventListener('click', () => addRow(false));
-    overlayEl.querySelector('#sched-add-break').addEventListener('click', () => addRow(true));
-    overlayEl.querySelector('#sched-save').addEventListener('click', save);
     overlayEl.querySelector('#sched-apply').addEventListener('click', applyTemplates);
-    overlayEl.querySelector('#sched-reapply').addEventListener('click', reapplyTemplates);
 
     overlayEl.querySelector('#sched-day-tabs').addEventListener('click', async (e) => {
         const day = e.target.dataset?.day;
@@ -340,7 +301,7 @@ function renderGrid() {
     const wrapper = overlayEl.querySelector('#sched-grid-wrapper');
 
     if (state.slots.length === 0) {
-        wrapper.innerHTML = '<p class="hint" style="padding:20px;text-align:center">Belum ada slot waktu. Klik "+ Slot Mengajar" untuk menambahkan.</p>';
+        wrapper.innerHTML = '<p class="hint" style="padding:20px;text-align:center">Belum ada slot waktu.</p>';
         return;
     }
 
@@ -523,11 +484,8 @@ function checkConflicts() {
 }
 
 async function save() {
-    const saveBtn = overlayEl.querySelector('#sched-save');
     const statusEl = overlayEl.querySelector('#sched-status');
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Menyimpan...';
-    statusEl.textContent = '';
+    statusEl.textContent = 'Menyimpan...';
 
     try {
         // Save time slots
@@ -569,7 +527,7 @@ async function save() {
         let saveMsg = `Tersimpan: ${templates.length} slot untuk hari ${DAY_LABELS[state.day]}`;
         if (unknownCodes.length > 0) {
             const unique = [...new Set(unknownCodes)];
-            saveMsg += `\nPeringatan: ${unknownCodes.length} slot tidak tersimpan karena kode guru tidak dikenal: ${unique.join(', ')}. Periksa tab Kode Guru untuk melihat kode yang terdaftar.`;
+            saveMsg += `\nPeringatan: ${unknownCodes.length} slot tidak tersimpan karena kode guru tidak dikenal: ${unique.join(', ')}.`;
             statusEl.style.color = 'var(--color-warning, orange)';
         } else {
             statusEl.style.color = 'var(--color-success)';
@@ -578,9 +536,6 @@ async function save() {
     } catch (err) {
         statusEl.textContent = `Gagal: ${err.message}`;
         statusEl.style.color = 'var(--color-danger)';
-    } finally {
-        saveBtn.disabled = false;
-        saveBtn.textContent = 'Simpan';
     }
 }
 
@@ -669,7 +624,7 @@ function reapplyJobKey() {
 async function checkAndShowResumeBanner() {
     const statusEl   = overlayEl?.querySelector('#sched-status');
     const reapplyBtn = overlayEl?.querySelector('#sched-reapply');
-    if (!statusEl || !reapplyBtn) return;
+    if (!statusEl) return;
 
     let job;
     try {
@@ -693,7 +648,7 @@ async function checkAndShowResumeBanner() {
             '⏳ Sedang generate jadwal baru... (atau koneksi sebelumnya terputus) — ' +
             'refresh halaman beberapa saat lagi untuk cek hasilnya.';
         statusEl.style.color = 'var(--color-warning)';
-        reapplyBtn.disabled  = true;
+        if (reapplyBtn) reapplyBtn.disabled = true;
         return;
     }
 
@@ -712,7 +667,7 @@ async function checkAndShowResumeBanner() {
             `⚠ Penghapusan ${job.deleted_count} sesi selesai. Siap generate jadwal baru.`,
             resumeBtn,
         );
-        reapplyBtn.disabled = true;
+        if (reapplyBtn) reapplyBtn.disabled = true;
         return;
     }
 
@@ -735,7 +690,7 @@ async function checkAndShowResumeBanner() {
         `(${job.deleted_count}/${job.total_to_delete} sesi, ${pct}%).`,
         resumeBtn,
     );
-    reapplyBtn.disabled = true;
+    if (reapplyBtn) reapplyBtn.disabled = true;
 }
 
 /** Loop FASE 2: hapus batch sampai done, lalu tanya konfirmasi FASE 3. */
@@ -744,7 +699,7 @@ async function runBatchLoop(jobId, totalToDelete, startDeleted) {
     const reapplyBtn = overlayEl.querySelector('#sched-reapply');
     const applyBtn   = overlayEl.querySelector('#sched-apply');
 
-    reapplyBtn.disabled = true;
+    if (reapplyBtn) reapplyBtn.disabled = true;
     applyBtn.disabled   = true;
 
     let totalDeleted = startDeleted;
@@ -781,10 +736,9 @@ async function runBatchLoop(jobId, totalToDelete, startDeleted) {
         if (!goFinalize) {
             statusEl.innerHTML  = '';
             statusEl.textContent =
-                `✓ ${totalDeleted} sesi dihapus. Generate dibatalkan — ` +
-                `klik "Terapkan Ulang" untuk melanjutkan.`;
+                `✓ ${totalDeleted} sesi dihapus. Generate dibatalkan.`;
             statusEl.style.color = 'var(--color-warning)';
-            reapplyBtn.disabled = false;
+            if (reapplyBtn) reapplyBtn.disabled = false;
             applyBtn.disabled   = false;
             // Refresh banner supaya tombol "Generate Jadwal Baru" muncul
             await checkAndShowResumeBanner();
@@ -797,7 +751,7 @@ async function runBatchLoop(jobId, totalToDelete, startDeleted) {
         statusEl.innerHTML  = '';
         statusEl.textContent = `✗ Gagal: ${err.message}`;
         statusEl.style.color = 'var(--color-danger)';
-        reapplyBtn.disabled = false;
+        if (reapplyBtn) reapplyBtn.disabled = false;
         applyBtn.disabled   = false;
         // Pertahankan localStorage — supaya bisa resume
     }
@@ -809,7 +763,7 @@ async function doFinalize(jobId, deletedCount) {
     const reapplyBtn = overlayEl.querySelector('#sched-reapply');
     const applyBtn   = overlayEl.querySelector('#sched-apply');
 
-    reapplyBtn.disabled = true;
+    if (reapplyBtn) reapplyBtn.disabled = true;
     applyBtn.disabled   = true;
     statusEl.innerHTML  = '';
     statusEl.textContent = 'Generating jadwal baru...';
@@ -825,8 +779,7 @@ async function doFinalize(jobId, deletedCount) {
             `✓ Jadwal diperbarui — ${deletedCount} sesi lama dihapus, ` +
             `${result?.templates_found} template, ${generated} sesi baru dibuat.`;
         statusEl.style.color    = 'var(--color-success)';
-        reapplyBtn.textContent  = '✓ Jadwal Diperbarui';
-        reapplyBtn.style.background = 'var(--color-success)';
+        if (reapplyBtn) { reapplyBtn.textContent = '✓ Jadwal Diperbarui'; reapplyBtn.style.background = 'var(--color-success)'; }
 
     } catch (err) {
         // Jangan hapus localStorage — supaya bisa retry finalize tanpa ulang delete
@@ -834,86 +787,7 @@ async function doFinalize(jobId, deletedCount) {
         statusEl.style.color = 'var(--color-danger)';
 
     } finally {
-        reapplyBtn.disabled = false;
-        applyBtn.disabled   = false;
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function reapplyTemplates() {
-    if (state.dirty) {
-        if (!confirm('Ada perubahan yang belum disimpan. Simpan dulu sebelum menerapkan ulang?')) return;
-        await save();
-        if (state.dirty) return;
-    }
-
-    const statusEl   = overlayEl.querySelector('#sched-status');
-    const reapplyBtn = overlayEl.querySelector('#sched-reapply');
-    const applyBtn   = overlayEl.querySelector('#sched-apply');
-
-    const confirmed = confirm(
-        'Terapkan Ulang Jadwal akan menghapus semua sesi mulai besok yang belum punya absensi, ' +
-        'lalu men-generate ulang dari template terkini.\n\n' +
-        'Sesi hari ini dan sesi yang sudah ada absensinya tidak akan terganggu.\n\n' +
-        'Lanjutkan?'
-    );
-    if (!confirmed) return;
-
-    reapplyBtn.disabled = true;
-    applyBtn.disabled   = true;
-    statusEl.innerHTML  = '';
-    statusEl.style.color = '';
-
-    try {
-        // Server adalah source of truth — cek dulu apakah ada job aktif
-        let job = await checkActiveReapplyJob(state.academicYear, state.semester);
-
-        if (!job) {
-            const prepared = await prepareReapplyJob(state.academicYear, state.semester);
-            if (!prepared) throw new Error('Gagal membuat job reapply');
-            job = {
-                job_id:          prepared.job_id,
-                status:          'PENDING',
-                total_to_delete: prepared.total_to_delete,
-                deleted_count:   0,
-            };
-        }
-
-        localStorage.setItem(reapplyJobKey(), JSON.stringify({ jobId: job.job_id }));
-
-        if (job.status === 'GENERATING') {
-            statusEl.innerHTML = '';
-            statusEl.textContent =
-                '⏳ Sedang generate jadwal baru... (atau koneksi sebelumnya terputus) — ' +
-                'refresh halaman beberapa saat lagi untuk cek hasilnya.';
-            statusEl.style.color = 'var(--color-warning)';
-            reapplyBtn.disabled  = true;
-            return;
-        }
-
-        if (job.status === 'DELETED') {
-            // Hapus sudah selesai sebelumnya — langsung ke checkpoint konfirmasi
-            const goFinalize = confirm(
-                `${job.deleted_count} sesi lama sudah dihapus sebelumnya.\n\n` +
-                `Lanjutkan generate jadwal baru?`
-            );
-            if (!goFinalize) {
-                statusEl.textContent = 'Generate dibatalkan.';
-                reapplyBtn.disabled = false;
-                applyBtn.disabled   = false;
-                return;
-            }
-            await doFinalize(job.job_id, job.deleted_count);
-            return;
-        }
-
-        await runBatchLoop(job.job_id, job.total_to_delete, job.deleted_count ?? 0);
-
-    } catch (err) {
-        statusEl.textContent = `✗ Gagal: ${err.message}`;
-        statusEl.style.color = 'var(--color-danger)';
-        reapplyBtn.disabled = false;
+        if (reapplyBtn) reapplyBtn.disabled = false;
         applyBtn.disabled   = false;
     }
 }
@@ -923,229 +797,18 @@ function esc(str) {
     return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// ─── Panel: Kode Mapel ─────────────────────────────────────────────────────
-
-async function renderKodeMapelPanel() {
-    const panel = overlayEl.querySelector('#sched-panel-kode-mapel');
-    panel.style.flex = '1';
-    panel.style.minHeight = '0';
-    panel.style.overflowY = 'auto';
-    panel.innerHTML = '<p class="hint" style="text-align:center">Memuat…</p>';
-
-    let aliases = [];
-    try { aliases = await getSubjectCodeAliases(); } catch (_) { /* kosong */ }
-
-    // Fetch semua mapel tanpa filter is_generatable untuk lookup nama saat simpan
-    const { data: allSubjects } = await supabase
-        .from('v_core_subjects').select('subject_id, name');
-    const nameMap = new Map(
-        (allSubjects ?? []).map(cs => [cs.name.toLowerCase(), cs.subject_id])
-    );
-
-    panel.innerHTML = `
-        <h4 style="margin:0 0 8px">Kode Mapel</h4>
-        <p class="hint" style="margin:0 0 10px">
-            Isi tabel atau <strong>paste langsung dari Excel</strong> (pilih 4 kolom: Kode | Nama Mapel Lengkap | Jurusan/Konteks | Berlaku di Kelas → Ctrl+V di tabel).
-            Nama Mapel harus cocok dengan nama di kurikulum. Kolom Jurusan hanya referensi, tidak disimpan. Kolom Berlaku di Kelas disimpan. Baris kosong diabaikan.
-        </p>
-        <div id="sca-paste-target">
-            <table class="table" style="width:max-content;table-layout:auto">
-                <colgroup>
-                    <col style="width:110px">
-                    <col style="width:260px">
-                    <col style="width:200px">
-                    <col style="width:160px">
-                    <col>
-                    <col style="width:36px">
-                </colgroup>
-                <thead><tr><th>Kode</th><th>Nama Mapel Lengkap</th><th>Jurusan / Konteks</th><th>Berlaku di Kelas</th><th></th><th></th></tr></thead>
-                <tbody id="sca-tbody"></tbody>
-            </table>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
-            <button type="button" class="btn btn-secondary" id="sca-add-row" style="padding:6px 16px">+ Tambah Baris</button>
-            <button type="button" class="btn btn-primary" id="sca-save" style="padding:6px 20px">Simpan</button>
-            <span id="sca-status" style="font-size:13px"></span>
-        </div>
-    `;
-
-    const tbody = panel.querySelector('#sca-tbody');
-
-    function makeRow(kode = '', nama = '', jurusan = '', kelas = '', aliasId = null) {
-        const tr = document.createElement('tr');
-        if (aliasId) tr.dataset.aliasId = aliasId;
-        tr.innerHTML = `
-            <td style="padding:2px 4px"><input type="text" class="input sca-cell-kode" value="${esc(kode)}"
-                style="width:100%;text-transform:uppercase;font-size:13px;padding:4px 6px"></td>
-            <td style="padding:2px 4px"><input type="text" class="input sca-cell-nama" value="${esc(nama)}"
-                style="width:100%;font-size:13px;padding:4px 6px"></td>
-            <td style="padding:2px 4px"><input type="text" class="input sca-cell-jurusan" value="${esc(jurusan)}"
-                style="width:100%;font-size:13px;padding:4px 6px"></td>
-            <td style="padding:2px 4px"><input type="text" class="input sca-cell-kelas" value="${esc(kelas)}"
-                style="width:100%;font-size:13px;padding:4px 6px"></td>
-            <td class="sca-row-err" style="padding:2px 6px;font-size:12px;color:var(--color-danger);white-space:normal;word-break:break-word"></td>
-            <td style="padding:2px 4px;text-align:center">
-                <button type="button" class="sca-btn-del" title="Hapus baris"
-                    style="background:none;border:none;cursor:pointer;font-size:18px;line-height:1;color:var(--color-danger);padding:2px 6px">×</button>
-            </td>
-        `;
-        tr.querySelector('.sca-cell-kode').addEventListener('input', e => {
-            e.target.value = e.target.value.toUpperCase();
-        });
-        tr.querySelector('.sca-btn-del').addEventListener('click', async () => {
-            const id = tr.dataset.aliasId;
-            if (id) {
-                try { await deleteSubjectCodeAlias(id); } catch (err) {
-                    tr.querySelector('.sca-row-err').textContent = `✗ ${err.message}`;
-                    return;
-                }
-            }
-            tr.remove();
-        });
-        tbody.appendChild(tr);
-        return tr;
-    }
-
-    // Pre-fill existing aliases + buffer of empty rows
-    const initCount = Math.max(aliases.length + 3, 8);
-    for (let i = 0; i < initCount; i++) {
-        const a = aliases[i];
-        makeRow(a?.kode ?? '', a?.nama ?? '', a?.jurusan ?? '', a?.kelas ?? '', a?.alias_id ?? null);
-    }
-
-    panel.querySelector('#sca-add-row').addEventListener('click', () => makeRow());
-
-    // Paste handler: expand rows automatically if paste exceeds current count
-    panel.querySelector('#sca-paste-target').addEventListener('paste', e => {
-        e.preventDefault();
-        const text = e.clipboardData?.getData('text/plain') ?? '';
-        const pasteLines = text.split(/\r?\n/).filter(l => l !== '');
-
-        let startRow = 0;
-        const focusedCell = document.activeElement;
-        if (focusedCell) {
-            const tr = focusedCell.closest('tr');
-            if (tr) {
-                const idx = [...tbody.querySelectorAll('tr')].indexOf(tr);
-                if (idx >= 0) startRow = idx;
-            }
-        }
-
-        pasteLines.forEach((line, li) => {
-            const ri = startRow + li;
-            const cols = line.split('\t');
-            const kode     = (cols[0] ?? '').trim().toUpperCase();
-            const nama     = (cols[1] ?? '').trim();
-            const jurusan  = (cols[2] ?? '').trim();
-            const kelas    = (cols[3] ?? '').trim();
-            const trs = [...tbody.querySelectorAll('tr')];
-            if (ri < trs.length) {
-                trs[ri].querySelector('.sca-cell-kode').value    = kode;
-                trs[ri].querySelector('.sca-cell-nama').value    = nama;
-                trs[ri].querySelector('.sca-cell-jurusan').value = jurusan;
-                trs[ri].querySelector('.sca-cell-kelas').value   = kelas;
-            } else {
-                makeRow(kode, nama, jurusan, kelas);
-            }
-        });
-    });
-
-    panel.querySelector('#sca-save').addEventListener('click', async () => {
-        const statusEl = panel.querySelector('#sca-status');
-        const allTrs = [...tbody.querySelectorAll('tr')];
-        allTrs.forEach(tr => { tr.querySelector('.sca-row-err').textContent = ''; });
-
-        const rows = allTrs.map(tr => ({
-            kode: tr.querySelector('.sca-cell-kode').value.trim().toUpperCase(),
-            nama: tr.querySelector('.sca-cell-nama').value.trim(),
-            jurusan: tr.querySelector('.sca-cell-jurusan').value.trim(),
-            kelas: tr.querySelector('.sca-cell-kelas').value.trim(),
-            errTd: tr.querySelector('.sca-row-err'),
-        })).filter(r => r.kode !== '');
-
-        if (rows.length === 0) {
-            statusEl.textContent = 'Tidak ada baris yang diisi.';
-            statusEl.style.color = 'var(--color-danger)';
-            return;
-        }
-
-        if (!state.schoolId) {
-            statusEl.textContent = 'Error: school_id belum ter-load. Tutup dan buka kembali wizard.';
-            statusEl.style.color = 'var(--color-danger)';
-            return;
-        }
-
-        statusEl.textContent = 'Menyimpan…';
-        statusEl.style.color = '';
-
-        let saved = 0, failed = 0;
-        for (const r of rows) {
-            const coreSubjectId = nameMap.get(r.nama.toLowerCase()) ?? null;
-            try {
-                await upsertSubjectCodeAlias(state.schoolId, r.kode, coreSubjectId, r.nama, r.jurusan, r.kelas);
-                saved++;
-            } catch (err) {
-                r.errTd.textContent = `✗ ${err.message}`;
-                failed++;
-            }
-        }
-
-        if (failed === 0) {
-            statusEl.textContent = `✓ ${saved} alias tersimpan.`;
-            statusEl.style.color = 'var(--color-success, green)';
-        } else {
-            statusEl.textContent = `${saved} tersimpan, ${failed} gagal (lihat ✗ di baris).`;
-            statusEl.style.color = 'var(--color-danger)';
-        }
-    });
-}
-
-// ─── Panel: Kode Guru ─────────────────────────────────────────────────────
-
-function renderKodeGuruPanel() {
-    const panel = overlayEl.querySelector('#sched-panel-kode-guru');
-    const withCode = state.teachers.filter(t => t.teacher_code);
-    const items = withCode.map(t =>
-        `<div style="display:flex;align-items:baseline;gap:6px;padding:6px 8px;
-            border:1px solid var(--color-border,#e2e8f0);border-radius:6px;min-width:0">
-            <span style="font-weight:700;white-space:nowrap;flex-shrink:0">${esc(t.teacher_code)}</span>
-            <span style="font-size:13px;color:var(--color-text-muted,#64748b);
-                overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.full_name)}</span>
-        </div>`
-    ).join('');
-
-    panel.innerHTML = `
-        <h4 style="margin:0 0 8px">Kode Guru</h4>
-        <p class="hint" style="margin:0 0 12px">
-            Daftar ini otomatis dari data staf. Kolom KG di grid jadwal menggunakan kode-kode berikut.
-        </p>
-        ${withCode.length > 0 ? `
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">${items}</div>`
-        : '<p class="hint">Belum ada guru dengan kode. Isi kode di menu Staf &amp; Peran.</p>'}
-        <p class="hint" style="margin-top:12px">Untuk mengubah kode guru, edit di menu <strong>Staf &amp; Peran</strong>.</p>
-    `;
-}
-
 // ─── Paste handler multi-sel ───────────────────────────────────────────────
 
 function checkCellValidity() {
     const teacherSet = new Set(
         state.teachers.filter(t => t.teacher_code).map(t => t.teacher_code.toUpperCase())
     );
-    const aliasSet = new Set(state.aliases.map(a => a.kode.toUpperCase()));
 
     overlayEl.querySelectorAll('.sched-kg').forEach(input => {
         const val = input.value.trim().toUpperCase();
         const invalid = val !== '' && !teacherSet.has(val);
         input.classList.toggle('sched-kg-invalid', invalid);
         input.title = invalid ? 'gagal: kode guru tidak ditemukan' : '';
-    });
-
-    overlayEl.querySelectorAll('.sched-mapel').forEach(input => {
-        const val = input.value.trim().toUpperCase();
-        const invalid = val !== '' && !aliasSet.has(val);
-        input.classList.toggle('sched-mapel-invalid', invalid);
-        input.title = invalid ? 'gagal: kode mapel belum ada di tab Kode Mapel' : '';
     });
 }
 
