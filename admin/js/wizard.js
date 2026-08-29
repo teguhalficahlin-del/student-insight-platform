@@ -1821,6 +1821,11 @@ async function parseAndValidateJadwal(file) {
                 continue;
             }
 
+            if (mapel && !guru) {
+                errors.push(`Baris ${excelRow}, Kelas ${cl.name}: Guru wajib diisi`);
+                continue;
+            }
+
             if (guru && !teacherMap.has(guru)) {
                 errors.push(`Baris ${excelRow}, Kelas ${cl.name}: Kode guru '${guru}' tidak dikenal`);
                 continue;
