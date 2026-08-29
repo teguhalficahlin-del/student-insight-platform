@@ -420,6 +420,20 @@ export async function saveScheduleTemplates(academicYear, semester, dayOfWeek, t
     if (error) throw error;
 }
 
+export async function bulkSaveTimeSlots(schoolId, academicYear, semester, slots) {
+    const { error: delErr } = await supabase
+        .from('schedule_time_slots')
+        .delete()
+        .eq('school_id', schoolId)
+        .eq('academic_year', academicYear)
+        .eq('semester', semester);
+    if (delErr) throw delErr;
+    for (let i = 0; i < slots.length; i += 100) {
+        const { error } = await supabase.from('schedule_time_slots').insert(slots.slice(i, i + 100));
+        if (error) throw error;
+    }
+}
+
 export async function bulkReplaceScheduleTemplates(schoolId, academicYear, semester, rows) {
     const { error: delErr } = await supabase
         .from('schedule_templates')

@@ -35,6 +35,7 @@ import {
     logout,
     getCoreSubjectsForSchedule,
     bulkReplaceScheduleTemplates,
+    bulkSaveTimeSlots,
 } from './api.js';
 
 import { openScheduleBuilder } from './schedule-builder.js';
@@ -1790,11 +1791,12 @@ async function parseAndValidateJadwal(file) {
             seenKeys.set(cl.key, cl.name);
         }
     }
-    if (errors.length > 0) { showPreviewModal([], errors, schoolId, academicYear, semester); return; }
+    if (errors.length > 0) { showPreviewModal([], errors, schoolId, academicYear, semester, []); return; }
 
     // Skip row 1 (sub-header Mapel/Guru), parse mulai row 2
     const VALID_DAYS = new Set(['SENIN','SELASA','RABU','KAMIS','JUMAT','SABTU']);
     let currentHari = '';
+    const breakRows = []; // { day_of_week, start_time, end_time, label }
 
     for (let rowIdx = 2; rowIdx < aoa.length; rowIdx++) {
         const row = aoa[rowIdx];
@@ -1807,8 +1809,25 @@ async function parseAndValidateJadwal(file) {
         // Update current hari jika kolom A ada nilai
         if (hariRaw) currentHari = hariRaw;
 
-        // Skip baris istirahat: JAM (Col B) kosong atau bukan angka
-        if (jamRaw === '' || jamRaw === null || jamRaw === undefined || isNaN(Number(jamRaw))) continue;
+        // Baris istirahat/kegiatan: JAM (Col B) kosong atau bukan angka
+        if (jamRaw === '' || jamRaw === null || jamRaw === undefined || isNaN(Number(jamRaw))) {
+            // Ambil label dari kolom A atau kolom WAKTU (kolom C)
+            const labelSrc = String(row[0] ?? '').trim() || waktuRaw;
+            const label = labelSrc.replace(/\(.*\)$/, '').trim();
+            // Ambil waktu dari kolom C jika ada format "HH:MM - HH:MM"
+            const brkMatch = waktuRaw.match(/^(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})$/);
+            const hari = currentHari;
+            if (label && brkMatch && VALID_DAYS.has(hari)) {
+                const padT = t => t.length === 5 ? t + ':00' : t;
+                breakRows.push({
+                    day_of_week: hari,
+                    start_time:  padT(brkMatch[1]),
+                    end_time:    padT(brkMatch[2]),
+                    label,
+                });
+            }
+            continue;
+        }
 
         // Skip baris separator: seluruh baris kosong
         if (!hariRaw && !jamRaw && !waktuRaw && classes.every(cl => !String(row[cl.colIdx] ?? '').trim())) continue;
@@ -1885,12 +1904,12 @@ async function parseAndValidateJadwal(file) {
             }
         }
     }
-    if (errors.length > 0) { showPreviewModal([], errors, schoolId, academicYear, semester); return; }
+    if (errors.length > 0) { showPreviewModal([], errors, schoolId, academicYear, semester, []); return; }
 
-    showPreviewModal(validRows, errors, schoolId, academicYear, semester);
+    showPreviewModal(validRows, errors, schoolId, academicYear, semester, breakRows);
 }
 
-async function showPreviewModal(validRows, errors, schoolId, academicYear, semester) {
+async function showPreviewModal(validRows, errors, schoolId, academicYear, semester, breakRows = []) {
     // Hapus modal lama jika ada
     document.getElementById('wz-upload-modal')?.remove();
 
@@ -1940,6 +1959,7 @@ async function showPreviewModal(validRows, errors, schoolId, academicYear, semes
     <tr><td style="padding:4px 8px;color:#94a3b8">Total slot</td><td style="padding:4px 8px;color:#e2e8f0;font-weight:600">${validRows.length}</td></tr>
     <tr><td style="padding:4px 8px;color:#94a3b8">Kelas</td><td style="padding:4px 8px;color:#e2e8f0">${kelasSet}</td></tr>
     <tr><td style="padding:4px 8px;color:#94a3b8">Hari</td><td style="padding:4px 8px;color:#e2e8f0">${esc(hariSet)}</td></tr>
+    <tr><td style="padding:4px 8px;color:#94a3b8">Istirahat/Kegiatan</td><td style="padding:4px 8px;color:#e2e8f0">${breakRows.length} slot</td></tr>
     <tr><td style="padding:4px 8px;color:#f59e0b">Data lama</td><td style="padding:4px 8px;color:#f59e0b">${oldCount} slot (akan diganti)</td></tr>
   </table>
   <div style="margin-top:20px;display:flex;gap:8px;justify-content:flex-end">
@@ -1955,7 +1975,7 @@ async function showPreviewModal(validRows, errors, schoolId, academicYear, semes
         confirmBtn.disabled = true;
         confirmBtn.textContent = 'Mengimpor…';
         try {
-            await doImportJadwal(validRows, schoolId, academicYear, semester);
+            await doImportJadwal(validRows, schoolId, academicYear, semester, breakRows);
             modal.remove();
         } catch (err) {
             confirmBtn.disabled = false;
@@ -1965,8 +1985,52 @@ async function showPreviewModal(validRows, errors, schoolId, academicYear, semes
     });
 }
 
-async function doImportJadwal(rows, schoolId, academicYear, semester) {
+async function doImportJadwal(rows, schoolId, academicYear, semester, breakRows = []) {
     await bulkReplaceScheduleTemplates(schoolId, academicYear, semester, rows);
+
+    // Bangun schedule_time_slots dari slot mengajar unik + baris istirahat/kegiatan
+    const slotsByDay = new Map();
+    for (const r of rows) {
+        if (!r.start_time || !r.end_time) continue;
+        if (!slotsByDay.has(r.day_of_week)) slotsByDay.set(r.day_of_week, new Set());
+        slotsByDay.get(r.day_of_week).add(`${r.start_time}|${r.end_time}`);
+    }
+    const timeSlots = [];
+    for (const [day, slotSet] of slotsByDay) {
+        const sorted = [...slotSet]
+            .map(s => s.split('|'))
+            .sort((a, b) => a[0].localeCompare(b[0]));
+        sorted.forEach(([st, et], i) => {
+            timeSlots.push({
+                school_id:     schoolId,
+                academic_year: academicYear,
+                semester:      semester,
+                day_of_week:   day,
+                slot_number:   i + 1,
+                start_time:    st,
+                end_time:      et,
+                is_break:      false,
+                break_label:   null,
+            });
+        });
+    }
+    for (const br of breakRows) {
+        timeSlots.push({
+            school_id:     schoolId,
+            academic_year: academicYear,
+            semester:      semester,
+            day_of_week:   br.day_of_week,
+            slot_number:   0,
+            start_time:    br.start_time,
+            end_time:      br.end_time,
+            is_break:      true,
+            break_label:   br.label,
+        });
+    }
+    if (timeSlots.length > 0) {
+        await bulkSaveTimeSlots(schoolId, academicYear, semester, timeSlots);
+    }
+
     alert(`${rows.length} slot berhasil diimport`);
     await refreshDataList(11);
     openScheduleBuilder();

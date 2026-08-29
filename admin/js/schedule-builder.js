@@ -94,6 +94,8 @@ function createOverlay() {
 .sched-ptab[data-panel="kode-guru"].active   { background:#ef4444; color:#fff; }
 .sched-kg-invalid { background:#fee2e2!important; border-color:#ef4444!important; color:#ef4444!important; }
 .sched-mapel-invalid { background:#fef9c3!important; border-color:#ca8a04!important; }
+.sched-cell-kg input { background:#1e2a3a; color:#e2e8f0; border-color:#2d3f6b; cursor:default; }
+.sched-cell-mapel input { background:#1a2035; color:#cbd5e1; border-color:#2d3f6b; }
         `.trim();
         document.head.appendChild(s);
     }
@@ -389,7 +391,7 @@ function renderGrid() {
                 const key = `${idx}_${c.class_id}`;
                 const cell = state.cells.get(key) ?? { mapel: '', teacher_code: '' };
                 html += `<td class="sched-cell-mapel"><input type="text" class="sched-input sched-mapel" data-key="${key}" value="${esc(cell.mapel)}" placeholder="—" /></td>`;
-                html += `<td class="sched-cell-kg"><input type="text" class="sched-input sched-kg" data-key="${key}" value="${esc(cell.teacher_code)}" placeholder="—" /></td>`;
+                html += `<td class="sched-cell-kg"><input type="text" class="sched-input sched-kg" data-key="${key}" value="${esc(cell.teacher_code)}" placeholder="—" readonly /></td>`;
             });
 
             html += `<td><button type="button" class="sched-del-row" data-idx="${idx}">✕</button></td>`;
@@ -462,17 +464,7 @@ function wireGridEvents() {
         });
     });
 
-    // KG (kode guru) inputs
-    overlayEl.querySelectorAll('.sched-kg').forEach(input => {
-        input.addEventListener('input', () => {
-            const key = input.dataset.key;
-            if (!state.cells.has(key)) state.cells.set(key, { mapel: '', teacher_code: '' });
-            state.cells.get(key).teacher_code = input.value.toUpperCase();
-            input.value = input.value.toUpperCase();
-            state.dirty = true;
-            checkConflicts();
-        });
-    });
+    // KG (kode guru) inputs — readonly, tidak perlu event listener input
 
     // Delete row
     overlayEl.querySelectorAll('.sched-del-row').forEach(btn => {
