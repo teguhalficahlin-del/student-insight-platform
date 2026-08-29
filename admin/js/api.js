@@ -397,9 +397,10 @@ export async function saveTimeSlots(academicYear, semester, dayOfWeek, slots) {
     if (error) throw error;
 }
 
-export async function getScheduleTemplates(academicYear, semester, dayOfWeek) {
+export async function getScheduleTemplates(schoolId, academicYear, semester, dayOfWeek) {
     return fetchAllRows('schedule_templates',
         q => q.select('template_id, start_time, end_time, class_id, teacher_id, subject_label')
+              .eq('school_id', schoolId)
               .eq('academic_year', academicYear)
               .eq('semester', semester)
               .eq('day_of_week', dayOfWeek));

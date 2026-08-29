@@ -216,7 +216,7 @@ async function loadDay() {
 
     const [timeSlots, templates] = await Promise.all([
         getTimeSlots(state.schoolId, state.academicYear, state.semester, state.day),
-        getScheduleTemplates(state.academicYear, state.semester, state.day),
+        getScheduleTemplates(state.schoolId, state.academicYear, state.semester, state.day),
     ]);
 
     if (seq !== loadSeq) return; // a newer load was triggered, discard this result
