@@ -1781,6 +1781,17 @@ async function parseAndValidateJadwal(file) {
         classes.push({ name: raw, key, colIdx: c });
     }
 
+    // Cek duplikat nama kelas di header
+    const seenKeys = new Map();
+    for (const cl of classes) {
+        if (seenKeys.has(cl.key)) {
+            errors.push(`Header: Nama kelas '${cl.name}' muncul duplikat. Pastikan setiap kelas hanya muncul satu kali di template.`);
+        } else {
+            seenKeys.set(cl.key, cl.name);
+        }
+    }
+    if (errors.length > 0) { showPreviewModal([], errors, schoolId, academicYear, semester); return; }
+
     // Skip row 1 (sub-header Mapel/Guru), parse mulai row 2
     const VALID_DAYS = new Set(['SENIN','SELASA','RABU','KAMIS','JUMAT','SABTU']);
     let currentHari = '';
