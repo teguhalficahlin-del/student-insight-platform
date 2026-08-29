@@ -1811,15 +1811,8 @@ async function parseAndValidateJadwal(file) {
 
         // Baris istirahat/kegiatan: JAM (Col B) kosong atau bukan angka
         if (jamRaw === '' || jamRaw === null || jamRaw === undefined || isNaN(Number(jamRaw))) {
-            // Cocokkan format "LABEL (HH:MM - HH:MM)" atau murni "HH:MM - HH:MM"
-            const brkMatchLabeled = waktuRaw.match(/^(.+?)\s*\(\s*(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})\s*\)$/);
-            const brkMatchPlain   = waktuRaw.match(/^(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})$/);
-            const brkMatch = brkMatchLabeled
-                ? [null, brkMatchLabeled[2], brkMatchLabeled[3]]
-                : brkMatchPlain;
-            const label = brkMatchLabeled
-                ? brkMatchLabeled[1].trim()
-                : String(row[0] ?? '').trim() || waktuRaw.replace(/\(.*\)$/, '').trim();
+            const brkMatch = waktuRaw.match(/(?:^|.*\()(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})\)?$/);
+            const label = waktuRaw.includes('(') ? waktuRaw.replace(/\s*\(.*\)$/, '').trim() : (String(row[0] ?? '').trim() || waktuRaw);
             const hari = currentHari;
             if (label && brkMatch && VALID_DAYS.has(hari)) {
                 const padT = t => t.length === 5 ? t + ':00' : t;
