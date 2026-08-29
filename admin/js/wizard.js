@@ -1869,6 +1869,24 @@ async function parseAndValidateJadwal(file) {
         }
     }
 
+    // Validasi overlap slot waktu per hari
+    const slotsByDay = new Map();
+    for (const r of validRows) {
+        if (!slotsByDay.has(r.day_of_week)) slotsByDay.set(r.day_of_week, new Set());
+        slotsByDay.get(r.day_of_week).add(`${r.start_time}|${r.end_time}`);
+    }
+    for (const [hari, slotSet] of slotsByDay) {
+        const slots = [...slotSet]
+            .map(s => { const [st, et] = s.split('|'); return { st, et }; })
+            .sort((a, b) => a.st.localeCompare(b.st));
+        for (let i = 0; i < slots.length - 1; i++) {
+            if (slots[i].et > slots[i + 1].st) {
+                errors.push(`${hari}: Slot ${slots[i].st}-${slots[i].et} dan ${slots[i + 1].st}-${slots[i + 1].et} saling tumpang tindih`);
+            }
+        }
+    }
+    if (errors.length > 0) { showPreviewModal([], errors, schoolId, academicYear, semester); return; }
+
     showPreviewModal(validRows, errors, schoolId, academicYear, semester);
 }
 
