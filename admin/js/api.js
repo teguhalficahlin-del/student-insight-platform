@@ -368,10 +368,11 @@ export async function fetchAllRows(table, build, pageSize = 1000) {
 // SCHEDULE BUILDER
 // ─────────────────────────────────────────────────────────────
 
-export async function getTimeSlots(academicYear, semester, dayOfWeek) {
+export async function getTimeSlots(schoolId, academicYear, semester, dayOfWeek) {
     const { data, error } = await supabase
         .from('schedule_time_slots')
         .select('*')
+        .eq('school_id', schoolId)
         .eq('academic_year', academicYear)
         .eq('semester', semester)
         .eq('day_of_week', dayOfWeek)

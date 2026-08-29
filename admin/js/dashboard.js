@@ -2054,7 +2054,7 @@ async function renderJadwalPanel() {
         try {
             const classes = allClasses.filter(c => c.grade_level === activeGrade).sort((a,b) => a.name.localeCompare(b.name,'id'));
             const [slots, templates] = await Promise.all([
-                getTimeSlots(ay, sem, activeDay),
+                getTimeSlots(config?.school_id, ay, sem, activeDay),
                 getScheduleTemplates(ay, sem, activeDay),
             ]);
             const filteredTemplates = templates.filter(t => classes.some(c => c.class_id === t.class_id));

@@ -215,7 +215,7 @@ async function loadDay() {
     state.cells = new Map();
 
     const [timeSlots, templates] = await Promise.all([
-        getTimeSlots(state.academicYear, state.semester, state.day),
+        getTimeSlots(state.schoolId, state.academicYear, state.semester, state.day),
         getScheduleTemplates(state.academicYear, state.semester, state.day),
     ]);
 
