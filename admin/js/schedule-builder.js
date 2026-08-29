@@ -226,6 +226,20 @@ async function loadDay() {
         break_label: s.break_label,
     }));
 
+    // Jika time_slots belum diatur tapi templates sudah ada (mis. dari upload wizard),
+    // bangun kerangka baris dari waktu unik di templates agar grid bisa ditampilkan.
+    if (state.slots.length === 0 && templates.length > 0) {
+        const seen = new Map();
+        for (const t of templates) {
+            const st = t.start_time?.slice(0, 5);
+            const et = t.end_time?.slice(0, 5);
+            if (st && et && !seen.has(`${st}|${et}`)) seen.set(`${st}|${et}`, { start_time: st, end_time: et });
+        }
+        state.slots = [...seen.values()]
+            .sort((a, b) => a.start_time.localeCompare(b.start_time))
+            .map(s => ({ start_time: s.start_time, end_time: s.end_time, is_break: false, break_label: null }));
+    }
+
     for (const t of templates) {
         const slotIdx = state.slots.findIndex(s =>
             !s.is_break && s.start_time === t.start_time?.slice(0, 5) && s.end_time === t.end_time?.slice(0, 5)
