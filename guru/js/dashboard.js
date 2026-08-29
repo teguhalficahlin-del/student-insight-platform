@@ -846,13 +846,14 @@ function renderScheduleRows(rows, contentEl, date) {
         ? '<p class="hint" style="margin:8px 0 4px">Tidak ada jadwal mengajar pada tanggal ini.</p>'
         : `<div class="table-wrapper">
            <table class="table">
-               <thead><tr><th>Jam</th><th>Kelas</th><th>Kehadiran</th></tr></thead>
+               <thead><tr><th>Jam</th><th>Mapel</th><th>Kelas</th><th>Kehadiran</th></tr></thead>
                <tbody>
                ${mergedRows.map(r => {
                    const ended = date < today || (isToday && nowTime > r.merged_end);
                    return `
                    <tr>
                        <td>${fmtTime(r.merged_start)} – ${fmtTime(r.merged_end)}</td>
+                       <td>${esc(r.subject_label ?? '—')}</td>
                        <td>${esc(r.class?.name ?? '—')}</td>
                        <td>
                            <button class="btn btn-secondary btn-xs att-open-btn"

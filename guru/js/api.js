@@ -142,7 +142,7 @@ export async function getMyScheduleForDate(userId, date) {
     const { data, error } = await supabase
         .from('teaching_schedules')
         .select(`
-            schedule_id, session_date, session_start, session_end,
+            schedule_id, session_date, session_start, session_end, subject_label,
             class:classes ( class_id, name )
         `)
         .eq('session_date', date)
