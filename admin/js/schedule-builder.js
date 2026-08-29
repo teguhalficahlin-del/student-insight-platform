@@ -113,6 +113,7 @@ function createOverlay() {
                     </div>
                     <span class="sched-conflict-count" id="sched-conflict-count"></span>
                     <button type="button" class="btn btn-success" id="sched-apply" style="padding:6px 16px;margin-left:auto" title="Generate jadwal harian dari template yang sudah disimpan. Tidak mengubah sesi yang sudah ada.">Terapkan Jadwal</button>
+                    <button type="button" class="btn btn-warning" id="sched-reapply" style="padding:6px 16px" title="Hapus sesi mendatang yang belum ada absensinya, lalu generate ulang dari template terkini.">Terapkan Ulang</button>
                 </div>
 
                 <div class="sched-body">
@@ -145,6 +146,7 @@ function createOverlay() {
         overlayEl.querySelector(`#sched-panel-${panel}`).style.display = '';
     });
     overlayEl.querySelector('#sched-apply').addEventListener('click', applyTemplates);
+    overlayEl.querySelector('#sched-reapply').addEventListener('click', startReapplyJob);
 
     overlayEl.querySelector('#sched-day-tabs').addEventListener('click', async (e) => {
         const day = e.target.dataset?.day;
@@ -788,6 +790,45 @@ async function doFinalize(jobId, deletedCount) {
 
     } finally {
         if (reapplyBtn) reapplyBtn.disabled = false;
+        applyBtn.disabled   = false;
+    }
+}
+
+/** Dipicu tombol #sched-reapply — FASE 1: buat/ambil job, lalu lanjut ke FASE 2. */
+async function startReapplyJob() {
+    const reapplyBtn = overlayEl.querySelector('#sched-reapply');
+    const applyBtn   = overlayEl.querySelector('#sched-apply');
+    const statusEl   = overlayEl.querySelector('#sched-status');
+
+    if (!confirm(
+        'Ini akan menghapus sesi jadwal mendatang yang belum ada absensinya, ' +
+        'lalu generate ulang dari template terkini. Lanjutkan?'
+    )) return;
+
+    reapplyBtn.disabled = true;
+    applyBtn.disabled   = true;
+    statusEl.innerHTML  = '';
+    statusEl.textContent = 'Menyiapkan job...';
+    statusEl.style.color = '';
+
+    try {
+        const job = await prepareReapplyJob(state.academicYear, state.semester);
+        localStorage.setItem(reapplyJobKey(), JSON.stringify({ jobId: job.job_id }));
+
+        if (job.total_to_delete === 0) {
+            statusEl.textContent = 'Tidak ada sesi mendatang yang perlu diganti.';
+            statusEl.style.color = 'var(--color-success)';
+            localStorage.removeItem(reapplyJobKey());
+            reapplyBtn.disabled = false;
+            applyBtn.disabled   = false;
+            return;
+        }
+
+        await runBatchLoop(job.job_id, job.total_to_delete, 0);
+    } catch (err) {
+        statusEl.textContent = `✗ Gagal: ${err.message}`;
+        statusEl.style.color = 'var(--color-danger)';
+        reapplyBtn.disabled = false;
         applyBtn.disabled   = false;
     }
 }
