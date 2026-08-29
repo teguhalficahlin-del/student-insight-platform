@@ -2053,10 +2053,12 @@ async function renderJadwalPanel() {
         gridArea.innerHTML = '<p class="hint">Memuat…</p>';
         try {
             const classes = allClasses.filter(c => c.grade_level === activeGrade).sort((a,b) => a.name.localeCompare(b.name,'id'));
-            const [slots, templates] = await Promise.all([
+            const [rawSlots, templates] = await Promise.all([
                 getTimeSlots(config?.school_id, ay, sem, activeDay),
                 getScheduleTemplates(config?.school_id, ay, sem, activeDay),
             ]);
+            const slots = rawSlots.slice().sort((a, b) =>
+                (a.start_time ?? '').localeCompare(b.start_time ?? ''));
             const filteredTemplates = templates.filter(t => classes.some(c => c.class_id === t.class_id));
             gridArea.innerHTML = classes.length === 0
                 ? '<p class="hint">Tidak ada kelas untuk tingkat ini.</p>'
