@@ -1985,10 +1985,11 @@ async function renderJadwalPanel() {
     const sem = config?.current_semester ?? 1;
     const [allClasses, teachers, substitutes] = await Promise.all([
         getClasses(ay),
-        getTeacherList().catch(() => []),
+        supabase.from('v_users_staff_directory').select('user_id, teacher_code')
+            .not('teacher_code', 'is', null).then(r => r.data ?? []).catch(() => []),
         getActiveSubstitutes().catch(() => []),
     ]);
-    const teacherIdMap = new Map(teachers.filter(t => t.teacher_code).map(t => [t.user_id, t.teacher_code]));
+    const teacherIdMap = new Map(teachers.map(t => [t.user_id, t.teacher_code]));
 
     const wizardUrl = schoolSlug ? `wizard.html?school=${encodeURIComponent(schoolSlug)}` : 'wizard.html';
 
