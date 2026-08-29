@@ -1811,8 +1811,11 @@ async function parseAndValidateJadwal(file) {
 
         // Baris istirahat/kegiatan: JAM (Col B) kosong atau bukan angka
         if (jamRaw === '' || jamRaw === null || jamRaw === undefined || isNaN(Number(jamRaw))) {
-            const brkMatch = waktuRaw.match(/(?:^|.*\()(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})\)?$/);
-            const label = waktuRaw.includes('(') ? waktuRaw.replace(/\s*\(.*\)$/, '').trim() : (String(row[0] ?? '').trim() || waktuRaw);
+            const TIME_RE = /(?:^|.*\()(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})\)?$/;
+            const colASrc = String(row[0] ?? '').trim();
+            const brkSrc  = waktuRaw || colASrc; // fallback ke kolom A jika kolom C kosong
+            const brkMatch = brkSrc.match(TIME_RE);
+            const label = brkSrc.includes('(') ? brkSrc.replace(/\s*\(.*\)$/, '').trim() : colASrc;
             const hari = currentHari;
             if (label && brkMatch && VALID_DAYS.has(hari)) {
                 const padT = t => t.length === 5 ? t + ':00' : t;
