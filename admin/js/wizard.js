@@ -1692,9 +1692,18 @@ async function parseAndValidateJadwal(file) {
         return;
     }
 
-    const schoolId     = state.schoolId;
-    const academicYear = state.data.academicYear;
-    const semester     = state.data.semester || '1';
+    const schoolId   = state.schoolId;
+    let academicYear = state.data.academicYear;
+    const semester   = state.data.semester || '1';
+
+    if (!academicYear) {
+        const cfg = await getSchoolConfig().catch(() => null);
+        academicYear = cfg?.current_academic_year ?? '';
+    }
+    if (!academicYear) {
+        alert('Tahun ajaran tidak ditemukan. Selesaikan langkah Tahun Ajaran di wizard terlebih dahulu.');
+        return;
+    }
 
     // Baca file
     let workbook;
