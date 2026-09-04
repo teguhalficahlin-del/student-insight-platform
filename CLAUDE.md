@@ -230,6 +230,10 @@ Aturan klasifikasi:
 
 ### 6c. Migration
 - Format nama: `YYYYMMDDHHMMSS_nama-fitur.sql` (14 digit)
+- **Sebelum menulis timestamp baru**, jalankan `ls supabase/migrations/ | sort | tail -5`
+  untuk melihat timestamp terbesar yang sudah ada. Timestamp migration baru HARUS lebih
+  besar dari semua yang ada di lokal maupun remote — konflik timestamp menyebabkan
+  `supabase db push --dry-run` error "inserted before last migration on remote".
 - Selalu `IF NOT EXISTS` / `OR REPLACE` (idempotent)
 - Urutan wajib:
   ```sql
@@ -385,7 +389,7 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
 
 ---
 
-## 9. STATUS PROYEK (per HEAD 6e52656, 31 Jul 2026)
+## 9. STATUS PROYEK (per HEAD 8d90222, 4 Sep 2026)
 
 ### Selesai
 - Audit keamanan Fase 1–3 ✅ (test suite 93/93)
@@ -397,6 +401,9 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
   UI: Guru Wali di semua panel, Kaprodi panel lengkap, Semua Siswa di branch else,
       TU tidak bisa broadcast ke sesama TU, school_id eksplisit di getParentForumRecipients,
       tab Terkirim ortu via helper API (bukan inline query)
+- Hardening Langkah 11 Jadwal ✅ (4 Sep 2026) — defensive school_id filter eksplisit:
+  schedule-builder (checkAllConflicts, getClasses, update nama kelas), api.js (getClasses),
+  wizard.js (refreshDataList 11); migration policy SELECT ADMINISTRATIVE di schedule_templates
 
 ### Blocker Go-Live (PRIORITAS TINGGI)
 1. **Jadwal import SMK Uji E7** — blocker Go-Live tenant E1/E2/E4/E7
