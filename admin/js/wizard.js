@@ -340,11 +340,6 @@ async function renderStep2() {
             <div class="step-label">Langkah 2 dari ${TOTAL_STEPS}</div>
             <h3>Tahun Ajaran</h3>
             ${wzHintCard(2)}
-            <div class="alert alert-info" style="margin-bottom:20px">
-                <strong>Periode akademik dikelola otomatis.</strong><br>
-                Tahun ajaran berubah melalui <strong>Tutup Semester</strong> dan
-                <strong>Tutup Tahun Ajaran</strong> di dashboard — bukan di sini.
-            </div>
             <p class="hint">Periode yang tercatat untuk sekolah ini:</p>
             <table class="table">
                 <thead><tr><th>Tahun Ajaran</th><th>Semester</th><th>Periode</th><th>Status</th></tr></thead>
