@@ -182,7 +182,9 @@ const WZ_HINT_TEXT = {
   <li>NIS siswa harus sudah terdaftar di Langkah 6</li>
 </ul>`,
     8: `<ul>
-  <li>Isi nama dan instansi DUDI sesuai data mitra magang resmi</li>
+  <li>Unduh template, baca sheet petunjuk, isi data, lalu unggah</li>
+  <li>DUDI login menggunakan nama usaha — sistem otomatis membuat kode login dari nama usaha</li>
+  <li>kode_program — isi untuk menautkan DUDI ke Kaprodi program tertentu, harus sesuai kode di Langkah 3</li>
   <li>DUDI hanya bisa melihat data magang — tidak bisa mengubah data lain</li>
 </ul>`,
     9: `<ul>
@@ -2563,7 +2565,7 @@ const IMPORT_STEP_INFO = {
     7: { title: 'Orang Tua',
          desc: '' },
     8: { title: 'DUDI',
-         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
+         desc: '' },
     12: {
         title: 'Penugasan Forum Kelas',
         desc: 'Impor penugasan BK per kelas dan Guru Wali per siswa. Gunakan dua template terpisah.',
