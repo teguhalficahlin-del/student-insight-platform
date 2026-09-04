@@ -8,6 +8,18 @@ verify_jwt = false
 [functions.reset-admin-password]
 verify_jwt = false
 
+[functions.delete-school]
+verify_jwt = false
+
+[functions.update-school-status]
+verify_jwt = false
+
+[functions.set-maintenance]
+verify_jwt = false
+
+[functions.platform-stats]
+verify_jwt = false
+
 [functions.evaluate-teacher-indicators]
 enabled = true
 verify_jwt = false
