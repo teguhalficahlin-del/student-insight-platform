@@ -89,6 +89,7 @@ function createOverlay() {
 .sched-mapel-invalid { background:#fef9c3!important; border-color:#ca8a04!important; }
 .sched-cell-kg input { background:#1e2a3a; color:#e2e8f0; border-color:#2d3f6b; cursor:default; }
 .sched-cell-mapel input { background:#1a2035; color:#cbd5e1; border-color:#2d3f6b; }
+.sched-del-row { display:none; }
         `.trim();
         document.head.appendChild(s);
     }
