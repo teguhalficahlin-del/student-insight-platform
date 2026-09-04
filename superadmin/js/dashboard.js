@@ -480,6 +480,11 @@ deleteConfirmBtn.addEventListener('click', async () => {
     deleteConfirmBtn.disabled = true;
     deleteConfirmBtn.textContent = 'Menghapus…';
     const namaSekolah = _deleteSchoolName;
+    let _elapsed = 0;
+    const _timer = setInterval(() => {
+        _elapsed++;
+        deleteConfirmBtn.textContent = `Menghapus… ${_elapsed}d`;
+    }, 1000);
     try {
         const res = await fetch(
             `${SUPABASE_URL}/functions/v1/delete-school`, {
@@ -494,6 +499,7 @@ deleteConfirmBtn.addEventListener('click', async () => {
             }),
         });
         const json = await res.json();
+        clearInterval(_timer);
         if (res.status === 401) {
             closeDeleteModal();
             return;
@@ -524,6 +530,7 @@ deleteConfirmBtn.addEventListener('click', async () => {
             hintEl.style.display = 'block';
         }
     } catch (err) {
+        clearInterval(_timer);
         deleteError.textContent = `✗ ${err.message}`;
         deleteError.style.display = 'block';
         deleteConfirmBtn.disabled = false;
