@@ -171,6 +171,7 @@ const WZ_HINT_TEXT = {
   <li>Kode guru dipakai di kolom KG pada grid jadwal visual — isi dengan kode singkat yang mudah dikenali</li>
 </ul>`,
     6: `<ul>
+  <li>Unduh template, baca sheet petunjuk, isi data, lalu unggah</li>
   <li>Nama kelas harus sama persis dengan yang terdaftar di Langkah 4</li>
   <li>NISN dipakai sebagai login siswa — pastikan tidak ada duplikat</li>
 </ul>`,
@@ -2556,7 +2557,7 @@ const IMPORT_STEP_INFO = {
     5: { title: 'Staf & Peran',
          desc: '' },
     6: { title: 'Siswa',
-         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
+         desc: '' },
     7: { title: 'Orang Tua',
          desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.<br><strong>Import ulang aman</strong> — sistem akan memperbarui nama dan memulihkan akun yang pernah dihapus. Tidak perlu menghapus data lama sebelum import ulang.' },
     8: { title: 'DUDI',
