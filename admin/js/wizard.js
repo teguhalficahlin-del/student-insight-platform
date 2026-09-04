@@ -194,8 +194,10 @@ const WZ_HINT_TEXT = {
   <li>Stakeholder hanya bisa melihat ringkasan data sekolah (jumlah siswa, kehadiran, dll.) — tidak bisa mengubah apa pun</li>
 </ul>`,
     10: `<ul>
-  <li>Login menggunakan NIP/NIK yang didaftarkan di sini</li>
-  <li>Catat password awal — password tidak bisa ditampilkan ulang</li>
+  <li>TU adalah staf administrasi yang mengelola data operasional harian — piket, keterlambatan siswa, izin keluar, dan rekap kehadiran</li>
+  <li>Isi nama lengkap dan NIP/NIK, lalu klik Tambah — sistem otomatis membuat password awal</li>
+  <li>Catat NIP/NIK dan password awal segera — password tidak bisa ditampilkan ulang</li>
+  <li>TU juga dapat berkirim pesan melalui Forum Sekolah</li>
 </ul>`,
     11: `<p style="margin-bottom:8px">Gunakan template jadwal yang tersedia. Sebelum mengisi, perhatikan daftar kode guru dan nama kelas berikut — gunakan persis seperti tertera.</p>
 <div id="wz-hint-guru-list"><p class="hint">Memuat daftar guru…</p></div>
@@ -573,7 +575,6 @@ async function renderTuStep() {
         <div class="step-label">Langkah 10 dari ${TOTAL_STEPS}</div>
         <h3>Tata Usaha</h3>
         ${wzHintCard(10)}
-        <p class="hint">Tambahkan akun Tata Usaha (TU). TU dapat melihat rekap piket dan kehadiran siswa. Login menggunakan NIP/NIK.</p>
 
         <div id="wz-data-list"><p class="hint">Memuat data…</p></div>
 
