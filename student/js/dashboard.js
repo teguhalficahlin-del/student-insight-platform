@@ -133,9 +133,18 @@ async function init() {
     initAckQueue({ userId: currentUser.user_id });
 
     // Default ke tab pertama yang tersedia (Jadwal disembunyikan saat PKL).
-    const firstTab = tabs[0]?.key ?? 'kehadiran';
-    activateTab(firstTab);
+    const hashTab  = location.hash.slice(1);
+    const firstTab = (hashTab && tabs.find(t => t.key === hashTab)) ? hashTab : tabs[0]?.key ?? 'kehadiran';
+    activateTab(firstTab, { replace: true });
     await initTab(firstTab);
+
+    window.addEventListener('popstate', async e => {
+        const key = e.state?.tab ?? location.hash.slice(1);
+        if (key && document.querySelector(`[data-tab="${key}"]`)) {
+            activateTab(key, { noHistory: true });
+            await loadTabContent(key);
+        }
+    });
     showPwaBanner({ hasBottomNav: true });
     initSessionGuard(supabase, getLoginUrl());
 }
@@ -178,7 +187,11 @@ function buildTabs() {
     return tabs;
 }
 
-function activateTab(key) {
+function activateTab(key, { replace = false, noHistory = false } = {}) {
+    if (!noHistory) {
+        if (replace) history.replaceState({ tab: key }, '', '#' + key);
+        else         history.pushState({ tab: key }, '', '#' + key);
+    }
     document.querySelectorAll('.tab-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.tab === key));
     document.querySelectorAll('.tab-panel').forEach(p =>

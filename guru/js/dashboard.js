@@ -365,9 +365,19 @@ async function init() {
     const defaultTab = isTeacher ? 'guru' : (jabatan[0] ?? 'kasus');
     const savedTab   = localStorage.getItem('sip_active_tab_guru');
     const tabExists  = savedTab && !!document.querySelector(`[data-tab="${savedTab}"]`);
-    const startTab   = (tabExists ? savedTab : null) || defaultTab;
-    await activateTab(startTab);
+    const hashTab    = location.hash.slice(1);
+    const hashExists = hashTab && !!document.querySelector(`[data-tab="${hashTab}"]`);
+    const startTab   = hashExists ? hashTab : (tabExists ? savedTab : null) || defaultTab;
+    await activateTab(startTab, { replace: true });
     await loadTabContent(startTab);
+
+    window.addEventListener('popstate', async e => {
+        const key = e.state?.tab ?? location.hash.slice(1);
+        if (key && document.querySelector(`[data-tab="${key}"]`)) {
+            await activateTab(key, { noHistory: true });
+            await loadTabContent(key);
+        }
+    });
 
     // Offline sync: tampilkan status + kirim absensi tertunda.
     await updateSyncBanner();
@@ -527,8 +537,12 @@ async function buildTabs() {
 // Mengembalikan Promise supaya loadTabContent() menunggu - penanganan
 // errornya menyeleksi '.tab-panel.active .page-body', yang selama jeda
 // masih menunjuk panel lama.
-function activateTab(key) {
+function activateTab(key, { replace = false, noHistory = false } = {}) {
     localStorage.setItem('sip_active_tab_guru', key);
+    if (!noHistory) {
+        if (replace) history.replaceState({ tab: key }, '', '#' + key);
+        else         history.pushState({ tab: key }, '', '#' + key);
+    }
     document.querySelectorAll('.tab-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.tab === key));
 

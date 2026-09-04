@@ -150,6 +150,10 @@ async function init() {
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => showTab(btn.dataset.tab));
     });
+    window.addEventListener('popstate', async e => {
+        const sid = e.state?.tab ?? location.hash.slice(1);
+        if (sid && document.getElementById(sid)) await showTab(sid, null, { noHistory: true });
+    });
 
     if (children.length === 0) {
         loadingEl.textContent = 'Belum ada data anak yang terhubung ke akun Anda. Hubungi admin sekolah.';
@@ -202,7 +206,7 @@ function getTabKey(sectionId) {
     return map[sectionId] ?? null;
 }
 
-async function showTab(sectionId, signal = null) {
+async function showTab(sectionId, signal = null, { replace = false, noHistory = false } = {}) {
     // Sembunyikan semua section
     ALL_SECTIONS.forEach(s => {
         s.classList.remove('active');
@@ -213,6 +217,10 @@ async function showTab(sectionId, signal = null) {
     if (!target) return;
     target.style.display = 'block';
     target.classList.add('active');
+    if (!noHistory) {
+        if (replace) history.replaceState({ tab: sectionId }, '', '#' + sectionId);
+        else         history.pushState({ tab: sectionId }, '', '#' + sectionId);
+    }
     // Update tombol aktif
     tabBtns.forEach(b => b.classList.toggle('active',
         b.dataset.tab === sectionId));
@@ -284,7 +292,7 @@ async function loadChildData(index) {
     const defaultTab = isPkl          ? 'section-pkl'
                      : isInactive     ? 'section-observations'
                      :                  'section-schedule';
-    await showTab(defaultTab, signal);
+    await showTab(defaultTab, signal, { replace: true });
     if (signal.aborted) return;
     _loadChildAbort = null;
 }

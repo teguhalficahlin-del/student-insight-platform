@@ -123,13 +123,14 @@ const PANEL_RENDERERS = {
     'guru-piket':       renderGuruPiketPanel,
 };
 
-async function navigateToPanel(panelId) {
+async function navigateToPanel(panelId, { replace = false } = {}) {
     if (_panelRendering) return;
     _panelRendering = true;
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('is-active'));
     const link = document.querySelector(`.nav-link[data-panel="${panelId}"]`);
     if (link) link.classList.add('is-active');
-    history.replaceState(null, '', '#' + panelId);
+    if (replace) history.replaceState({ tab: panelId }, '', '#' + panelId);
+    else         history.pushState({ tab: panelId }, '', '#' + panelId);
     syncBottomNav(panelId);
     const renderer = PANEL_RENDERERS[panelId] ?? renderComingSoon;
     const hasOwnLoading = panelId === 'forum-kelas' || panelId === 'guru-piket';
@@ -192,6 +193,11 @@ document.querySelectorAll('.admin-bottom-nav .nav-tab[data-panel]').forEach(btn 
 
 document.getElementById('bottom-menu-btn')?.addEventListener('click', () => {
     menuToggle?.click();
+});
+
+window.addEventListener('popstate', e => {
+    const pid = e.state?.tab ?? location.hash.slice(1);
+    if (pid && pid in PANEL_RENDERERS) navigateToPanel(pid, { replace: true });
 });
 
 // ─── Panel: Penugasan Forum Kelas ────────────────────────
@@ -2473,7 +2479,7 @@ async function renderExportPanel() {
     });
 
     const hashPanel = location.hash.slice(1);
-    await navigateToPanel(hashPanel in PANEL_RENDERERS ? hashPanel : 'setup');
+    await navigateToPanel(hashPanel in PANEL_RENDERERS ? hashPanel : 'setup', { replace: true });
     showPwaBanner({ hasBottomNav: true });
     initSessionGuard(supabase, getLoginUrl());
 })();

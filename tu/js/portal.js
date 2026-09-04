@@ -60,13 +60,17 @@ let _cachedLate       = [];
 let _cachedAttendance = [];
 
 // ── Tab navigation ─────────────────────────────────────────────
-function showTab(sectionId) {
+function showTab(sectionId, { replace = false, noHistory = false } = {}) {
     ALL_SECTIONS.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
     const target = document.getElementById(sectionId);
     if (target) target.style.display = 'block';
+    if (!noHistory) {
+        if (replace) history.replaceState({ tab: sectionId }, '', '#' + sectionId);
+        else         history.pushState({ tab: sectionId }, '', '#' + sectionId);
+    }
     tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === sectionId));
 }
 
@@ -74,6 +78,14 @@ tabBtns.forEach(btn => btn.addEventListener('click', async () => {
     showTab(btn.dataset.tab);
     if (btn.dataset.tab === 'section-forum') await initForumSection();
 }));
+
+window.addEventListener('popstate', async e => {
+    const sid = e.state?.tab ?? location.hash.slice(1);
+    if (sid && ALL_SECTIONS.includes(sid)) {
+        showTab(sid, { noHistory: true });
+        if (sid === 'section-forum') await initForumSection();
+    }
+});
 
 // ── Helpers ────────────────────────────────────────────────────
 function esc(str) {
@@ -2076,7 +2088,8 @@ async function init() {
     tabNav.style.display    = 'flex';
     bottomNav.style.display = 'block';
 
-    showTab('section-piket');
+    const hashSid = location.hash.slice(1);
+    showTab(ALL_SECTIONS.includes(hashSid) ? hashSid : 'section-piket', { replace: true });
     await loadPiket();
     showPwaBanner({ hasBottomNav: true });
     // NOTIF-01: antrean retry ack "posting sudah dibaca".
