@@ -3042,7 +3042,9 @@ const STEP_LIST = {
                     template_id, day_of_week, start_time, end_time,
                     class:classes ( name ),
                     teacher:users ( full_name )
-                `).order('day_of_week').order('start_time'));
+                `)
+                .eq('school_id', state.schoolId)
+                .order('day_of_week').order('start_time'));
             return data.map(t => ({
                 id: t.template_id,
                 cells: [

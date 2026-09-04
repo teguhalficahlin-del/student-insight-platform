@@ -227,7 +227,7 @@ async function loadGrade(seq) {
     // When called from a grade-tab click (not from loadDay), take a new sequence slot
     if (seq === undefined) seq = ++loadSeq;
 
-    const classes = await getClasses(state.academicYear);
+    const classes = await getClasses(state.academicYear, state.schoolId);
 
     if (seq !== loadSeq) return; // stale
 
@@ -403,7 +403,9 @@ function wireGridEvents() {
             if (!newName) { input.value = cls.name; return; }
             if (cls.name === newName) return;
             cls.name = newName;
-            const { error } = await supabase.from('classes').update({ name: newName }).eq('class_id', classId);
+            const { error } = await supabase.from('classes').update({ name: newName })
+                .eq('class_id', classId)
+                .eq('school_id', state.schoolId);
             if (error) { alert(`Gagal simpan nama kelas: ${error.message}`); cls.name = input.value; }
         });
     });
@@ -495,7 +497,7 @@ async function save() {
 
         // Build templates from cells (all grades, not just current view)
         // Load ALL classes for this academic year to include other grades' data
-        const allClasses = await getClasses(state.academicYear);
+        const allClasses = await getClasses(state.academicYear, state.schoolId);
         const allClassIds = new Set(allClasses.map(c => c.class_id));
 
         const templates = [];
@@ -547,7 +549,8 @@ async function checkAllConflicts() {
     const data = await fetchAllRows('schedule_templates',
         q => q.select('day_of_week, start_time, teacher_id')
               .eq('academic_year', state.academicYear)
-              .eq('semester', state.semester));
+              .eq('semester', state.semester)
+              .eq('school_id', state.schoolId));
 
     // Guru dengan allow_parallel_teaching=true (moving class/team teaching)
     // dikecualikan — jadwal paralel mereka disengaja, bukan bentrok.

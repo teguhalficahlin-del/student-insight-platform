@@ -487,9 +487,10 @@ export async function addProgram({ code, name }) {
     return data;
 }
 
-export async function getClasses(academicYear = null) {
+export async function getClasses(academicYear = null, schoolId = null) {
     let query = supabase.from('classes').select('*').order('name');
     if (academicYear) query = query.eq('academic_year', academicYear);
+    if (schoolId)     query = query.eq('school_id', schoolId);
     const { data, error } = await query;
     if (error) throw error;
     return data;
