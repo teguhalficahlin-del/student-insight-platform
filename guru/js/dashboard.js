@@ -1363,6 +1363,7 @@ const OBS_VIS_LABEL = {
     SISWA_SAJA:    '🎓 Siswa saja',
     ORTU_SAJA:     '👨‍👩‍👧 Orang Tua saja',
     SISWA_DAN_ORTU:'👨‍👩‍👦 Siswa & Orang Tua',
+    PRIVATE:       '🔒 Catatan pribadi',
 };
 
 function renderObsHistory(rows, listEl) {
