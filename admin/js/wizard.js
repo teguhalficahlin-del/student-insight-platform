@@ -162,6 +162,7 @@ const WZ_HINT_TEXT = {
   <li>Wajib ada minimal 1 program sebelum bisa lanjut</li>
 </ul>`,
     4: `<ul>
+  <li>Unduh template, baca sheet petunjuk, isi data, lalu unggah</li>
   <li>Pastikan kode program sesuai dengan yang sudah didaftarkan di Langkah 3</li>
   <li>Nama kelas harus konsisten — dirujuk oleh data siswa dan jadwal</li>
 </ul>`,
@@ -2551,7 +2552,7 @@ function generateExcelTemplate(filename, headers, exampleRows, guide) {
 
 const IMPORT_STEP_INFO = {
     4: { title: 'Kelas & Rombel',
-         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
+         desc: '' },
     5: { title: 'Staf & Peran',
          desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
     6: { title: 'Siswa',
@@ -2759,7 +2760,7 @@ async function renderImportStep() {
         <div class="step-label">Langkah ${step} dari ${TOTAL_STEPS}</div>
         <h3>${info.title}</h3>
         ${wzHintCard(step)}
-        <p class="hint">${info.desc}</p>
+        ${info.desc ? `<p class="hint">${info.desc}</p>` : ''}
         ${templateButtonHtml(step)}
         <div class="wz-data-list" id="wz-data-list"><p class="hint">Memuat data…</p></div>
         <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
