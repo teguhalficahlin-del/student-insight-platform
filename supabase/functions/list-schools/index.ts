@@ -62,11 +62,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
             // Health: siswa total vs sudah punya akun login
             admin.rpc('fn_school_student_health'),
 
-            // Jumlah pengguna aktif per role group per sekolah
+            // Jumlah pengguna yang sudah pernah login per role group per sekolah
+            // (punya minimal 1 baris di login_devices = pernah login)
             admin
                 .from('users')
-                .select('school_id, role_type')
-                .eq('is_active', true)
+                .select('school_id, role_type, login_devices!inner(user_id)')
                 .in('role_type', ['GURU','WALI_KELAS','BK','WAKA_KURIKULUM','WAKA_HUMAS','WAKA_KESISWAAN','KEPSEK','KAPRODI','TU','ADMINISTRATIVE','SISWA','ORTU','DUDI','STAKEHOLDER']),
         ]);
 
@@ -75,7 +75,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         type AdminRow    = { school_id: string; full_name: string; login_identifier: string | null };
         type StaffHealth = { school_id: string; kepsek_count: number; waka_kurikulum_count: number; waka_kesiswaan_count: number; waka_humas_count: number; staff_count: number };
         type StudentHealth = { school_id: string; student_count: number; provisioned_count: number };
-        type UserRow    = { school_id: string; role_type: string };
+        type UserRow    = { school_id: string; role_type: string; login_devices: unknown[] };
 
         // Agregasi jumlah pengguna per role group per sekolah
         const GURU_ROLES = new Set(['GURU','WALI_KELAS','BK','WAKA_KURIKULUM','WAKA_HUMAS','WAKA_KESISWAAN','KEPSEK','KAPRODI','TU','ADMINISTRATIVE']);
