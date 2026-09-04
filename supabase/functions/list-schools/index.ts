@@ -67,7 +67,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 .from('users')
                 .select('school_id, role_type')
                 .eq('is_active', true)
-                .in('role_type', ['GURU','WALI_KELAS','GURU_BK','WAKA_KURIKULUM','WAKA_HUMAS','KEPSEK','KAPRODI','GURU_PIKET','TU','ADMINISTRATIVE','SISWA','ORTU','DUDI','STAKEHOLDER']),
+                .in('role_type', ['GURU','WALI_KELAS','BK','WAKA_KURIKULUM','WAKA_HUMAS','WAKA_KESISWAAN','KEPSEK','KAPRODI','TU','ADMINISTRATIVE','SISWA','ORTU','DUDI','STAKEHOLDER']),
         ]);
 
         if (schoolsRes.error) throw schoolsRes.error;
@@ -78,7 +78,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         type UserRow    = { school_id: string; role_type: string };
 
         // Agregasi jumlah pengguna per role group per sekolah
-        const GURU_ROLES = new Set(['GURU','WALI_KELAS','GURU_BK','WAKA_KURIKULUM','WAKA_HUMAS','KEPSEK','KAPRODI','GURU_PIKET','TU','ADMINISTRATIVE']);
+        const GURU_ROLES = new Set(['GURU','WALI_KELAS','BK','WAKA_KURIKULUM','WAKA_HUMAS','WAKA_KESISWAAN','KEPSEK','KAPRODI','TU','ADMINISTRATIVE']);
         const userCountsBySchool: Record<string, { guru: number; siswa: number; ortu: number; dudi: number; stakeholder: number }> = {};
         for (const u of ((userCountsRes.data ?? []) as UserRow[])) {
             if (!userCountsBySchool[u.school_id]) {
