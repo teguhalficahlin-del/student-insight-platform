@@ -200,7 +200,10 @@ const WZ_HINT_TEXT = {
   <li>TU juga dapat berkirim pesan melalui Forum Sekolah</li>
 </ul>`,
     11: `<ul>
-  <li>Unduh template jadwal, isi sesuai daftar kode guru dan nama kelas di bawah, lalu unggah</li>
+  <li>Unduh template jadwal, isi kolom KG menggunakan daftar kode guru dan nama kelas di bawah, lalu unggah</li>
+  <li>Sistem otomatis menolak jika ada kelas dan kode guru yang tidak cocok</li>
+  <li><strong>Susun Jadwal Visual</strong> — klik tombol biru untuk membuka grid jadwal per hari (Senin–Sabtu) setelah berhasil impor</li>
+  <li>Klik <strong>Terapkan Jadwal</strong> untuk generate sesi absensi. Gunakan <strong>Terapkan Ulang</strong> jika jadwal sudah pernah diterapkan dan ada perubahan pada kode mapel</li>
   <li>Langkah ini opsional — bisa dilewati dan dilengkapi kapan saja dari menu Jadwal di dashboard</li>
 </ul>
 <details name="wz-jadwal-ref" style="margin-top:8px">
