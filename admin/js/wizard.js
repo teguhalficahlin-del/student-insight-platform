@@ -199,9 +199,18 @@ const WZ_HINT_TEXT = {
   <li>Catat NIP/NIK dan password awal segera — password tidak bisa ditampilkan ulang</li>
   <li>TU juga dapat berkirim pesan melalui Forum Sekolah</li>
 </ul>`,
-    11: `<p style="margin-bottom:8px">Gunakan template jadwal yang tersedia. Sebelum mengisi, perhatikan daftar kode guru dan nama kelas berikut — gunakan persis seperti tertera.</p>
-<div id="wz-hint-guru-list"><p class="hint">Memuat daftar guru…</p></div>
-<div id="wz-hint-kelas-list"><p class="hint">Memuat daftar kelas…</p></div>`,
+    11: `<ul>
+  <li>Unduh template jadwal, isi sesuai daftar kode guru dan nama kelas di bawah, lalu unggah</li>
+  <li>Langkah ini opsional — bisa dilewati dan dilengkapi kapan saja dari menu Jadwal di dashboard</li>
+</ul>
+<details name="wz-jadwal-ref" style="margin-top:8px">
+  <summary style="cursor:pointer;font-weight:500">Daftar Kode Guru</summary>
+  <div id="wz-hint-guru-list"><p class="hint">Memuat daftar guru…</p></div>
+</details>
+<details name="wz-jadwal-ref">
+  <summary style="cursor:pointer;font-weight:500">Daftar Nama Kelas</summary>
+  <div id="wz-hint-kelas-list"><p class="hint">Memuat daftar kelas…</p></div>
+</details>`,
     12: `<ul>
   <li>Tab BK: tugaskan konselor BK per kelas</li>
   <li>Tab Guru Wali: tugaskan guru wali per siswa</li>
@@ -1652,7 +1661,6 @@ async function renderScheduleStep() {
         <div class="step-label">Langkah 11 dari ${TOTAL_STEPS}</div>
         <h3>Jadwal</h3>
         ${wzHintCard(11)}
-        <p class="hint-success">✓ Langkah ini opsional — bisa dilewati dan disusun nanti setelah wizard selesai.</p>
         <div style="display:flex;gap:8px;margin-bottom:16px">
             <button type="button" class="btn btn-primary" id="wz-open-schedule" style="flex:1;min-width:0">Susun Jadwal Visual</button>
             <button type="button" class="btn btn-outline-secondary" id="btnDownloadTemplateJadwal" style="flex:1;min-width:0">⬇ Download Template Jadwal</button>
