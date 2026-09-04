@@ -154,6 +154,13 @@
         <div class="page-body">
             <div class="section-card">
                 <h3>Tulis Catatan Siswa</h3>
+                <div id="obs-class-filter-wrap" style="margin-bottom:16px">
+                    <label for="obs-class-filter" style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Filter Kelas</label>
+                    <select id="obs-class-filter" class="input" style="max-width:280px">
+                        <option value="">— Semua Kelas —</option>
+                    </select>
+                </div>
+                <div id="obs-student-tiles" style="display:none;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
                 <form id="obs-form">
                     <div class="field" style="position:relative">
                         <label for="obs-student-search">Siswa</label>

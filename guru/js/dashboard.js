@@ -1256,6 +1256,58 @@ async function initObsForm() {
     const obsContentEl  = document.getElementById('obs-content');
     const obsCharCountEl= document.getElementById('obs-char-count');
     const visSelect     = document.getElementById('obs-visibility');
+
+    // --- Class filter + student tiles ---
+    const classFilterEl = document.getElementById('obs-class-filter');
+    const tilesEl       = document.getElementById('obs-student-tiles');
+
+    const classNames = [...new Set(
+        myStudents.map(s => s.class_name).filter(Boolean)
+    )].sort();
+    classNames.forEach(cn => {
+        const opt = document.createElement('option');
+        opt.value = cn;
+        opt.textContent = cn;
+        classFilterEl.appendChild(opt);
+    });
+
+    function renderTiles(className) {
+        const filtered = className
+            ? myStudents.filter(s => s.class_name === className)
+            : [];
+        if (filtered.length === 0) {
+            tilesEl.innerHTML = '';
+            tilesEl.style.display = 'none';
+            return;
+        }
+        tilesEl.style.display = 'flex';
+        tilesEl.innerHTML = filtered.map(s =>
+            `<button type="button" class="obs-student-tile"
+                data-id="${s.student_id}" data-name="${esc(s.full_name)}"
+                style="padding:6px 12px;border:1px solid var(--color-border);border-radius:var(--radius);
+                       background:var(--color-surface);cursor:pointer;font-size:13px;white-space:nowrap">
+                ${esc(s.full_name)}<span style="color:var(--color-text-muted);font-size:11px"> ${esc(s.nis ?? '')}</span>
+            </button>`
+        ).join('');
+        tilesEl.querySelectorAll('.obs-student-tile').forEach(btn => {
+            btn.addEventListener('click', () => {
+                tilesEl.querySelectorAll('.obs-student-tile').forEach(b =>
+                    b.style.background = 'var(--color-surface)'
+                );
+                btn.style.background = 'var(--color-primary-soft, #dbeafe)';
+                hiddenEl.value = btn.dataset.id;
+                searchEl.value = btn.dataset.name;
+                form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+        });
+    }
+
+    classFilterEl.addEventListener('change', () => {
+        renderTiles(classFilterEl.value);
+        hiddenEl.value = '';
+        searchEl.value = '';
+    });
+
     obsContentEl.addEventListener('input', () => {
         obsCharCountEl.textContent = obsContentEl.value.length;
     });
@@ -1321,6 +1373,10 @@ async function initObsForm() {
             statusEl.style.display = 'block';
             form.reset();
             hiddenEl.value = '';
+            searchEl.value = '';
+            tilesEl.querySelectorAll('.obs-student-tile').forEach(b =>
+                b.style.background = 'var(--color-surface)'
+            );
             if (r.status === 'synced') await loadObsHistory();
         } catch (err) {
             statusEl.textContent   = `✗ ${fe(err, 's')}`;
