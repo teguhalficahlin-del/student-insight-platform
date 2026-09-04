@@ -2,10 +2,10 @@
 # Konteks untuk Claude Code
 
 > Baca SELURUH dokumen ini sebelum mengerjakan apapun.
-> WAJIB baca juga `AGENT_WORKING_RULES.md` di root repo — dokumen itu memuat aturan
+> WAJIB baca juga `AGENT.md` di root repo — dokumen itu memuat aturan
 > kerja agen yang berlaku penuh, baik diminta eksplisit di prompt maupun tidak.
-> Pembagiannya: `AGENT_WORKING_RULES.md` = cara kerja agen; `CLAUDE.md` = konteks
-> proyek + aturan teknis. Kalau keduanya berbeda, `AGENT_WORKING_RULES.md` menang.
+> Pembagiannya: `AGENT.md` = cara kerja agen; `CLAUDE.md` = konteks
+> proyek + aturan teknis. Kalau keduanya berbeda, `AGENT.md` menang.
 > CONTEXT.md deprecated.
 
 ---
@@ -121,7 +121,7 @@ hasil query SQL, dan output bash apapun yang diminta Claude Chat untuk direview.
 ### 6a. Verifikasi pembuka — LANGKAH PERTAMA
 1. Jalankan `pwd` dan pastikan output mengandung `"SIP SMK"`.
    Jika tidak → STOP, laporkan ke user.
-2. Sebutkan **eksplisit di awal respons** bahwa `AGENT_WORKING_RULES.md` dan
+2. Sebutkan **eksplisit di awal respons** bahwa `AGENT.md` dan
    `CLAUDE.md` sudah dibaca — satu kalimat konfirmasi, bukan asumsi diam-diam.
 
 Kalau salah satu verifikasi ini belum dilakukan, JANGAN lanjut ke pekerjaan
@@ -162,7 +162,7 @@ Aturan klasifikasi:
 - Tunggu Romo tidak membantah sebelum lanjut ke FASE 0
 
 **FASE 0 — BASELINE SNAPSHOT**
-- Jalankan `pwd`, baca `AGENT_WORKING_RULES.md` + `CLAUDE.md`
+- Jalankan `pwd`, baca `AGENT.md` + `CLAUDE.md`
 - Jalankan test suite baseline:
 ```
   node tests/tenant-isolation.mjs 2>&1
@@ -334,7 +334,7 @@ gagal: STOP dan laporkan.
 
 ### 6j. Checklist akhir sebelum STOP — cantumkan di akhir setiap laporan
 - [ ] pwd terverifikasi mengandung "SIP SMK"
-- [ ] `AGENT_WORKING_RULES.md` + `CLAUDE.md` sudah dibaca — disebutkan eksplisit di awal
+- [ ] `AGENT.md` + `CLAUDE.md` sudah dibaca — disebutkan eksplisit di awal
 - [ ] Semua perubahan sesuai `BATASAN KERAS` — tidak ada file di luar daftar tersentuh
 - [ ] Diff/output ditampilkan verbatim di badan teks — bukan ringkasan atau placeholder
 - [ ] Tidak ada push/deploy tanpa instruksi eksplisit terpisah
