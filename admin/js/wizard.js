@@ -157,7 +157,7 @@ const WZ_HINT_TEXT = {
   <li>Pastikan data yang tampil sudah sesuai sebelum melanjutkan</li>
 </ul>`,
     3: `<ul>
-  <li>Unduh template, isi kode dan nama program, lalu unggah</li>
+  <li>Unduh template, baca sheet petunjuk, isi kode dan nama program, lalu unggah</li>
   <li>Kode program harus unik — dipakai di langkah Kelas dan Staf</li>
   <li>Wajib ada minimal 1 program sebelum bisa lanjut</li>
 </ul>`,
