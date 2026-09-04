@@ -155,6 +155,12 @@ Aturan klasifikasi:
 | Migration DB | supabase/migrations/** | TIDAK — STOP setelah FASE 3, tampilkan hasil, tunggu konfirmasi Romo |
 | Campuran | Kombinasi tipe di atas | Ikuti aturan tipe paling ketat |
 
+**PRA-FASE 0 — KONFIRMASI PEMAHAMAN**
+- Sebelum memulai apapun, nyatakan pemahaman atas perintah Romo dalam bahasa pengguna:
+  apa yang akan diperbaiki, siapa yang terdampak, dan apa yang akan berubah dari
+  sudut pandang pengguna (admin/guru/siswa/dll) — bukan bahasa teknis
+- Tunggu Romo tidak membantah sebelum lanjut ke FASE 0
+
 **FASE 0 — BASELINE SNAPSHOT**
 - Jalankan `pwd`, baca `AGENT_WORKING_RULES.md` + `CLAUDE.md`
 - Jalankan test suite baseline:
@@ -213,6 +219,12 @@ Aturan klasifikasi:
   git stash drop
 ```
   STOP, laporkan output lengkap, jangan lanjut ke FASE 4
+
+**PRA-FASE 4 — PERBANDINGAN SEBELUM VS SESUDAH (SISI PENGGUNA)**
+- Sajikan perbandingan dari sudut pandang pengguna — bukan diff kode:
+  - **Sebelum**: apa yang pengguna lihat / alami sebelum perubahan ini
+  - **Sesudah**: apa yang pengguna akan lihat / alami setelah perubahan ini
+- Baru kemudian minta konfirmasi Romo untuk lanjut ke FASE 4
 
 **FASE 4 — COMMIT + PUSH**
 - Hanya dieksekusi jika GATE 0 + 1 + 2 + 3 semua lulus
