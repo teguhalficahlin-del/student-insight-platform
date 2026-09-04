@@ -471,7 +471,12 @@ deleteModal.addEventListener('click', e => {
 });
 
 deleteConfirmBtn.addEventListener('click', async () => {
-    const saKey = getSaKey(); if (!saKey) return;
+    const saKey = getSaKey();
+    if (!saKey) {
+        deleteError.textContent = '✗ Sesi habis — tutup dialog ini dan login ulang.';
+        deleteError.style.display = 'block';
+        return;
+    }
     deleteError.style.display = 'none';
     deleteConfirmBtn.disabled = true;
     deleteConfirmBtn.textContent = 'Menghapus…';
@@ -490,6 +495,7 @@ deleteConfirmBtn.addEventListener('click', async () => {
             }),
         });
         const json = await res.json();
+        if (res.status === 401) throw new Error('Sesi habis — tutup dialog ini dan login ulang.');
         if (!res.ok) throw new Error(
             json?.error ?? json?.message ?? 'Gagal menghapus');
 
