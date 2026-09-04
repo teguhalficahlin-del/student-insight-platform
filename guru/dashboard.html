@@ -160,13 +160,13 @@
                         <option value="">— Semua Kelas —</option>
                     </select>
                 </div>
-                <div id="obs-student-tiles" style="display:none;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
                 <form id="obs-form">
-                    <div class="field" style="position:relative">
-                        <label for="obs-student-search">Siswa</label>
-                        <input type="text" id="obs-student-search" class="input" placeholder="Cari nama siswa…" autocomplete="off">
+                    <div class="field">
+                        <label for="obs-student-select">Siswa</label>
+                        <select id="obs-student-select" class="input">
+                            <option value="">— Pilih siswa —</option>
+                        </select>
                         <input type="hidden" id="obs-student-id">
-                        <div id="obs-student-list" style="display:none; border:1px solid var(--color-border); border-radius:var(--radius); background:var(--color-surface); max-height:180px; overflow-y:auto; position:absolute; z-index:100; left:0; right:0; top:100%"></div>
                     </div>
                     <div class="obs-fields-row" style="display:flex; gap:12px; flex-wrap:wrap">
                         <div class="field" style="flex:1; min-width:140px">

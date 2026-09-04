@@ -1247,9 +1247,8 @@ async function initObsForm() {
     _obsFormInit = true;
     await ensureStudentPool();
 
-    const searchEl      = document.getElementById('obs-student-search');
     const hiddenEl      = document.getElementById('obs-student-id');
-    const listEl        = document.getElementById('obs-student-list');
+    const studentSelEl  = document.getElementById('obs-student-select');
     const form          = document.getElementById('obs-form');
     const submitBtn     = document.getElementById('obs-submit');
     const statusEl      = document.getElementById('obs-status');
@@ -1257,9 +1256,8 @@ async function initObsForm() {
     const obsCharCountEl= document.getElementById('obs-char-count');
     const visSelect     = document.getElementById('obs-visibility');
 
-    // --- Class filter + student tiles ---
+    // --- Class filter → student dropdown ---
     const classFilterEl = document.getElementById('obs-class-filter');
-    const tilesEl       = document.getElementById('obs-student-tiles');
 
     const classNames = [...new Set(
         myStudents.map(s => s.class_name).filter(Boolean)
@@ -1271,77 +1269,28 @@ async function initObsForm() {
         classFilterEl.appendChild(opt);
     });
 
-    function renderTiles(className) {
-        const filtered = className
-            ? myStudents.filter(s => s.class_name === className)
-            : [];
-        if (filtered.length === 0) {
-            tilesEl.innerHTML = '';
-            tilesEl.style.display = 'none';
-            return;
-        }
-        tilesEl.style.display = 'flex';
-        tilesEl.innerHTML = filtered.map(s =>
-            `<button type="button" class="obs-student-tile"
-                data-id="${s.student_id}" data-name="${esc(s.full_name)}"
-                style="padding:6px 12px;border:1px solid var(--color-border);border-radius:var(--radius);
-                       background:var(--color-surface);cursor:pointer;font-size:13px;white-space:nowrap">
-                ${esc(s.full_name)}<span style="color:var(--color-text-muted);font-size:11px"> ${esc(s.nis ?? '')}</span>
-            </button>`
-        ).join('');
-        tilesEl.querySelectorAll('.obs-student-tile').forEach(btn => {
-            btn.addEventListener('click', () => {
-                tilesEl.querySelectorAll('.obs-student-tile').forEach(b =>
-                    b.style.background = 'var(--color-surface)'
-                );
-                btn.style.background = 'var(--color-primary-soft, #dbeafe)';
-                hiddenEl.value = btn.dataset.id;
-                searchEl.value = btn.dataset.name;
-                form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    function populateStudentSelect(className) {
+        studentSelEl.innerHTML = '<option value="">— Pilih siswa —</option>';
+        hiddenEl.value = '';
+        if (!className) return;
+        myStudents
+            .filter(s => s.class_name === className)
+            .forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.student_id;
+                opt.textContent = `${s.full_name}${s.nis ? '  (' + s.nis + ')' : ''}`;
+                studentSelEl.appendChild(opt);
             });
-        });
     }
 
-    classFilterEl.addEventListener('change', () => {
-        renderTiles(classFilterEl.value);
-        hiddenEl.value = '';
-        searchEl.value = '';
+    classFilterEl.addEventListener('change', () => populateStudentSelect(classFilterEl.value));
+
+    studentSelEl.addEventListener('change', () => {
+        hiddenEl.value = studentSelEl.value;
     });
 
     obsContentEl.addEventListener('input', () => {
         obsCharCountEl.textContent = obsContentEl.value.length;
-    });
-
-    // Audience ditentukan oleh select obs-visibility — tidak ada picker.
-
-    function renderHits(hits) {
-        if (hits.length === 0) { listEl.style.display = 'none'; return; }
-        listEl.innerHTML = hits.map(s =>
-            `<div class="obs-list-item" data-id="${s.student_id}" data-name="${esc(s.full_name)}"
-                style="padding:10px 14px; cursor:pointer; font-size:13px; border-bottom:1px solid var(--color-border)">
-                ${esc(s.full_name)} <span style="color:var(--color-text-muted)">${esc(s.nis ?? '')}${s.class_name ? ' · ' + esc(s.class_name) : ''}</span>
-            </div>`
-        ).join('');
-        listEl.style.display = 'block';
-        listEl.querySelectorAll('.obs-list-item').forEach(item => {
-            item.addEventListener('mousedown', () => {
-                hiddenEl.value       = item.dataset.id;
-                searchEl.value       = item.dataset.name;
-                listEl.style.display = 'none';
-            });
-        });
-    }
-
-    searchEl.addEventListener('input', () => {
-        const q = searchEl.value.trim().toLowerCase();
-        if (q.length < 2) { listEl.style.display = 'none'; return; }
-        const hits = myStudents.filter(s =>
-            s.full_name.toLowerCase().includes(q) || s.nis?.includes(q)
-        );
-        renderHits(hits.slice(0, 10));
-    });
-    document.addEventListener('click', (e) => {
-        if (!listEl.contains(e.target) && e.target !== searchEl) listEl.style.display = 'none';
     });
 
     form.addEventListener('submit', async (e) => {
@@ -1373,10 +1322,7 @@ async function initObsForm() {
             statusEl.style.display = 'block';
             form.reset();
             hiddenEl.value = '';
-            searchEl.value = '';
-            tilesEl.querySelectorAll('.obs-student-tile').forEach(b =>
-                b.style.background = 'var(--color-surface)'
-            );
+            studentSelEl.value = '';
             if (r.status === 'synced') await loadObsHistory();
         } catch (err) {
             statusEl.textContent   = `✗ ${fe(err, 's')}`;
