@@ -167,8 +167,8 @@ const WZ_HINT_TEXT = {
   <li>Nama kelas harus konsisten — dirujuk oleh data siswa dan jadwal</li>
 </ul>`,
     5: `<ul>
+  <li>Unduh template, baca sheet petunjuk, isi data, lalu unggah</li>
   <li>Kode guru dipakai di kolom KG pada grid jadwal visual — isi dengan kode singkat yang mudah dikenali</li>
-  <li>Peran (Wali Kelas, BK, Waka) ditentukan di kolom khusus dalam template</li>
 </ul>`,
     6: `<ul>
   <li>Nama kelas harus sama persis dengan yang terdaftar di Langkah 4</li>
@@ -2554,7 +2554,7 @@ const IMPORT_STEP_INFO = {
     4: { title: 'Kelas & Rombel',
          desc: '' },
     5: { title: 'Staf & Peran',
-         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
+         desc: '' },
     6: { title: 'Siswa',
          desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
     7: { title: 'Orang Tua',
