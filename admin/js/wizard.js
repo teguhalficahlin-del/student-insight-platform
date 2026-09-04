@@ -188,8 +188,10 @@ const WZ_HINT_TEXT = {
   <li>DUDI hanya bisa melihat data magang — tidak bisa mengubah data lain</li>
 </ul>`,
     9: `<ul>
-  <li>Stakeholder adalah pihak eksternal yang diberi akses terbatas — isi sesuai kebutuhan</li>
-  <li>Catat kode login dan password awal — password tidak bisa ditampilkan ulang</li>
+  <li>Stakeholder adalah pihak eksternal (komite sekolah, dinas pendidikan, dll.) yang perlu memantau kondisi sekolah secara berkala tanpa bisa mengubah data</li>
+  <li>Isi nama dan kode login unik, lalu klik Tambah — sistem otomatis membuat password awal</li>
+  <li>Catat kode login dan password awal segera — password tidak bisa ditampilkan ulang</li>
+  <li>Stakeholder hanya bisa melihat ringkasan data sekolah (jumlah siswa, kehadiran, dll.) — tidak bisa mengubah apa pun</li>
 </ul>`,
     10: `<ul>
   <li>Login menggunakan NIP/NIK yang didaftarkan di sini</li>
@@ -504,7 +506,6 @@ async function renderStakeholderStep() {
         <div class="step-label">Langkah 9 dari ${TOTAL_STEPS}</div>
         <h3>Stakeholder</h3>
         ${wzHintCard(9)}
-        <p class="hint">Tambahkan akun stakeholder (komite sekolah, dinas pendidikan, dll). Stakeholder hanya bisa melihat ringkasan data sekolah, tidak bisa mengubah apa pun. Login menggunakan kode khusus yang Anda tentukan.</p>
 
         <div id="wz-data-list"><p class="hint">Memuat data…</p></div>
 
