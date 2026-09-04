@@ -7,9 +7,11 @@
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { initSessionGuard } from '../../shared/session-guard.js';
+import { initAckQueue, ackWithRetry } from '../../shared/ack-queue.js';
 import { supabase, getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getForumGuruWaliCandidates, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent,
     getDutyStaffCandidates, getDutySchedules, revokeDutySchedule,
-    getAdminPanelDudi, getAdminPanelStaff } from './api.js';
+    getAdminPanelDudi, getAdminPanelStaff,
+    getUnreadNotifCount, getRecentNotifications, markNotificationsRead } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
 
@@ -149,6 +151,88 @@ document.querySelectorAll('.nav-link').forEach(link => {
         navigateToPanel(panel);
     });
 });
+
+// ── Notifikasi lonceng ────────────────────────────────────────
+let _notifPollTimer = null;
+
+function _setBellBadge(n) {
+    const btn = document.getElementById('notif-bell-btn');
+    if (!btn) return;
+    let badge = btn.querySelector('.notif-badge');
+    if (n > 0) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'notif-badge';
+            badge.style.cssText = 'position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--color-danger,#dc2626);color:#fff;font-size:11px;font-weight:700;text-align:center;padding:0 3px;pointer-events:none';
+            btn.style.position = 'relative';
+            btn.appendChild(badge);
+        }
+        badge.textContent = n > 99 ? '99+' : String(n);
+    } else {
+        badge?.remove();
+    }
+}
+
+async function _refreshNotifBadge() {
+    try { _setBellBadge(await getUnreadNotifCount()); } catch { /* tidak kritis */ }
+}
+
+async function _openNotifDropdown() {
+    const panel = document.getElementById('notif-dropdown');
+    if (!panel) return;
+    if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+    panel.style.display = 'block';
+    panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-text-muted)">Memuat…</p>';
+    try {
+        const notifs = await getRecentNotifications(15);
+        if (!notifs.length) {
+            panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-text-muted)">Tidak ada notifikasi baru.</p>';
+            return;
+        }
+        const fmt = s => s ? new Date(s).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+        panel.innerHTML = notifs.map(n => `
+            <div class="notif-item" data-id="${esc(n.notification_id)}" data-case="${esc(n.case_id ?? '')}"
+                 style="padding:10px 14px;border-bottom:1px solid var(--color-border);cursor:pointer;font-size:13px">
+                <div style="font-weight:600;margin-bottom:2px">${esc(n.title)}</div>
+                <div style="color:var(--color-text-muted);font-size:12px">${esc(n.body)}</div>
+                <div style="color:var(--color-text-muted);font-size:11px;margin-top:3px">${fmt(n.created_at)}</div>
+            </div>`).join('') +
+            `<div style="padding:8px 14px;text-align:center">
+                <button id="notif-mark-all-btn" class="btn btn-secondary btn-sm" style="font-size:12px">Tandai semua dibaca</button>
+            </div>`;
+        panel.querySelectorAll('.notif-item').forEach(el => {
+            el.addEventListener('mouseenter', () => { el.style.background = 'var(--color-bg)'; });
+            el.addEventListener('mouseleave', () => { el.style.background = ''; });
+            el.addEventListener('click', async () => {
+                panel.style.display = 'none';
+                await ackWithRetry('notif_read', [el.dataset.id], `notif_read:${el.dataset.id}`);
+                await _refreshNotifBadge();
+            });
+        });
+        document.getElementById('notif-mark-all-btn')?.addEventListener('click', async () => {
+            const ids = notifs.map(n => n.notification_id);
+            await ackWithRetry('notif_read', ids, `notif_read:batch:${[...ids].sort().join(',')}`);
+            panel.style.display = 'none';
+            _setBellBadge(0);
+        });
+    } catch {
+        panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-danger)">Gagal memuat notifikasi.</p>';
+    }
+}
+
+function initNotifBell(userId) {
+    const btn = document.getElementById('notif-bell-btn');
+    if (!btn) return;
+    initAckQueue({ userId });
+    window.addEventListener('sip:ack-flushed', () => _refreshNotifBadge());
+    btn.addEventListener('click', e => { e.stopPropagation(); _openNotifDropdown(); });
+    document.addEventListener('click', e => {
+        const panel = document.getElementById('notif-dropdown');
+        if (panel && !panel.contains(e.target) && e.target !== btn) panel.style.display = 'none';
+    });
+    _refreshNotifBadge();
+    _notifPollTimer = setInterval(_refreshNotifBadge, 60_000);
+}
 
 document.getElementById('logout-btn').addEventListener('click', async () => {
     await logout();
@@ -2475,5 +2559,6 @@ async function renderExportPanel() {
     const hashPanel = location.hash.slice(1);
     await navigateToPanel(hashPanel in PANEL_RENDERERS ? hashPanel : 'setup');
     showPwaBanner({ hasBottomNav: true });
+    initNotifBell(userRow.user_id);
     initSessionGuard(supabase, getLoginUrl());
 })();

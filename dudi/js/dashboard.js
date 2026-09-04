@@ -178,7 +178,7 @@ function _setBellBadge(n) {
         if (!badge) {
             badge = document.createElement('span');
             badge.className = 'notif-badge';
-            badge.style.cssText = 'position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;text-align:center;padding:0 3px;pointer-events:none';
+            badge.style.cssText = 'position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--color-danger,#dc2626);color:#fff;font-size:11px;font-weight:700;text-align:center;padding:0 3px;pointer-events:none';
             btn.style.position = 'relative';
             btn.appendChild(badge);
         }
@@ -203,24 +203,24 @@ async function openNotifDropdown() {
     if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
 
     panel.style.display = 'block';
-    panel.innerHTML = '<p style="padding:12px;font-size:13px;color:#6b7280">Memuat…</p>';
+    panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-text-muted)">Memuat…</p>';
     try {
         const notifs = await getRecentNotifications(15);
         if (!notifs.length) {
-            panel.innerHTML = '<p style="padding:12px;font-size:13px;color:#6b7280">Tidak ada notifikasi baru.</p>';
+            panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-text-muted)">Tidak ada notifikasi baru.</p>';
             return;
         }
         const fmt = s => s ? new Date(s).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
         const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         panel.innerHTML = notifs.map(n => `
             <div class="notif-item" data-id="${n.notification_id}"
-                 style="padding:10px 14px;border-bottom:1px solid #e5e7eb;cursor:pointer;font-size:13px">
+                 style="padding:10px 14px;border-bottom:1px solid var(--color-border);cursor:pointer;font-size:13px">
                 <div style="font-weight:600;margin-bottom:2px">${esc(n.title)}</div>
-                <div style="color:#6b7280;font-size:12px">${esc(n.body)}</div>
-                <div style="color:#9ca3af;font-size:11px;margin-top:3px">${fmt(n.created_at)}</div>
+                <div style="color:var(--color-text-muted);font-size:12px">${esc(n.body)}</div>
+                <div style="color:var(--color-text-muted);font-size:11px;margin-top:3px">${fmt(n.created_at)}</div>
             </div>`).join('') +
             `<div style="padding:8px 14px;text-align:center">
-                <button id="notif-mark-all-btn" style="font-size:12px;padding:4px 10px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer">Tandai semua dibaca</button>
+                <button id="notif-mark-all-btn" class="btn btn-secondary btn-sm" style="font-size:12px">Tandai semua dibaca</button>
             </div>`;
 
         panel.querySelectorAll('.notif-item').forEach(el => {
@@ -243,7 +243,7 @@ async function openNotifDropdown() {
             _setBellBadge(0);
         });
     } catch {
-        panel.innerHTML = '<p style="padding:12px;font-size:13px;color:#dc2626">Gagal memuat notifikasi.</p>';
+        panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-danger)">Gagal memuat notifikasi.</p>';
     }
 }
 
