@@ -212,9 +212,10 @@ const WZ_HINT_TEXT = {
   <div id="wz-hint-kelas-list"><p class="hint">Memuat daftar kelas…</p></div>
 </details>`,
     12: `<ul>
-  <li>Tab BK: tugaskan konselor BK per kelas</li>
-  <li>Tab Guru Wali: tugaskan guru wali per siswa</li>
-  <li>Tab Guru Piket: tentukan staf piket per hari</li>
+  <li>Tab BK: tugaskan konselor BK per kelas — isi langsung di tab atau via template Excel</li>
+  <li>Tab Guru Wali: tugaskan guru wali per siswa — isi langsung di tab atau via template Excel</li>
+  <li>Tab Guru Piket: tentukan staf piket per hari — isi langsung di tab atau via template Excel</li>
+  <li>Semua penugasan bisa dilengkapi kapan saja dari dashboard — langkah ini opsional</li>
 </ul>`,
     13: `<ul>
   <li>Langkah yang dilewati tetap bisa dilengkapi kapan saja via dashboard</li>
@@ -954,8 +955,6 @@ async function renderForumAssignmentStep() {
             <div class="step-label">Langkah 12 dari ${TOTAL_STEPS}</div>
             <h3>Penugasan Forum Kelas</h3>
             ${wzHintCard(12)}
-            <p class="hint">Tugaskan BK ke kelas, Guru Wali ke siswa, dan Guru Piket ke hari via
-                file Excel/CSV, atau isi manual di tab di bawah.</p>
             <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
                 <button id="wz-fk-tab-bk"
                     class="btn ${_wzFkTab === 'bk' ? 'btn-primary' : 'btn-secondary'}"
