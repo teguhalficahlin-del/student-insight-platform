@@ -176,8 +176,10 @@ const WZ_HINT_TEXT = {
   <li>NISN dipakai sebagai login siswa — pastikan tidak ada duplikat</li>
 </ul>`,
     7: `<ul>
-  <li>Kolom NISN harus sesuai dengan NISN siswa yang sudah terdaftar</li>
-  <li>Import ulang aman — data lama diperbarui, tidak perlu hapus dulu</li>
+  <li>Unduh template, baca sheet petunjuk, isi data, lalu unggah</li>
+  <li>Kolom NIK dipakai sebagai login — tidak harus NIK resmi, boleh angka unik lain (misal nomor telepon), tapi wajib diisi dan hanya boleh angka</li>
+  <li>Satu orang tua dengan beberapa anak? Tulis NIK yang sama di beberapa baris, satu baris per anak</li>
+  <li>NIS siswa harus sudah terdaftar di Langkah 6</li>
 </ul>`,
     8: `<ul>
   <li>Isi nama dan instansi DUDI sesuai data mitra magang resmi</li>
@@ -2559,7 +2561,7 @@ const IMPORT_STEP_INFO = {
     6: { title: 'Siswa',
          desc: '' },
     7: { title: 'Orang Tua',
-         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.<br><strong>Import ulang aman</strong> — sistem akan memperbarui nama dan memulihkan akun yang pernah dihapus. Tidak perlu menghapus data lama sebelum import ulang.' },
+         desc: '' },
     8: { title: 'DUDI',
          desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
     12: {
