@@ -18,9 +18,6 @@ import {
     fetchMyObservations,
     saveObservation,
     AudienceError,
-    getUnreadNotifCount,
-    getRecentNotifications,
-    markNotificationsRead,
 } from './api.js';
 import {
     saveAttendanceOffline,
@@ -29,9 +26,7 @@ import {
     clearOfflineQueue,
 } from './offline.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
-import {
-    initAckQueue, registerAckHandler, ackWithRetry,
-} from '../../shared/ack-queue.js';
+import { initAckQueue } from '../../shared/ack-queue.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
 const offlineBannerEl   = document.getElementById('offline-banner');
@@ -167,94 +162,6 @@ window.addEventListener('online', async () => {
     await updateOfflineBanner();
 });
 
-// ── Notifikasi lonceng ────────────────────────────────────────
-let _notifPollTimer = null;
-
-function _setBellBadge(n) {
-    const btn = document.getElementById('notif-bell-btn');
-    if (!btn) return;
-    let badge = btn.querySelector('.notif-badge');
-    if (n > 0) {
-        if (!badge) {
-            badge = document.createElement('span');
-            badge.className = 'notif-badge';
-            badge.style.cssText = 'position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--color-danger,#dc2626);color:#fff;font-size:11px;font-weight:700;text-align:center;padding:0 3px;pointer-events:none';
-            btn.style.position = 'relative';
-            btn.appendChild(badge);
-        }
-        badge.textContent = n > 99 ? '99+' : String(n);
-    } else {
-        badge?.remove();
-    }
-}
-
-async function refreshNotifBadge() {
-    try { _setBellBadge(await getUnreadNotifCount()); } catch { /* tidak kritis */ }
-}
-
-function startNotifPolling() {
-    clearInterval(_notifPollTimer);
-    _notifPollTimer = setInterval(refreshNotifBadge, 60_000);
-}
-
-async function openNotifDropdown() {
-    const panel = document.getElementById('notif-dropdown');
-    if (!panel) return;
-    if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
-
-    panel.style.display = 'block';
-    panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-text-muted)">Memuat…</p>';
-    try {
-        const notifs = await getRecentNotifications(15);
-        if (!notifs.length) {
-            panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-text-muted)">Tidak ada notifikasi baru.</p>';
-            return;
-        }
-        const fmt = s => s ? new Date(s).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
-        const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        panel.innerHTML = notifs.map(n => `
-            <div class="notif-item" data-id="${n.notification_id}"
-                 style="padding:10px 14px;border-bottom:1px solid var(--color-border);cursor:pointer;font-size:13px">
-                <div style="font-weight:600;margin-bottom:2px">${esc(n.title)}</div>
-                <div style="color:var(--color-text-muted);font-size:12px">${esc(n.body)}</div>
-                <div style="color:var(--color-text-muted);font-size:11px;margin-top:3px">${fmt(n.created_at)}</div>
-            </div>`).join('') +
-            `<div style="padding:8px 14px;text-align:center">
-                <button id="notif-mark-all-btn" class="btn btn-secondary btn-sm" style="font-size:12px">Tandai semua dibaca</button>
-            </div>`;
-
-        panel.querySelectorAll('.notif-item').forEach(el => {
-            el.addEventListener('mouseenter', () => { el.style.background = '#f9fafb'; });
-            el.addEventListener('mouseleave', () => { el.style.background = ''; });
-            el.addEventListener('click', async () => {
-                panel.style.display = 'none';
-                // NOTIF-01: tidak lagi .catch(() => {}) — kegagalan masuk antrean retry.
-                await ackWithRetry('notif_read', [el.dataset.id],
-                    `notif_read:${el.dataset.id}`);
-                await refreshNotifBadge();
-            });
-        });
-        document.getElementById('notif-mark-all-btn')?.addEventListener('click', async () => {
-            // NOTIF-01: badge tetap di-nol-kan optimistic; retry ditangani antrean.
-            const ids = notifs.map(n => n.notification_id);
-            await ackWithRetry('notif_read', ids,
-                `notif_read:batch:${[...ids].sort().join(',')}`);
-            panel.style.display = 'none';
-            _setBellBadge(0);
-        });
-    } catch {
-        panel.innerHTML = '<p style="padding:12px;font-size:13px;color:var(--color-danger)">Gagal memuat notifikasi.</p>';
-    }
-}
-
-document.getElementById('notif-bell-btn')?.addEventListener('click', e => { e.stopPropagation(); openNotifDropdown(); });
-document.addEventListener('click', e => {
-    const panel = document.getElementById('notif-dropdown');
-    if (panel && !panel.contains(e.target) && e.target.id !== 'notif-bell-btn') {
-        panel.style.display = 'none';
-    }
-});
-
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
     const { data: authData } = await supabase.auth.getUser();
@@ -278,10 +185,6 @@ async function init() {
             return updateOfflineBanner();
         })
         .catch(err => console.warn('[dudi] flush awal gagal:', err));
-
-    // Notifikasi: cek unread count, poll tiap 1 menit
-    refreshNotifBadge();
-    startNotifPolling();
 
     const uid = currentUser.user_id;
 
@@ -328,11 +231,6 @@ async function init() {
         ]);
     }
 
-    // NOTIF-01: ack yang gagal (jaringan/timeout) masuk antrean persisten dan
-    // dicoba ulang saat online / tab aktif / halaman dimuat ulang. Badge
-    // di-refresh setiap flush supaya rollback langsung terlihat.
-    registerAckHandler('notif_read', ids => markNotificationsRead(ids));
-    window.addEventListener('sip:ack-flushed', () => { refreshNotifBadge(); });
     initAckQueue({ userId: currentUser.user_id });
 
     showPwaBanner({ hasBottomNav: false });
