@@ -478,7 +478,6 @@ async function renderStep3() {
         <div class="step-label">Langkah 3 dari ${TOTAL_STEPS}</div>
         <h3>Program Keahlian</h3>
         ${wzHintCard(3)}
-        <p class="hint">Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.</p>
         ${templateButtonHtml(3)}
         <div id="wz-data-list"></div>
 
@@ -2552,15 +2551,15 @@ function generateExcelTemplate(filename, headers, exampleRows, guide) {
 
 const IMPORT_STEP_INFO = {
     4: { title: 'Kelas & Rombel',
-         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
+         desc: '' },
     5: { title: 'Staf & Peran',
-         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
+         desc: '' },
     6: { title: 'Siswa',
-         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
+         desc: '' },
     7: { title: 'Orang Tua',
-         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.<br><strong>Import ulang aman</strong> — sistem akan memperbarui nama dan memulihkan akun yang pernah dihapus. Tidak perlu menghapus data lama sebelum import ulang.' },
+         desc: '<strong>Import ulang aman</strong> — sistem akan memperbarui nama dan memulihkan akun yang pernah dihapus. Tidak perlu menghapus data lama sebelum import ulang.' },
     8: { title: 'DUDI',
-         desc: 'Unduh template, isi data, lalu unggah. Panduan pengisian ada di sheet PETUNJUK dalam template.' },
+         desc: '' },
     12: {
         title: 'Penugasan Forum Kelas',
         desc: 'Impor penugasan BK per kelas dan Guru Wali per siswa. Gunakan dua template terpisah.',
@@ -2760,7 +2759,7 @@ async function renderImportStep() {
         <div class="step-label">Langkah ${step} dari ${TOTAL_STEPS}</div>
         <h3>${info.title}</h3>
         ${wzHintCard(step)}
-        <p class="hint">${info.desc}</p>
+        ${info.desc ? `<p class="hint">${info.desc}</p>` : ''}
         ${templateButtonHtml(step)}
         <div class="wz-data-list" id="wz-data-list"><p class="hint">Memuat data…</p></div>
         <hr style="margin:24px 0;border:none;border-top:1px solid var(--color-border)" />
