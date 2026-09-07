@@ -369,7 +369,7 @@ export async function getForumSekolahPosts(schoolId, userId, limit = 20, offset 
     const { data, error } = await supabase
         .from('forum_posts')
         .select(`
-            post_id, title, body, attachment_url, attachment_name,
+            post_id, title, body, attachment_url, attachment_name, attachment_path,
             is_edited, created_at, updated_at,
             author_user_id,
             author:users!forum_posts_author_user_id_fkey(user_id, full_name, role_type),

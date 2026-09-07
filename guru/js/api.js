@@ -1239,7 +1239,7 @@ export async function getForumSekolahPosts(schoolId, callerId, limit = 20, offse
     const { data, error } = await supabase
         .from('forum_posts')
         .select(`
-            post_id, title, body, attachment_url, attachment_name,
+            post_id, title, body, attachment_url, attachment_name, attachment_path,
             is_edited, is_withdrawn, edited_at, deleted_at, created_at, updated_at,
             author_user_id,
             author:users!forum_posts_author_user_id_fkey(user_id, full_name, role_type),
@@ -1264,7 +1264,7 @@ export async function getForumSekolahPostById(postId, schoolId, callerId) {
     const { data, error } = await supabase
         .from('forum_posts')
         .select(`
-            post_id, title, body, attachment_url, attachment_name,
+            post_id, title, body, attachment_url, attachment_name, attachment_path,
             is_edited, is_withdrawn, edited_at, deleted_at, created_at, updated_at,
             author_user_id,
             author:users!forum_posts_author_user_id_fkey(user_id, full_name, role_type),
@@ -1291,7 +1291,7 @@ export async function getForumSekolahSentPostById(postId, schoolId, callerId) {
     const { data, error } = await supabase
         .from('forum_posts')
         .select(`
-            post_id, title, body, attachment_url, attachment_name,
+            post_id, title, body, attachment_url, attachment_name, attachment_path,
             is_edited, is_withdrawn, edited_at, deleted_at, created_at, updated_at,
             author_user_id,
             comments:forum_post_comments(comment_id),
@@ -1315,7 +1315,7 @@ export async function getForumSekolahSentPosts(schoolId, callerId, limit = 20, o
     const { data, error } = await supabase
         .from('forum_posts')
         .select(`
-            post_id, title, body, attachment_url, attachment_name,
+            post_id, title, body, attachment_url, attachment_name, attachment_path,
             is_edited, is_withdrawn, edited_at, deleted_at, created_at, updated_at,
             author_user_id,
             comments:forum_post_comments(comment_id),

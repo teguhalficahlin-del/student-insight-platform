@@ -639,7 +639,7 @@ function renderForumCard(post) {
         <p style="margin:0 0 8px;font-size:14px;white-space:pre-wrap">${
             esc(bodyText).substring(0, 160)}${bodyText.length > 160 ? '…' : ''}</p>
         <div style="display:flex;gap:12px;font-size:12px;color:var(--color-muted)">
-            ${post.attachment_url ? '<span>📎 Lampiran</span>' : ''}
+            ${(post.attachment_url || post.attachment_path) ? '<span>📎 Lampiran</span>' : ''}
             <span>✓ ${ackCnt} dibaca</span>
         </div>`;
     card.addEventListener('click', () => openForumDetail(post));
@@ -1855,9 +1855,11 @@ async function submitForumPost() {
                 .from('forum-attachments').upload(path, file, { upsert: false });
             if (upErr) throw upErr;
             uploadedPath = path;
-            const { data: urlData } = supabase.storage
-                .from('forum-attachments').getPublicUrl(path);
-            attachmentUrl = urlData.publicUrl; attachmentName = file.name;
+            // FORUM-FIX-01: bucket forum-attachments bersifat private, jadi
+            // getPublicUrl() menghasilkan URL yang selalu 403 saat diklik.
+            // attachment_path yang disimpan cukup -- pembaca membuat signed URL
+            // sendiri lewat createSignedUrl() saat membuka detail posting.
+            attachmentUrl = null; attachmentName = file.name;
         }
         if (_forumEditPostId) {
             // TU-07: lampiran baru saat edit sebelumnya ter-upload tapi tak pernah

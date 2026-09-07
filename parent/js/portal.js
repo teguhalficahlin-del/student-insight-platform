@@ -926,7 +926,7 @@ function renderForumCard(post) {
         ? esc(post.author.full_name)
         : _forumMode === 'terkirim' ? 'Anda' : '—';
     const ackCnt  = post.acknowledgements?.length ?? 0;
-    const hasFile = !!post.attachment_url;
+    const hasFile = !!(post.attachment_url || post.attachment_path);
     const edited  = post.is_edited
         ? '<span class="hint" style="font-size:11px"> (diedit)</span>' : '';
     const bodyText = post.body ?? '';

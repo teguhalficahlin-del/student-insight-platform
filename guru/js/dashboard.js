@@ -4618,7 +4618,7 @@ function renderForumPostCard(post) {
     const author  = esc(post.author?.full_name ?? '\u2014');
     const cmtCnt  = post.comments?.length ?? 0;
     const ackCnt  = post.acknowledgements?.length ?? 0;
-    const hasFile = !!post.attachment_url;
+    const hasFile = !!(post.attachment_url || post.attachment_path);
     const edited  = post.is_edited ? ' <span class="hint">(diedit)</span>' : '';
     const withdrawn = post.is_withdrawn
         ? ' <span style="color:var(--color-danger);font-size:12px">Ditarik</span>' : '';
@@ -5898,10 +5898,11 @@ async function submitForumPost() {
             // FUNC-01 poin 2: upload gagal → keluar sebelum menyentuh DB.
             if (upErr) throw upErr;
             uploadedPath = path;
-            const { data: urlData } = supabase.storage
-                .from('forum-attachments')
-                .getPublicUrl(path);
-            attachmentUrl  = urlData.publicUrl;
+            // FORUM-FIX-01: bucket forum-attachments bersifat private, jadi
+            // getPublicUrl() menghasilkan URL yang selalu 403 saat diklik.
+            // attachment_path yang disimpan cukup -- pembaca membuat signed URL
+            // sendiri lewat createSignedUrl() saat membuka detail posting.
+            attachmentUrl  = null;
             attachmentName = file.name;
         }
 
