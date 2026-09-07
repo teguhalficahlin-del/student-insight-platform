@@ -326,12 +326,23 @@ export async function updateForumSekolahPost(postId, newTitle, newBody) {
     if (error) throw error;
 }
 
+/**
+ * FORUM-DEL-01: hapus posting PERMANEN (hard delete).
+ * Otorisasi (penulis atau moderator), pembersihan notifications, dan
+ * CASCADE ke audience/komentar/tanda-dibaca ditangani di dalam RPC.
+ * Versi lama hanya soft delete dan TIDAK membersihkan file storage,
+ * sehingga lampirannya tertinggal sebagai sampah permanen.
+ */
 export async function deleteForumSekolahPost(postId) {
-    const { error } = await supabase
-        .from('forum_posts')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('post_id', postId);
+    const { data, error } = await supabase.rpc('fn_delete_forum_post', {
+        p_post_id: postId,
+    });
     if (error) throw error;
+    const path = data?.[0]?.attachment_path ?? null;
+    if (path) {
+        supabase.storage.from('forum-attachments').remove([path])
+            .catch(e => console.warn('[forum] hapus storage gagal:', e));
+    }
 }
 
 export async function getForumRecipientCandidates(

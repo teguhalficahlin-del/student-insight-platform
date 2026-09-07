@@ -37,7 +37,7 @@ import {
     getForumRecipientCandidates, getForumSekolahPosts, getForumSekolahSentPosts,
     getForumSekolahPostById, getForumSekolahSentPostById,
     getForumSekolahComments, createForumSekolahPost, updateForumSekolahPost,
-    deleteForumSekolahPost, toggleForumPostWithdrawn,
+    deleteForumSekolahPost,
     addForumSekolahComment, deleteForumSekolahComment,
     addForumSekolahAcknowledgement, setForumAttachment,
     getCorePhases, getCoreSubjectsDirect, getMyTeachingCoreSubjects,
@@ -4541,29 +4541,14 @@ async function initForumTab() {
     });
     document.getElementById('btn-forum-delete').addEventListener('click', async () => {
         const postId = document.getElementById('modal-forum-detail').dataset.postId;
-        if (!confirm('Hapus posting ini? Tindakan tidak dapat dibatalkan.')) return;
+        if (!confirm('Hapus posting ini secara PERMANEN?\n\n' +
+            'Komentar, daftar penerima, tanda sudah dibaca, notifikasi, dan ' +
+            'lampiran ikut terhapus. Tindakan ini TIDAK dapat dibatalkan.')) return;
         try {
             await deleteForumSekolahPost(postId);
             closeForumDetail();
             loadForumPosts();
         } catch (err) { alert(fe(err)); }
-    });
-    document.getElementById('btn-forum-withdraw').addEventListener('click', async e => {
-        const modal = document.getElementById('modal-forum-detail');
-        const withdrawn = modal.dataset.withdrawn === 'true';
-        const action = withdrawn ? 'memulihkan' : 'menarik';
-        if (!confirm(`Yakin ingin ${action} posting ini?`)) return;
-        const btn = e.currentTarget;
-        btn.disabled = true;
-        try {
-            await toggleForumPostWithdrawn(modal.dataset.postId, !withdrawn);
-            closeForumDetail();
-            await loadForumPosts();
-        } catch (err) {
-            alert(fe(err));
-        } finally {
-            btn.disabled = false;
-        }
     });
 
     // Load more
@@ -5992,7 +5977,6 @@ async function openForumDetail(postId) {
     document.getElementById('detail-forum-comments-list').innerHTML = '';
     document.getElementById('detail-forum-comments-loading').style.display = 'block';
     document.getElementById('forum-author-actions').style.display = 'none';
-    document.getElementById('btn-forum-withdraw').style.display = 'none';
     document.getElementById('forum-comment-error').style.display  = 'none';
     document.getElementById('forum-comment-input').value = '';
 
@@ -6036,12 +6020,10 @@ async function openForumDetail(postId) {
         if (isAuthor || isModerator) {
             document.getElementById('forum-author-actions').style.display = 'block';
             document.getElementById('btn-forum-edit').style.display = isAuthor ? '' : 'none';
-            document.getElementById('btn-forum-delete').style.display = isAuthor ? '' : 'none';
-            const withdrawBtn = document.getElementById('btn-forum-withdraw');
-            const canToggle = !post.is_withdrawn || isModerator;
-            withdrawBtn.style.display = canToggle ? '' : 'none';
-            withdrawBtn.textContent = post.is_withdrawn ? 'Pulihkan' : 'Tarik Posting';
-            withdrawBtn.className = post.is_withdrawn ? 'btn btn-secondary' : 'btn btn-danger';
+            // FORUM-DEL-01: moderator kini boleh menghapus posting siapa pun,
+            // sejalan dengan otorisasi di dalam fn_delete_forum_post.
+            document.getElementById('btn-forum-delete').style.display =
+                isAuthor || isModerator ? '' : 'none';
         }
 
         await loadForumComments(postId);

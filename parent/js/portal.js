@@ -856,13 +856,13 @@ function initForumListeners() {
         if (e.target === e.currentTarget) closeForumDetail();
     });
     const detailBox = document.querySelector('#modal-forum-detail .modal-box');
-    if (detailBox && !document.getElementById('btn-forum-withdraw')) {
+    if (detailBox && !document.getElementById('btn-forum-delete')) {
         detailBox.insertAdjacentHTML('beforeend', `
             <div id="forum-author-actions" style="display:none;margin-top:12px;
                  border-top:1px solid var(--color-border);padding-top:12px">
-                <button id="btn-forum-withdraw" class="btn btn-danger">Tarik Posting</button>
+                <button id="btn-forum-delete" class="btn btn-danger">Hapus Posting</button>
             </div>`);
-        document.getElementById('btn-forum-withdraw').addEventListener('click', withdrawParentForumPost);
+        document.getElementById('btn-forum-delete').addEventListener('click', deleteParentForumPost);
     }
 
     // Load more
@@ -973,8 +973,10 @@ async function openForumDetail(post) {
     const edited = post.is_edited ? ' • diedit' : '';
     document.getElementById('detail-forum-meta').textContent =
         `${author} · ${time}${edited}${post.is_withdrawn ? ' • Ditarik' : ''}`;
+    // FORUM-DEL-01: aksi penulis tidak lagi bergantung status "ditarik" --
+    // fitur tarik posting sudah diganti hard delete permanen.
     document.getElementById('forum-author-actions').style.display =
-        post.author_user_id === currentUser.user_id && !post.is_withdrawn ? 'block' : 'none';
+        post.author_user_id === currentUser.user_id ? 'block' : 'none';
 
     const attEl = document.getElementById('detail-forum-attachment');
     if (post.attachment_url || post.attachment_path) {
@@ -1007,17 +1009,25 @@ async function openForumDetail(post) {
     }
 }
 
-async function withdrawParentForumPost(e) {
-    if (!confirm('Yakin ingin menarik posting ini?')) return;
+// FORUM-DEL-01: menggantikan withdrawParentForumPost. Penghapusan bersifat
+// permanen; otorisasi dan pembersihan turunan ditangani di dalam RPC.
+async function deleteParentForumPost(e) {
+    if (!confirm('Hapus posting ini secara PERMANEN?\n\n' +
+        'Komentar, daftar penerima, tanda sudah dibaca, notifikasi, dan ' +
+        'lampiran ikut terhapus. Tindakan ini TIDAK dapat dibatalkan.')) return;
     const btn = e.currentTarget;
     btn.disabled = true;
     try {
         const postId = document.getElementById('modal-forum-detail').dataset.postId;
-        const { error } = await supabase.rpc('fn_toggle_forum_post_withdrawn', {
+        const { data, error } = await supabase.rpc('fn_delete_forum_post', {
             p_post_id: postId,
-            p_withdrawn: true,
         });
         if (error) throw error;
+        const path = data?.[0]?.attachment_path ?? null;
+        if (path) {
+            supabase.storage.from('forum-attachments').remove([path])
+                .catch(err2 => console.warn('[forum] hapus storage gagal:', err2));
+        }
         closeForumDetail();
         await loadForumPosts();
     } catch (err) {

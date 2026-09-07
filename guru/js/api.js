@@ -1414,32 +1414,28 @@ export async function updateForumSekolahPost(postId, newTitle, newBody) {
     if (error) throw error;
 }
 
-export async function toggleForumPostWithdrawn(postId, withdrawn) {
-    const { data, error } = await supabase.rpc('fn_toggle_forum_post_withdrawn', {
-        p_post_id:  postId,
-        p_withdrawn: withdrawn,
-    });
-    if (error) throw error;
-    return Array.isArray(data) ? data[0] : data;
-}
+// FORUM-DEL-01: toggleForumPostWithdrawn dihapus. Fitur "tarik posting"
+// digantikan hard delete permanen lewat deleteForumSekolahPost().
 
 /**
- * Hapus posting secara soft delete (hanya author).
- * File storage dihapus best-effort jika attachment_path tersimpan.
+ * FORUM-DEL-01: hapus posting PERMANEN (hard delete).
+ * Menggantikan soft delete + fitur "tarik posting" yang lama.
+ *
+ * Otorisasi dan pembersihan dilakukan di dalam RPC: penulis atau
+ * moderator; notifications dibersihkan di sana (FK-nya SET NULL, jadi
+ * tidak ikut CASCADE); audience/komentar/tanda-dibaca ikut terhapus
+ * lewat ON DELETE CASCADE. RPC mengembalikan attachment_path supaya
+ * file di storage bisa ikut dibuang -- sesudah baris hilang, path itu
+ * tidak bisa ditemukan lagi oleh siapa pun.
  */
 export async function deleteForumSekolahPost(postId) {
-    const { data: post } = await supabase
-        .from('forum_posts')
-        .select('attachment_path')
-        .eq('post_id', postId)
-        .single();
-    const { error } = await supabase
-        .from('forum_posts')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('post_id', postId);
+    const { data, error } = await supabase.rpc('fn_delete_forum_post', {
+        p_post_id: postId,
+    });
     if (error) throw error;
-    if (post?.attachment_path) {
-        supabase.storage.from('forum-attachments').remove([post.attachment_path])
+    const path = data?.[0]?.attachment_path ?? null;
+    if (path) {
+        supabase.storage.from('forum-attachments').remove([path])
             .catch(e => console.warn('[forum] hapus storage gagal:', e));
     }
 }
