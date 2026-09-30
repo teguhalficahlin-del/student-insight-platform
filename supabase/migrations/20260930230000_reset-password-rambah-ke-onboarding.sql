@@ -36,6 +36,14 @@
 --   1 ADMINISTRATIVE) akan kehilangan password itu. Mereka harus login
 --   ulang dengan '12345678' lalu membuat password baru.
 --
+-- KENAPA extensions.crypt DAN BUKAN crypt
+--   pgcrypto terpasang di skema `extensions`, dan role sementara yang
+--   dipakai `supabase db push` tidak memuat skema itu di search_path-nya.
+--   Tanpa kualifikasi eksplisit, migration gagal dengan
+--   "function gen_salt(unknown) does not exist (SQLSTATE 42883)".
+--   Migration Juli 2026 (20260714050000) memakai bentuk tanpa kualifikasi;
+--   jangan dijadikan contoh.
+--
 -- VOLUME
 --   ~99 baris (100 akun minus 1 ADMINISTRATIVE) — jauh di bawah ambang
 --   yang mewajibkan EXPLAIN ANALYZE, dan aman terhadap statement_timeout
@@ -44,7 +52,7 @@
 
 -- 1. Password -> '12345678'
 UPDATE auth.users au
-SET    encrypted_password = crypt('12345678', gen_salt('bf'))
+SET    encrypted_password = extensions.crypt('12345678', extensions.gen_salt('bf'))
 WHERE  au.id IN (
     SELECT u.auth_user_id
     FROM   public.users u
