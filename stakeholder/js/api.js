@@ -57,3 +57,32 @@ export async function getStakeholderSummary() {
     if (error) throw error;
     return data ?? {};
 }
+
+/**
+ * Monitoring kehadiran — RPC yang SAMA dengan yang dipakai Kepala Sekolah
+ * (guru/js/api.js: getKepsekMonitoring). Sengaja satu fungsi, bukan salinan,
+ * supaya angka yang dilihat Kepsek dan Stakeholder tidak pernah melenceng.
+ *
+ * Payload-nya agregat murni — persentase dan hitungan, tanpa PII.
+ * school_id diturunkan server-side dari auth.uid(), bukan dari klien.
+ */
+export async function getKepsekMonitoring(period = 'hari_ini', academicYear = null, dateStart = null, dateEnd = null) {
+    const { data, error } = await supabase.rpc('fn_kepsek_monitoring', {
+        p_period:        period,
+        p_academic_year: academicYear,
+        p_date_start:    dateStart,
+        p_date_end:      dateEnd,
+    });
+    if (error) throw error;
+    return data;
+}
+
+/**
+ * Tahun ajaran aktif — dipakai untuk menghitung label "Tahun Lalu".
+ * RLS school_config mengizinkan SELECT untuk setiap pengguna terautentikasi
+ * di sekolah yang sama (rls_school_config_read_all), termasuk STAKEHOLDER.
+ */
+export async function getSchoolConfig() {
+    const { data } = await supabase.from('school_config').select('current_academic_year, current_semester').single();
+    return data;
+}
