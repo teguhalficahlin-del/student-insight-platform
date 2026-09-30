@@ -33,13 +33,19 @@ Fitur utama: absensi, BK (kasus siswa), jadwal, forum, perangkat ajar (AI pipeli
 
 | Key | Value |
 |-----|-------|
-| HEAD (31 Jul 2026) | `6e52656` |
+| HEAD (30 Sep 2026) | `af73464` |
 | SMKN 1 Ujungbatu `school_id` | `244e389c-de7d-4d70-ac95-346d33a5d02c` |
-| SMKN 1 Ujungbatu slug | `smkn1ujungbatu` |
+| SMKN 1 Ujungbatu slug | `smkn1ujungbatu` (URL pendek: `smkn1ub`) |
+| **SMK Negeri 3 Rambah** `school_id` | `561cc906-e6e0-40c7-a5b0-d8f69a15258a` |
+| **SMK Negeri 3 Rambah** slug | `smkn3` |
 | SMK Uji E7 `school_id` | `4c084682-aca3-45c3-8882-24309e4c33a1` |
 | SMK Uji E7 slug | `smk-uji-e7` |
 
 **PENTING:** ID lama SMKN 1 Ujungbatu `cc1e152e-...` adalah SALAH — jangan gunakan.
+
+**SMK Negeri 3 Rambah adalah tenant PRODUKSI dengan siswa nyata**, bukan sekolah uji.
+Nama folder `file uji/SMK3RBH/` di repo menyesatkan — isinya template impor.
+Program keahlian: `ATP`, `OTKP`, `APAT`, `DPB`. Kelas: `X ATP`, `XI OTKP`, dst.
 
 ---
 
@@ -358,6 +364,11 @@ gagal: STOP dan laporkan.
 | Cron evaluate-teacher | `0 17 * * *` = jam 00:00 WIB |
 | `subject_code_aliases` | persist `nama` + `jurusan` |
 | Tenant isolation anchor | `school_id` di setiap tabel |
+| pgcrypto di migration | WAJIB `extensions.crypt` / `extensions.gen_salt` — `db push` dan `db query` punya `search_path` berbeda; bentuk tanpa kualifikasi gagal `42883` |
+| Kolom `users` terlindungi | `must_change_password` dkk ditolak `UPDATE` langsung (`42501`). Jalur sah untuk migration: `SET LOCAL app.bypass_users_guard = 'on';` |
+| WARNING `25P01` saat `db push` | Kosmetik — batch multi-statement jalan sebagai transaksi implisit, `SET LOCAL` tetap berlaku. Percayai hasil verifikasi, bukan ada/tidaknya peringatan |
+| Password onboarding | `12345678` untuk SEMUA peran pengguna, selalu berpasangan `must_change_password=true`. Konstanta: `_shared/onboarding.ts` + `shared/onboarding.js`. ADMINISTRATIVE dikecualikan (tetap acak) |
+| Metrik kehadiran | Dua definisi berbeda dan keduanya sah: `kehadiran_bulan_pct` (penyebut = baris absensi tercatat) vs `pct_siswa` (penyebut = seluruh siswa aktif). Jangan disamakan |
 
 ### Aturan RLS & Security (kritis)
 - **Missing policy ≠ celah** — RLS default-deny. Baru masalah jika klien butuh akses itu.
@@ -401,7 +412,7 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
 
 ---
 
-## 9. STATUS PROYEK (per HEAD 8d90222, 4 Sep 2026)
+## 9. STATUS PROYEK (per HEAD af73464, 30 Sep 2026)
 
 ### Selesai
 - Audit keamanan Fase 1–3 ✅ (test suite 93/93)
@@ -417,6 +428,25 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
   schedule-builder (checkAllConflicts, getClasses, update nama kelas), api.js (getClasses),
   wizard.js (refreshDataList 11); migration policy SELECT ADMINISTRATIVE di schedule_templates
 
+- Sesi 30 Sep 2026 ✅ — enam commit, semuanya live dan terverifikasi di produksi:
+  `7a362e0` fn_admin_panel_staff cast enum — panel Stakeholder & TU yang blank kembali hidup
+  `5f82d60` tombol Reset PW selalu tersedia di 6 panel (sebelumnya disembunyikan
+            justru saat must_change_password=true — keadaan yang paling membutuhkannya)
+  `c0bbacd` monitoring kehadiran Stakeholder setara Kepala Sekolah (gerbang peran
+            fn_kepsek_monitoring dilebarkan; Kasus BK & Kelola Admin TIDAK dibuka)
+  `d915df8` password onboarding seragam `12345678` + must_change_password untuk
+            SEMUA peran pengguna; ADMINISTRATIVE sengaja tetap acak
+  `6b7d1b0` reset 99 akun SMK Negeri 3 Rambah ke keadaan onboarding
+  `af73464` layar wajib-ganti-password menolak password yang sama dengan password awal
+
+### Koreksi atas backlog lama (diverifikasi ke kode 30 Sep 2026)
+Tiga item di bawah pernah tercatat keliru dan sempat dua kali memperlambat kerja:
+- **Jadwal portal siswa & ortu SUDAH ADA** — `student/js/dashboard.js:236`,
+  `parent/js/portal.js:200`. Sebelumnya tercatat "belum diimplementasi".
+- **Modul Nilai SUDAH LENGKAP** — `guru/js/penilaian.js`, 2.533 baris: TP, KKTP,
+  asesmen, rekap, tersambung ke portal siswa dan ortu. Tidak pernah tercatat sama sekali.
+- **SMK Negeri 3 Rambah** tenant produksi aktif, tidak pernah tercatat di dokumen ini.
+
 ### Blocker Go-Live (PRIORITAS TINGGI)
 1. **Jadwal import SMK Uji E7** — blocker Go-Live tenant E1/E2/E4/E7
    Excel parser origin B1 sudah siap, tapi data E7 belum di-import
@@ -424,12 +454,24 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
    solusi: batch DELETE + path recovery di UI admin
 
 ### Backlog Fitur (PRIORITAS SEDANG)
-3. **Tab Perangkat Ajar** — Generate Promes, PPM, LKPD, Soal, Rubrik (UI belum ada;
-   `generation_jobs` sudah schema-ready)
-4. **Download .docx** dari `content_json` hasil generate
+3. **Tab Perangkat Ajar** — UI SUDAH ADA dan menawarkan 7 jenis dokumen, tapi hanya
+   ATP dan Program Tahunan yang punya pembangkit (`generate-atp-v2`, `generate-prota`).
+   Memilih PROGRAM_SEMESTER / PPM / LKPD / SOAL / RUBRIK hanya menyimpan
+   `{judul, catatan}` kosong lalu menampilkan "✓ berhasil disimpan"
+   (`guru/js/dashboard.js` ~6198 dan ~6427). Rawan saat demo — sembunyikan dulu
+   lima jenis itu, atau bangun pembangkitnya mulai dari Program Semester.
+4. **Download .docx** dari `content_json` hasil generate — belum ada jalur keluar
+   sama sekali; sistem hanya menerima unggahan PDF/DOCX
 5. **Kolom Mapel di grid jadwal** admin — masih kosong
-6. **Jadwal portal siswa dan ortu** — belum diimplementasi
+6. **Notifikasi keluar aplikasi** — belum ada kanal apa pun (tidak ada push handler
+   di `sw.js`, tidak ada WhatsApp/FCM/SMTP). Orang tua hanya tahu anaknya alpa
+   kalau membuka aplikasi lebih dulu
 7. **Filter mapel picker Generate ATP** guru Waka Kurikulum
+8. **Metrik `kehadiran_bulan_pct` dan `hadir_hari_ini` memakai `created_at`**,
+   bukan `session_date` — dengan mode offline, absensi yang tersinkron terlambat
+   masuk ke periode yang salah. `fn_kepsek_monitoring` sudah benar memakai
+   `session_date`. Memperbaikinya mengubah angka yang sedang ditampilkan,
+   jadi perlu keputusan tersendiri
 
 ### Backlog Jauh (belum disentuh)
 - Approval workflow kepsek/waka di UI guru
