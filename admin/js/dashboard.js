@@ -12,6 +12,7 @@ import { supabase, getCurrentUserRow, requireAdministrativeOrRedirect, getSchool
     getAdminPanelDudi, getAdminPanelStaff } from './api.js';
 import { mountSemesterPanel } from './semester.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
+import { DEFAULT_ONBOARDING_PASSWORD } from '../../shared/onboarding.js';
 
 // ADM-22: escaping lewat DOM (createElement + textContent + innerHTML) supaya
 // seragam dengan portal lain, TAPI innerHTML tidak meng-escape kutip — padahal
@@ -81,12 +82,6 @@ function fmt(iso) {
 }
 
 
-function generateTempPassword() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    const arr = new Uint8Array(12);
-    crypto.getRandomValues(arr);
-    return Array.from(arr, b => chars[b % chars.length]).join('');
-}
 
 function showPwModal(nama, pw) {
     const id = 'pw-result-modal';
@@ -96,14 +91,14 @@ function showPwModal(nama, pw) {
     el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
     el.innerHTML = `
       <div style="background:var(--color-surface,#1e293b);border:1px solid var(--color-border,#334155);border-radius:10px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.4)">
-        <h3 style="margin:0 0 8px;font-size:16px">Password berhasil direset</h3>
-        <p style="margin:0 0 16px;font-size:13px;color:var(--color-text-muted,#94a3b8)">Password sementara untuk <strong>${esc(nama)}</strong>:</p>
+        <h3 style="margin:0 0 8px;font-size:16px">Password berhasil dikembalikan</h3>
+        <p style="margin:0 0 16px;font-size:13px;color:var(--color-text-muted,#94a3b8)">Password <strong>${esc(nama)}</strong> kembali ke password awal:</p>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
           <input id="pw-copy-input" type="text" value="${esc(pw)}" readonly
             style="flex:1;font-family:monospace;font-size:18px;font-weight:700;letter-spacing:2px;padding:10px 12px;border-radius:6px;border:1px solid var(--color-border,#334155);background:var(--color-bg,#0f172a);color:var(--color-text,#f1f5f9);cursor:text" />
           <button id="pw-copy-btn" class="btn btn-primary" style="white-space:nowrap">Salin</button>
         </div>
-        <p style="margin:0 0 20px;font-size:12px;color:var(--color-text-muted,#94a3b8)">Catat dan bagikan ke pengguna. Password ini tidak akan ditampilkan lagi.</p>
+        <p style="margin:0 0 20px;font-size:12px;color:var(--color-text-muted,#94a3b8)">Sampaikan ke pengguna. Sistem akan meminta dia membuat password baru saat login berikutnya.</p>
         <button id="pw-close-btn" class="btn btn-secondary" style="width:100%">Tutup</button>
       </div>`;
     document.body.appendChild(el);
@@ -1112,10 +1107,10 @@ async function renderStaffPanel() {
         if (resetBtn) {
             const userId = resetBtn.dataset.userId;
             const nama   = resetBtn.dataset.nama;
-            if (!confirm(`Reset password ${nama}?\n\nPassword akan direset ke password sementara acak. Lanjutkan?`)) return;
+            if (!confirm(`Reset password ${nama}?\n\nPassword akan dikembalikan ke password awal ${DEFAULT_ONBOARDING_PASSWORD}, dan pengguna wajib membuat password baru saat login berikutnya. Lanjutkan?`)) return;
             resetBtn.disabled = true; resetBtn.textContent = '…';
             try {
-                const newPw = generateTempPassword();
+                const newPw = DEFAULT_ONBOARDING_PASSWORD;
                 await adminResetUserPassword(userId, newPw);
                 showPwModal(nama, newPw);
                 // Sama seperti panel non-staf: gambar ulang sel lewat helper
@@ -2474,10 +2469,10 @@ async function renderExportPanel() {
         if (!btn) return;
         const userId = btn.dataset.userId;
         const nama   = btn.dataset.nama;
-        if (!confirm(`Reset password ${nama}?\n\nPassword akan direset ke password sementara acak. Lanjutkan?`)) return;
+        if (!confirm(`Reset password ${nama}?\n\nPassword akan dikembalikan ke password awal ${DEFAULT_ONBOARDING_PASSWORD}, dan pengguna wajib membuat password baru saat login berikutnya. Lanjutkan?`)) return;
         btn.disabled = true; btn.textContent = '…';
         try {
-            const newPw = generateTempPassword();
+            const newPw = DEFAULT_ONBOARDING_PASSWORD;
             await adminResetUserPassword(userId, newPw);
             showPwModal(nama, newPw);
             // Reset berhasil -> must_change_password kembali true.

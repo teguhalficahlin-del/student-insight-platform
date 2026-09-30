@@ -46,6 +46,7 @@ import { resolveAuth, isAuthError }    from '../_shared/auth.ts';
 import { getAdminClient }              from '../_shared/db.ts';
 import { parseCsv }                    from '../_shared/csv.ts';
 import { generateSlug, resolveCollision } from '../_shared/identifier.ts';
+import { DEFAULT_ONBOARDING_PASSWORD } from '../_shared/onboarding.ts';
 
 // ─────────────────────────────────────────────────────────────
 // TYPES
@@ -232,10 +233,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
             // Sertakan school_id prefix agar email unik antar-sekolah (Auth bersifat global)
             const schoolPrefix  = user.school_id.replace(/-/g, '').substring(0, 8);
             const internalEmail = `${row.slug}@${schoolPrefix}.dudi`;
-            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-            const arr = new Uint8Array(12);
-            crypto.getRandomValues(arr);
-            const password = Array.from(arr, b => chars[b % chars.length]).join('');
+            // Password onboarding seragam untuk semua peran — lihat
+            // _shared/onboarding.ts. WAJIB tetap berpasangan dengan
+            // must_change_password = true saat insert ke users di bawah.
+            const password = DEFAULT_ONBOARDING_PASSWORD;
 
             const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                 email:         internalEmail,

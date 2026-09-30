@@ -37,6 +37,7 @@ import { ok, forbidden, internalError,
 import { resolveAuth, isAuthError }    from '../_shared/auth.ts';
 import { getAdminClient }              from '../_shared/db.ts';
 import { toInternalEmail }             from '../_shared/identifier.ts';
+import { DEFAULT_ONBOARDING_PASSWORD } from '../_shared/onboarding.ts';
 
 interface StudentRow {
     student_id: string;
@@ -139,7 +140,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
                         continue;
                     }
 
-                    const tempPassword = '12345678';
+                    const tempPassword = DEFAULT_ONBOARDING_PASSWORD;
 
                     const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                         email:         internalEmail,

@@ -69,6 +69,7 @@ import { getAdminClient }              from '../_shared/db.ts';
 import { parseCsv }                    from '../_shared/csv.ts';
 import { toInternalEmail, IdentifierType } from '../_shared/identifier.ts';
 import { ROLE_TYPE }                   from '../_shared/validate.ts';
+import { DEFAULT_ONBOARDING_PASSWORD } from '../_shared/onboarding.ts';
 
 // ─────────────────────────────────────────────────────────────
 // TYPES
@@ -116,16 +117,11 @@ const STAFF_ROLES = ROLE_TYPE.filter(
     r => !['SISWA', 'ORTU', 'ADMINISTRATIVE'].includes(r)
 );
 
-// ADM-01: password sementara wajib acak. Sebelumnya hardcoded '12345678',
-// sehingga setiap user hasil import punya password yang sama dan bisa ditebak
-// siapa pun yang pernah melihat satu akun saja. Charset dan panjang mengikuti
-// generatePassword() di manage-admin-account — tanpa karakter ambigu (I, l, O, 0, 1).
-function generateTempPassword(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    const arr = new Uint8Array(12);
-    crypto.getRandomValues(arr);
-    return Array.from(arr, b => chars[b % chars.length]).join('');
-}
+// Password onboarding seragam untuk semua peran — lihat _shared/onboarding.ts
+// untuk alasan, syarat yang menyertainya, dan risiko yang diterima.
+// Menggantikan ADM-01 (password acak), yang membuat jalur ini berbeda sendiri
+// dari jalur siswa dan menyulitkan distribusi kredensial di sekolah.
+// WAJIB tetap berpasangan dengan must_change_password = true di bawah.
 
 // ─────────────────────────────────────────────────────────────
 // MAIN HANDLER
@@ -600,10 +596,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
                         user.school_id,
                     )
             );
-            // Semua role termasuk STAKEHOLDER: password acak terpisah dari kode login.
-            // Kode (login_identifier) = identitas, password = rahasia yang berbeda.
-            // Wizard menampilkan keduanya sekali kepada admin setelah berhasil dibuat.
-            const tempPassword = generateTempPassword();
+            // Semua role termasuk STAKEHOLDER memakai password onboarding yang sama.
+            // Kode (login_identifier) tetap identitas, password tetap hal berbeda —
+            // keduanya tidak boleh disamakan meski passwordnya kini bukan rahasia.
+            const tempPassword = DEFAULT_ONBOARDING_PASSWORD;
 
             const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
                 email:         internalEmail,

@@ -27,7 +27,7 @@ export async function loginWithIdentifier(identifier, password, schoolId = null)
     if (error) {
         if (error.status === 429 || /rate limit|too many/i.test(error.message || ''))
             throw new Error('Terlalu banyak percobaan login. Tunggu ±15 menit lalu coba lagi.');
-        throw new Error('Password salah. Hubungi admin sekolah jika belum pernah login.');
+        throw new Error('Password salah. Kalau ini login pertama Anda, gunakan password awal 12345678. Kalau lupa password, minta admin sekolah mengembalikannya ke 12345678 lewat tombol Reset PW.');
     }
     return data.user;
 }
