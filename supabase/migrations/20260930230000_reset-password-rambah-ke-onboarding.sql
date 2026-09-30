@@ -65,6 +65,7 @@ WHERE  au.id IN (
 -- 2. Wajib ganti password saat login berikutnya.
 --    Migration Juli 2026 melewatkan langkah ini — akibatnya password
 --    kembali ke default tanpa ada yang memaksa penggunanya mengganti.
+SET LOCAL app.bypass_users_guard = 'on';
 UPDATE public.users u
 SET    must_change_password = TRUE
 WHERE  u.school_id    = '561cc906-e6e0-40c7-a5b0-d8f69a15258a'
