@@ -214,7 +214,6 @@ export const ATTENDANCE_BATCH_SCHEMA: FieldDef[] = [
     ['session_date',     V.isoDate,                         true],
     ['records',          V.arrayOf(validateAttendanceRecord, 1), true],
     // Optional
-    ['substitute_token', V.str(1, 500),                     false],
     ['meeting_status',   V.enum(MEETING_STATUS),            false],
     ['_schema_version',  V.str(1, 20),                      false],
 ];

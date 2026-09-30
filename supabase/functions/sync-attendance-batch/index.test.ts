@@ -254,17 +254,6 @@ Deno.test('Student validation — passes when all students enrolled', () => {
     assertEquals(invalid.length, 0);
 });
 
-Deno.test('Substitute token expiry — detects expired token', () => {
-    const expiredAt = new Date(Date.now() - 3600000).toISOString(); // 1 hour ago
-    const isExpired = new Date(expiredAt) <= new Date();
-    assertEquals(isExpired, true);
-});
-
-Deno.test('Substitute token expiry — valid token not expired', () => {
-    const validUntil = new Date(Date.now() + 3600000).toISOString(); // 1 hour from now
-    const isExpired  = new Date(validUntil) <= new Date();
-    assertEquals(isExpired, false);
-});
 
 Deno.test('KEGIATAN_SEKOLAH blocks attendance submission', () => {
     const meetingStatus = 'KEGIATAN_SEKOLAH';

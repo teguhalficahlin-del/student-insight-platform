@@ -7,7 +7,7 @@
 
 import { applyBrandingById, getLoginUrl } from '../../shared/branding.js';
 import { initSessionGuard } from '../../shared/session-guard.js';
-import { supabase, getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getActiveSubstitutes, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getForumGuruWaliCandidates, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent,
+import { supabase, getCurrentUserRow, requireAdministrativeOrRedirect, getSchoolConfig, logout, getPrograms, getClasses, fetchAllRows, countStudentsWithoutAccount, provisionStudentAccounts, updateSchoolBranding, getSchoolBranding, setUserActive, deactivateStaff, checkTeacherScheduleDependencies, releaseTeacherFromSchedules, voidObservation, getAlumniRecap, cancelAcademicYear, getStaleStaff, deactivateStaleStaff, deleteUserWithAuth, restoreUser, purgeUser, getDeletedUsers, adminResetUserPassword, updateAlumniCareer, markStudentKeluar, reEnrollStudent, getRetentionCandidates, purgeExpiredStudents, getScheduleTemplates, getTimeSlots, getTeacherList, getForumBkStaff, getForumGuruWaliCandidates, getBkAssignments, getGuruWaliAssignments, assignBkToClass, revokeBkFromClass, assignGuruWaliToStudent, revokeGuruWaliFromStudent,
     getDutyStaffCandidates, getDutySchedules, revokeDutySchedule,
     getAdminPanelDudi, getAdminPanelStaff } from './api.js';
 import { mountSemesterPanel } from './semester.js';
@@ -1996,45 +1996,15 @@ async function renderJadwalPanel() {
     const config = await getSchoolConfig();
     const ay  = config?.current_academic_year ?? '';
     const sem = config?.current_semester ?? 1;
-    const [allClasses, teachers, substitutes] = await Promise.all([
+    const [allClasses, teachers] = await Promise.all([
         getClasses(ay),
         supabase.from('v_users_staff_directory').select('user_id, teacher_code')
             .not('teacher_code', 'is', null).then(r => r.data ?? []).catch(() => []),
-        getActiveSubstitutes().catch(() => []),
     ]);
     const teacherIdMap = new Map(teachers.map(t => [t.user_id, t.teacher_code]));
 
     const wizardUrl = schoolSlug ? `wizard.html?school=${encodeURIComponent(schoolSlug)}` : 'wizard.html';
 
-    const subsHtml = substitutes.length === 0
-        ? '<p class="hint">Tidak ada guru pengganti aktif saat ini.</p>'
-        : `<table style="width:100%;border-collapse:collapse;font-size:13px">
-            <thead><tr style="text-align:left;border-bottom:1px solid var(--color-border,#dde3e9)">
-                <th style="padding:6px 8px">Guru Pengganti</th>
-                <th style="padding:6px 8px">Kelas / Mata Pelajaran</th>
-                <th style="padding:6px 8px">Tanggal Sesi</th>
-                <th style="padding:6px 8px">Berlaku sampai</th>
-                <th style="padding:6px 8px">Token</th>
-            </tr></thead>
-            <tbody>${substitutes.map(s => {
-                const expire = new Date(s.sync_token_expires_at).toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
-                const sessionDate = s.schedule?.session_date ?? '—';
-                const kelas   = s.schedule?.class?.name   ?? '—';
-                const mapel   = s.schedule?.subject?.name ?? '—';
-                const name    = s.substitute?.full_name    ?? '—';
-                const token   = s.sync_token;
-                return `<tr style="border-bottom:1px solid var(--color-border,#eee)">
-                    <td style="padding:6px 8px">${esc(name)}</td>
-                    <td style="padding:6px 8px">${esc(kelas)} / ${esc(mapel)}</td>
-                    <td style="padding:6px 8px">${esc(sessionDate)}</td>
-                    <td style="padding:6px 8px">${esc(expire)}</td>
-                    <td style="padding:6px 8px">
-                        <code style="font-size:11px;background:var(--color-input-bg,#1e293b);padding:2px 6px;border-radius:4px;user-select:all">${esc(token)}</code>
-                        <button class="btn btn-sm btn-secondary" style="margin-left:6px" onclick="navigator.clipboard.writeText('${token}').then(()=>{this.textContent='✓ Disalin';setTimeout(()=>this.textContent='Salin',2000)})">Salin</button>
-                    </td>
-                </tr>`;
-            }).join('')}</tbody>
-        </table>`;
 
     // Scaffold: tab hari + tab kelas, grid dimuat saat tab diklik
     panelContent.innerHTML = `
@@ -2052,10 +2022,6 @@ async function renderJadwalPanel() {
         </div>
 
         <div id="jadwal-grid-area"><p class="hint">Memuat grid…</p></div>
-
-        <h4 style="margin:24px 0 8px">Token Guru Pengganti Aktif</h4>
-        <p class="hint" style="margin-bottom:10px">Salin token lalu kirim ke HP guru pengganti (mis. via WhatsApp). Token otomatis kedaluwarsa saat sesi selesai.</p>
-        ${subsHtml}
     `;
 
     let activeGrade = 10;

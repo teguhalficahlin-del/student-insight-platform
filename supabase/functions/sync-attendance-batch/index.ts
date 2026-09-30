@@ -18,7 +18,6 @@
  *   5.  Idempotency check (was this batch already processed?)
  *   6.  Permission check: is this user allowed to submit for this schedule?
  *   7.  Schedule verification: does the schedule exist, is it not CLOSED?
- *   8.  Substitute token validation (if provided)
  *   9.  DB transaction:
  *         a. UPSERT attendance records
  *         b. UPDATE teaching_schedules.meeting_status (if provided)
@@ -60,7 +59,6 @@ interface AttendanceBatchPayload {
     submitted_by:     string;
     session_date:     string;
     records:          AttendanceRecord[];
-    substitute_token?: string;
     meeting_status?:  string;
 }
 
@@ -73,13 +71,6 @@ interface ScheduleRow {
     teacher_indicator:    string;
     academic_year:        string;
     semester:             string;
-}
-
-interface SubstituteRow {
-    substitute_id:              string;
-    substitute_user_id:         string;
-    sync_token:                 string;
-    sync_token_expires_at:      string;
 }
 
 
@@ -158,9 +149,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return badRequest(`Jadwal tidak ditemukan: ${payload.schedule_id}`);
         }
 
-        // Permission: must be assigned teacher or valid substitute
+        // Permission: hanya guru yang bertugas pada jadwal ini.
+        //
+        // Jalur "guru pengganti" dihapus 30 Sep 2026. Fitur itu tidak pernah
+        // selesai: tabel substitute_schedules, RLS-nya, validasi token, dan
+        // panel penampil di konsol admin semuanya ada, tetapi TIDAK ADA satu
+        // pun jalur yang membuat barisnya — tanpa formulir, tanpa RPC, tanpa
+        // edge function. Tabelnya kosong di seluruh platform (diverifikasi
+        // 30 Sep 2026), sehingga cabang ini tidak pernah bisa memberi akses.
+        // Menghapusnya tidak mengubah perilaku, hanya membuang percabangan
+        // otorisasi yang menyesatkan pembacanya.
         const isAssignedTeacher = schedule.scheduled_teacher_id === user.user_id;
-        let   isValidSubstitute = false;
 
         // FUNGSIONAL-2: validate session_date matches DB — reject stale offline payloads
         if (schedule.session_date !== payload.session_date) {
@@ -170,34 +169,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }
 
         if (!isAssignedTeacher) {
-            // Check substitute_schedules
-            const { data: substitute } = await admin
-                .from('substitute_schedules')
-                .select('substitute_id, substitute_user_id, sync_token, sync_token_expires_at')
-                .eq('schedule_id', payload.schedule_id)
-                .eq('substitute_user_id', user.user_id)
-                .maybeSingle() as { data: SubstituteRow | null; error: unknown };
-
-            if (substitute) {
-                // Validate token if provided
-                if (payload.substitute_token && payload.substitute_token !== substitute.sync_token) {
-                    return forbidden('Token guru pengganti tidak valid');
-                }
-                // Validate expiry
-                if (new Date(substitute.sync_token_expires_at) <= new Date()) {
-                    return forbidden(
-                        'Token guru pengganti sudah kedaluwarsa. ' +
-                        'Hubungi administrator untuk mendapatkan token baru.'
-                    );
-                }
-                isValidSubstitute = true;
-            }
-        }
-
-        if (!isAssignedTeacher && !isValidSubstitute) {
             return forbidden(
-                'Hanya guru yang bertugas atau guru pengganti yang valid ' +
-                'dapat mengisi absensi untuk jadwal ini'
+                'Hanya guru yang bertugas yang dapat mengisi absensi untuk jadwal ini'
             );
         }
 
@@ -265,7 +238,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
             p_records:          payload.records,
             p_meeting_status:   payload.meeting_status ?? null,
             p_idempotency_key:  payload.idempotency_key,
-            p_is_substitute:    isValidSubstitute,
+            // Jalur guru pengganti dihapus 30 Sep 2026; RPC masih menerima
+            // parameter ini (DEFAULT FALSE), jadi dikirim eksplisit agar signature
+            // pemanggilan tetap cocok dengan fungsi yang ter-deploy.
+            p_is_substitute:    false,
         };
 
         const { data: rpcResult, error: rpcError } = await admin
