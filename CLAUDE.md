@@ -43,9 +43,19 @@ Fitur utama: absensi, BK (kasus siswa), jadwal, forum, perangkat ajar (AI pipeli
 
 **PENTING:** ID lama SMKN 1 Ujungbatu `cc1e152e-...` adalah SALAH — jangan gunakan.
 
-**SMK Negeri 3 Rambah adalah tenant PRODUKSI dengan siswa nyata**, bukan sekolah uji.
-Nama folder `file uji/SMK3RBH/` di repo menyesatkan — isinya template impor.
+**SMK Negeri 3 Rambah = SEKOLAH UJI** (dinyatakan Romo, 30 Sep 2026).
+Boleh dipakai untuk pengujian merusak: reset password massal, impor coba-coba,
+audit oleh penguji luar. Bukan sekolah yang sedang beroperasi.
 Program keahlian: `ATP`, `OTKP`, `APAT`, `DPB`. Kelas: `X ATP`, `XI OTKP`, dst.
+
+Catatan riwayat — sampai 30 Sep 2026 tenant ini diperlakukan sebagai produksi,
+dan datanya berasal dari impor sekolah sungguhan (nama siswa, NIP guru).
+Status "sekolah uji" adalah keputusan tata kelola, bukan berarti datanya fiktif.
+Untuk uji yang melibatkan pihak ketiga, tetap minta penguji menulis
+`[nama siswa]` alih-alih menyalin nama.
+
+**SMKN 1 Ujungbatu adalah satu-satunya tenant produksi sungguhan** —
+1.053 siswa aktif. Jangan jadikan sasaran pengujian.
 
 ---
 
@@ -438,6 +448,12 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
             SEMUA peran pengguna; ADMINISTRATIVE sengaja tetap acak
   `6b7d1b0` reset 99 akun SMK Negeri 3 Rambah ke keadaan onboarding
   `af73464` layar wajib-ganti-password menolak password yang sama dengan password awal
+  `1063ed3` CLAUDE.md disegarkan (dokumen ini)
+  `9fd3c65` fitur guru pengganti dihapus dari kode aplikasi — tidak pernah selesai,
+            tabel substitute_schedules kosong di seluruh platform dan tidak ada
+            jalur yang membuat barisnya. Lapis DB (drop tabel + 5 objek terkait)
+            sengaja TIDAK dikerjakan atas keputusan Romo; petanya ada di badan commit
+- SMK Negeri 3 Rambah dinyatakan SEKOLAH UJI (30 Sep 2026) — lihat §2
 
 ### Koreksi atas backlog lama (diverifikasi ke kode 30 Sep 2026)
 Tiga item di bawah pernah tercatat keliru dan sempat dua kali memperlambat kerja:
