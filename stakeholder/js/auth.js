@@ -13,6 +13,17 @@ const loginBtn = document.getElementById('login-btn');
 // Tombol dinonaktifkan sampai konteks sekolah terkonfirmasi dari URL slug.
 loginBtn.disabled = true;
 
+// Kode login stakeholder SELALU disimpan huruf besar oleh wizard admin
+// (admin/js/wizard.js: code.trim().toUpperCase()), sedangkan
+// fn_resolve_login_email mencocokkan dengan operator = (exact match).
+// Tanpa normalisasi yang sama di sini, "komite01" ditolak dengan pesan
+// "kode tidak ditemukan" padahal akunnya ada dan aktif.
+identEl.addEventListener('input', () => {
+    const pos = identEl.selectionStart;
+    identEl.value = identEl.value.toUpperCase();
+    identEl.setSelectionRange(pos, pos);
+});
+
 applyBranding().then(b => {
     _schoolId = b?.school_id ?? null;
     if (!_schoolId) {
@@ -39,7 +50,7 @@ form.addEventListener('submit', async (e) => {
     loginBtn.textContent = 'Memuat...';
 
     try {
-        await loginWithIdentifier(identEl.value.trim(), passEl.value, _schoolId);
+        await loginWithIdentifier(identEl.value.trim().toUpperCase(), passEl.value, _schoolId);
         const row = await getCurrentUserRow();
         if (!row || !STAKEHOLDER_ROLES.includes(row.role_type)) {
             await supabase.auth.signOut();

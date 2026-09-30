@@ -24,7 +24,7 @@ export async function loginWithIdentifier(identifier, password, schoolId = null)
     const { data: email, error: resolveErr } = await supabase
         .rpc('fn_resolve_login_email', { p_identifier: identifier, p_school_id: schoolId });
     if (resolveErr) throw new Error('Gagal menghubungi server. Coba lagi.');
-    if (!email) throw new Error('Kode akses tidak ditemukan. Hubungi admin sekolah untuk memastikan akun sudah dibuat.');
+    if (!email) throw new Error('Kode login tidak dikenali. Pastikan yang dimasukkan adalah KODE LOGIN (contoh: KOMITE01), bukan nama lembaga. Admin sekolah dapat melihat kode Anda di menu Stakeholder.');
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
         if (error.status === 429 || /rate limit|too many/i.test(error.message || ''))
