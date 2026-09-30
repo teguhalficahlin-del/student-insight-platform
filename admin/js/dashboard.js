@@ -23,6 +23,26 @@ function esc(s) {
     return el.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+/**
+ * Isi sel kolom "Aksi" untuk password pengguna.
+ *
+ * Tombol Reset PW SELALU tersedia — termasuk saat must_change_password
+ * masih true. Sebelumnya tombol disembunyikan tepat pada keadaan itu,
+ * padahal justru itu keadaan yang paling membutuhkannya: akun yang baru
+ * dibuat dan password sementaranya hilang jadi tidak punya jalur
+ * pemulihan sama sekali dari konsol admin.
+ *
+ * Badge dipertahankan sebagai penanda STATUS, terpisah dari tombol yang
+ * merupakan AKSI. Keduanya menjawab pertanyaan berbeda.
+ */
+function pwActionCell(userId, fullName, pendingChange, btnClass = 'user-reset-pw-btn', extraStyle = '') {
+    const styleAttr = extraStyle ? ` style="${extraStyle}"` : '';
+    const badge = pendingChange
+        ? `<span class="badge badge-muted"${styleAttr} title="Menunggu pengguna ganti password">Menunggu ganti PW</span> `
+        : '';
+    return `${badge}<button class="btn btn-sm btn-secondary ${btnClass}" data-user-id="${userId}" data-nama="${esc(fullName)}"${styleAttr}>Reset PW</button>`;
+}
+
 // CHECK-A: pengganti prompt() — mengembalikan Promise<string|null>
 function showInputModal(message, { placeholder = '', defaultValue = '', okLabel = 'OK', okClass = 'btn-primary' } = {}) {
     return new Promise(resolve => {
@@ -930,9 +950,10 @@ async function renderStaffPanel() {
         const btn = u.is_active === false
             ? `<button class="btn btn-sm btn-secondary staff-toggle-btn" data-user-id="${u.user_id}" data-active="false">Aktifkan</button>`
             : `<button class="btn btn-sm btn-warning staff-toggle-btn" data-user-id="${u.user_id}" data-active="true">Nonaktifkan</button>`;
-        const resetBtn = u.must_change_password
-            ? `<span class="badge badge-muted" style="margin-left:4px" title="Menunggu pengguna ganti password">Menunggu ganti PW</span>`
-            : `<button class="btn btn-sm btn-secondary staff-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}" style="margin-left:4px">Reset PW</button>`;
+        const resetBtn = pwActionCell(
+            u.user_id, u.full_name, u.must_change_password,
+            'staff-reset-pw-btn', 'margin-left:4px',
+        );
         return `<tr style="${rowStyle}">
             <td>${esc(u.full_name)}${badge}</td>
             <td>${esc(u.login_identifier)}</td>
@@ -1097,10 +1118,17 @@ async function renderStaffPanel() {
                 const newPw = generateTempPassword();
                 await adminResetUserPassword(userId, newPw);
                 showPwModal(nama, newPw);
-                resetBtn.classList.remove('staff-reset-pw-btn');
-                resetBtn.textContent = 'Menunggu ganti PW';
-                resetBtn.title = 'Menunggu pengguna ganti password';
-                resetBtn.style.opacity = '0.6';
+                // Sama seperti panel non-staf: gambar ulang sel lewat helper
+                // agar badge status muncul tanpa menduplikasi teks tombol,
+                // dan tombol tetap tersedia untuk reset berikutnya.
+                const cell = resetBtn.parentElement;
+                if (cell) {
+                    const toggleBtn = cell.querySelector('.staff-toggle-btn');
+                    cell.innerHTML = (toggleBtn ? toggleBtn.outerHTML : '')
+                        + pwActionCell(userId, nama, true, 'staff-reset-pw-btn', 'margin-left:4px');
+                } else {
+                    resetBtn.disabled = true;
+                }
             } catch (err) {
                 alert(`Gagal reset: ${err.message}`);
                 resetBtn.disabled = false; resetBtn.textContent = 'Reset PW';
@@ -1254,12 +1282,7 @@ async function renderStudentsPanel() {
         <td>${esc(s.full_name)}</td>
         <td>${esc(s.nis)}</td>
         <td>${s.user_id
-            ? (pendingPwSet.has(s.user_id)
-                ? `<span class="badge badge-muted"
-                    title="Menunggu pengguna ganti password">Menunggu ganti PW</span>`
-                : `<button class="btn btn-sm btn-secondary user-reset-pw-btn"
-                    data-user-id="${s.user_id}"
-                    data-nama="${esc(s.full_name)}">Reset PW</button>`)
+            ? pwActionCell(s.user_id, s.full_name, pendingPwSet.has(s.user_id))
             : '<span class="hint" style="font-size:11px">belum ada akun</span>'}
         </td></tr>`;
 
@@ -1425,11 +1448,7 @@ async function renderParentsPanel() {
             <td>${esc(u.full_name)}</td>
             <td style="color:var(--color-text-muted);font-size:13px">${childCell}</td>
             <td>${esc(u.login_identifier)}</td>
-            <td>${u.must_change_password
-                ? `<span class="badge badge-muted"
-                    title="Menunggu pengguna ganti password">Menunggu ganti PW</span>`
-                : `<button class="btn btn-sm btn-secondary user-reset-pw-btn"
-                    data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}">Reset PW</button>`}
+            <td>${pwActionCell(u.user_id, u.full_name, u.must_change_password)}
             </td></tr>`;
     };
 
@@ -1875,9 +1894,7 @@ async function renderDudiPanel() {
         users ?? [],
         u => u.program_id ? (pn.get(u.program_id) ?? '—') : 'Tanpa Program / Lintas Program',
         ['Nama Usaha', 'Penanggung Jawab', 'Aksi'],
-        u => `<tr><td>${u.dudi_org_name ?? '—'}</td><td>${u.full_name}</td><td>${u.must_change_password
-            ? `<span class="badge badge-muted" title="Menunggu pengguna ganti password">Menunggu ganti PW</span>`
-            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}">Reset PW</button>`}</td></tr>`,
+        u => `<tr><td>${u.dudi_org_name ?? '—'}</td><td>${u.full_name}</td><td>${pwActionCell(u.user_id, u.full_name, u.must_change_password)}</td></tr>`,
     );
     panelContent.innerHTML = `
         <h3>DUDI (${(users ?? []).length})</h3>
@@ -1891,9 +1908,7 @@ async function renderStakeholdersPanel() {
         <h3>Stakeholder (${(users ?? []).length})</h3>
         <table class="table">
             <thead><tr><th>Nama</th><th>Kode Login</th><th>Aksi</th></tr></thead>
-            <tbody>${(users ?? []).map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td>${u.must_change_password
-            ? `<span class="badge badge-muted" title="Menunggu pengguna ganti password">Menunggu ganti PW</span>`
-            : `<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="${u.user_id}" data-nama="${esc(u.full_name)}">Reset PW</button>`}</td></tr>`).join('')}</tbody>
+            <tbody>${(users ?? []).map(u => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.login_identifier)}</td><td>${pwActionCell(u.user_id, u.full_name, u.must_change_password)}</td></tr>`).join('')}</tbody>
         </table>
     `;
 }
@@ -1913,10 +1928,7 @@ async function renderTuPanel() {
             <tbody>${(users ?? []).map(u => `<tr>
                 <td>${esc(u.full_name)}</td>
                 <td>${esc(u.login_identifier)}</td>
-                <td>${u.must_change_password
-                    ? '<span class="badge badge-muted" title="Menunggu pengguna ganti password">Menunggu ganti PW</span>'
-                    : '<button class="btn btn-sm btn-secondary user-reset-pw-btn" data-user-id="' + u.user_id + '" data-nama="' + esc(u.full_name) + '">Reset PW</button>'
-                }</td></tr>`).join('')}</tbody>
+                <td>${pwActionCell(u.user_id, u.full_name, u.must_change_password)}</td></tr>`).join('')}</tbody>
         </table></div>
     `;
 }
@@ -2468,10 +2480,13 @@ async function renderExportPanel() {
             const newPw = generateTempPassword();
             await adminResetUserPassword(userId, newPw);
             showPwModal(nama, newPw);
-            btn.classList.remove('user-reset-pw-btn');
-            btn.textContent = 'Menunggu ganti PW';
-            btn.title = 'Menunggu pengguna ganti password';
-            btn.style.opacity = '0.6';
+            // Reset berhasil -> must_change_password kembali true.
+            // Gambar ulang seluruh sel lewat helper yang sama agar badge
+            // status muncul TANPA menduplikasi teks di tombol, dan tombol
+            // tetap tersedia kalau password barunya ikut hilang lagi.
+            const cell = btn.closest('td');
+            if (cell) cell.innerHTML = pwActionCell(userId, nama, true);
+            else      btn.disabled = true;
         } catch (err) {
             alert(`Gagal reset: ${err.message}`);
             btn.disabled = false; btn.textContent = 'Reset PW';
