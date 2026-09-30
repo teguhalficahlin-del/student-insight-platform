@@ -16,7 +16,35 @@
  *   opsional (user sudah login normal).
  */
 
+import { DEFAULT_ONBOARDING_PASSWORD } from './onboarding.js';
+
 const MIN_LEN = 8;
+
+/**
+ * Tolak password baru yang sama dengan password onboarding.
+ *
+ * Sebelumnya hanya ada dua pemeriksaan — panjang minimal dan kecocokan
+ * konfirmasi — sehingga pengguna bisa mengetik ulang password awalnya dan
+ * dianggap sudah mengganti. Flag must_change_password mati, passwordnya
+ * tidak berubah sedikit pun.
+ *
+ * Celah itu kecil ketika password awal masih acak: tidak ada yang hafal,
+ * jadi tidak ada yang mengetiknya ulang. Setelah password onboarding
+ * diseragamkan jadi satu nilai yang diketahui semua orang, ini justru
+ * menjadi jalan termudah — dan langkah wajib-ganti berubah jadi formalitas.
+ *
+ * Ditemukan 30 Sep 2026 lewat audit akun SMK Negeri 3 Rambah: satu akun
+ * stakeholder tercatat sudah mengganti password, tetapi passwordnya masih
+ * persis password onboarding.
+ *
+ * @returns {string|null} pesan galat, atau null bila password diterima
+ */
+function tolakPasswordAwal(pw) {
+    if (pw === DEFAULT_ONBOARDING_PASSWORD) {
+        return 'Password baru tidak boleh sama dengan password awal. Pilih password lain.';
+    }
+    return null;
+}
 
 function createModal(title, hint, forceMode = false) {
     const el = document.createElement('div');
@@ -78,6 +106,8 @@ export async function checkMustChangePassword(supabase, userRow) {
             const conf = confInput.value;
             if (pw.length < MIN_LEN) { showStatus(status, `Password minimal ${MIN_LEN} karakter.`, false); return; }
             if (pw !== conf)         { showStatus(status, 'Konfirmasi password tidak cocok.', false); return; }
+            const tolakan = tolakPasswordAwal(pw);
+            if (tolakan)             { showStatus(status, tolakan, false); return; }
 
             submitBtn.disabled = true; submitBtn.textContent = 'Menyimpan…';
             const { error } = await supabase.auth.updateUser({ password: pw });
@@ -124,6 +154,8 @@ export function initChangePassword(supabase, triggerSelector) {
             const conf  = confInput.value;
             if (pw.length < MIN_LEN) { showStatus(status, `Password minimal ${MIN_LEN} karakter.`, false); return; }
             if (pw !== conf)         { showStatus(status, 'Konfirmasi password tidak cocok.', false); return; }
+            const tolakan = tolakPasswordAwal(pw);
+            if (tolakan)             { showStatus(status, tolakan, false); return; }
 
             submitBtn.disabled = true; submitBtn.textContent = 'Menyimpan…';
 
