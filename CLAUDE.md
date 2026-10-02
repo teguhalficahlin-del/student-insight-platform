@@ -33,7 +33,7 @@ Fitur utama: absensi, BK (kasus siswa), jadwal, forum, perangkat ajar (AI pipeli
 
 | Key | Value |
 |-----|-------|
-| HEAD (30 Sep 2026) | `af73464` |
+| HEAD (30 Sep 2026) | `c9fb231` |
 | SMKN 1 Ujungbatu `school_id` | `244e389c-de7d-4d70-ac95-346d33a5d02c` |
 | SMKN 1 Ujungbatu slug | `smkn1ujungbatu` (URL pendek: `smkn1ub`) |
 | **SMK Negeri 3 Rambah** `school_id` | `561cc906-e6e0-40c7-a5b0-d8f69a15258a` |
@@ -422,7 +422,7 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
 
 ---
 
-## 9. STATUS PROYEK (per HEAD af73464, 30 Sep 2026)
+## 9. STATUS PROYEK (per HEAD c9fb231, 30 Sep 2026)
 
 ### Selesai
 - Audit keamanan Fase 1–3 ✅ (test suite 93/93)
@@ -438,7 +438,7 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
   schedule-builder (checkAllConflicts, getClasses, update nama kelas), api.js (getClasses),
   wizard.js (refreshDataList 11); migration policy SELECT ADMINISTRATIVE di schedule_templates
 
-- Sesi 30 Sep 2026 ✅ — enam commit, semuanya live dan terverifikasi di produksi:
+- Sesi 30 Sep 2026 ✅ — sepuluh commit, semuanya live dan terverifikasi di produksi:
   `7a362e0` fn_admin_panel_staff cast enum — panel Stakeholder & TU yang blank kembali hidup
   `5f82d60` tombol Reset PW selalu tersedia di 6 panel (sebelumnya disembunyikan
             justru saat must_change_password=true — keadaan yang paling membutuhkannya)
@@ -448,11 +448,14 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
             SEMUA peran pengguna; ADMINISTRATIVE sengaja tetap acak
   `6b7d1b0` reset 99 akun SMK Negeri 3 Rambah ke keadaan onboarding
   `af73464` layar wajib-ganti-password menolak password yang sama dengan password awal
-  `1063ed3` CLAUDE.md disegarkan (dokumen ini)
+  `1063ed3` `a2cbe56` CLAUDE.md disegarkan + Rambah dinyatakan sekolah uji
   `9fd3c65` fitur guru pengganti dihapus dari kode aplikasi — tidak pernah selesai,
             tabel substitute_schedules kosong di seluruh platform dan tidak ada
             jalur yang membuat barisnya. Lapis DB (drop tabel + 5 objek terkait)
             sengaja TIDAK dikerjakan atas keputusan Romo; petanya ada di badan commit
+  `c9fb231` seed absensi uji Rambah (4.048 baris, 7 hari, 15 guru) + matikan modal
+            wajib-ganti untuk audit tab per peran. HANYA sekolah uji. Pulihkan
+            dengan menjalankan ulang 20260930230000
 - SMK Negeri 3 Rambah dinyatakan SEKOLAH UJI (30 Sep 2026) — lihat §2
 
 ### Koreksi atas backlog lama (diverifikasi ke kode 30 Sep 2026)
