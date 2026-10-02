@@ -369,7 +369,7 @@ async function getCloseSummary(period) {
         supabase.from('students')
             .select('student_id', { count: 'exact', head: true })
             .eq('student_status', 'AKTIF'),
-        supabase.from('cases')
+        supabase.from('coaching_cases')
             .select('case_id', { count: 'exact', head: true })
             .neq('status', 'CLOSED'),
     ]);
