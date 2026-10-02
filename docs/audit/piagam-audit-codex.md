@@ -47,8 +47,9 @@ Untuk uji isolasi lintas-tenant, pakai KEDUA id ini sebagai dua sisi.
 === TITIK AWAL YANG SUDAH DIKETAHUI (verifikasi + perluas, jangan dianggap final) ===
 - Drift enum: contract lama menulis TIDAK_HADIR, nilai sebenarnya ALPA
   (validate.ts + CLAUDE.md §7). Cari drift serupa: enum di JS vs edge fn vs pg_enum.
-- fn_can_see_case: KEPSEK belum punya cabang akses kasus BK (CLAUDE.md §8) —
-  bug fungsional, periksa dampaknya.
+- [TERVERIFIKASI SALAH, 2 Okt 2026] "fn_can_see_case KEPSEK tak punya cabang" —
+  audit Codex membuktikan helper AKTIF fn_can_see_coaching_case SUDAH punya cabang
+  KEPSEK. Jangan laporkan lagi sebagai temuan.
 - Tabel ld_* / learning_documents (mig 20260716121239): RLS pakai auth.uid()
   padahal kolom FK ke user_id — periksa apakah policy benar-benar cocok.
 - fn_resolve_login_email sengaja anon-accessible (CLAUDE.md "Accepted Risk") —

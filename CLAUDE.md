@@ -417,7 +417,7 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
 |--------|-----------|
 | `fn_get_forum_recipient_candidates()` | kandidat penerima forum, per role group |
 | `fn_apply_schedule_templates()` | TIMEOUT RISK — batch besar, ada issue 57014 |
-| `fn_can_see_case()` | akses kasus BK — KEPSEK belum punya cabang (bug fungsional) |
+| `fn_can_see_coaching_case()` | akses kasus BK — helper AKTIF, sudah punya cabang KEPSEK (diverifikasi audit Codex 2 Okt 2026; `fn_can_see_case` lama sudah tidak dipakai) |
 | `evaluate_teacher_indicators()` | dijalankan cron 00:00 WIB |
 
 ---
@@ -496,7 +496,6 @@ Tiga item di bawah pernah tercatat keliru dan sempat dua kali memperlambat kerja
 - Approval workflow kepsek/waka di UI guru
 - Regenerate limits (counter per tahun ajaran)
 - Notifikasi push (FCM)
-- `fn_can_see_case()` — KEPSEK lihat kasus PRIVATE/RESTRICTED (bug fungsional, bukan leak)
 
 ---
 
