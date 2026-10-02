@@ -24,6 +24,18 @@ function esc(s) {
     return el.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// Peta role_type -> label Indonesia. Audit Codex #17: kode mentah seperti
+// WALI_KELAS/ADMINISTRATIVE bocor ke layar (recycle bin). Pakai esc(roleLabel(x)).
+const ROLE_LABEL = {
+    GURU: 'Guru', BK: 'BK', WALI_KELAS: 'Wali Kelas',
+    WAKA_KURIKULUM: 'Waka Kurikulum', WAKA_HUMAS: 'Waka Humas',
+    WAKA_KESISWAAN: 'Waka Kesiswaan', KEPSEK: 'Kepala Sekolah',
+    KAPRODI: 'Kaprodi', SISWA: 'Siswa', ORTU: 'Orang Tua',
+    ADMINISTRATIVE: 'Admin', TU: 'Tata Usaha', DUDI: 'DUDI',
+    STAKEHOLDER: 'Stakeholder',
+};
+function roleLabel(rt) { return ROLE_LABEL[rt] ?? (rt ?? '—'); }
+
 /**
  * Isi sel kolom "Aksi" untuk password pengguna.
  *
@@ -1044,7 +1056,7 @@ async function renderStaffPanel() {
                         ${deleted.map(u => `<tr data-uid="${u.user_id}">
                             <td>${esc(u.full_name)}</td>
                             <td>${esc(u.login_identifier)}</td>
-                            <td>${esc(u.role_type)}</td>
+                            <td>${esc(roleLabel(u.role_type))}</td>
                             <td>${fmt(u.deleted_at)}</td>
                             <td>${daysLeft(u.deleted_at)} hari</td>
                             <td style="white-space:nowrap">

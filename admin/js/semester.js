@@ -318,7 +318,7 @@ async function onOpenNextSemester(container, closedPeriod, config) {
                 </p>
                 <ol style="line-height:2rem; padding-left:1.25rem;">
                     <li>
-                        <strong>Import jadwal baru</strong> —
+                        <strong>Impor jadwal baru</strong> —
                         jadwal semester 2 biasanya berbeda dari semester 1.
                     </li>
                     <li>

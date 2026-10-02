@@ -493,14 +493,14 @@ async function setupStep11() {
         <p><strong>Sekolah:</strong> ${state.schoolName} — Tahun Ajaran ${state.academicYear}, Semester ${state.semester}</p>
         <p><strong>Program Keahlian:</strong> ${programsCache.length} program</p>
         <p><strong>Kelas:</strong> ${classesCache.length} kelas</p>
-        <p><strong>Import Kepsek:</strong> <span class="badge ${state.stepDone[4] ? 'badge-success' : 'badge-muted'}">${state.stepDone[4] ? 'Sudah diimpor' : 'Belum/dilewati'}</span></p>
-        <p><strong>Import Kaprodi:</strong> <span class="badge ${state.stepDone[5] ? 'badge-success' : 'badge-muted'}">${state.stepDone[5] ? 'Sudah diimpor' : 'Belum/dilewati'}</span></p>
-        <p><strong>Import Wali Kelas:</strong> <span class="badge ${state.stepDone[6] ? 'badge-success' : 'badge-muted'}">${state.stepDone[6] ? 'Sudah diimpor' : 'Belum/dilewati'}</span></p>
-        <p><strong>Import Guru:</strong> <span class="badge ${state.stepDone[7] ? 'badge-success' : 'badge-muted'}">${state.stepDone[7] ? 'Sudah diimpor' : 'Belum/dilewati'}</span></p>
-        <p><strong>Import BK:</strong> <span class="badge ${state.stepDone[8] ? 'badge-success' : 'badge-muted'}">${state.stepDone[8] ? 'Sudah diimpor' : 'Belum/dilewati'}</span></p>
-        <p><strong>Import Siswa:</strong> <span class="badge ${state.stepDone[9] ? 'badge-success' : 'badge-muted'}">${state.stepDone[9] ? 'Sudah diimpor' : 'Belum/dilewati'}</span></p>
-        <p><strong>Import Orang Tua:</strong> <span class="badge ${state.stepDone.parentsImported ? 'badge-success' : 'badge-muted'}">${state.stepDone.parentsImported ? 'Sudah diimpor' : 'Opsional — dapat dilakukan via dashboard'}</span></p>
-        <p><strong>Import DUDI:</strong> <span class="badge ${state.stepDone[10] ? 'badge-success' : 'badge-muted'}">${state.stepDone[10] ? 'Sudah diimpor' : 'Opsional — dapat dilakukan via dashboard'}</span></p>
+        <p><strong>Impor Kepsek:</strong> <span class="badge ${state.stepDone[4] ? 'badge-success' : 'badge-muted'}">${state.stepDone[4] ? 'Sudah diimpor' : 'Belum/dilewati'}</span></p>
+        <p><strong>Impor Kaprodi:</strong> <span class="badge ${state.stepDone[5] ? 'badge-success' : 'badge-muted'}">${state.stepDone[5] ? 'Sudah diimpor' : 'Belum/dilewati'}</span></p>
+        <p><strong>Impor Wali Kelas:</strong> <span class="badge ${state.stepDone[6] ? 'badge-success' : 'badge-muted'}">${state.stepDone[6] ? 'Sudah diimpor' : 'Belum/dilewati'}</span></p>
+        <p><strong>Impor Guru:</strong> <span class="badge ${state.stepDone[7] ? 'badge-success' : 'badge-muted'}">${state.stepDone[7] ? 'Sudah diimpor' : 'Belum/dilewati'}</span></p>
+        <p><strong>Impor BK:</strong> <span class="badge ${state.stepDone[8] ? 'badge-success' : 'badge-muted'}">${state.stepDone[8] ? 'Sudah diimpor' : 'Belum/dilewati'}</span></p>
+        <p><strong>Impor Siswa:</strong> <span class="badge ${state.stepDone[9] ? 'badge-success' : 'badge-muted'}">${state.stepDone[9] ? 'Sudah diimpor' : 'Belum/dilewati'}</span></p>
+        <p><strong>Impor Orang Tua:</strong> <span class="badge ${state.stepDone.parentsImported ? 'badge-success' : 'badge-muted'}">${state.stepDone.parentsImported ? 'Sudah diimpor' : 'Opsional — dapat dilakukan via dashboard'}</span></p>
+        <p><strong>Impor DUDI:</strong> <span class="badge ${state.stepDone[10] ? 'badge-success' : 'badge-muted'}">${state.stepDone[10] ? 'Sudah diimpor' : 'Opsional — dapat dilakukan via dashboard'}</span></p>
         <p class="hint">Klik "Selesaikan Setup" untuk mengaktifkan sistem.</p>
     `;
 }
