@@ -78,6 +78,7 @@ a:hover { text-decoration: underline; }
     font-weight: 600;
     cursor: pointer;
     transition: background-color 0.15s, border-color 0.15s;
+    min-height: 44px;
 }
 
 .btn-primary { background: var(--color-primary); color: #fff; }
