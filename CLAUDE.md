@@ -33,7 +33,7 @@ Fitur utama: absensi, BK (kasus siswa), jadwal, forum, perangkat ajar (AI pipeli
 
 | Key | Value |
 |-----|-------|
-| HEAD (2 Okt 2026) | `96a16db` |
+| HEAD (3 Okt 2026) | `8f82ed6` (lokal) — push 664af64+8f82ed6 pending |
 | SMKN 1 Ujungbatu `school_id` | `244e389c-de7d-4d70-ac95-346d33a5d02c` |
 | SMKN 1 Ujungbatu slug | `smkn1ujungbatu` (URL pendek: `smkn1ub`) |
 | **SMK Negeri 3 Rambah** `school_id` | `561cc906-e6e0-40c7-a5b0-d8f69a15258a` |
@@ -422,7 +422,7 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
 
 ---
 
-## 9. STATUS PROYEK (per HEAD 96a16db, 2 Okt 2026)
+## 9. STATUS PROYEK (per HEAD 8f82ed6, 3 Okt 2026)
 
 ### Selesai
 - Audit keamanan Fase 1–3 ✅ (test suite 93/93)
@@ -468,7 +468,18 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
   `3e1fbcf` docs: cabut "bug KEPSEK fn_can_see_case" yang terbukti stale
   `96a16db` fix(audit #17): label peran Indonesia + "Import"->"Impor" admin
 
-#### STATUS TEMUAN AUDIT CODEX (2 Okt 2026) — lanjutkan dari sini
+- Sesi 3 Okt 2026 ✅ — lanjutan perbaikan audit Codex, semua temuan non-perangkat-ajar selesai.
+  Delapan commit live (kecuali 664af64+8f82ed6 yang pending push):
+  `577abe6` fix(audit #4): hapus jalur mati observation_audience_members di portal DUDI
+  `f811385` perf(audit #10,#11): parallelise fetchAllRows admin + forum drilldown
+  `cf7fb62` fix(audit #18): min-height 44px pada .btn admin (touch target)
+  `e9e6e7c` fix(audit #14): ganti EXISTS langsung ke tabel ber-RLS di policy ld_*
+  `0131b00` docs: update status temuan audit #9 #10 #11 #14 #18
+  `273dc72` fix(audit #13): attendance_status di contracts/ → ALPA
+  `664af64` fix(audit #12): fn_stakeholder_summary created_at → session_date (migration 20261003110000 LIVE)
+  `8f82ed6` docs: update status temuan audit #12 #13
+
+#### STATUS TEMUAN AUDIT CODEX (3 Okt 2026) — semua non-perangkat-ajar selesai
 Laporan lengkap ada di percakapan; ringkasan status per temuan:
 | # | Temuan | Status |
 |---|--------|--------|
@@ -476,13 +487,13 @@ Laporan lengkap ada di percakapan; ringkasan status per temuan:
 | 3 | Tutup semester query tabel `cases` mati | ✅ SELESAI live (2eb04c1) |
 | 17 | role_type mentah + "Import" di admin | ✅ SELESAI live (96a16db) |
 | — | "bug KEPSEK fn_can_see_case" | ✅ TERBUKTI STALE, dicabut dari docs (3e1fbcf) |
-| 4 | Catatan DUDI tak terbaca siapa pun (visibility RESTRICTED tanpa policy SELECT) | ⚠️ MIGRATION DITULIS, BELUM DI-APPLY — lihat PERINGATAN di bawah |
+| 4 | Catatan DUDI tak terbaca siapa pun (visibility RESTRICTED tanpa policy SELECT) | ✅ SELESAI live (bd7896e + migration 20261002140000, 577abe6 hapus jalur mati JS) |
 | 2 | 4 fungsi AI tak cek is_active | ⬜ belum — DIKECUALIKAN (perangkat ajar) atas perintah Romo |
 | 5 | RLS ld_* pakai auth.uid() vs user_id | ⬜ belum — DIKECUALIKAN (perangkat ajar) |
 | 6 | Perangkat Ajar 5 jenis dok kosong | ⬜ belum — DIKECUALIKAN (perangkat ajar) = Backlog Fitur #3 |
 | 15 | 9 tabel pipeline AI dorman | ⬜ belum — DIKECUALIKAN (perangkat ajar) |
-| 7 | Job generate FAILED tak bisa resume | ⬜ belum (migration/logic) |
-| 8 | RPC TP lama kolom teacher_user_id 42703 (tak dipakai UI) | ⬜ belum (drop/selaras) |
+| 7 | Job generate FAILED tak bisa resume | ⬜ belum — DIKECUALIKAN (perangkat ajar) |
+| 8 | RPC TP lama kolom teacher_user_id 42703 (tak dipakai UI) | ⏸ TUNDA — kolom teacher_user_id masih ada di 5 tabel aktif; fn_check_element_duplicate berpotensi 42703 tapi tidak dipanggil UI. Kerjakan saat sprint perangkat ajar. |
 | 9 | CTE block_group_id N² (UUID acak ikut DISTINCT) | ✅ STALE — sudah terselesaikan di migration 20260802150000 (fn_kepsek_monitoring tidak pakai block_group_id lagi) |
 | 10 | Rekap admin tanpa pagination/agregasi | ✅ SELESAI live (f811385) |
 | 11 | Forum penerima N+1 per jurusan/kelas | ✅ SELESAI live (f811385) |
@@ -491,22 +502,8 @@ Laporan lengkap ada di percakapan; ringkasan status per temuan:
 | 14 | Policy ld_* pakai EXISTS langsung ke tabel ber-RLS | ✅ SELESAI live (e9e6e7c) |
 | 18 | Tombol admin tanpa min-height (CSS) | ✅ SELESAI live (cf7fb62) |
 
-**⚠️ PERINGATAN SESI BARU — migration DUDI #4 menggantung:**
-`supabase/migrations/20261002140000_fix-dudi-observation-read-policies.sql`
-ADA di working tree (untracked), TAPI: belum dry-run, belum di-apply ke
-remote, belum di-commit. Isinya: 3 policy SELECT agar catatan DUDI
-(visibility='RESTRICTED') terbaca siswa, ortu, kaprodi, waka humas (opsi B,
-disetujui Romo). Self-review 5 poin sudah lulus di percakapan.
-LANGKAH BERIKUTNYA: `supabase db push --linked --dry-run` -> tampilkan ->
-konfirmasi Romo -> `db push` -> commit. SETELAH migration live, baru fix JS:
-buang jalur mati di `dudi/js/api.js` (fungsi addObservationAudience +
-getKaprodiAndWakaHumas + class AudienceError yang insert ke
-observation_audience_members yang sudah di-drop) dan hapus penanganan
-AudienceError di `dudi/js/dashboard.js`. Urutan: migration dulu (catatan jadi
-terbaca), baru JS (hentikan error palsu). JANGAN ubah JS dulu.
-
-Kueri verifikasi read-only tersedia di scratchpad/ (cek_rls_observations.sql,
-cek_dudi_insert.sql, dll) — untracked, boleh dipakai ulang.
+**Catatan sesi 3 Okt 2026:** Dua commit pending push ke remote — `664af64` dan `8f82ed6`.
+Jalankan `git push origin main` untuk menyelesaikan. Migration `20261003110000` sudah live.
 
 ### Koreksi atas backlog lama (diverifikasi ke kode 30 Sep 2026)
 Tiga item di bawah pernah tercatat keliru dan sempat dua kali memperlambat kerja:
@@ -536,11 +533,6 @@ Tiga item di bawah pernah tercatat keliru dan sempat dua kali memperlambat kerja
    di `sw.js`, tidak ada WhatsApp/FCM/SMTP). Orang tua hanya tahu anaknya alpa
    kalau membuka aplikasi lebih dulu
 7. **Filter mapel picker Generate ATP** guru Waka Kurikulum
-8. **Metrik `kehadiran_bulan_pct` dan `hadir_hari_ini` memakai `created_at`**,
-   bukan `session_date` — dengan mode offline, absensi yang tersinkron terlambat
-   masuk ke periode yang salah. `fn_kepsek_monitoring` sudah benar memakai
-   `session_date`. Memperbaikinya mengubah angka yang sedang ditampilkan,
-   jadi perlu keputusan tersendiri
 
 ### Backlog Jauh (belum disentuh)
 - Approval workflow kepsek/waka di UI guru
