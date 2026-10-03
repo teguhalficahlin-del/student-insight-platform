@@ -33,7 +33,7 @@ Fitur utama: absensi, BK (kasus siswa), jadwal, forum, perangkat ajar (AI pipeli
 
 | Key | Value |
 |-----|-------|
-| HEAD (30 Sep 2026) | `c9fb231` |
+| HEAD (2 Okt 2026) | `96a16db` |
 | SMKN 1 Ujungbatu `school_id` | `244e389c-de7d-4d70-ac95-346d33a5d02c` |
 | SMKN 1 Ujungbatu slug | `smkn1ujungbatu` (URL pendek: `smkn1ub`) |
 | **SMK Negeri 3 Rambah** `school_id` | `561cc906-e6e0-40c7-a5b0-d8f69a15258a` |
@@ -422,7 +422,7 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
 
 ---
 
-## 9. STATUS PROYEK (per HEAD c9fb231, 30 Sep 2026)
+## 9. STATUS PROYEK (per HEAD 96a16db, 2 Okt 2026)
 
 ### Selesai
 - Audit keamanan Fase 1–3 ✅ (test suite 93/93)
@@ -457,6 +457,56 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
             wajib-ganti untuk audit tab per peran. HANYA sekolah uji. Pulihkan
             dengan menjalankan ulang 20260930230000
 - SMK Negeri 3 Rambah dinyatakan SEKOLAH UJI (30 Sep 2026) — lihat §2
+
+- Sesi 2 Okt 2026 ✅ — audit Codex (read-only, HEAD 322ec72) + perbaikan.
+  Piagam audit: `docs/audit/piagam-audit-codex.md`. Tujuh commit live:
+  `4101a72` `322ec72` docs: catat sesi 30 Sep + piagam audit Codex
+  `21382e1` fix(login): "Password" -> "Kata Sandi" enam portal
+  `2eb04c1` fix(audit #3): panel tutup semester query coaching_cases (tabel cases di-drop)
+  `e638052` fix(audit #1 KRITIS): guard tenant fn_get_forum_members — tutup
+            kebocoran daftar anggota kelas lintas-sekolah. MIGRATION LIVE.
+  `3e1fbcf` docs: cabut "bug KEPSEK fn_can_see_case" yang terbukti stale
+  `96a16db` fix(audit #17): label peran Indonesia + "Import"->"Impor" admin
+
+#### STATUS TEMUAN AUDIT CODEX (2 Okt 2026) — lanjutkan dari sini
+Laporan lengkap ada di percakapan; ringkasan status per temuan:
+| # | Temuan | Status |
+|---|--------|--------|
+| 1 | Forum lintas-tenant (KRITIS) | ✅ SELESAI live (e638052 + migration 20261002120000) |
+| 3 | Tutup semester query tabel `cases` mati | ✅ SELESAI live (2eb04c1) |
+| 17 | role_type mentah + "Import" di admin | ✅ SELESAI live (96a16db) |
+| — | "bug KEPSEK fn_can_see_case" | ✅ TERBUKTI STALE, dicabut dari docs (3e1fbcf) |
+| 4 | Catatan DUDI tak terbaca siapa pun (visibility RESTRICTED tanpa policy SELECT) | ⚠️ MIGRATION DITULIS, BELUM DI-APPLY — lihat PERINGATAN di bawah |
+| 2 | 4 fungsi AI tak cek is_active | ⬜ belum — DIKECUALIKAN (perangkat ajar) atas perintah Romo |
+| 5 | RLS ld_* pakai auth.uid() vs user_id | ⬜ belum — DIKECUALIKAN (perangkat ajar) |
+| 6 | Perangkat Ajar 5 jenis dok kosong | ⬜ belum — DIKECUALIKAN (perangkat ajar) = Backlog Fitur #3 |
+| 15 | 9 tabel pipeline AI dorman | ⬜ belum — DIKECUALIKAN (perangkat ajar) |
+| 7 | Job generate FAILED tak bisa resume | ⬜ belum (migration/logic) |
+| 8 | RPC TP lama kolom teacher_user_id 42703 (tak dipakai UI) | ⬜ belum (drop/selaras) |
+| 9 | CTE block_group_id N² (UUID acak ikut DISTINCT) | ⬜ belum (migration perf) |
+| 10 | Rekap admin tanpa pagination/agregasi | ⬜ belum (JS, risiko sedang) |
+| 11 | Forum penerima N+1 per jurusan/kelas | ⬜ belum (JS perf) |
+| 12 | Metrik kehadiran pakai created_at (= Backlog Fitur #8) | ⏸ BUTUH KEPUTUSAN ROMO — fix mengubah angka yang tampil |
+| 13 | contract/ pakai TIDAK_HADIR | ⬜ rendah — folder contracts/ snapshot desain, usang luas |
+| 14 | Policy ld_* pakai EXISTS langsung ke tabel ber-RLS | ⬜ belum (migration, belum terbukti bocor) |
+| 18 | Tombol admin tanpa min-height (CSS) | ⬜ belum (CSS global, perlu verifikasi dashboard) |
+
+**⚠️ PERINGATAN SESI BARU — migration DUDI #4 menggantung:**
+`supabase/migrations/20261002140000_fix-dudi-observation-read-policies.sql`
+ADA di working tree (untracked), TAPI: belum dry-run, belum di-apply ke
+remote, belum di-commit. Isinya: 3 policy SELECT agar catatan DUDI
+(visibility='RESTRICTED') terbaca siswa, ortu, kaprodi, waka humas (opsi B,
+disetujui Romo). Self-review 5 poin sudah lulus di percakapan.
+LANGKAH BERIKUTNYA: `supabase db push --linked --dry-run` -> tampilkan ->
+konfirmasi Romo -> `db push` -> commit. SETELAH migration live, baru fix JS:
+buang jalur mati di `dudi/js/api.js` (fungsi addObservationAudience +
+getKaprodiAndWakaHumas + class AudienceError yang insert ke
+observation_audience_members yang sudah di-drop) dan hapus penanganan
+AudienceError di `dudi/js/dashboard.js`. Urutan: migration dulu (catatan jadi
+terbaca), baru JS (hentikan error palsu). JANGAN ubah JS dulu.
+
+Kueri verifikasi read-only tersedia di scratchpad/ (cek_rls_observations.sql,
+cek_dudi_insert.sql, dll) — untracked, boleh dipakai ulang.
 
 ### Koreksi atas backlog lama (diverifikasi ke kode 30 Sep 2026)
 Tiga item di bawah pernah tercatat keliru dan sempat dua kali memperlambat kerja:
