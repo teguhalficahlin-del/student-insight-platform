@@ -483,13 +483,13 @@ Laporan lengkap ada di percakapan; ringkasan status per temuan:
 | 15 | 9 tabel pipeline AI dorman | ⬜ belum — DIKECUALIKAN (perangkat ajar) |
 | 7 | Job generate FAILED tak bisa resume | ⬜ belum (migration/logic) |
 | 8 | RPC TP lama kolom teacher_user_id 42703 (tak dipakai UI) | ⬜ belum (drop/selaras) |
-| 9 | CTE block_group_id N² (UUID acak ikut DISTINCT) | ⬜ belum (migration perf) |
-| 10 | Rekap admin tanpa pagination/agregasi | ⬜ belum (JS, risiko sedang) |
-| 11 | Forum penerima N+1 per jurusan/kelas | ⬜ belum (JS perf) |
+| 9 | CTE block_group_id N² (UUID acak ikut DISTINCT) | ✅ STALE — sudah terselesaikan di migration 20260802150000 (fn_kepsek_monitoring tidak pakai block_group_id lagi) |
+| 10 | Rekap admin tanpa pagination/agregasi | ✅ SELESAI live (f811385) |
+| 11 | Forum penerima N+1 per jurusan/kelas | ✅ SELESAI live (f811385) |
 | 12 | Metrik kehadiran pakai created_at (= Backlog Fitur #8) | ⏸ BUTUH KEPUTUSAN ROMO — fix mengubah angka yang tampil |
 | 13 | contract/ pakai TIDAK_HADIR | ⬜ rendah — folder contracts/ snapshot desain, usang luas |
-| 14 | Policy ld_* pakai EXISTS langsung ke tabel ber-RLS | ⬜ belum (migration, belum terbukti bocor) |
-| 18 | Tombol admin tanpa min-height (CSS) | ⬜ belum (CSS global, perlu verifikasi dashboard) |
+| 14 | Policy ld_* pakai EXISTS langsung ke tabel ber-RLS | ✅ SELESAI live (e9e6e7c) |
+| 18 | Tombol admin tanpa min-height (CSS) | ✅ SELESAI live (cf7fb62) |
 
 **⚠️ PERINGATAN SESI BARU — migration DUDI #4 menggantung:**
 `supabase/migrations/20261002140000_fix-dudi-observation-read-policies.sql`
