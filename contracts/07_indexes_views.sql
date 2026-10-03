@@ -84,7 +84,7 @@ SELECT
     COUNT(a.attendance_id)
         FILTER (WHERE a.status = 'HADIR'   AND a.is_void = FALSE) AS hadir,
     COUNT(a.attendance_id)
-        FILTER (WHERE a.status = 'TIDAK_HADIR' AND a.is_void = FALSE) AS tidak_hadir,
+        FILTER (WHERE a.status = 'ALPA' AND a.is_void = FALSE) AS alpa,
     COUNT(a.attendance_id)
         FILTER (WHERE a.status = 'IZIN'    AND a.is_void = FALSE) AS izin,
     COUNT(a.attendance_id)

@@ -91,7 +91,7 @@ export const OFFLINE_QUEUE_TYPES = Object.freeze({
 
 export const ATTENDANCE_STATUS = Object.freeze({
     HADIR:       'HADIR',
-    TIDAK_HADIR: 'TIDAK_HADIR',
+    ALPA:        'ALPA',
     IZIN:        'IZIN',
     SAKIT:       'SAKIT',
     // EKSKUL dihapus (mig 20260703220000) — siswa ekskul ditandai HADIR

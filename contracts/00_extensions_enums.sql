@@ -52,7 +52,7 @@ CREATE TYPE student_status AS ENUM (
 -- siswa yang ikut ekstrakurikuler ditandai HADIR.
 CREATE TYPE attendance_status AS ENUM (
     'HADIR',
-    'TIDAK_HADIR',
+    'ALPA',
     'IZIN',
     'SAKIT'
 );
