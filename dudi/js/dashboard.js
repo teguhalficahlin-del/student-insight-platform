@@ -17,7 +17,6 @@ import {
     fetchRecentAttendance,
     fetchMyObservations,
     saveObservation,
-    AudienceError,
 } from './api.js';
 import {
     saveAttendanceOffline,
@@ -415,38 +414,16 @@ obsForm.addEventListener('submit', async (e) => {
     obsSubmitBtn.textContent   = 'Menyimpan...';
 
     try {
-        let audienceWarning = null;
-        let recipientCount = 0;
-        try {
-            ({ recipientCount } = await saveObservation({
-                studentId:  obsStudentEl.value,
-                sentiment:  obsSentimentEl.value,
-                dimension:  obsDimensionEl.value,
-                content:    obsContentEl.value.trim(),
-                userId:     currentUser.user_id,
-                schoolId:   currentUser.school_id,
-            }));
-        } catch (err) {
-            // DUD-02: partial success. Catatannya SUDAH tersimpan, yang gagal
-            // cuma daftar penerima — jadi jangan bilang "gagal menyimpan",
-            // karena user akan menulis ulang dan jadi catatan ganda.
-            if (!(err instanceof AudienceError)) throw err;
-            console.error('[dudi] AudienceError:', err.cause ?? err);
-            audienceWarning = 'Catatan TERSIMPAN, tetapi belum terkirim ke siswa, orang tua, dan '
-                + 'pihak sekolah. Jangan tulis ulang — laporkan ke admin sekolah.';
-        }
-
-        if (audienceWarning) {
-            obsErrorEl.textContent   = audienceWarning;
-            obsErrorEl.style.display = 'block';
-        } else if (recipientCount === 0) {
-            obsErrorEl.style.color   = 'var(--color-warning,#92400e)';
-            obsErrorEl.textContent   = 'Catatan tersimpan. Belum ada penerima terdaftar (siswa/ortu/pengawas belum punya akun).';
-            obsErrorEl.style.display = 'block';
-        } else {
-            obsSuccessEl.textContent   = 'Catatan berhasil disimpan.';
-            obsSuccessEl.style.display = 'block';
-        }
+        await saveObservation({
+            studentId:  obsStudentEl.value,
+            sentiment:  obsSentimentEl.value,
+            dimension:  obsDimensionEl.value,
+            content:    obsContentEl.value.trim(),
+            userId:     currentUser.user_id,
+            schoolId:   currentUser.school_id,
+        });
+        obsSuccessEl.textContent   = 'Catatan berhasil disimpan.';
+        obsSuccessEl.style.display = 'block';
         obsForm.reset();
         obsCharCount.textContent = '0';
         await loadObservationHistory();

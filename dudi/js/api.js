@@ -211,82 +211,6 @@ export async function markNotificationsRead(ids) {
     if (error) throw error;
 }
 
-// ─── CATATAN SISWA ────────────────────────────────────────────
-// FOLLOWUP-C2: kaprodi & waka humas adalah penerima WAJIB catatan DUDI, bukan
-// tambahan opsional. Sebelumnya kegagalan query dibalas `[]` diam-diam, jadi
-// dua pengawas PKL tidak menerima catatan tanpa ada yang tahu. Sekarang error
-// dilempar apa adanya — addObservationAudience membungkusnya jadi
-// AudienceError, dan UI memberi tahu user bahwa catatan belum terkirim.
-export async function getKaprodiAndWakaHumas(schoolId) {
-    const { data, error } = await supabase
-        .from('v_users_staff_directory')
-        .select('user_id, role_type')
-        .in('role_type', ['KAPRODI', 'WAKA_HUMAS'])
-        .eq('school_id', schoolId)
-        .eq('is_active', true);
-    if (error) throw error;
-    return data ?? [];
-}
-
-/**
- * DUD-02: dilempar saat observation SUDAH tersimpan tapi daftar penerimanya
- * gagal ditulis. Partial success — wajib dibedakan dari kegagalan total, supaya
- * UI tidak menyuruh user menulis ulang catatan yang sebenarnya sudah ada.
- */
-export class AudienceError extends Error {
-    constructor(message, cause) {
-        super(message);
-        this.name  = 'AudienceError';
-        this.cause = cause;
-    }
-}
-
-export async function addObservationAudience(observationId, studentId, schoolId) {
-    const audienceRows = [];
-
-    // Fase kumpulkan penerima. Gagal di sini pun bukan kegagalan total —
-    // observation-nya sudah tersimpan — jadi tetap dibungkus AudienceError.
-    try {
-        const { data: studentData, error: studentErr } = await supabase
-            .from('students')
-            .select('user_id')
-            .eq('student_id', studentId)
-            .maybeSingle();
-        if (studentErr) throw studentErr;
-
-        const { data: parents, error: parentsErr } = await supabase
-            .from('student_parents')
-            .select('parent_user_id')
-            .eq('student_id', studentId)
-            .eq('school_id', schoolId);
-        if (parentsErr) throw parentsErr;
-
-        const staffList = await getKaprodiAndWakaHumas(schoolId);
-
-        if (studentData?.user_id) {
-            audienceRows.push({ observation_id: observationId, user_id: studentData.user_id, school_id: schoolId, added_by_user_id: null });
-        }
-        for (const p of (parents ?? [])) {
-            audienceRows.push({ observation_id: observationId, user_id: p.parent_user_id, school_id: schoolId, added_by_user_id: null });
-        }
-        for (const s of staffList) {
-            audienceRows.push({ observation_id: observationId, user_id: s.user_id, school_id: schoolId, added_by_user_id: null });
-        }
-    } catch (e) {
-        throw new AudienceError('Daftar penerima catatan gagal disusun.', e);
-    }
-
-    // Tidak ada penerima valid = sah, bukan error. Catatan tetap tersimpan dan
-    // tetap bisa dibaca penulisnya sendiri.
-    if (audienceRows.length === 0) return 0;
-
-    const { error } = await supabase
-        .from('observation_audience_members')
-        .insert(audienceRows);
-    if (error) throw new AudienceError('Penerima catatan gagal disimpan.', error);
-    return audienceRows.length;
-}
-
 export async function saveObservation({ studentId, sentiment, dimension, content, userId, schoolId }) {
     const observationId = crypto.randomUUID();
 
@@ -305,9 +229,5 @@ export async function saveObservation({ studentId, sentiment, dimension, content
         });
 
     if (error) throw error;
-
-    // DUD-02: blocking, bukan fire-and-forget. Kalau daftar penerima gagal
-    // ditulis, catatan ini tidak sampai ke siapa pun — caller wajib tahu.
-    const recipientCount = await addObservationAudience(observationId, studentId, schoolId);
-    return { recipientCount: recipientCount ?? 0 };
+    return {};
 }
