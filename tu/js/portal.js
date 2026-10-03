@@ -1340,22 +1340,24 @@ async function submitDrillDown() {
     errEl.style.display  = 'none';
 
     try {
-        for (const programId of _drillJurusanAll) {
-            const prog = _forumPrograms.find(p => p.program_id === programId);
-            const list = await getForumRecipientCandidates(tJur, { programId, academicYear: acYear });
-            const key  = `${_drillType}_JUR_${programId}`;
-            list.forEach(c => _forumRecipients.set(c.user_id, c));
-            _forumGroupLabels.set(key, `${prog?.name ?? 'Jurusan'} (semua)`);
-            _forumGroupUids.set(key, new Set(list.map(c => c.user_id)));
-        }
-        for (const classId of _drillKelasAll) {
-            const cls  = _forumClasses.find(c => c.class_id === classId);
-            const list = await getForumRecipientCandidates(tKls, { classId, academicYear: acYear });
-            const key  = `${_drillType}_KLS_${classId}`;
-            list.forEach(c => _forumRecipients.set(c.user_id, c));
-            _forumGroupLabels.set(key, `${cls?.name ?? 'Kelas'} (semua)`);
-            _forumGroupUids.set(key, new Set(list.map(c => c.user_id)));
-        }
+        await Promise.all([
+            ...[..._drillJurusanAll].map(async programId => {
+                const prog = _forumPrograms.find(p => p.program_id === programId);
+                const list = await getForumRecipientCandidates(tJur, { programId, academicYear: acYear });
+                const key  = `${_drillType}_JUR_${programId}`;
+                list.forEach(c => _forumRecipients.set(c.user_id, c));
+                _forumGroupLabels.set(key, `${prog?.name ?? 'Jurusan'} (semua)`);
+                _forumGroupUids.set(key, new Set(list.map(c => c.user_id)));
+            }),
+            ...[..._drillKelasAll].map(async classId => {
+                const cls  = _forumClasses.find(c => c.class_id === classId);
+                const list = await getForumRecipientCandidates(tKls, { classId, academicYear: acYear });
+                const key  = `${_drillType}_KLS_${classId}`;
+                list.forEach(c => _forumRecipients.set(c.user_id, c));
+                _forumGroupLabels.set(key, `${cls?.name ?? 'Kelas'} (semua)`);
+                _forumGroupUids.set(key, new Set(list.map(c => c.user_id)));
+            }),
+        ]);
         if (_drillIndividu.size > 0) {
             const key = `${_drillType}_INDIVIDU_${Date.now()}`;
             _drillIndividu.forEach((c, uid) => _forumRecipients.set(uid, c));

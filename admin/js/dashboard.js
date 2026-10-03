@@ -573,7 +573,7 @@ async function renderSetupPanel() {
         { count: stakeholderCount },
         { count: tuCount },
         { count: jadwalCount },
-        linksRaw,
+        { count: ortuCount },
     ] = await Promise.all([
         supabase.from('programs').select('*', { count: 'exact', head: true }),
         supabase.from('classes').select('*', { count: 'exact', head: true }),
@@ -584,20 +584,8 @@ async function renderSetupPanel() {
         supabase.from('v_users_staff_directory').select('*', { count: 'exact', head: true }).eq('role_type', 'STAKEHOLDER').is('deleted_at', null),
         supabase.from('v_users_staff_directory').select('*', { count: 'exact', head: true }).eq('role_type', 'TU').is('deleted_at', null),
         supabase.from('schedule_templates').select('*', { count: 'exact', head: true }),
-        fetchAllRows('student_parents', q => q.select('parent_user_id, students(student_status)')),
+        supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'ORTU').is('deleted_at', null),
     ]);
-
-    // Hitung orang tua siswa aktif vs orang tua alumni
-    const parentStatuses = new Map();
-    for (const l of linksRaw) {
-        if (!parentStatuses.has(l.parent_user_id)) parentStatuses.set(l.parent_user_id, []);
-        if (l.students?.student_status) parentStatuses.get(l.parent_user_id).push(l.students.student_status);
-    }
-    let ortuSiswaCount = 0, ortuAlumniCount = 0;
-    for (const statuses of parentStatuses.values()) {
-        if (statuses.some(s => s === 'AKTIF')) ortuSiswaCount++;
-        else if (statuses.every(s => s === 'LULUS')) ortuAlumniCount++;
-    }
 
     const base = window.location.href.replace(/\/admin\/.*$/, '');
     const slug = schoolSlug ? encodeURIComponent(schoolSlug) : '';
@@ -609,8 +597,7 @@ async function renderSetupPanel() {
         { label: 'Staf & Peran',      count: stafCount,        panel: 'staff',       portal: portalUrl('guru/index.html') },
         { label: 'Siswa Aktif',       count: siswaCount,       panel: 'students',    portal: portalUrl('student/index.html') },
         { label: 'Alumni',            count: alumniCount,      panel: 'alumni',      portal: null },
-        { label: 'Orang Tua Siswa',   count: ortuSiswaCount,   panel: 'parents',     portal: portalUrl('parent/index.html') },
-        { label: 'Orang Tua Alumni',  count: ortuAlumniCount,  panel: 'alumni',      portal: null },
+        { label: 'Orang Tua',         count: ortuCount,        panel: 'parents',     portal: portalUrl('parent/index.html') },
         { label: 'DUDI',              count: dudiCount,        panel: 'dudi',        portal: portalUrl('dudi/index.html') },
         { label: 'Stakeholder',       count: stakeholderCount, panel: 'stakeholders',  portal: portalUrl('stakeholder/index.html') },
         { label: 'Tata Usaha',        count: tuCount,          panel: 'tata-usaha',    portal: portalUrl('tu/index.html') },
@@ -1526,12 +1513,21 @@ async function renderParentsPanel() {
 // Keduanya disusun accordion bersarang: Tahun Lulus → Program → Kelas.
 async function renderAlumniPanel() {
     // ── Siswa alumni ──
-    const siswaRaw = await fetchAllRows('students',
-        q => q.select(`student_id, full_name, nis, graduated_academic_year,
-            alumni_career_track, alumni_career_note,
-            program:programs ( name ),
-            enrollment:class_enrollments ( academic_year, class:classes ( name ) )
-        `).eq('student_status', 'LULUS').order('full_name'));
+    const [siswaRaw, parents, links] = await Promise.all([
+        fetchAllRows('students',
+                    q => q.select(`student_id, full_name, nis, graduated_academic_year,
+                alumni_career_track, alumni_career_note,
+                program:programs ( name ),
+                enrollment:class_enrollments ( academic_year, class:classes ( name ) )
+            `).eq('student_status', 'LULUS').order('full_name')),
+        fetchAllRows('users',
+                    q => q.select('user_id, full_name, login_identifier').eq('role_type', 'ORTU').is('deleted_at', null).order('full_name')),
+        fetchAllRows('student_parents',
+                    q => q.select(`parent_user_id, students ( student_status, graduated_academic_year,
+                program:programs ( name ),
+                enrollment:class_enrollments ( academic_year, class:classes ( name ) )
+            )`)),
+    ]);
 
     const siswaRows = siswaRaw.map(s => ({
         year:    s.graduated_academic_year ?? 'Tidak diketahui',
@@ -1539,15 +1535,6 @@ async function renderAlumniPanel() {
         kelas:   alumniClassName(s.enrollment, s.graduated_academic_year),
         item:    s,
     }));
-
-    // ── Orang tua alumni (semua anak sudah lulus) ──
-    const parents = await fetchAllRows('users',
-        q => q.select('user_id, full_name, login_identifier').eq('role_type', 'ORTU').is('deleted_at', null).order('full_name'));
-    const links = await fetchAllRows('student_parents',
-        q => q.select(`parent_user_id, students ( student_status, graduated_academic_year,
-            program:programs ( name ),
-            enrollment:class_enrollments ( academic_year, class:classes ( name ) )
-        )`));
 
     const childMap = new Map();
     for (const l of links) {
