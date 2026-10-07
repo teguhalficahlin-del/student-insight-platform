@@ -514,10 +514,12 @@
                         </div>
                         <div id="wali-kasus-audience-block" style="margin-bottom:16px; display:none; padding:12px; border:1px solid var(--color-border); border-radius:var(--radius)"></div>
                         <div id="wali-kasus-status-block" style="display:none">
-                            <label for="wali-kasus-new-status">Ubah Status</label>
-                            <select id="wali-kasus-new-status" class="input" style="width:auto; margin-bottom:6px"></select>
+                            <div id="wali-kasus-status-change-controls" style="margin-bottom:8px">
+                                <label for="wali-kasus-new-status">Ubah Status</label>
+                                <select id="wali-kasus-new-status" class="input" style="width:auto; margin-bottom:6px"></select>
+                                <button class="btn btn-primary btn-sm" id="wali-kasus-status-btn">Simpan Status</button>
+                            </div>
                             <textarea id="wali-kasus-status-note" class="input" rows="2" placeholder="Catatan perubahan (opsional)…" style="margin-bottom:8px"></textarea>
-                            <button class="btn btn-primary btn-sm" id="wali-kasus-status-btn">Simpan Status</button>
                             <span id="wali-kasus-status-msg" style="font-size:13px; margin-left:8px"></span>
                         </div>
                         <div style="margin-top:16px">

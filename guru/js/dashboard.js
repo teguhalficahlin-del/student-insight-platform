@@ -14,7 +14,7 @@ import {
     getMyScheduleForDate, getEnrolledStudents, getMyClasses, getClassesByProgram,
     getAttendanceForSession,
     getMyStudents, searchStudents, insertObservation,
-    getWaliKelasInfo, getWaliAttendanceSummary,
+    getWaliKelasInfo, getWaliAttendanceSummary, getWaliCoachingStudents, getWaliAttendanceSessions,
     getProgram, fetchPklStudents, fetchNonPklStudents,
     fetchDudiPartners, fetchPklAttendance, fetchDudiObservations,
     getAttendanceSummaryByStudents,
@@ -1524,6 +1524,9 @@ function renderObsHistory(rows, listEl) {
 
 // ─── TAB WALI KELAS ──────────────────────────────────────────
 
+let _waliSummarySeq = 0;
+let _waliRosterSeq = 0;
+
 async function initWaliTab() {
     wireSimpleAccordion('wali-att-card');
     const classId = currentUser.wali_kelas_class_id;
@@ -1551,13 +1554,14 @@ async function initWaliTab() {
 
         try {
             const classId   = currentUser.wali_kelas_class_id;
-            const dateStart = document.getElementById('wali-date-start').value;
-            const dateEnd   = document.getElementById('wali-date-end').value;
+            const dateStart = document.getElementById('wali-date-start').value || null;
+            const dateEnd   = document.getElementById('wali-date-end').value || null;
+            const academicYear = config.current_academic_year;
 
-            const students = await getWaliAttendanceSummary(classId, config.current_academic_year, dateStart, dateEnd);
+            const students = await getWaliAttendanceSummary(classId, academicYear, dateStart, dateEnd);
 
             const allSessions = await Promise.all(
-                students.map(s => getStudentAttendanceSessions(s.student_id, dateStart, dateEnd)
+                students.map(s => getWaliAttendanceSessions(classId, academicYear, s.student_id, dateStart, dateEnd)
                     .then(sessions => ({ student: s, sessions }))
                 )
             );
@@ -1575,8 +1579,11 @@ async function initWaliTab() {
             ];
             XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryData), 'Ringkasan');
 
+            const usedNames = new Set(['ringkasan']);
             for (const { student, sessions } of allSessions) {
                 const sheetData = [
+                    ['Nama', student.full_name],
+                    ['NIS', student.nis ?? ''],
                     ['Tanggal', 'Jam', 'Mata Pelajaran', 'Guru', 'Status', 'Keterangan'],
                     ...sessions.map(s => [
                         s.schedule?.session_date ?? '',
@@ -1587,13 +1594,20 @@ async function initWaliTab() {
                         s.status === 'IZIN' ? (s.notes ?? '') : '',
                     ])
                 ];
-                const sheetName = student.full_name.slice(0, 31);
+                const baseName = (student.full_name ?? 'Siswa').replace(/[\\/:?*\[\]]/g, ' ')
+                    .trim().replace(/^'+|'+$/g, '').slice(0, 31).replace(/^'+|'+$/g, '') || 'Siswa';
+                let sheetName = baseName;
+                for (let n = 2; usedNames.has(sheetName.toLowerCase()); n++) {
+                    const suffix = ` (${n})`;
+                    sheetName = baseName.slice(0, 31 - suffix.length) + suffix;
+                }
+                usedNames.add(sheetName.toLowerCase());
                 XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheetData), sheetName);
             }
 
             const className = document.getElementById('wali-class-title')
                 .textContent.replace('Kelas Walian — ', '').trim();
-            XLSX.writeFile(wb, `rekap_wali_${className}_${dateStart}_${dateEnd}.xlsx`);
+            XLSX.writeFile(wb, `rekap_wali_${className}_${dateStart ?? 'awal'}_${dateEnd ?? 'akhir'}.xlsx`);
 
         } catch (err) {
             alert('Gagal mengunduh: ' + fe(err));
@@ -1610,28 +1624,43 @@ async function initWaliTab() {
 async function initWaliKasusSection() {
     const classId = currentUser.wali_kelas_class_id;
     const msgEl   = document.getElementById('wali-kasus-list-content');
-    if (_waliKasusCtx) { await loadKasusList(false, _waliKasusCtx); return; }
-    try {
-        const enrolled   = await getEnrolledStudents(classId, config.current_academic_year);
-        const studentIds = enrolled.map(s => s.student_id);
-        if (!studentIds.length) {
-            msgEl.innerHTML = '<p class="hint">Tidak ada siswa terdaftar di kelas ini.</p>';
-            return;
-        }
-        _waliKasusCtx = makeKasusCtx('wali-kasus', { studentIds });
+    const seq = ++_waliRosterSeq;
+    if (!_waliKasusCtx) {
+        _waliKasusCtx = makeKasusCtx('wali-kasus', { studentIds: [] });
         document.getElementById('wali-kasus-back-btn')
             .addEventListener('click', () => showKasusList(_waliKasusCtx));
         wireKasusDownloadButtons(_waliKasusCtx);
         document.getElementById('wali-kasus-filter-btn')
-            ?.addEventListener('click', () => loadKasusList(false, _waliKasusCtx));
-        await loadKasusList(false, _waliKasusCtx);
+            ?.addEventListener('click', () => initWaliKasusSection());
+    }
+    const ctx = _waliKasusCtx;
+    ++ctx.listSeq;
+    ctx.extraQuery.studentIds = [];
+    ctx.allCases = [];
+    ctx.offset = 0;
+    ctx.hasMore = false;
+    showKasusList(ctx);
+    msgEl.innerHTML = '<p class="hint">Memuat siswa dan kasus…</p>';
+    try {
+        const enrolled   = await getWaliCoachingStudents(classId, config.current_academic_year);
+        if (seq !== _waliRosterSeq) return;
+        const studentIds = enrolled.map(s => s.student_id);
+        ctx.extraQuery.studentIds = studentIds;
+        if (!studentIds.length) {
+            msgEl.innerHTML = '<p class="hint">Tidak ada siswa terdaftar di kelas ini.</p>';
+            return;
+        }
+        await loadKasusList(false, ctx);
     } catch (err) {
-        msgEl.innerHTML = `<div class="status-err">${esc(fe(err))}</div>`;
+        if (seq !== _waliRosterSeq) return;
+        showKasusLoadError(err, ctx, () => initWaliKasusSection());
     }
 }
 
 async function loadWaliSummary() {
+    const seq = ++_waliSummarySeq;
     const classId   = currentUser.wali_kelas_class_id;
+    const academicYear = config.current_academic_year;
     const dateStart = document.getElementById('wali-date-start').value || null;
     const dateEnd   = document.getElementById('wali-date-end').value   || null;
     const container = document.getElementById('wali-att-recap');
@@ -1639,8 +1668,9 @@ async function loadWaliSummary() {
 
     try {
         const students = await getWaliAttendanceSummary(
-            classId, config.current_academic_year, dateStart, dateEnd
+            classId, academicYear, dateStart, dateEnd
         );
+        if (seq !== _waliSummarySeq) return;
         if (!students.length) {
             container.innerHTML = '<p class="hint">Belum ada siswa di kelas ini.</p>';
             return;
@@ -1680,24 +1710,11 @@ async function loadWaliSummary() {
                 const sid = det.dataset.studentId;
                 const ds  = det.dataset.dateStart || null;
                 const de  = det.dataset.dateEnd   || null;
-                if (!ds || !de) {
-                    body.innerHTML = '<p class="acc-empty">Pilih rentang tanggal untuk melihat detail sesi. Untuk data lengkap, gunakan fitur Unduh Excel.</p>';
-                    return;
-                }
                 try {
-                    const sessions = await getStudentAttendanceSessions(sid, ds, de);
+                    const sessions = await getWaliAttendanceSessions(classId, academicYear, sid, ds, de);
                     if (!sessions.length) {
                         body.innerHTML = '<p class="acc-empty">Belum ada sesi tercatat.</p>';
                         return;
-                    }
-                    const grouped = [];
-                    const seen = new Map();
-                    for (const s of sessions) {
-                        const key = `${s.schedule.session_date}|${s.schedule.subject_label ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
-                        if (!seen.has(key)) {
-                            seen.set(key, true);
-                            grouped.push(s);
-                        }
                     }
                     const STATUS_COLOR = {
                         HADIR: 'var(--color-success)',
@@ -1706,11 +1723,12 @@ async function loadWaliSummary() {
                         ALPA: 'var(--color-danger)',
                     };
                     const STATUS_LABEL = { HADIR:'Hadir', IZIN:'Izin', SAKIT:'Sakit', ALPA:'Alpa' };
-                    body.innerHTML = grouped.map(s => `
+                    body.innerHTML = sessions.map(s => `
                         <div style="display:flex;align-items:center;gap:8px;
                             padding:7px 16px;border-top:0.5px solid var(--color-border)">
                             <span style="font-size:12px;color:var(--color-text-muted);min-width:90px">
                                 ${esc(s.schedule.session_date)}
+                                <br>${esc(fmtTime(s.schedule.session_start))} - ${esc(fmtTime(s.schedule.session_end))}
                             </span>
                             <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
                                 ${esc(s.schedule.subject_label ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
@@ -1721,6 +1739,7 @@ async function loadWaliSummary() {
                             </span>
                         </div>`).join('');
                 } catch(err) {
+                    delete body.dataset.loaded;
                     body.innerHTML = `<div class="alert alert-danger" style="margin:8px 16px">${esc(fe(err))}</div>`;
                 }
             });
@@ -1729,6 +1748,7 @@ async function loadWaliSummary() {
         document.getElementById('wali-recap-export').style.display = '';
 
     } catch (err) {
+        if (seq !== _waliSummarySeq) return;
         container.innerHTML = `<div class="alert alert-danger">${esc(fe(err))}</div>`;
     }
 }

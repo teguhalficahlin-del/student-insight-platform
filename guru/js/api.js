@@ -340,8 +340,8 @@ export async function getWaliAttendanceSummary(classId, academicYear, dateStart,
     const { data, error } = await supabase.rpc('fn_class_attendance_summary', {
         p_class_id:      classId,
         p_academic_year: academicYear,
-        p_date_start:    dateStart ?? null,
-        p_date_end:      dateEnd   ?? null,
+        p_date_start:    dateStart || null,
+        p_date_end:      dateEnd   || null,
         p_teacher_id:    null,
     });
     if (error) throw error;
@@ -354,6 +354,43 @@ export async function getWaliAttendanceSummary(classId, academicYear, dateStart,
         IZIN:        Number(r.izin),
         SAKIT:       Number(r.sakit),
         total:       Number(r.total),
+    }));
+}
+
+export async function getWaliCoachingStudents(classId, academicYear) {
+    const { data, error } = await supabase
+        .from('class_enrollments')
+        .select('student:students ( student_id, nis, full_name, student_status )')
+        .eq('class_id', classId)
+        .eq('academic_year', academicYear)
+        .is('withdrawn_at', null);
+    if (error) throw error;
+    return (data ?? []).map(r => r.student)
+        .filter(s => s && ['AKTIF', 'PKL'].includes(s.student_status));
+}
+
+export async function getWaliAttendanceSessions(classId, academicYear, studentId, dateStart, dateEnd) {
+    const rows = [];
+    const pageSize = 1000;
+    for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await supabase.rpc('fn_wali_attendance_sessions', {
+            p_class_id: classId,
+            p_academic_year: academicYear,
+            p_student_id: studentId,
+            p_date_start: dateStart || null,
+            p_date_end: dateEnd || null,
+        }).range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        rows.push(...(data ?? []));
+        if (!data || data.length < pageSize) break;
+    }
+    return rows.map(r => ({
+        attendance_id: r.attendance_id, status: r.status, notes: r.notes,
+        schedule: {
+            session_date: r.session_date, session_start: r.session_start,
+            session_end: r.session_end, subject_label: r.subject_label,
+            teacher: { full_name: r.teacher_full_name },
+        },
     }));
 }
 
@@ -876,8 +913,7 @@ export async function markNotificationsRead(ids) {
  * @param {string}   status          filter satu status persis (paling spesifik, menang atas statusNotClosed)
  * @param {string}   track           SEKOLAH | PKL
  * @param {string[]} studentIds      batasi ke siswa tertentu (wali kelas / kaprodi).
- *                                   Array kosong = filter DILEWATI (semua kasus) — caller wajib
- *                                   menangani sendiri kasus "tidak ada siswa" sebelum memanggil.
+ *                                   Array kosong = tidak ada kasus (fail closed).
  * @param {boolean}  statusNotClosed hanya kasus aktif (kepsek). Diabaikan jika `status` diisi.
  */
 export async function getCases({
@@ -889,6 +925,7 @@ export async function getCases({
     offset = 0,
     limit = 51
 } = {}) {
+    if (Array.isArray(studentIds) && studentIds.length === 0) return [];
     let req = supabase
         .from('coaching_cases')
         .select(`
