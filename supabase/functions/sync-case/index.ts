@@ -52,19 +52,45 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
         const idempotencyKey = body['idempotency_key'] as string;
 
+        if (body['created_by_user_id'] !== user.user_id) {
+            return forbidden('created_by_user_id harus sesuai dengan akun yang login');
+        }
+
+        const { data: student, error: studentError } = await admin
+            .from('students')
+            .select('student_id')
+            .eq('student_id', body['student_id'] as string)
+            .eq('school_id', user.school_id)
+            .maybeSingle();
+        if (studentError) return internalError(studentError);
+        if (!student) return forbidden('Siswa tidak ditemukan di sekolah Anda');
+
+        if (user.role_type === 'DUDI') {
+            if (body['track'] !== 'PKL') return forbidden('DUDI hanya dapat membuat kasus PKL');
+            const { data: placement, error: placementError } = await admin
+                .from('pkl_placements')
+                .select('placement_id')
+                .eq('school_id', user.school_id)
+                .eq('student_id', body['student_id'] as string)
+                .eq('dudi_user_id', user.user_id)
+                .eq('is_active', true)
+                .limit(1)
+                .maybeSingle();
+            if (placementError) return internalError(placementError);
+            if (!placement) return forbidden('Siswa bukan peserta PKL dalam binaan Anda');
+        }
+
         // Idempotency check
         const { data: existing } = await admin
             .from('sync_idempotency')
             .select('idempotency_key, result_json')
             .eq('idempotency_key', idempotencyKey)
+            .eq('school_id', user.school_id)
+            .eq('function_name', 'sync-case')
             .maybeSingle();
 
         if (existing) {
             return ok({ ...(existing.result_json ?? {}), was_duplicate: true });
-        }
-
-        if (body['created_by_user_id'] !== user.user_id) {
-            return forbidden('created_by_user_id harus sesuai dengan akun yang login');
         }
 
         // DUDI selalu PRIVATE; internal boleh pilih; default PRIVATE jika tidak dikirim

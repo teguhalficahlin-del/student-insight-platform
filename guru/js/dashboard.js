@@ -3521,6 +3521,8 @@ const EVENT_TYPE_LABEL = {
 
 const KASUS_PAGE    = 50;
 let _kasusTabInit   = false;
+let _kasusTabBusy   = false;
+let _kasusSearchSeq = 0;
 
 /**
  * Konteks render kasus — satu objek per tab yang menampilkan daftar & detail kasus.
@@ -3534,7 +3536,7 @@ let _kasusTabInit   = false;
  * beberapa tab bisa menampilkan daftar kasus sekaligus tanpa saling menimpa.
  */
 function makeKasusCtx(prefix, extraQuery = {}) {
-    return { prefix, extraQuery, allCases: [], offset: 0, hasMore: false, currentId: null };
+    return { prefix, extraQuery, allCases: [], offset: 0, hasMore: false, currentId: null, listSeq: 0, detailSeq: 0 };
 }
 
 // Konteks tab-kasus — dipakai sebagai default oleh seluruh fungsi di bawah,
@@ -3546,10 +3548,17 @@ function kEl(ctx, suffix) { return document.getElementById(`${ctx.prefix}-${suff
 
 async function initKasusTab() {
     markKasusAsSeen();
-    if (_kasusTabInit) { renderKasusList(); return; }
-    _kasusTabInit = true;
-
-    await ensureStudentPool();
+    if (_kasusTabInit) { await loadKasusList(); return; }
+    if (_kasusTabBusy) return;
+    _kasusTabBusy = true;
+    try {
+        await ensureStudentPool();
+    } catch (err) {
+        showKasusLoadError(err, kasusCtxDefault, () => initKasusTab());
+        return;
+    } finally {
+        _kasusTabBusy = false;
+    }
 
     // Filters
     document.getElementById('kasus-filter-status').addEventListener('change', () => loadKasusList());
@@ -3601,8 +3610,10 @@ async function initKasusTab() {
         trackEl.value = 'SEKOLAH';
     }
 
-    let kasusSearchSeq = 0;
     searchEl.addEventListener('input', async () => {
+        const seq = ++_kasusSearchSeq;
+        studentIdEl.value = '';
+        listEl.style.display = 'none';
         const raw = searchEl.value.trim();
         const q   = raw.toLowerCase();
         if (q.length < 2) { listEl.style.display = 'none'; return; }
@@ -3618,14 +3629,14 @@ async function initKasusTab() {
 
         let hits = local;
         if (isBroadObserver) {
-            const seq = ++kasusSearchSeq;
             try {
                 const remote = await searchStudents(raw, currentUser.school_id);
-                if (seq !== kasusSearchSeq) return;
                 const seen = new Set(local.map(s => s.student_id));
                 hits = [...local, ...remote.filter(s => !seen.has(s.student_id))];
             } catch { /* fallback lokal */ }
         }
+        const modal = document.getElementById('kasus-create-modal');
+        if (seq !== _kasusSearchSeq || modal.style.display !== 'flex' || modal.classList.contains('sip-exit')) return;
 
         hits = hits.slice(0, 12);
         if (!hits.length) { listEl.style.display = 'none'; return; }
@@ -3635,6 +3646,7 @@ async function initKasusTab() {
         listEl.style.display = 'block';
         listEl.querySelectorAll('div').forEach(el => {
             el.addEventListener('click', () => {
+                ++_kasusSearchSeq;
                 searchEl.value = el.dataset.name;
                 studentIdEl.value = el.dataset.id;
                 listEl.style.display = 'none';
@@ -3681,6 +3693,7 @@ async function initKasusTab() {
         }
     });
 
+    _kasusTabInit = true;
     await loadKasusList();
 }
 
@@ -3693,6 +3706,7 @@ function showCreateMsg(msg, isErr = false) {
 
 function openKasusModal() {
     if (!navigator.onLine) return;
+    ++_kasusSearchSeq;
     const modal = document.getElementById('kasus-create-modal');
     document.getElementById('kasus-create-form').reset();
     document.getElementById('kasus-c-student-id').value = '';
@@ -3702,14 +3716,34 @@ function openKasusModal() {
     modal.style.display = 'flex';
 }
 function closeKasusModal() {
+    ++_kasusSearchSeq;
     sipCloseOverlay(document.getElementById('kasus-create-modal'));
 }
 
-async function loadKasusList(append = false, ctx = kasusCtxDefault) {
+function showKasusLoadError(err, ctx, retry, append = false) {
+    kEl(ctx, 'list-error')?.remove();
+    const errorEl = document.createElement('div');
+    errorEl.id = `${ctx.prefix}-list-error`;
+    errorEl.className = 'status-err';
+    errorEl.setAttribute('role', 'alert');
+    errorEl.innerHTML = `${esc(fe(err))} <button class="btn btn-secondary btn-sm">Coba Lagi</button>`;
     const contentEl = kEl(ctx, 'list-content');
+    if (append) contentEl.appendChild(errorEl);
+    else contentEl.replaceChildren(errorEl);
+    errorEl.querySelector('button').addEventListener('click', async (event) => {
+        event.currentTarget.disabled = true;
+        await retry();
+    });
+}
+
+async function loadKasusList(append = false, ctx = kasusCtxDefault) {
+    const seq = ++ctx.listSeq;
+    const contentEl = kEl(ctx, 'list-content');
+    kEl(ctx, 'list-error')?.remove();
     if (!append) {
         ctx.allCases = [];
         ctx.offset   = 0;
+        ctx.hasMore  = false;
         contentEl.innerHTML = '<p class="hint">Memuat kasus…</p>';
     }
     // Tab jabatan boleh tidak menyediakan kontrol filter — anggap "tanpa filter".
@@ -3720,13 +3754,15 @@ async function loadKasusList(append = false, ctx = kasusCtxDefault) {
             ...ctx.extraQuery,
             status, track, offset: ctx.offset, limit: KASUS_PAGE + 1,
         });
+        if (seq !== ctx.listSeq) return;
         ctx.hasMore  = rows.length > KASUS_PAGE;
         const page   = ctx.hasMore ? rows.slice(0, KASUS_PAGE) : rows;
         ctx.allCases = append ? [...ctx.allCases, ...page] : page;
         ctx.offset   = ctx.allCases.length;
         renderKasusList(ctx);
     } catch (err) {
-        if (!append) contentEl.innerHTML = `<div class="status-err">${esc(fe(err))}</div>`;
+        if (seq !== ctx.listSeq) return;
+        showKasusLoadError(err, ctx, () => loadKasusList(append, ctx), append);
     }
 }
 
@@ -3764,7 +3800,12 @@ function renderKasusList(ctx = kasusCtxDefault) {
     if (moreBtn) moreBtn.addEventListener('click', async () => {
         moreBtn.disabled = true;
         moreBtn.textContent = 'Memuat…';
-        await loadKasusList(true, ctx);
+        try {
+            await loadKasusList(true, ctx);
+        } finally {
+            moreBtn.disabled = false;
+            moreBtn.textContent = 'Muat lebih…';
+        }
     });
 }
 
@@ -3772,10 +3813,36 @@ function showKasusList(ctx = kasusCtxDefault) {
     kEl(ctx, 'list-view').style.display   = 'block';
     kEl(ctx, 'detail-view').style.display = 'none';
     ctx.currentId = null;
+    ++ctx.detailSeq;
+}
+
+function resetKasusActionForm(ctx) {
+    for (const suffix of ['comment-text', 'escalate-note', 'status-note']) {
+        const el = kEl(ctx, suffix);
+        if (el) el.value = '';
+    }
+    for (const suffix of ['comment-msg', 'escalate-msg', 'status-msg']) {
+        const el = kEl(ctx, suffix);
+        if (el) el.textContent = '';
+    }
+    const visible = kEl(ctx, 'comment-visible');
+    if (visible) visible.checked = false;
+    const close = kEl(ctx, 'close-btn');
+    if (close) close.dataset.confirming = '';
+}
+
+function showKasusDetailError(err, ctx) {
+    kEl(ctx, 'actions').style.display = 'none';
+    kEl(ctx, 'events-list').innerHTML = '';
+    kEl(ctx, 'detail-header').innerHTML = `<div class="status-err" role="alert">${esc(fe(err))}
+        <button class="btn btn-secondary btn-sm">Coba Lagi</button></div>`;
+    kEl(ctx, 'detail-header').querySelector('button').addEventListener('click', () => openKasusDetail(ctx.currentId, ctx));
 }
 
 async function openKasusDetail(caseId, ctx = kasusCtxDefault) {
+    if (ctx.currentId !== caseId) resetKasusActionForm(ctx);
     ctx.currentId = caseId;
+    const seq = ++ctx.detailSeq;
     kEl(ctx, 'list-view').style.display   = 'none';
     kEl(ctx, 'detail-view').style.display = 'block';
     kEl(ctx, 'detail-header').innerHTML = '<p class="hint">Memuat…</p>';
@@ -3784,12 +3851,13 @@ async function openKasusDetail(caseId, ctx = kasusCtxDefault) {
 
     try {
         const [kasus, events] = await Promise.all([getCase(caseId), getCoachingCaseEvents(caseId)]);
+        if (ctx.currentId !== caseId || ctx.detailSeq !== seq) return;
         renderKasusDetail(kasus, ctx);
         renderKasusEvents(events, ctx);
-        await renderKasusActions(kasus, ctx);
+        await renderKasusActions(kasus, ctx, seq);
     } catch (err) {
-        kEl(ctx, 'detail-header').innerHTML =
-            `<div class="status-err">${esc(fe(err))}</div>`;
+        if (ctx.currentId !== caseId || ctx.detailSeq !== seq) return;
+        showKasusDetailError(err, ctx);
     }
 }
 
@@ -3817,7 +3885,7 @@ function renderKasusEvents(events, ctx = kasusCtxDefault) {
     }
     el.innerHTML = events.map(ev => {
         const label = EVENT_TYPE_LABEL[ev.event_type] ?? ev.event_type;
-        const text  = ev.payload?.note ?? ev.payload?.text ?? '';
+        const text  = ev.payload?.note ?? ev.payload?.text ?? ev.payload?.summary ?? '';
         let detail  = '';
         if (ev.event_type === 'ESCALATED' && ev.payload?.note)
             detail = esc(ev.payload.note);
@@ -3838,10 +3906,12 @@ function renderKasusEvents(events, ctx = kasusCtxDefault) {
     }).join('');
 }
 
-// 6 peran yang boleh jadi handler/eskalasi tujuan kasus internal
-const INTERNAL_CASE_ROLES = ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','KEPSEK'];
+// Selaras dengan fn_validate_escalation; DUDI bukan penerima eskalasi internal.
+const INTERNAL_CASE_ROLES = ['GURU','BK','WALI_KELAS','KAPRODI','WAKA_KESISWAAN','WAKA_KURIKULUM','WAKA_HUMAS','KEPSEK'];
 
-async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
+async function renderKasusActions(kasus, ctx = kasusCtxDefault, seq = ctx.detailSeq) {
+    const isCurrent = () => ctx.currentId === kasus.case_id && ctx.detailSeq === seq;
+    if (!isCurrent()) return;
     const actionsEl     = kEl(ctx, 'actions');
     const escalateBlock = kEl(ctx, 'escalate-block');
     const statusBlock   = kEl(ctx, 'status-block');
@@ -3861,7 +3931,7 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
         return;
     }
 
-    actionsEl.style.display = 'block';
+    actionsEl.style.display = 'none';
 
     // ── Eskalasi: kandidat dari fn_get_escalation_candidates ──
     const isInternal = INTERNAL_CASE_ROLES.includes(currentUser.role_type);
@@ -3871,7 +3941,9 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
         const warnEl = kEl(ctx, 'escalate-warn');
         if (warnEl) warnEl.style.display = 'none';
         try {
-            const candidates = await getEscalationCandidates(kasus.case_id);
+            const candidates = (await getEscalationCandidates(kasus.case_id))
+                .filter(c => INTERNAL_CASE_ROLES.includes(c.role_type));
+            if (!isCurrent()) return;
             if (!candidates.length) {
                 escalateTo.innerHTML = '<option value="">Tidak ada kandidat tersedia</option>';
             } else {
@@ -3880,6 +3952,7 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
                 ).join('');
             }
         } catch {
+            if (!isCurrent()) return;
             escalateTo.innerHTML = '<option value="">Gagal memuat kandidat</option>';
         }
     } else {
@@ -3887,15 +3960,17 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
     }
 
     // ── Status change ──
+    const statusControls = kEl(ctx, 'status-change-controls') ?? statusBlock;
     const nextStatuses = STATUS_AFTER_CURRENT[kasus.status] ?? [];
     if (isHandler && nextStatuses.length) {
         statusSel.innerHTML = nextStatuses.map(s =>
             `<option value="${s}">${esc(CASE_STATUS_LABEL[s])}</option>`
         ).join('');
-        statusBlock.style.display = 'block';
+        statusControls.style.display = 'block';
     } else {
-        statusBlock.style.display = 'none';
+        statusControls.style.display = 'none';
     }
+    if (statusControls !== statusBlock) statusBlock.style.display = 'block';
 
     // Close: Kepsek/BK/handler
     const canClose = currentUser.role_type === 'KEPSEK' || isHandler;
@@ -3933,8 +4008,10 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
                     await shareCoachingCaseToStudent(kasus.case_id, currentUser.user_id, currentUser.school_id);
                     audienceMsgEl.style.color = 'var(--color-success)'; audienceMsgEl.textContent = 'Dibagikan ke siswa.';
                 }
+                if (!isCurrent()) return;
                 await refreshKasusDetail(ctx);
             } catch (err) {
+                if (!isCurrent()) return;
                 audienceMsgEl.style.color = 'var(--color-danger)'; audienceMsgEl.textContent = fe(err, 's');
                 shareStudentBtn.disabled = false;
             }
@@ -3950,8 +4027,10 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
                     await shareCoachingCaseToParent(kasus.case_id, currentUser.user_id, currentUser.school_id);
                     audienceMsgEl.style.color = 'var(--color-success)'; audienceMsgEl.textContent = 'Dibagikan ke orang tua.';
                 }
+                if (!isCurrent()) return;
                 await refreshKasusDetail(ctx);
             } catch (err) {
+                if (!isCurrent()) return;
                 audienceMsgEl.style.color = 'var(--color-danger)'; audienceMsgEl.textContent = fe(err, 's');
                 shareParentBtn.disabled = false;
             }
@@ -3965,6 +4044,12 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
     const newEscBtn     = replaceEl(`${ctx.prefix}-escalate-btn`);
     const newStatusBtn  = replaceEl(`${ctx.prefix}-status-btn`);
     const newCloseBtn   = replaceEl(`${ctx.prefix}-close-btn`);
+    for (const [button, label] of [[newCommentBtn, 'Kirim Komentar'], [newEscBtn, 'Teruskan'],
+        [newStatusBtn, 'Ubah Status'], [newCloseBtn, 'Tutup Kasus']]) {
+        button.disabled = false;
+        button.textContent = label;
+    }
+    newCloseBtn.dataset.confirming = '';
 
     if (!kEl(ctx, 'comment-visible-wrap')) {
         const wrap = document.createElement('div');
@@ -3981,11 +4066,13 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
         newCommentBtn.disabled = true; newCommentBtn.textContent = 'Mengirim…';
         try {
             await addCoachingNote({ caseId: kasus.case_id, text, authorUserId: currentUser.user_id, schoolId: currentUser.school_id, isVisibleToStudent });
+            if (!isCurrent()) return;
             kEl(ctx, 'comment-text').value = '';
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Catatan dikirim.';
             newCommentBtn.disabled = false; newCommentBtn.textContent = 'Kirim Komentar';
             await refreshKasusDetail(ctx);
         } catch (err) {
+            if (!isCurrent()) return;
             msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
             newCommentBtn.disabled = false; newCommentBtn.textContent = 'Kirim Komentar';
         }
@@ -4006,11 +4093,13 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
                 authorUserId:     currentUser.user_id,
                 schoolId:         currentUser.school_id,
             });
+            if (!isCurrent()) return;
             const recipName = selEl.options[selEl.selectedIndex]?.text ?? to;
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = `Diteruskan ke ${esc(recipName)}.`;
             newEscBtn.disabled = false; newEscBtn.textContent = 'Teruskan';
             await refreshKasusDetail(ctx);
         } catch (err) {
+            if (!isCurrent()) return;
             msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
             newEscBtn.disabled = false; newEscBtn.textContent = 'Teruskan';
         }
@@ -4023,9 +4112,11 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
         newStatusBtn.disabled = true; newStatusBtn.textContent = 'Menyimpan…';
         try {
             await changeCoachingCaseStatus({ caseId: kasus.case_id, previousStatus: kasus.status, newStatus: newSt, note, authorUserId: currentUser.user_id, schoolId: currentUser.school_id });
+            if (!isCurrent()) return;
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = `Status diubah ke ${CASE_STATUS_LABEL[newSt]}.`;
             await refreshKasusDetail(ctx);
         } catch (err) {
+            if (!isCurrent()) return;
             msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
         } finally {
             newStatusBtn.disabled = false; newStatusBtn.textContent = 'Ubah Status';
@@ -4041,7 +4132,7 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
             msgEl.textContent   = 'Kasus yang ditutup tidak bisa dibuka kembali. Klik "Tutup Kasus" sekali lagi untuk konfirmasi.';
             newCloseBtn.textContent = 'Konfirmasi Tutup';
             setTimeout(() => {
-                if (newCloseBtn.dataset.confirming === 'yes') {
+                if (isCurrent() && newCloseBtn.dataset.confirming === 'yes') {
                     newCloseBtn.dataset.confirming = '';
                     newCloseBtn.textContent = 'Tutup Kasus';
                     msgEl.textContent = '';
@@ -4053,14 +4144,17 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault) {
         newCloseBtn.disabled = true; newCloseBtn.textContent = 'Menutup…';
         try {
             await closeCoachingCase({ caseId: kasus.case_id, note, authorUserId: currentUser.user_id, previousStatus: kasus.status, schoolId: currentUser.school_id });
+            if (!isCurrent()) return;
             msgEl.style.color = 'var(--color-success)'; msgEl.textContent = 'Kasus berhasil ditutup.';
             await refreshKasusDetail(ctx);
         } catch (err) {
+            if (!isCurrent()) return;
             msgEl.style.color = 'var(--color-danger)'; msgEl.textContent = fe(err, 's');
         } finally {
             newCloseBtn.disabled = false; newCloseBtn.textContent = 'Tutup Kasus';
         }
     });
+    actionsEl.style.display = 'block';
 }
 
 function replaceEl(id) {
@@ -4072,13 +4166,18 @@ function replaceEl(id) {
 }
 
 async function refreshKasusDetail(ctx = kasusCtxDefault) {
-    if (!ctx.currentId) return;
+    const caseId = ctx.currentId;
+    if (!caseId) return;
+    const seq = ++ctx.detailSeq;
+    kEl(ctx, 'actions').style.display = 'none';
     try {
-        const [kasus, events] = await Promise.all([getCase(ctx.currentId), getCoachingCaseEvents(ctx.currentId)]);
+        const [kasus, events] = await Promise.all([getCase(caseId), getCoachingCaseEvents(caseId)]);
+        if (ctx.currentId !== caseId || ctx.detailSeq !== seq) return;
         renderKasusDetail(kasus, ctx);
         renderKasusEvents(events, ctx);
-        await renderKasusActions(kasus, ctx);
-        const idx = ctx.allCases.findIndex(c => c.case_id === ctx.currentId);
+        await renderKasusActions(kasus, ctx, seq);
+        if (ctx.currentId !== caseId || ctx.detailSeq !== seq) return;
+        const idx = ctx.allCases.findIndex(c => c.case_id === caseId);
         if (idx >= 0) ctx.allCases[idx] = {
             ...ctx.allCases[idx],
             status:                  kasus.status,
@@ -4087,7 +4186,9 @@ async function refreshKasusDetail(ctx = kasusCtxDefault) {
         };
         if (ctx === _wkKasusCtx) await renderWkCount().catch(() => {});
     } catch (err) {
+        if (ctx.currentId !== caseId || ctx.detailSeq !== seq) return;
         console.error('[kasus] refresh error', err);
+        showKasusDetailError(err, ctx);
     }
 }
 

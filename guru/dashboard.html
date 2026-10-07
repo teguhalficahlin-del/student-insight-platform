@@ -1560,11 +1560,13 @@
                     <div id="kasus-audience-block" style="margin-bottom:16px; display:none; padding:12px; border:1px solid var(--color-border); border-radius:var(--radius)"></div>
                     <!-- Status change / close -->
                     <div id="kasus-status-block" style="display:none">
-                        <label for="kasus-new-status">Ubah Status</label>
-                        <select id="kasus-new-status" class="input" style="width:auto; margin-bottom:8px"></select>
+                        <div id="kasus-status-change-controls" style="margin-bottom:8px">
+                            <label for="kasus-new-status">Ubah Status</label>
+                            <select id="kasus-new-status" class="input" style="width:auto; margin-bottom:8px"></select>
+                            <button class="btn btn-secondary btn-sm" id="kasus-status-btn">Ubah Status</button>
+                        </div>
                         <textarea id="kasus-status-note" class="input" rows="2" placeholder="Catatan perubahan status (opsional)…" style="margin-bottom:8px"></textarea>
                         <div style="display:flex; gap:8px; flex-wrap:wrap">
-                            <button class="btn btn-secondary btn-sm" id="kasus-status-btn">Ubah Status</button>
                             <button class="btn btn-danger btn-sm" id="kasus-close-btn" style="display:none">Tutup Kasus</button>
                         </div>
                         <span id="kasus-status-msg" style="font-size:13px; display:block; margin-top:6px"></span>
