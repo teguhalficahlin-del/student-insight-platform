@@ -1244,7 +1244,6 @@ async function runFlush() {
 
 async function ensureStudentPool() {
     if (_studentPoolInit) return;
-    _studentPoolInit = true;
     isBroadObserver = jabatan.some(j => ['bk', 'waka_kesiswaan', 'kepsek'].includes(j));
     const stuCacheKey = `mystudents-${currentUser.user_id}`;
     myStudents = LC.get(stuCacheKey) ?? [];
@@ -1256,16 +1255,39 @@ async function ensureStudentPool() {
         );
         myStudents = fresh;
         LC.set(stuCacheKey, fresh);
-    } catch (_) { /* pakai cache yang sudah di-load di atas */ }
+        _studentPoolInit = true;
+    } catch (err) {
+        _studentPoolInit = false;
+        throw err;
+    }
 }
 
 // ── Observasi ─────────────────────────────────────────────────
 
 let _obsFormInit = false;
+const OBS_HISTORY_PAGE_SIZE = 100;
+let _obsHistoryRows  = [];
+let _obsHistoryTotal = 0;
+let _obsHistoryBusy  = false;
+
 async function initObsForm() {
     if (_obsFormInit) return;
+    try {
+        await ensureStudentPool();
+    } catch (err) {
+        const statusEl = document.getElementById('obs-status');
+        const submitBtn = document.getElementById('obs-submit');
+        const studentSelEl = document.getElementById('obs-student-select');
+        if (studentSelEl) studentSelEl.disabled = true;
+        if (submitBtn) submitBtn.disabled = true;
+        if (statusEl) {
+            statusEl.textContent = `Gagal memuat daftar siswa. ${fe(err)} Buka ulang tab untuk mencoba lagi.`;
+            statusEl.className = 'status-msg status-err';
+            statusEl.style.display = 'block';
+        }
+        return;
+    }
     _obsFormInit = true;
-    await ensureStudentPool();
 
     const hiddenEl      = document.getElementById('obs-student-id');
     const studentSelEl  = document.getElementById('obs-student-select');
@@ -1275,6 +1297,8 @@ async function initObsForm() {
     const obsContentEl  = document.getElementById('obs-content');
     const obsCharCountEl= document.getElementById('obs-char-count');
     const visSelect     = document.getElementById('obs-visibility');
+    studentSelEl.disabled = false;
+    submitBtn.disabled = false;
 
     // --- Class filter → student dropdown ---
     const classFilterEl = document.getElementById('obs-class-filter');
@@ -1357,21 +1381,92 @@ async function initObsForm() {
 
 async function initObsTab() {
     await initObsForm();
+    const moreBtn = document.getElementById('obs-history-more');
+    if (moreBtn && moreBtn.dataset.wired !== '1') {
+        moreBtn.dataset.wired = '1';
+        moreBtn.addEventListener('click', loadMoreObsHistory);
+    }
     await loadObsHistory();
+}
+
+function setObsHistoryNotice(listEl, message, className = 'status-warn') {
+    listEl.querySelector('.obs-history-notice')?.remove();
+    if (!message) return;
+    const notice = document.createElement('div');
+    notice.className = `obs-history-notice ${className}`;
+    notice.style.cssText = 'margin-bottom:10px;padding:8px 10px';
+    notice.textContent = message;
+    listEl.prepend(notice);
+}
+
+function updateObsHistoryMore() {
+    const btn = document.getElementById('obs-history-more');
+    if (!btn) return;
+    const hasMore = _obsHistoryRows.length < _obsHistoryTotal;
+    btn.style.display = hasMore ? 'inline-block' : 'none';
+    btn.disabled = _obsHistoryBusy;
 }
 
 async function loadObsHistory() {
     const listEl   = document.getElementById('obs-history-list');
     const cacheKey = `obs-history-${currentUser.user_id}`;
     const cached   = LC.get(cacheKey);
-    if (cached) renderObsHistory(cached, listEl);
+    const cachedState = Array.isArray(cached) ? { rows: cached, total: cached.length } : cached;
+    if (cachedState) {
+        _obsHistoryRows  = cachedState.rows ?? [];
+        _obsHistoryTotal = Number(cachedState.total ?? _obsHistoryRows.length);
+        renderObsHistory(_obsHistoryRows, listEl);
+        setObsHistoryNotice(listEl, 'Menampilkan cache lokal. Memeriksa pembaruan…');
+        updateObsHistoryMore();
+    }
     else listEl.innerHTML = '<p class="hint">Memuat…</p>';
     try {
-        const rows = await getMyObservations(currentUser.user_id);
-        LC.set(cacheKey, rows);
-        renderObsHistory(rows, listEl);
+        const result = await getMyObservations(currentUser.user_id, {
+            limit: OBS_HISTORY_PAGE_SIZE,
+            offset: 0,
+        });
+        _obsHistoryRows  = result.rows;
+        _obsHistoryTotal = result.total;
+        LC.set(cacheKey, result);
+        renderObsHistory(_obsHistoryRows, listEl);
+        setObsHistoryNotice(listEl, '');
+        updateObsHistoryMore();
     } catch (err) {
-        if (!cached) listEl.innerHTML = `<div class="status-err">Gagal memuat. ${esc(fe(err))}</div>`;
+        if (!cachedState) {
+            listEl.innerHTML = `<div class="status-err">Gagal memuat. ${esc(fe(err))}</div>`;
+        } else {
+            setObsHistoryNotice(listEl, `Gagal memperbarui riwayat. Data yang tampil mungkin belum terbaru. ${fe(err)}`);
+        }
+        updateObsHistoryMore();
+    }
+}
+
+async function loadMoreObsHistory() {
+    if (_obsHistoryBusy || _obsHistoryRows.length >= _obsHistoryTotal) return;
+    const listEl = document.getElementById('obs-history-list');
+    const btn = document.getElementById('obs-history-more');
+    _obsHistoryBusy = true;
+    if (btn) btn.textContent = 'Memuat…';
+    updateObsHistoryMore();
+    try {
+        const result = await getMyObservations(currentUser.user_id, {
+            limit: OBS_HISTORY_PAGE_SIZE,
+            offset: _obsHistoryRows.length,
+        });
+        _obsHistoryRows  = [..._obsHistoryRows, ...result.rows];
+        _obsHistoryTotal = result.total;
+        LC.set(`obs-history-${currentUser.user_id}`, {
+            rows: _obsHistoryRows,
+            total: _obsHistoryTotal,
+        });
+        renderObsHistory(_obsHistoryRows, listEl);
+        updateObsHistoryMore();
+    } catch (err) {
+        setObsHistoryNotice(listEl, `Gagal memuat catatan berikutnya. ${fe(err)}`, 'status-err');
+    } finally {
+        _obsHistoryBusy = false;
+        if (btn) btn.textContent = 'Muat lebih banyak';
+        updateObsHistoryMore();
     }
 }
 

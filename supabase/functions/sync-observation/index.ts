@@ -20,8 +20,6 @@ import { validatePayload,
          OBSERVATION_SCHEMA }          from '../_shared/validate.ts';
 import { getAdminClient }              from '../_shared/db.ts';
 
-const ALLOWED_ROLES = ['GURU'];
-
 Deno.serve(async (req: Request): Promise<Response> => {
     if (req.method === 'OPTIONS') return handleCors();
     if (req.method !== 'POST') {
@@ -37,8 +35,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (isAuthError(authResult)) return authResult;
         const { user } = authResult;
 
-        if (!ALLOWED_ROLES.includes(user.role_type)) {
-            return forbidden('Hanya guru mata pelajaran yang dapat menyimpan catatan siswa');
+        if (!user.teacher_code?.trim()) {
+            return forbidden('Hanya pengguna dengan teacher_code yang dapat menyimpan catatan siswa');
         }
 
         let body: Record<string, unknown>;

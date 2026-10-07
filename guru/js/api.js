@@ -797,19 +797,19 @@ export async function updateJournalEntry(journalId, entryDate, content, userId) 
     });
 }
 
-export async function getMyObservations(userId) {
-    const { data, error } = await supabase
+export async function getMyObservations(userId, { limit = 100, offset = 0 } = {}) {
+    const { data, error, count } = await supabase
         .from('observations')
         .select(`
             observation_id, dimension, sentiment, visibility, content, observed_at, created_at,
             student_id, author_user_id, is_void, void_reason,
             student:students!observations_student_id_fkey ( full_name, nis )
-        `)
+        `, { count: 'exact' })
         .eq('author_user_id', userId)
         .order('created_at', { ascending: false })
-        .limit(100);
+        .range(offset, offset + limit - 1);
     if (error) throw error;
-    return data ?? [];
+    return { rows: data ?? [], total: count ?? 0 };
 }
 
 export async function getStudentUserId(studentId) {
