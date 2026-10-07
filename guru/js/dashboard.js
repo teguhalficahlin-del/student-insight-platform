@@ -501,7 +501,9 @@ async function buildTabs() {
     tabs.push({ key: 'kasus', label: 'Pembinaan Siswa' });
 
     const onDuty = await isOnDutyToday();
-    if (onDuty) tabs.push({ key: 'piket', label: 'Piket' });
+    // Saat status piket gagal dibaca, tampilkan tab agar kegagalan terlihat
+    // sebagai error tab, bukan seolah-olah guru tidak bertugas.
+    if (onDuty !== false) tabs.push({ key: 'piket', label: 'Piket' });
     if (isTeacher) tabs.push({ key: 'observasi', label: 'Catatan Siswa' });
     if (isTeacher) tabs.push({ key: 'jurnal', label: 'Jurnal Mengajar' });
     if (isTeacher) tabs.push({ key: 'perangkat_ajar', label: 'Perangkat Ajar' });
@@ -829,8 +831,11 @@ function mergeConsecutiveSessions(sessions) {
     const merged = [];
     for (const s of sorted) {
         const last = merged[merged.length - 1];
+        const lastSubject = (last?.subject_label ?? '').trim().toLocaleLowerCase();
+        const currentSubject = (s.subject_label ?? '').trim().toLocaleLowerCase();
         const sameBlock = last
             && last.class?.class_id === s.class?.class_id
+            && lastSubject === currentSubject
             && isConsecutive(last.merged_end, s.session_start);
         if (sameBlock) {
             last.merged_end = s.session_end;
@@ -968,14 +973,13 @@ async function loadWeekSchedule() {
     try {
         const results = await Promise.all(
             days.map(d => getMyScheduleForDate(currentUser.user_id, d)
-                .then(rows => ({ date: d, rows }))
-                .catch(() => ({ date: d, rows: [] }))
+                .then(rows => ({ date: d, rows, error: null }))
+                .catch(error => ({ date: d, rows: [], error }))
             )
         );
 
-        const hasAny = results.some(r => r.rows.length > 0);
-        if (!hasAny) {
-            contentEl.innerHTML = '<p class="hint">Tidak ada jadwal mengajar minggu ini.</p>';
+        if (results.every(r => r.error)) {
+            contentEl.innerHTML = `<div class="status-err">Gagal memuat jadwal minggu ini. ${esc(fe(results[0].error))}</div>`;
             return;
         }
 
@@ -984,9 +988,11 @@ async function loadWeekSchedule() {
         contentEl.innerHTML = results.map((r, idx) => {
             const dayLabel  = `${DAY_NAMES[idx]}, ${fmtDayLabel(r.date).split(',')[1]?.trim() ?? r.date}`;
             const isToday   = r.date === todayStr;
-            const mergedSessions = mergeConsecutiveSessions(r.rows);
+            const mergedSessions = r.error ? [] : mergeConsecutiveSessions(r.rows);
             const sesiCount = mergedSessions.length;
-            const tableHtml = sesiCount === 0
+            const tableHtml = r.error
+                ? `<div class="status-err">Gagal memuat jadwal hari ini. ${esc(fe(r.error))}</div>`
+                : sesiCount === 0
                 ? '<p class="hint" style="margin:8px 0 4px">Tidak ada jadwal</p>'
                 : `<div class="table-wrapper">
                    <table class="table">
@@ -1004,7 +1010,7 @@ async function loadWeekSchedule() {
                 <details class="att-accordion">
                     <summary class="att-accordion-summary">
                         <span class="att-acc-name">${esc(dayLabel)}</span>
-                        <span class="att-acc-names">${sesiCount > 0 ? `${sesiCount} sesi` : 'tidak ada jadwal'}</span>
+                        <span class="att-acc-names">${r.error ? 'gagal memuat' : sesiCount > 0 ? `${sesiCount} sesi` : 'tidak ada jadwal'}</span>
                     </summary>
                     <div style="padding:0 12px 8px">${tableHtml}</div>
                 </details>`;
@@ -3034,7 +3040,7 @@ async function loadWhCases() {
         tbody.innerHTML = cases.map(c => `<tr>
             <td>${esc(c.student?.full_name ?? '—')}</td>
             <td>${esc(c.title)}</td>
-            <td>${esc(c.current_handler_role ?? '—')}</td>
+            <td>${esc(c.handler?.full_name ?? c.current_handler_role ?? '—')}</td>
             <td>${fmt(c.created_at)}</td>
         </tr>`).join('');
     } catch (err) {
@@ -4626,6 +4632,8 @@ function renderForumPostCard(post) {
 
 function wireForumCards() {
     document.querySelectorAll('.forum-post-card').forEach(card => {
+        if (card.dataset.forumWired === '1') return;
+        card.dataset.forumWired = '1';
         card.addEventListener('click', () => openForumDetail(card.dataset.postId));
     });
 }
@@ -6102,9 +6110,11 @@ async function submitForumComment() {
     }
 }
 
+const PERANGKAT_AJAR_ENABLED = false;
 let _paTabInit = false;
 
 async function initPerangkatAjarTab() {
+    if (!PERANGKAT_AJAR_ENABLED) return;
     if (_paTabInit) {
         // Refresh data setiap kali tab dibuka (tapi jangan re-wire events)
         await loadPerangkatAjarDashboard();
@@ -6118,6 +6128,7 @@ async function initPerangkatAjarTab() {
 }
 
 async function loadPerangkatAjarDashboard() {
+    if (!PERANGKAT_AJAR_ENABLED) return;
     const container = document.getElementById('perangkat-ajar-container');
     container.innerHTML = `
         <div class="pa-header" style="margin-bottom:16px">

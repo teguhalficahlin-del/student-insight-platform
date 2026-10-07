@@ -243,7 +243,7 @@ export async function getAttendanceForSession(scheduleId) {
 export async function getMyStudents(userId, academicYear, semester) {
     const { data, error } = await supabase
         .from('teaching_assignments')
-        .select('class:classes ( class_id, name, enrollments:class_enrollments ( student:students ( student_id, nis, full_name ) ) )')
+        .select('class:classes ( class_id, name, enrollments:class_enrollments ( withdrawn_at, student:students ( student_id, nis, full_name, student_status ) ) )')
         .eq('user_id', userId)
         .eq('academic_year', academicYear)
         .eq('semester', semester)
@@ -255,6 +255,7 @@ export async function getMyStudents(userId, academicYear, semester) {
     for (const ta of data ?? []) {
         for (const en of ta.class?.enrollments ?? []) {
             const s = en.student;
+            if (en.withdrawn_at || s?.student_status !== 'AKTIF') continue;
             if (s && !seen.has(s.student_id)) {
                 seen.add(s.student_id);
                 students.push({ ...s, class_id: ta.class?.class_id, class_name: ta.class?.name });
@@ -1831,11 +1832,11 @@ export async function isOnDutyToday() {
     if (new Date().getDay() === 0) return false; // MINGGU tidak ada di enum day_of_week
     try {
         const { data, error } = await supabase.rpc('fn_is_on_duty_today');
-        if (error) { console.warn('[piket] isOnDutyToday error:', error.message); return false; }
+        if (error) throw error;
         return !!data;
     } catch (e) {
         console.warn('[piket] isOnDutyToday exception:', e);
-        return false;
+        return null;
     }
 }
 
@@ -1853,7 +1854,7 @@ export async function getTodayLateArrivals() {
             `)
             .eq('late_date', today)
             .order('arrival_time', { ascending: true });
-        if (error) { console.warn('[piket] getTodayLateArrivals error:', error.message); return []; }
+        if (error) throw error;
         return (data ?? []).map(r => ({
             late_id:      r.late_id,
             arrival_time: r.arrival_time,
@@ -1866,7 +1867,7 @@ export async function getTodayLateArrivals() {
         }));
     } catch (e) {
         console.warn('[piket] getTodayLateArrivals exception:', e);
-        return [];
+        throw e;
     }
 }
 
@@ -1908,7 +1909,7 @@ export async function getTodayExits() {
             `)
             .eq('exit_date', today)
             .order('exit_time', { ascending: true });
-        if (error) { console.warn('[piket] getTodayExits error:', error.message); return []; }
+        if (error) throw error;
         return (data ?? []).map(r => {
             const enrollment = r.student?.class_enrollment ?? [];
             const latest = enrollment[enrollment.length - 1];
@@ -1924,7 +1925,7 @@ export async function getTodayExits() {
                 recorder_id:  r.recorder?.user_id ?? null,
             };
         });
-    } catch (e) { console.warn('[piket] getTodayExits exception:', e); return []; }
+    } catch (e) { console.warn('[piket] getTodayExits exception:', e); throw e; }
 }
 
 export async function recordExit(studentId, exitTime, reason, schoolId, recordedBy) {
