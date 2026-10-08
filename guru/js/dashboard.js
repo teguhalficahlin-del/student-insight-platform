@@ -2829,8 +2829,12 @@ async function initKpPlacementForm(programId) {
 
 let _wkKur1Visible = false;
 let _wkKur1Loaded  = false;
+let _wkKur1Date    = null;
+let _wkKur1Seq     = 0;
 let _wkKur2Visible = false;
+let _wkKur2Seq     = 0;
 let _wkKurTabInit  = false;
+const _wkKurStatsSeq = {};
 
 async function initWakaKurTab() {
     if (!_wkKurTabInit) {
@@ -2844,9 +2848,22 @@ async function initWakaKurTab() {
         document.getElementById('wk-kur1-btn').onclick = handleWkKur1Btn;
         document.getElementById('wk-kur2-btn').onclick = handleWkKur2Btn;
     }
-    // Hanya load stats saat tab dibuka; tabel Panel 1 load on demand (klik Tampilkan)
-    await Promise.all([loadWkKurStats(localDateStr(), localDateStr())]);
-    await loadWakaDocApprovals();
+    // Refresh an open daily table; invalidate a hidden one for its next opening.
+    const today = localDateStr();
+    const reloadDaily = _wkKur1Visible;
+    ++_wkKur1Seq;
+    _wkKur1Loaded = false;
+    _wkKur1Date = null;
+    _wkKur1Visible = false;
+    document.getElementById('wk-kur1-wrap').style.display = 'none';
+    document.getElementById('wk-kur1-hint').style.display = 'none';
+    const btn = document.getElementById('wk-kur1-btn');
+    btn.disabled = false;
+    btn.textContent = 'Tampilkan';
+    await Promise.all([
+        loadWkKurStats(today, today),
+        ...(reloadDaily ? [loadWkKur1(today)] : []),
+    ]);
 }
 
 async function loadWkKurStats(dateStart, dateEnd, prefix = 'wk-kur', emptyMsg = 'Tidak ada sesi hari ini') {
@@ -2857,33 +2874,41 @@ async function loadWkKurStats(dateStart, dateEnd, prefix = 'wk-kur', emptyMsg = 
 
     if (!elHadir) return;
 
+    const seq = (_wkKurStatsSeq[prefix] || 0) + 1;
+    _wkKurStatsSeq[prefix] = seq;
     elHadir.textContent = '…'; elPending.textContent = '…';
+    if (elDetailSudah) elDetailSudah.textContent = '';
+    if (elDetailBelum) elDetailBelum.textContent = '';
 
     try {
-        const today = localDateStr();
-        const d = await getWakaKurStats(dateStart ?? today, dateEnd ?? today);
+        const d = await getWakaKurStats(dateStart, dateEnd);
+        if (seq !== _wkKurStatsSeq[prefix]) return;
 
-        elHadir.textContent = (d.pct_hadir != null) ? d.pct_hadir + '%' : '0%';
+        elHadir.textContent = (d.pct_hadir != null) ? d.pct_hadir + '%' : '—';
         if (elDetailSudah) {
             elDetailSudah.textContent = d.guru_total > 0
-                ? `${d.guru_hadir} / ${d.guru_total} guru hadir`
+                ? `${d.guru_hadir} / ${d.guru_total} guru sudah input absensi`
                 : emptyMsg;
         }
 
         elPending.textContent = d.guru_belum;
         if (elDetailBelum) {
-            elDetailBelum.textContent = d.guru_belum > 0
-                ? `${d.guru_belum} guru belum input absensi`
-                : 'semua guru sudah input absensi hari ini';
+            elDetailBelum.textContent = d.guru_total === 0 ? emptyMsg
+                : d.guru_belum > 0 ? `${d.guru_belum} guru masih memiliki sesi belum diisi`
+                : 'Tidak ada sesi yang belum diisi.';
         }
 
     } catch (e) {
+        if (seq !== _wkKurStatsSeq[prefix]) return;
         elHadir.textContent = '!'; elPending.textContent = '!';
+        if (elDetailSudah) elDetailSudah.textContent = 'Gagal memuat ringkasan.';
+        if (elDetailBelum) elDetailBelum.textContent = fe(e);
         console.error('[loadWkKurStats]', e);
     }
 }
 
-async function loadWkKur1(date) {
+async function loadWkKur1(date = localDateStr()) {
+    const seq = ++_wkKur1Seq;
     const hintEl = document.getElementById('wk-kur1-hint');
     const wrapEl = document.getElementById('wk-kur1-wrap');
     const tbody  = document.getElementById('wk-kur1-body');
@@ -2891,13 +2916,19 @@ async function loadWkKur1(date) {
 
     hintEl.style.display = 'none';
     wrapEl.style.display = 'none';
-    btn.style.display    = 'none';
+    btn.style.display    = '';
+    btn.disabled         = true;
+    btn.textContent      = 'Memuat…';
+    _wkKur1Loaded = false;
+    _wkKur1Date = null;
+    _wkKur1Visible = false;
 
     try {
         const rows = await getPendingAttendanceSessions(date);
+        if (seq !== _wkKur1Seq || date !== localDateStr()) return;
 
         if (rows.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="hint" style="text-align:center;padding:12px">✓ Tidak ada sesi yang menunggu pengisian absensi hari ini.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" class="hint" style="text-align:center;padding:12px">✓ Tidak ada sesi yang menunggu pengisian absensi hari ini.</td></tr>`;
         } else {
             const groups = {};
             rows.forEach(r => {
@@ -2951,17 +2982,23 @@ async function loadWkKur1(date) {
         btn.style.display    = '';
         btn.textContent      = 'Sembunyikan';
         _wkKur1Visible = true;
+        _wkKur1Loaded = true;
+        _wkKur1Date = date;
     } catch (err) {
+        if (seq !== _wkKur1Seq || date !== localDateStr()) return;
         hintEl.textContent   = `Gagal memuat data. ${fe(err)}`;
         hintEl.style.display = 'block';
+    } finally {
+        if (seq === _wkKur1Seq) {
+            btn.disabled = false;
+            if (!_wkKur1Loaded) btn.textContent = 'Tampilkan';
+        }
     }
 }
 
 function handleWkKur1Btn() {
-    if (!_wkKur1Loaded) {
-        _wkKur1Loaded = true;
-        loadWkKur1(localDateStr());
-        return;
+    if (!_wkKur1Loaded || _wkKur1Date !== localDateStr()) {
+        return loadWkKur1(localDateStr());
     }
     const wrapEl = document.getElementById('wk-kur1-wrap');
     const btn    = document.getElementById('wk-kur1-btn');
@@ -2971,25 +3008,37 @@ function handleWkKur1Btn() {
 }
 
 async function loadWkKur2() {
+    const seq = ++_wkKur2Seq;
+    _wkKurStatsSeq['wk-kur2'] = (_wkKurStatsSeq['wk-kur2'] || 0) + 1;
     const hintEl    = document.getElementById('wk-kur2-hint');
     const wrapEl    = document.getElementById('wk-kur2-wrap');
     const tbody     = document.getElementById('wk-kur2-body');
     const btn       = document.getElementById('wk-kur2-btn');
-    const dateStart = document.getElementById('wk-kur-start').value;
-    const dateEnd   = document.getElementById('wk-kur-end').value;
+    const dateStart = document.getElementById('wk-kur-start').value || null;
+    const dateEnd   = document.getElementById('wk-kur-end').value || null;
 
     const statsRow = document.getElementById('wk-kur2-stats-row');
     hintEl.style.display    = 'none';
     wrapEl.style.display    = 'none';
     statsRow.style.display  = 'none';
+    tbody.innerHTML         = '';
+    _wkKur2Visible          = false;
+    if (dateStart && dateEnd && dateStart > dateEnd) {
+        hintEl.textContent = 'Tanggal awal tidak boleh melewati tanggal akhir.';
+        hintEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Tampilkan';
+        return;
+    }
     btn.disabled            = true;
     btn.textContent         = 'Memuat…';
 
     try {
         const [groups] = await Promise.all([
-            getPendingSessionsByTeacher(dateStart || null, dateEnd || null),
-            loadWkKurStats(dateStart || null, dateEnd || null, 'wk-kur2', 'Tidak ada sesi pada rentang ini'),
+            getPendingSessionsByTeacher(dateStart, dateEnd),
+            loadWkKurStats(dateStart, dateEnd, 'wk-kur2', 'Tidak ada sesi pada rentang ini'),
         ]);
+        if (seq !== _wkKur2Seq) return;
         statsRow.style.display = 'grid';
         btn.disabled = false;
         if (groups.length === 0) {
@@ -3000,7 +3049,6 @@ async function loadWkKur2() {
             return;
         }
 
-        const THRESHOLD = 10;
         groups.sort((a, b) => a.teacher_name.localeCompare(b.teacher_name, 'id'));
         let html = '';
         groups.forEach((row, idx) => {
@@ -3041,14 +3089,17 @@ async function loadWkKur2() {
         btn.textContent      = 'Sembunyikan';
         _wkKur2Visible = true;
     } catch (err) {
-        btn.disabled         = false;
+        if (seq !== _wkKur2Seq) return;
         btn.textContent      = 'Tampilkan';
         hintEl.textContent   = `Gagal memuat data. ${fe(err)}`;
         hintEl.style.display = 'block';
+    } finally {
+        if (seq === _wkKur2Seq) btn.disabled = false;
     }
 }
 
 async function _wkKur2ToggleDetail(detailId, teacherId, dateStart, dateEnd) {
+    const seq = _wkKur2Seq;
     const row = document.getElementById(detailId);
     if (!row) return;
     const visible = row.style.display !== 'none';
@@ -3056,8 +3107,10 @@ async function _wkKur2ToggleDetail(detailId, teacherId, dateStart, dateEnd) {
     if (!visible && row.dataset.loaded === '0') {
         row.dataset.loaded = '1';
         const bodyEl = document.getElementById(detailId + '-body');
+        bodyEl.innerHTML = '<tr><td colspan="4" style="padding:8px 12px;color:var(--color-text-muted)">Memuat…</td></tr>';
         try {
             const sesi = await getPendingSessionsDetail(teacherId, dateStart || null, dateEnd || null);
+            if (seq !== _wkKur2Seq || !row.isConnected) return;
             bodyEl.innerHTML = sesi.length === 0
                 ? `<tr><td colspan="4" style="padding:8px 12px;color:var(--color-text-muted)">Tidak ada data.</td></tr>`
                 : sesi.map(s => `<tr style="font-size:13px">
@@ -3067,6 +3120,8 @@ async function _wkKur2ToggleDetail(detailId, teacherId, dateStart, dateEnd) {
                     <td style="padding:5px 12px">${esc(s.class_name ?? '—')}</td>
                 </tr>`).join('');
         } catch (err) {
+            if (seq !== _wkKur2Seq || !row.isConnected) return;
+            row.dataset.loaded = '0';
             bodyEl.innerHTML = `<tr><td colspan="4" style="padding:8px 12px;color:var(--color-danger,#ef4444)">Gagal memuat. ${fe(err)}</td></tr>`;
         }
     }
@@ -6898,10 +6953,10 @@ async function openDetailDokumenModal(docId, coreSubjectId, phaseId) {
     }
 }
 
-// Dipanggil dari initWakaKurTab — approval & riwayat untuk Waka Kurikulum
+// Persetujuan & riwayat Waka Kurikulum; tidak dimuat saat section tersembunyi.
 async function loadWakaDocApprovals() {
     const section = document.getElementById('kepsek-approval-section');
-    if (!section) return;
+    if (!section || section.hidden) return;
 
     const listEl = document.getElementById('kepsek-approval-list');
     listEl.innerHTML = '<p class="hint">Memuat...</p>';
