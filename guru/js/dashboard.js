@@ -1985,28 +1985,34 @@ async function initWakaKesiswaanTab() {
 async function renderWkCount() {
     const rekapEl = document.getElementById('wk-kasus-count-rekap');
     if (!rekapEl) return;
-    const counts = await getCoachingCasesCount();
-    const lbl    = 'font-size:11px;color:var(--color-text-muted);margin-top:2px';
-    rekapEl.style.display = '';
-    rekapEl.innerHTML = `
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
-            <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
-                <div style="font-size:20px;font-weight:500;color:var(--color-primary)">${counts.OPEN ?? 0}</div>
-                <div style="${lbl}">Terbuka</div>
-            </div>
-            <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
-                <div style="font-size:20px;font-weight:500;color:var(--color-warning,#f59e0b)">${counts.UNDER_REVIEW ?? 0}</div>
-                <div style="${lbl}">Ditinjau</div>
-            </div>
-            <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
-                <div style="font-size:20px;font-weight:500;color:var(--color-danger)">${counts.INTERVENTION ?? 0}</div>
-                <div style="${lbl}">Intervensi</div>
-            </div>
-            <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
-                <div style="font-size:20px;font-weight:500;color:var(--color-success)">${counts.MONITORING ?? 0}</div>
-                <div style="${lbl}">Monitoring</div>
-            </div>
-        </div>`;
+    try {
+        const counts = await getCoachingCasesCount();
+        const lbl    = 'font-size:11px;color:var(--color-text-muted);margin-top:2px';
+        rekapEl.style.display = '';
+        rekapEl.innerHTML = `
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+                <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+                    <div style="font-size:20px;font-weight:500;color:var(--color-primary)">${counts.OPEN ?? 0}</div>
+                    <div style="${lbl}">Terbuka</div>
+                </div>
+                <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+                    <div style="font-size:20px;font-weight:500;color:var(--color-warning,#f59e0b)">${counts.UNDER_REVIEW ?? 0}</div>
+                    <div style="${lbl}">Ditinjau</div>
+                </div>
+                <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+                    <div style="font-size:20px;font-weight:500;color:var(--color-danger)">${counts.INTERVENTION ?? 0}</div>
+                    <div style="${lbl}">Intervensi</div>
+                </div>
+                <div style="background:var(--color-bg);border:0.5px solid var(--color-border);border-radius:var(--radius);padding:10px;text-align:center">
+                    <div style="font-size:20px;font-weight:500;color:var(--color-success)">${counts.MONITORING ?? 0}</div>
+                    <div style="${lbl}">Monitoring</div>
+                </div>
+            </div>`;
+    } catch (err) {
+        console.error('[renderWkCount]', err);
+        rekapEl.style.display = '';
+        rekapEl.innerHTML = `<div class="alert alert-danger">Gagal memuat rekap kasus: ${esc(fe(err))}</div>`;
+    }
 }
 
 async function initWakaKesiswaanKasusSection() {
@@ -2019,8 +2025,11 @@ async function initWakaKesiswaanKasusSection() {
             ?.addEventListener('click', () => loadKasusList(false, _wkKasusCtx));
     }
     await loadKasusList(false, _wkKasusCtx);
-    await renderWkCount().catch(() => {});
+    await renderWkCount();
 }
+
+let _wkAttendanceRequestSeq = 0;
+let _wkLateRequestSeq = 0;
 
 function buildAttStatCards(rows) {
     const tot  = rows.reduce((s,r) => s + r.HADIR + r.IZIN + r.SAKIT + r.ALPA, 0);
@@ -2060,15 +2069,21 @@ function buildAttStatCards(rows) {
 }
 
 async function loadWkAttendanceRecap() {
+    const requestSeq = ++_wkAttendanceRequestSeq;
     const dateStart = document.getElementById('wk-att-start').value || null;
     const dateEnd   = document.getElementById('wk-att-end').value   || null;
     const container = document.getElementById('wk-att-recap');
+    if (!dateStart || !dateEnd || dateStart > dateEnd) {
+        container.innerHTML = '<p class="hint" style="color:var(--color-danger)">Rentang tanggal tidak valid.</p>';
+        return;
+    }
     container.innerHTML = '<p class="hint">Memuat…</p>';
     try {
         const [programs, rows] = await Promise.all([
             getPrograms(),
             getAttendanceRecapPerClass(dateStart, dateEnd),
         ]);
+        if (requestSeq !== _wkAttendanceRequestSeq) return;
 
         if (!rows.length) {
             container.innerHTML = '<p class="hint">Belum ada data kehadiran.</p>';
@@ -2159,6 +2174,7 @@ async function loadWkAttendanceRecap() {
                     const students = await getWaliAttendanceSummary(
                         classId, config.current_academic_year, dStart, dEnd
                     );
+                    if (requestSeq !== _wkAttendanceRequestSeq) return;
                     if (!students.length) {
                         body.innerHTML = '<p class="hint" style="padding:8px 16px">Belum ada data kehadiran siswa.</p>';
                         return;
@@ -2205,7 +2221,10 @@ async function loadWkAttendanceRecap() {
                                 return;
                             }
                             try {
-                                const sessions = await getStudentAttendanceSessions(sid, ds, de);
+                                const sessions = await getStudentAttendanceSessions(
+                                    sid, ds, de, null, config.current_academic_year
+                                );
+                                if (requestSeq !== _wkAttendanceRequestSeq) return;
                                 if (!sessions.length) {
                                     sBody.innerHTML = '<p class="hint" style="padding:8px 24px">Belum ada sesi tercatat.</p>';
                                     return;
@@ -2220,14 +2239,14 @@ async function loadWkAttendanceRecap() {
                                 const grouped = [];
                                 const seen = new Map();
                                 for (const s of sessions) {
-                                    const key = `${s.schedule.session_date}|${s.schedule.subject_label ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
+                                    const key = s.schedule.schedule_id ?? s.attendance_id;
                                     if (!seen.has(key)) { seen.set(key, true); grouped.push(s); }
                                 }
                                 sBody.innerHTML = grouped.map(s => `
                                     <div style="display:flex;align-items:center;gap:8px;
                                         padding:7px 24px;border-top:0.5px solid var(--color-border)">
                                         <span style="font-size:12px;color:var(--color-text-muted);min-width:90px">
-                                            ${esc(s.schedule.session_date)}
+                                            ${esc(s.schedule.session_date)}${s.schedule.session_start ? ` · ${esc(s.schedule.session_start.slice(0, 5))}` : ''}
                                         </span>
                                         <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
                                             ${esc(s.schedule.subject_label ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
@@ -2238,23 +2257,29 @@ async function loadWkAttendanceRecap() {
                                         </span>
                                     </div>`).join('');
                             } catch(err) {
+                                if (requestSeq !== _wkAttendanceRequestSeq) return;
+                                delete sBody.dataset.loaded;
                                 sBody.innerHTML = `<div class="alert alert-danger" style="margin:8px 24px">${esc(fe(err))}</div>`;
                             }
                         });
                     });
 
                 } catch (err) {
+                    if (requestSeq !== _wkAttendanceRequestSeq) return;
+                    delete body.dataset.loaded;
                     body.innerHTML = `<div class="alert alert-danger" style="margin:8px 16px">${esc(fe(err))}</div>`;
                 }
             });
         });
 
     } catch (err) {
+        if (requestSeq !== _wkAttendanceRequestSeq) return;
         container.innerHTML = `<div class="alert alert-danger">${esc(fe(err))}</div>`;
     }
 }
 
 async function loadWkLateRecap() {
+    const requestSeq = ++_wkLateRequestSeq;
     const start     = document.getElementById('wk-late-start').value;
     const end       = document.getElementById('wk-late-end').value;
     const container = document.getElementById('wk-late-recap');
@@ -2264,7 +2289,8 @@ async function loadWkLateRecap() {
     }
     container.innerHTML = '<p class="hint">Memuat…</p>';
     try {
-        const rows = await getLateArrivalsByRange(start, end);
+        const rows = await getLateArrivalsByRange(start, end, config?.current_academic_year ?? null);
+        if (requestSeq !== _wkLateRequestSeq) return;
         if (!rows.length) {
             container.innerHTML = '<p class="hint">Tidak ada catatan keterlambatan pada rentang ini.</p>';
             return;
@@ -2292,6 +2318,7 @@ async function loadWkLateRecap() {
             </table>
             </div>`;
     } catch (err) {
+        if (requestSeq !== _wkLateRequestSeq) return;
         container.innerHTML = `<div class="alert alert-danger">${esc(fe(err))}</div>`;
     }
 }
@@ -4239,7 +4266,7 @@ async function refreshKasusDetail(ctx = kasusCtxDefault) {
             current_handler_user_id: kasus.current_handler_user_id,
             handler:                 kasus.handler,
         };
-        if (ctx === _wkKasusCtx) await renderWkCount().catch(() => {});
+        if (ctx === _wkKasusCtx) await renderWkCount();
     } catch (err) {
         if (ctx.currentId !== caseId || ctx.detailSeq !== seq) return;
         console.error('[kasus] refresh error', err);

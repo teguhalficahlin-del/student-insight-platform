@@ -417,25 +417,35 @@ export async function getStudentAttendanceSessions(studentId, dateStart, dateEnd
     if (!dateStart || !dateEnd) {
         return [];
     }
-    let q = supabase
-        .from('attendance')
-        .select(`
-            attendance_id, status, is_void, notes,
-            schedule:teaching_schedules!inner (
-                schedule_id, session_date, session_start, session_end, subject_label,
-                teacher:users ( full_name )
-            )
-        `)
-        .eq('student_id', studentId)
-        .eq('is_void', false)
-        .order('created_at', { ascending: false });
-    if (dateStart)  q = q.gte('teaching_schedules.session_date', dateStart);
-    if (dateEnd)    q = q.lte('teaching_schedules.session_date', dateEnd);
-    if (teacherId)  q = q.eq('teaching_schedules.scheduled_teacher_id', teacherId);
-    if (academicYear) q = q.eq('teaching_schedules.academic_year', academicYear);
-    const { data, error } = await q;
-    if (error) throw error;
-    return (data ?? [])
+    const rows = [];
+    const pageSize = 1000;
+    for (let offset = 0; ; offset += pageSize) {
+        let q = supabase
+            .from('attendance')
+            .select(`
+                attendance_id, status, is_void, notes,
+                schedule:teaching_schedules!inner (
+                    schedule_id, session_date, session_start, session_end,
+                    subject_label, academic_year,
+                    teacher:users ( full_name )
+                )
+            `)
+            .eq('student_id', studentId)
+            .eq('is_void', false)
+            .gte('teaching_schedules.session_date', dateStart)
+            .lte('teaching_schedules.session_date', dateEnd)
+            .order('created_at', { ascending: false })
+            .order('attendance_id', { ascending: false });
+        if (teacherId) q = q.eq('teaching_schedules.scheduled_teacher_id', teacherId);
+        if (academicYear) q = q.eq('teaching_schedules.academic_year', academicYear);
+        q = q.range(offset, offset + pageSize - 1);
+        const { data, error } = await q;
+        if (error) throw error;
+        const page = data ?? [];
+        rows.push(...page);
+        if (page.length < pageSize) break;
+    }
+    return rows
         .filter(r => r.schedule)
         .sort((a, b) => (b.schedule.session_date ?? '').localeCompare(a.schedule.session_date ?? ''));
 }
@@ -2001,27 +2011,39 @@ export async function deleteExit(exitId) {
     if (error) throw error;
 }
 
-export async function getLateArrivalsByRange(dateStart, dateEnd) {
-    const { data, error } = await supabase
-        .from('late_arrivals')
-        .select(`
-            late_id, late_date, arrival_time, reason,
-            student:students(
-                student_id, full_name, nis,
-                class_enrollment:class_enrollments(
-                    class:classes(name)
-                )
-            ),
-            recorder:users!late_arrivals_recorded_by_fkey(full_name)
-        `)
-        .gte('late_date', dateStart)
-        .lte('late_date', dateEnd)
-        .order('late_date', { ascending: false })
-        .order('arrival_time', { ascending: true });
-    if (error) throw error;
-    return (data ?? []).map(r => {
-        const enrollment = r.student?.class_enrollment ?? [];
-        const latest = enrollment[enrollment.length - 1];
+export async function getLateArrivalsByRange(dateStart, dateEnd, academicYear = null) {
+    const rows = [];
+    const pageSize = 1000;
+    for (let offset = 0; ; offset += pageSize) {
+        let q = supabase
+            .from('late_arrivals')
+            .select(`
+                late_id, late_date, arrival_time, reason,
+                student:students(
+                    student_id, full_name, nis, student_status,
+                    class_enrollment:class_enrollments(
+                        academic_year, withdrawn_at, class:classes(name)
+                    )
+                ),
+                recorder:users!late_arrivals_recorded_by_fkey(full_name)
+            `)
+            .gte('late_date', dateStart)
+            .lte('late_date', dateEnd)
+            .order('late_date', { ascending: false })
+            .order('arrival_time', { ascending: true })
+            .order('late_id', { ascending: true })
+            .range(offset, offset + pageSize - 1);
+        const { data, error } = await q;
+        if (error) throw error;
+        const page = data ?? [];
+        rows.push(...page);
+        if (page.length < pageSize) break;
+    }
+    return rows.map(r => {
+        const enrollment = (r.student?.class_enrollment ?? [])
+            .filter(e => !e.withdrawn_at && (!academicYear || e.academic_year === academicYear))
+            .sort((a, b) => String(b.academic_year ?? '').localeCompare(String(a.academic_year ?? '')));
+        const current = enrollment[0];
         return {
             late_id:      r.late_id,
             date:         r.late_date,
@@ -2029,7 +2051,7 @@ export async function getLateArrivalsByRange(dateStart, dateEnd) {
             reason:       r.reason ?? '',
             student_name: r.student?.full_name ?? '—',
             nis:          r.student?.nis ?? '—',
-            class_name:   latest?.class?.name ?? '—',
+            class_name:   current?.class?.name ?? '—',
             recorder:     r.recorder?.full_name ?? '—',
         };
     });
