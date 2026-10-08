@@ -413,7 +413,7 @@ export async function getPrograms() {
     return data ?? [];
 }
 
-export async function getStudentAttendanceSessions(studentId, dateStart, dateEnd, teacherId = null) {
+export async function getStudentAttendanceSessions(studentId, dateStart, dateEnd, teacherId = null, academicYear = null) {
     if (!dateStart || !dateEnd) {
         return [];
     }
@@ -422,7 +422,7 @@ export async function getStudentAttendanceSessions(studentId, dateStart, dateEnd
         .select(`
             attendance_id, status, is_void, notes,
             schedule:teaching_schedules!inner (
-                session_date, session_start, session_end, subject_label,
+                schedule_id, session_date, session_start, session_end, subject_label,
                 teacher:users ( full_name )
             )
         `)
@@ -432,6 +432,7 @@ export async function getStudentAttendanceSessions(studentId, dateStart, dateEnd
     if (dateStart)  q = q.gte('teaching_schedules.session_date', dateStart);
     if (dateEnd)    q = q.lte('teaching_schedules.session_date', dateEnd);
     if (teacherId)  q = q.eq('teaching_schedules.scheduled_teacher_id', teacherId);
+    if (academicYear) q = q.eq('teaching_schedules.academic_year', academicYear);
     const { data, error } = await q;
     if (error) throw error;
     return (data ?? [])
@@ -454,7 +455,7 @@ export async function fetchPklStudents(programId) {
         .order('full_name');
     if (error) throw error;
     return (data ?? []).map(s => {
-        const active = (s.placements ?? []).find(p => p.is_active) ?? s.placements?.[0] ?? null;
+        const active = (s.placements ?? []).find(p => p.is_active) ?? null;
         return {
             student_id:   s.student_id, nis: s.nis, full_name: s.full_name,
             placement_id: active?.placement_id ?? null,
@@ -491,8 +492,8 @@ export async function fetchPklAttendance(studentIds, dateStart, dateEnd) {
     if (!studentIds?.length) return [];
     const { data, error } = await supabase.rpc('fn_pkl_attendance_recap', {
         p_student_ids: studentIds,
-        p_date_start:  dateStart ?? null,
-        p_date_end:    dateEnd   ?? null,
+        p_date_start:  dateStart || null,
+        p_date_end:    dateEnd   || null,
     });
     if (error) throw error;
     return (data ?? []).map(r => ({
@@ -507,18 +508,25 @@ export async function fetchPklAttendance(studentIds, dateStart, dateEnd) {
 
 export async function fetchDudiObservations(studentIds) {
     if (!studentIds?.length) return [];
-    const { data, error } = await supabase
-        .from('observations')
-        .select(`
-            observation_id, student_id, sentiment, dimension, content, observed_at, created_at,
-            author:users!observations_author_user_id_fkey ( full_name, role_type, dudi_org_name )
-        `)
-        .in('student_id', studentIds)
-        .eq('author.role_type', 'DUDI')
-        .order('created_at', { ascending: false })
-        .limit(200);
-    if (error) throw error;
-    return (data ?? [])
+    const pageSize = 200;
+    const rows = [];
+    for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+            .from('observations')
+            .select(`
+                observation_id, student_id, sentiment, dimension, content, observed_at, created_at,
+                author:users!observations_author_user_id_fkey ( full_name, role_type, dudi_org_name )
+            `)
+            .in('student_id', studentIds)
+            .eq('author.role_type', 'DUDI')
+            .order('created_at', { ascending: false })
+            .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const page = data ?? [];
+        rows.push(...page);
+        if (page.length < pageSize) break;
+    }
+    return rows
         .filter(r => r.author?.role_type === 'DUDI')
         .map(r => ({
             id:         r.observation_id,

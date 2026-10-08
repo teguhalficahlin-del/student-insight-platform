@@ -36,7 +36,9 @@ export interface AuthUser {
     teacher_code:         string | null;
     wali_kelas_class_id:  string | null;
     program_id:           string | null;
+    kaprodi_program_id:   string | null;
     school_id:            string;
+    is_kepsek:            boolean;
     is_active:            boolean;
 }
 
@@ -77,7 +79,7 @@ export async function resolveAuth(
     // 3. Resolve user row from DB
     const { data: userRow, error: dbError } = await supabaseAdmin
         .from('users')
-        .select('user_id, auth_user_id, full_name, email, role_type, teacher_code, wali_kelas_class_id, program_id, school_id, is_active')
+        .select('user_id, auth_user_id, full_name, email, role_type, teacher_code, wali_kelas_class_id, program_id, kaprodi_program_id, school_id, is_kepsek, is_active')
         .eq('auth_user_id', authUser.id)
         .single();
 

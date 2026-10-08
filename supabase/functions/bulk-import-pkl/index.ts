@@ -58,7 +58,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (isAuthError(authResult)) return authResult;
         const { user } = authResult;
 
-        if (!['ADMINISTRATIVE', 'KAPRODI', 'KEPSEK'].includes(user.role_type)) {
+        const kaprodiProgramId = user.kaprodi_program_id
+            ?? (user.role_type === 'KAPRODI' ? user.program_id : null);
+        const isSchoolwideManager = ['ADMINISTRATIVE', 'KEPSEK'].includes(user.role_type)
+            || user.is_kepsek === true;
+
+        if (!isSchoolwideManager && !kaprodiProgramId) {
             return forbidden('Hanya ADMINISTRATIVE, KAPRODI, atau KEPSEK yang dapat mengimpor penempatan PKL');
         }
 
@@ -101,10 +106,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
         // Batch-resolve NIS → student
         const wantedNis = [...new Set(validRows.map(r => r.nis))];
-        const { data: studentRows, error: studErr } = await admin
+        let studentQuery = admin
             .from('students')
             .select('student_id, nis, student_status, program_id')
+            .eq('school_id', user.school_id)
             .in('nis', wantedNis);
+        if (kaprodiProgramId) studentQuery = studentQuery.eq('program_id', kaprodiProgramId);
+        const { data: studentRows, error: studErr } = await studentQuery;
         if (studErr) return internalError(studErr);
 
         const nisToBranch = new Map(
@@ -115,11 +123,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
         // Batch-resolve login_dudi slug → DUDI user
         const wantedSlugs = [...new Set(validRows.map(r => r.login_dudi))];
-        const { data: dudiRows, error: dudiErr } = await admin
+        let dudiQuery = admin
             .from('users')
             .select('user_id, login_identifier, dudi_org_name')
             .eq('role_type', 'DUDI')
+            .eq('school_id', user.school_id)
             .in('login_identifier', wantedSlugs);
+        if (kaprodiProgramId) dudiQuery = dudiQuery.eq('program_id', kaprodiProgramId);
+        const { data: dudiRows, error: dudiErr } = await dudiQuery;
         if (dudiErr) return internalError(dudiErr);
 
         const slugToDudi = new Map(
@@ -132,6 +143,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const { data: existingPlacements, error: plErr } = await admin
             .from('pkl_placements')
             .select('placement_id, student_id, dudi_user_id, start_date')
+            .eq('school_id', user.school_id)
             .eq('is_active', true);
         if (plErr) return internalError(plErr);
 
@@ -169,6 +181,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { error: insertErr } = await admin
                 .from('pkl_placements')
                 .insert({
+                    school_id:    user.school_id,
                     student_id:   student.student_id,
                     dudi_user_id: dudi.user_id,
                     start_date:   row.tanggal_mulai,
@@ -187,7 +200,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
             const { error: updErr } = await admin
                 .from('students')
                 .update({ student_status: 'PKL' })
-                .eq('student_id', student.student_id);
+                .eq('student_id', student.student_id)
+                .eq('school_id', user.school_id);
             if (updErr) {
                 errors.push({ row: row.rowNumber, message: `Penempatan dibuat tapi gagal update status siswa: ${updErr.message}` });
             }

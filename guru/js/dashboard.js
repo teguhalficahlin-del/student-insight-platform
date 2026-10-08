@@ -170,6 +170,9 @@ let kpAktifStudents = [];  // kaprodi siswa AKTIF (kelas)
 let kpProgramId     = null;
 let kpDudiList      = [];
 let kpTabInitialized = false;
+let kpTabLoading      = false;
+let kpRecapSeq        = 0;
+let kpClsRecapSeq     = 0;
 
 const DIMENSION_LABELS = { AKADEMIK:'Akademik', KEHADIRAN:'Kehadiran', PERILAKU:'Perilaku', SOSIAL:'Sosial', AFEKTIF:'Afektif', BAKAT_MINAT:'Bakat & Minat', FISIK:'Fisik', LAINNYA:'Lainnya' };
 
@@ -1911,7 +1914,7 @@ async function loadBkAttendanceRecap() {
                                 return;
                             }
                             try {
-                                const sessions = await getStudentAttendanceSessions(sid, ds, de);
+                                 const sessions = await getStudentAttendanceSessions(sid, ds, de, null, config.current_academic_year);
                                 if (!sessions.length) {
                                     sBody.innerHTML = '<p class="hint" style="padding:8px 24px">Belum ada sesi tercatat.</p>';
                                     return;
@@ -2308,8 +2311,9 @@ function handleKpStudentsClick(e) {
 }
 
 async function initKaprodiTab() {
-    if (kpTabInitialized) return;
-    kpTabInitialized = true;
+    if (kpTabInitialized || kpTabLoading) return;
+    kpTabLoading = true;
+    document.getElementById('kp-load-error')?.remove();
 
     const programId = currentUser.kaprodi_program_id ??
         (currentUser.role_type === 'KAPRODI' ? currentUser.program_id : null);
@@ -2317,6 +2321,8 @@ async function initKaprodiTab() {
     if (!programId) {
         document.getElementById('tab-kaprodi').querySelector('.page-body').innerHTML =
             '<div class="section-card"><p class="hint">Akun ini belum terhubung ke program keahlian. Hubungi admin.</p></div>';
+        kpTabInitialized = true;
+        kpTabLoading = false;
         return;
     }
 
@@ -2373,20 +2379,33 @@ async function initKaprodiTab() {
                 }
             });
         });
+        kpTabInitialized = true;
     } catch (err) {
         console.error('[kaprodi]', err);
+        kpTabInitialized = false;
         const panel = document.getElementById('tab-kaprodi')?.querySelector('.page-body');
         if (panel) {
-            panel.innerHTML = '<div class="section-card"><p style="color:red;padding:8px">Gagal memuat tab Kaprodi. Silakan coba lagi atau refresh halaman.</p></div>';
+            const errorEl = document.createElement('div');
+            errorEl.id = 'kp-load-error';
+            errorEl.className = 'alert alert-danger';
+            errorEl.style.marginBottom = '12px';
+            errorEl.innerHTML = 'Gagal memuat sebagian data Kaprodi. <button type="button" class="btn btn-sm btn-secondary" style="margin-left:8px">Coba lagi</button>';
+            errorEl.querySelector('button').addEventListener('click', () => initKaprodiTab());
+            panel.prepend(errorEl);
         }
+    } finally {
+        kpTabLoading = false;
     }
 }
 
 async function initKaprodiKasusSection() {
     const msgEl      = document.getElementById('kp-kasus-list-content');
-    const studentIds = kpAktifStudents.map(s => s.student_id);
+    const studentIds = [...new Set([
+        ...kpAktifStudents.map(s => s.student_id),
+        ...kpStudents.map(s => s.student_id),
+    ])];
     if (!studentIds.length) {
-        msgEl.innerHTML = '<p class="hint">Tidak ada siswa aktif di program ini.</p>';
+        msgEl.innerHTML = '<p class="hint">Tidak ada siswa di program ini.</p>';
         return;
     }
     _kpKasusCtx = makeKasusCtx('kp-kasus', { studentIds });
@@ -2432,20 +2451,28 @@ async function handleFinishPkl(btn) {
     try {
         await finishPlacement(studentId, placementId);
         kpStudents = await fetchPklStudents(kpProgramId);
+        kpAktifStudents = await fetchNonPklStudents(kpProgramId);
         const seen = new Set(kpStudents.map(s => s.student_id));
-        kpAktifStudents = [...kpAktifStudents.filter(s => !seen.has(s.student_id))];
+        kaprodiAllStudents = [
+            ...kpStudents,
+            ...kpAktifStudents.filter(s => !seen.has(s.student_id)),
+        ];
         renderKpSummary();
         renderKpStudents();
         // Reload dropdown siswa di form penempatan
         const sel = document.getElementById('kp-pl-student');
         if (sel) {
-            const nonPkl = await fetchNonPklStudents(kpProgramId).catch(() => []);
+            const nonPkl = kpAktifStudents;
             sel.innerHTML = '<option value="">-- Pilih siswa --</option>';
             nonPkl.forEach(s => {
                 const o = document.createElement('option');
                 o.value = s.student_id; o.textContent = `${s.full_name} (${s.nis})`;
                 sel.appendChild(o);
             });
+        }
+        if (_kpKasusCtx) {
+            _kpKasusCtx.extraQuery.studentIds = [...new Set(kaprodiAllStudents.map(s => s.student_id))];
+            await loadKasusList(false, _kpKasusCtx);
         }
     } catch (err) {
         btn.disabled = false; btn.textContent = 'Selesaikan PKL';
@@ -2465,8 +2492,9 @@ function renderKpDudi() {
 
 async function loadKpRecap() {
     const ids   = kpStudents.map(s => s.student_id);
-    const start = document.getElementById('kp-date-start').value;
-    const end   = document.getElementById('kp-date-end').value;
+    const start = document.getElementById('kp-date-start').value || null;
+    const end   = document.getElementById('kp-date-end').value || null;
+    const seq   = ++kpRecapSeq;
     const tbody = document.getElementById('kp-recap-body');
     const empty = document.getElementById('kp-recap-empty');
     tbody.innerHTML = '<tr><td colspan="6" class="hint">Memuat…</td></tr>';
@@ -2475,6 +2503,7 @@ async function loadKpRecap() {
     if (ids.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
     try {
         const rows = await fetchPklAttendance(ids, start, end);
+        if (seq !== kpRecapSeq) return;
         const nameById = new Map(kpStudents.map(s => [s.student_id, { name: s.full_name, nis: s.nis }]));
         const recap = rows.map(r => ({ ...nameById.get(r.student_id), ...r }));
         if (recap.every(a => a.total === 0)) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
@@ -2491,6 +2520,7 @@ async function loadKpRecap() {
             </tr>`;
         }).join('');
     } catch (err) {
+        if (seq !== kpRecapSeq) return;
         tbody.innerHTML = `<tr><td colspan="6" style="color:var(--color-danger)">${esc(fe(err))}</td></tr>`;
     }
 }
@@ -2498,6 +2528,7 @@ async function loadKpRecap() {
 async function loadKpClsRecap() {
     const dateStart = document.getElementById('kp-cls-start').value || null;
     const dateEnd   = document.getElementById('kp-cls-end').value   || null;
+    const seq       = ++kpClsRecapSeq;
     const container = document.getElementById('kp-cls-recap');
     container.innerHTML = '<p class="hint">Memuat…</p>';
 
@@ -2516,6 +2547,7 @@ async function loadKpClsRecap() {
 
         // Rekap agregat per kelas
         const allRows = await getAttendanceRecapPerClass(dateStart, dateEnd);
+        if (seq !== kpClsRecapSeq) return;
         const classIds = new Set(classes.map(c => c.class_id));
         const rows = allRows.filter(r => classIds.has(r.class_id));
 
@@ -2625,12 +2657,12 @@ async function loadKpClsRecap() {
                                     ALPA: 'var(--color-danger)',
                                 };
                                 const STATUS_LABEL = { HADIR: 'Hadir', IZIN: 'Izin', SAKIT: 'Sakit', ALPA: 'Alpa' };
-                                const grouped = [];
-                                const seen = new Map();
-                                for (const s of sessions) {
-                                    const key = `${s.schedule.session_date}|${s.schedule.subject_label ?? ''}|${s.schedule.teacher?.full_name ?? ''}`;
-                                    if (!seen.has(key)) { seen.set(key, true); grouped.push(s); }
-                                }
+                                 const grouped = [];
+                                 const seen = new Set();
+                                 for (const s of sessions) {
+                                     const key = s.schedule.schedule_id ?? s.attendance_id;
+                                     if (!seen.has(key)) { seen.add(key); grouped.push(s); }
+                                 }
                                 sBody.innerHTML = grouped.map(s => `
                                     <div style="display:flex;align-items:center;gap:8px;
                                         padding:7px 24px;border-top:0.5px solid var(--color-border)">
@@ -2638,7 +2670,8 @@ async function loadKpClsRecap() {
                                             ${esc(s.schedule.session_date)}
                                         </span>
                                         <span style="flex:1;font-size:12px;color:var(--color-text-muted)">
-                                            ${esc(s.schedule.subject_label ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
+                                             ${esc(s.schedule.subject_label ?? '—')} · ${esc(s.schedule.teacher?.full_name ?? '—')}
+                                             ${s.schedule.session_start ? ` · ${esc(s.schedule.session_start.slice(0, 5))}–${esc((s.schedule.session_end ?? '').slice(0, 5))}` : ''}
                                         </span>
                                         <span style="font-size:11px;font-weight:600;
                                             color:${STATUS_COLOR[s.status] ?? 'var(--color-text-muted)'}">
@@ -2646,11 +2679,13 @@ async function loadKpClsRecap() {
                                         </span>
                                     </div>`).join('');
                             } catch(err) {
+                                 delete sBody.dataset.loaded;
                                 sBody.innerHTML = `<div class="alert alert-danger" style="margin:8px 24px">${esc(fe(err))}</div>`;
                             }
                         });
                     });
                 } catch (err) {
+                    delete body.dataset.loaded;
                     body.innerHTML = `<div class="alert alert-danger" style="margin:8px 16px">${esc(fe(err))}</div>`;
                 }
             });
@@ -2689,7 +2724,7 @@ async function initKpPlacementForm(programId) {
     async function reloadStudentSelect() {
         const el = document.getElementById('kp-pl-student');
         el.innerHTML = '<option value="">-- Pilih siswa --</option>';
-        const nonPkl = await fetchNonPklStudents(programId).catch(() => []);
+        const nonPkl = await fetchNonPklStudents(programId);
         nonPkl.forEach(s => {
             const o = document.createElement('option');
             o.value = s.student_id; o.textContent = `${s.full_name} (${s.nis})`;
