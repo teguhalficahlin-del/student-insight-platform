@@ -114,11 +114,11 @@ SET search_path = public
 AS $$
     SELECT
         s.student_id,
-        COUNT(pa.attendance_id) FILTER (WHERE pa.status = 'HADIR') AS hadir,
-        COUNT(pa.attendance_id) FILTER (WHERE pa.status = 'ALPA')  AS alpa,
-        COUNT(pa.attendance_id) FILTER (WHERE pa.status = 'IZIN')  AS izin,
-        COUNT(pa.attendance_id) FILTER (WHERE pa.status = 'SAKIT') AS sakit,
-        COUNT(pa.attendance_id) AS total
+        COUNT(pa.pkl_attendance_id) FILTER (WHERE pa.status = 'HADIR') AS hadir,
+        COUNT(pa.pkl_attendance_id) FILTER (WHERE pa.status = 'ALPA')  AS alpa,
+        COUNT(pa.pkl_attendance_id) FILTER (WHERE pa.status = 'IZIN')  AS izin,
+        COUNT(pa.pkl_attendance_id) FILTER (WHERE pa.status = 'SAKIT') AS sakit,
+        COUNT(pa.pkl_attendance_id) AS total
     FROM unnest(p_student_ids) AS requested(student_id)
     JOIN public.students s
       ON s.student_id = requested.student_id
