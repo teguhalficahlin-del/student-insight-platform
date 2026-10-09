@@ -565,7 +565,7 @@ export async function fetchAllPklStudents() {
         .order('full_name');
     if (error) throw error;
     return (data ?? []).map(s => {
-        const active = (s.placements ?? []).find(p => p.is_active) ?? s.placements?.[0] ?? null;
+        const active = (s.placements ?? []).find(p => p.is_active) ?? null;
         return {
             student_id:   s.student_id, nis: s.nis, full_name: s.full_name,
             program_name: s.program?.name ?? '—',

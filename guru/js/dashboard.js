@@ -3220,14 +3220,8 @@ async function loadWhRecap() {
     try {
         const rows = await fetchPklAttendance(ids, start, end);
         const nameMap = new Map(whStudents.map(s => [s.student_id, { name: s.full_name, prog: s.program_name }]));
-        const byStudent = new Map(whStudents.map(s => [s.student_id, { name: s.full_name, prog: s.program_name, HADIR:0, ALPA:0, IZIN:0, SAKIT:0, total:0 }]));
-        for (const r of rows) {
-            const a = byStudent.get(r.student_id);
-            if (!a) continue;
-            if (a[r.status] !== undefined) a[r.status]++;
-            a.total++;
-        }
-        const recap = [...byStudent.values()];
+        const recap = rows.filter(r => nameMap.has(r.student_id))
+            .map(r => ({ ...nameMap.get(r.student_id), ...r }));
         if (recap.every(a => a.total === 0)) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
         tbody.innerHTML = recap.map(a => {
             const pct = a.total > 0 ? Math.round(a.HADIR / a.total * 100) : 0;
@@ -3272,7 +3266,7 @@ async function loadWhCases() {
         tbody.innerHTML = cases.map(c => `<tr>
             <td>${esc(c.student?.full_name ?? '—')}</td>
             <td>${esc(c.title)}</td>
-            <td>${esc(c.handler?.full_name ?? c.current_handler_role ?? '—')}</td>
+            <td>${esc(CASE_STATUS_LABEL[c.status] ?? c.status)}</td>
             <td>${fmt(c.created_at)}</td>
         </tr>`).join('');
     } catch (err) {
