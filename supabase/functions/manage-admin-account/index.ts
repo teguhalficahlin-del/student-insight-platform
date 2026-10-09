@@ -137,50 +137,30 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return forbidden('Tidak dapat menghapus akun Anda sendiri');
         }
 
-        // Ambil target — harus ADMINISTRATIVE di sekolah yang sama
-        const { data: target, error: fetchErr } = await admin
-            .from('users')
-            .select('auth_user_id, role_type, full_name')
-            .eq('user_id', user_id)
-            .eq('school_id', user.school_id)
-            .maybeSingle();
+        // Pengecekan target, batas admin terakhir, dan soft-delete harus satu
+        // transaksi dengan advisory lock per sekolah.
+        const { data: deleted, error: deleteErr } = await admin.rpc('fn_remove_school_admin', {
+            p_actor_user_id:  user.user_id,
+            p_target_user_id: user_id,
+        });
 
-        if (fetchErr) return internalError(fetchErr);
-        if (!target)  return badRequest('Akun tidak ditemukan di sekolah ini');
-        if (target.role_type !== 'ADMINISTRATIVE') {
-            return forbidden('Hanya akun ADMINISTRATIVE yang dapat dihapus dari sini');
+        if (deleteErr) {
+            const message = deleteErr.message ?? 'Gagal menghapus akun admin';
+            if (/tidak dapat menghapus akun Anda sendiri|admin terakhir|tidak ditemukan|hanya akun ADMINISTRATIVE/i.test(message)) {
+                return forbidden(message);
+            }
+            if (/akses ditolak/i.test(message)) return forbidden(message);
+            return internalError(deleteErr);
         }
-
-        // Pastikan masih ada minimal 1 admin aktif tersisa setelah dihapus
-        const { count, error: countErr } = await admin
-            .from('users')
-            .select('user_id', { count: 'exact', head: true })
-            .eq('school_id', user.school_id)
-            .eq('role_type', 'ADMINISTRATIVE')
-            .eq('is_active', true)
-            .is('deleted_at', null);
-
-        if (countErr) return internalError(countErr);
-        if ((count ?? 0) <= 1) {
-            return forbidden('Tidak dapat menghapus admin terakhir sekolah ini');
-        }
-
-        // Soft-delete: set deleted_at + is_active=false di DB dulu
-        const { error: softDelErr } = await admin
-            .from('users')
-            .update({ deleted_at: new Date().toISOString(), is_active: false })
-            .eq('user_id', user_id);
-
-        if (softDelErr) return internalError(softDelErr);
 
         // Ban Auth account (bukan hard-delete agar bisa restore dalam 30 hari)
-        if (target.auth_user_id) {
-            await admin.auth.admin.updateUserById(target.auth_user_id, {
+        if (deleted?.auth_user_id) {
+            await admin.auth.admin.updateUserById(deleted.auth_user_id, {
                 ban_duration: '87600h', // ~10 tahun = effectively permanent
             }).catch(e => console.warn('[manage-admin-account] ban auth user gagal:', e));
         }
 
-        return ok({ deleted: true, user_id, full_name: target.full_name });
+        return ok(deleted);
     }
 
     return new Response('Method Not Allowed', { status: 405, headers: corsHeaders });

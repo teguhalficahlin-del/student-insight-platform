@@ -3298,12 +3298,31 @@ function fmtChartLabel(dateStr, byMonth) {
 
 let _ksTabInit = false;
 let _ksChart   = null;
+let _ksMonitoringSeq = 0;
+
+function kepsekLocalRange(period) {
+    const today = new Date();
+    const shift = (date, days) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+    const todayStr = localDateStr(today);
+
+    if (period === 'hari_ini') return { start: todayStr, end: todayStr };
+    if (period === '7_hari') return { start: localDateStr(shift(today, -6)), end: todayStr };
+    if (period === 'minggu_lalu') {
+        const daysSinceMonday = (today.getDay() + 6) % 7;
+        const thisMonday = shift(today, -daysSinceMonday);
+        return { start: localDateStr(shift(thisMonday, -7)), end: localDateStr(shift(thisMonday, -1)) };
+    }
+    if (period === 'bulan_lalu') {
+        const firstThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        return { start: localDateStr(new Date(today.getFullYear(), today.getMonth() - 1, 1)), end: localDateStr(shift(firstThisMonth, -1)) };
+    }
+    return null;
+}
 
 async function initKepsekTab() {
     if (!_ksTabInit) {
         _ksTabInit = true;
         wireSimpleAccordion('ks-chart-card');
-        wireSimpleAccordion('ks-disahkan-section');
         wireSimpleAccordion('ks-monitoring-card');
         wireSimpleAccordion('ks-admin-card');
 
@@ -3323,6 +3342,12 @@ async function initKepsekTab() {
             const start = document.getElementById('ks-range-start').value;
             const end   = document.getElementById('ks-range-end').value;
             if (!start || !end) return;
+            if (start > end) {
+                const errEl = document.getElementById('ks-monitoring-error');
+                errEl.textContent = 'Tanggal awal tidak boleh setelah tanggal akhir.';
+                errEl.style.display = 'block';
+                return;
+            }
             document.querySelectorAll('.ks-period-btn').forEach(b => b.classList.remove('active'));
             loadKepsekMonitoring('rentang', null, start, end);
         });
@@ -3333,7 +3358,6 @@ async function initKepsekTab() {
 
     }
     await loadKepsekMonitoring('7_hari');
-    await loadKepsekDisahkanDocs();
     await initKepsekKasusSection();
     await initKsAdminTab();
 }
@@ -3361,37 +3385,43 @@ async function initKsAdminTab() {
 }
 
 async function loadKepsekMonitoring(period, academicYear = null, dateStart = null, dateEnd = null) {
+    const seq       = ++_ksMonitoringSeq;
     const errEl    = document.getElementById('ks-monitoring-error');
     const pctSiswa = document.getElementById('ks-pct-siswa');
     const pctGuru  = document.getElementById('ks-pct-guru');
     const detSiswa = document.getElementById('ks-detail-siswa');
     const detGuru  = document.getElementById('ks-detail-guru');
     const hintEl   = document.getElementById('ks-chart-hint');
+    const countLate  = document.getElementById('ks-count-late');
+    const countExits = document.getElementById('ks-count-exits');
 
     pctSiswa.textContent = '…';
     pctGuru.textContent  = '…';
     detSiswa.textContent = '';
     detGuru.textContent  = '';
+    if (countLate)  countLate.textContent = '…';
+    if (countExits) countExits.textContent = '…';
+    hintEl.textContent = '';
     errEl.style.display  = 'none';
+    if (_ksChart) { _ksChart.destroy(); _ksChart = null; }
 
     try {
-        // FIX 3: 'hari_ini' pakai tanggal lokal browser, bukan CURRENT_DATE UTC di DB
+        // Relative presets use browser-local dates so DB timezone cannot shift a school day.
         let _period    = period;
         let _dateStart = dateStart;
         let _dateEnd   = dateEnd;
-        if (period === 'hari_ini') {
-            const today = localDateStr();
+        const localRange = kepsekLocalRange(period);
+        if (localRange) {
             _period    = 'rentang';
-            _dateStart = today;
-            _dateEnd   = today;
+            _dateStart = localRange.start;
+            _dateEnd   = localRange.end;
         }
         const d = await getKepsekMonitoring(_period, academicYear, _dateStart, _dateEnd);
+        if (seq !== _ksMonitoringSeq) return;
         const s = d.summary ?? {};
 
         pctSiswa.textContent = (s.pct_siswa != null && !isNaN(s.pct_siswa)) ? s.pct_siswa + '%' : '0%';
         pctGuru.textContent  = (s.pct_guru != null && !isNaN(s.pct_guru)) ? s.pct_guru + '%' : '0%';
-        const countLate  = document.getElementById('ks-count-late');
-        const countExits = document.getElementById('ks-count-exits');
         if (countLate)  countLate.textContent  = s.count_late  != null ? s.count_late  + ' siswa' : '—';
         if (countExits) countExits.textContent = s.count_exits != null ? s.count_exits + ' siswa' : '—';
         detSiswa.textContent = `${s.siswa_hadir ?? 0} / ${s.siswa_total ?? 0} siswa hadir`;
@@ -3420,10 +3450,15 @@ async function loadKepsekMonitoring(period, academicYear = null, dateStart = nul
             }
         }
     } catch (err) {
+        if (seq !== _ksMonitoringSeq) return;
         errEl.textContent   = `Gagal memuat data: ${fe(err)}`;
         errEl.style.display = 'block';
         pctSiswa.textContent = '—';
         pctGuru.textContent  = '—';
+        if (countLate)  countLate.textContent = '—';
+        if (countExits) countExits.textContent = '—';
+        hintEl.textContent = '';
+        if (_ksChart) { _ksChart.destroy(); _ksChart = null; }
         console.error('[kepsek monitoring]', err);
     }
 }
@@ -4063,7 +4098,8 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault, seq = ctx.detail
     }
 
     const isHandler = kasus.current_handler_user_id === currentUser.user_id;
-    if (!isHandler) {
+    const isKepsek = currentUser.role_type === 'KEPSEK' || currentUser.is_kepsek === true;
+    if (!isHandler && !isKepsek) {
         actionsEl.style.display = 'none';
         return;
     }
@@ -4099,7 +4135,7 @@ async function renderKasusActions(kasus, ctx = kasusCtxDefault, seq = ctx.detail
     // ── Status change ──
     const statusControls = kEl(ctx, 'status-change-controls') ?? statusBlock;
     const nextStatuses = STATUS_AFTER_CURRENT[kasus.status] ?? [];
-    if (isHandler && nextStatuses.length) {
+    if ((isHandler || isKepsek) && nextStatuses.length) {
         statusSel.innerHTML = nextStatuses.map(s =>
             `<option value="${s}">${esc(CASE_STATUS_LABEL[s])}</option>`
         ).join('');
@@ -7112,7 +7148,7 @@ const _KS_DISAHKAN_PAGE_SIZE = 10;
 
 async function loadKepsekDisahkanDocs() {
     const section = document.getElementById('ks-disahkan-section');
-    if (!section) return;
+    if (!section || section.hidden) return;
 
     const listEl = document.getElementById('ks-disahkan-list');
     listEl.innerHTML = '<p class="hint">Memuat...</p>';
