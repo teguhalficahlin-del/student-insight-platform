@@ -1227,6 +1227,7 @@ export async function getDutyStaffCandidates() {
         .in('role_type', ['GURU','BK','WALI_KELAS','KEPSEK',
             'WAKA_KURIKULUM','WAKA_KESISWAAN','WAKA_HUMAS'])
         .eq('is_active', true)
+        .is('deleted_at', null)
         .order('full_name');
     if (error) throw error;
 
@@ -1254,16 +1255,28 @@ export async function getDutySchedules(academicYear, semester) {
 export async function assignDutySchedule(
     userId, dayOfWeek, academicYear, semester, assignedByUserId, schoolId
 ) {
-    const { data: existing } = await supabase
+    let existingQuery = supabase
         .from('duty_schedules')
-        .select('duty_id')
+        .select('duty_id, is_active')
         .eq('user_id',      userId)
         .eq('day_of_week',  dayOfWeek)
         .eq('academic_year', academicYear)
-        .eq('semester',     semester)
-        .eq('is_active',    true)
-        .maybeSingle();
-    if (existing) return 'exists';
+        .eq('semester',     semester);
+    if (schoolId) existingQuery = existingQuery.eq('school_id', schoolId);
+    const { data: existing, error: existingError } = await existingQuery.maybeSingle();
+    if (existingError) throw existingError;
+    if (existing?.is_active) return 'exists';
+
+    if (existing?.duty_id) {
+        const { data, error } = await supabase
+            .from('duty_schedules')
+            .update({ is_active: true, assigned_by_user_id: assignedByUserId })
+            .eq('duty_id', existing.duty_id)
+            .select('duty_id')
+            .single();
+        if (error) throw error;
+        return data.duty_id;
+    }
 
     const { data, error } = await supabase
         .from('duty_schedules')

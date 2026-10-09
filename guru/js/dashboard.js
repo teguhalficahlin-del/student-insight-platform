@@ -320,7 +320,8 @@ async function init() {
     if (!auth?.user) { window.location.replace(getLoginUrl()); return; }
 
     currentUser = await getCurrentUserRow(auth.user);
-    if (!currentUser || !GURU_ROLES.includes(currentUser.role_type) || currentUser.is_active === false) {
+    if (!currentUser || !GURU_ROLES.includes(currentUser.role_type)
+        || currentUser.is_active === false || currentUser.deleted_at) {
         await supabase.auth.signOut();
         window.location.replace(getLoginUrl());
         return;
@@ -4368,11 +4369,20 @@ const PIKET_CLOSE_MIN  = 0;
 const PIKET_LATE_LIMIT = '07:15';
 
 function _piketFormActive() {
-    const now = new Date();
-    const mins = now.getHours() * 60 + now.getMinutes();
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+    const mins = Number(values.hour) * 60 + Number(values.minute);
     const open  = PIKET_OPEN_HOUR  * 60 + PIKET_OPEN_MIN;
     const close = PIKET_CLOSE_HOUR * 60 + PIKET_CLOSE_MIN;
     return mins >= open && mins < close;
+}
+
+function _piketJakartaTimeStr() {
+    return new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).format(new Date());
 }
 
 let _piketTabInit = false;
@@ -4441,7 +4451,7 @@ async function _piketRenderForm() {
     const wrap = document.getElementById('piket-form-wrap');
     if (!wrap) return;
     const active = _piketFormActive();
-    const nowTime = new Date().toTimeString().slice(0, 5);
+    const nowTime = _piketJakartaTimeStr();
 
     wrap.innerHTML = `
         ${!active ? `<p style="color:var(--color-text-muted);font-size:13px;font-style:italic">Form tidak tersedia di luar jam 07:00–16:00.</p>` : ''}

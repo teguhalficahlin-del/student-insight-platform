@@ -27,7 +27,8 @@ applyBranding().then(b => {
 supabase.auth.getUser().then(async ({ data }) => {
     if (!data?.user) return;
     const row = await getCurrentUserRow();
-    if (row && GURU_ROLES.includes(row.role_type) && row.is_active !== false) {
+    if (row && GURU_ROLES.includes(row.role_type)
+        && row.is_active !== false && !row.deleted_at) {
         window.location.replace('dashboard.html');
     }
 });
@@ -45,7 +46,7 @@ form.addEventListener('submit', async (e) => {
             await supabase.auth.signOut();
             throw new Error('Akun ini tidak memiliki akses ke Portal Guru.');
         }
-        if (row.is_active === false) {
+        if (row.is_active === false || row.deleted_at) {
             await supabase.auth.signOut();
             throw new Error('Akun Anda telah dinonaktifkan. Hubungi admin sekolah.');
         }

@@ -89,6 +89,7 @@ export async function getCurrentUserRow(authUser = null) {
             user_id, school_id, full_name, role_type, login_identifier, teacher_code,
             wali_kelas_class_id, kaprodi_program_id,
             is_bk, is_kepsek, is_waka_kurikulum, is_waka_kesiswaan, is_waka_humas, is_active,
+            deleted_at,
             must_change_password, last_seen_at, last_seen_ua,
             teaching_assignments(count)
         `)
@@ -296,6 +297,14 @@ export async function searchStudents(query, schoolId) {
 // dengan dudi/js/api.js.
 function localDateStr(d = new Date()) {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function jakartaDateStr(d = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(d);
+    const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+    return `${values.year}-${values.month}-${values.day}`;
 }
 
 /**
@@ -1884,7 +1893,6 @@ export async function saveTeachingContext(schoolId, context) {
 // ─── GURU PIKET ──────────────────────────────────────────────
 
 export async function isOnDutyToday() {
-    if (new Date().getDay() === 0) return false; // MINGGU tidak ada di enum day_of_week
     try {
         const { data, error } = await supabase.rpc('fn_is_on_duty_today');
         if (error) throw error;
@@ -1897,7 +1905,7 @@ export async function isOnDutyToday() {
 
 export async function getTodayLateArrivals() {
     try {
-        const today = localDateStr();
+        const today = jakartaDateStr();
         const { data, error } = await supabase
             .from('late_arrivals')
             .select(`
@@ -1927,7 +1935,7 @@ export async function getTodayLateArrivals() {
 }
 
 export async function recordLateArrival(studentId, arrivalTime, reason, schoolId) {
-    const today = localDateStr();
+    const today = jakartaDateStr();
     const userRow = await getCurrentUserRow();
     if (!userRow) throw new Error('Sesi tidak valid. Silakan login ulang.');
     const payload = {
@@ -1953,7 +1961,7 @@ export async function deleteLateArrival(lateId) {
 
 export async function getTodayExits() {
     try {
-        const today = new Date().toLocaleDateString('en-CA');
+        const today = jakartaDateStr();
         const { data, error } = await supabase
             .from('student_exits')
             .select(`
@@ -1984,7 +1992,7 @@ export async function getTodayExits() {
 }
 
 export async function recordExit(studentId, exitTime, reason, schoolId, recordedBy) {
-    const today = new Date().toLocaleDateString('en-CA');
+    const today = jakartaDateStr();
     const { data, error } = await supabase
         .from('student_exits')
         .insert({ student_id: studentId, exit_time: exitTime,
