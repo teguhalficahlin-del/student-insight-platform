@@ -8,7 +8,7 @@ import { checkMustChangePassword } from '../../shared/change-password.js';
 import { initLoginGuard } from '../../shared/login-guard.js';
 import { initSessionGuard } from '../../shared/session-guard.js';
 import {
-    supabase, logout, getCurrentUserRow, STAKEHOLDER_ROLES,
+    supabase, logout, getCurrentUserRow, isActiveStakeholder,
     getStakeholderSummary, getKepsekMonitoring, getSchoolConfig,
 } from './api.js';
 import { showPwaBanner } from '../../shared/pwa-banner.js';
@@ -17,7 +17,7 @@ function fmtNum(n)  { return (n ?? 0).toLocaleString('id-ID'); }
 function fmtPct(n)  { return (n === null || n === undefined) ? '—' : n + '%'; }
 function fmtTime(d) {
     if (!d) return '—';
-    return 'Diperbarui ' + new Date(d).toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+    return 'Diperbarui ' + new Date(d).toLocaleString('id-ID', { timeZone:'Asia/Jakarta', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
 }
 
 // ─── MONITORING KEHADIRAN ────────────────────────────────────
@@ -30,13 +30,22 @@ const BULAN_ID = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','N
 
 let _config  = null;
 let _ksChart = null;
+let _monitoringFilter = { period: '7_hari', academicYear: null, dateStart: null, dateEnd: null };
+let _monitoringRequest = 0;
+let _summaryRequest = 0;
+let _accessEnded = false;
+let _accessCheck = null;
 
 function localDateStr(d = new Date()) {
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(d);
+    const value = type => parts.find(p => p.type === type).value;
+    return `${value('year')}-${value('month')}-${value('day')}`;
 }
 
 function _prevAcademicYear() {
-    const y = parseInt(_config?.current_academic_year?.split('/')[0] ?? new Date().getFullYear());
+    const y = parseInt(_config?.current_academic_year?.split('/')[0] ?? localDateStr().slice(0, 4));
     return `${y - 1}/${y}`;
 }
 
@@ -52,15 +61,15 @@ async function init() {
     if (!auth?.user) { window.location.replace(getLoginUrl()); return; }
 
     const user = await getCurrentUserRow(auth.user);
-    if (!user || !STAKEHOLDER_ROLES.includes(user.role_type)) {
-        await supabase.auth.signOut();
-        window.location.replace(getLoginUrl());
+    if (!isActiveStakeholder(user)) {
+        await endStakeholderAccess();
         return;
     }
 
     document.getElementById('hdr-name').textContent = user.full_name;
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display     = 'block';
+    initStakeholderAccessGuard();
     await Promise.all([
         applyBrandingById(user.school_id, supabase),
         checkMustChangePassword(supabase, user),
@@ -75,14 +84,51 @@ async function init() {
 
     document.getElementById('refresh-btn').onclick = () => {
         loadSummary();
-        const aktif = document.querySelector('.ks-period-btn.active');
-        loadKepsekMonitoring(aktif?.dataset.period ?? '7_hari');
+        const f = _monitoringFilter;
+        loadKepsekMonitoring(f.period, f.academicYear, f.dateStart, f.dateEnd);
     };
     showPwaBanner({ hasBottomNav: false });
     initSessionGuard(supabase, getLoginUrl());
 }
 
+async function endStakeholderAccess() {
+    if (_accessEnded) return;
+    _accessEnded = true;
+    ++_monitoringRequest;
+    ++_summaryRequest;
+    document.getElementById('app').style.display = 'none';
+    clearMonitoring();
+    try { await supabase.auth.signOut({ scope: 'local' }); }
+    finally { window.location.replace(getLoginUrl()); }
+}
+
+async function verifyStakeholderAccess() {
+    if (_accessEnded) return false;
+    if (_accessCheck) return _accessCheck;
+    _accessCheck = (async () => {
+        const user = await getCurrentUserRow();
+        if (!isActiveStakeholder(user)) {
+            await endStakeholderAccess();
+            return false;
+        }
+        return true;
+    })();
+    try { return await _accessCheck; }
+    finally { _accessCheck = null; }
+}
+
+function initStakeholderAccessGuard() {
+    const check = () => {
+        if (!document.hidden) verifyStakeholderAccess().catch(err => console.error('[stakeholder access]', err));
+    };
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+    setInterval(check, 60000);
+}
+
 async function loadSummary() {
+    if (_accessEnded) return;
+    const request = ++_summaryRequest;
     const btn    = document.getElementById('refresh-btn');
     const errBox = document.getElementById('error-box');
     btn.disabled = true;
@@ -91,6 +137,7 @@ async function loadSummary() {
 
     try {
         const s = await getStakeholderSummary();
+        if (request !== _summaryRequest) return;
         document.getElementById('st-siswa').textContent          = fmtNum(s.total_siswa);
         document.getElementById('st-pkl').textContent            = fmtNum(s.total_pkl);
         document.getElementById('st-staf').textContent           = fmtNum(s.total_staf);
@@ -101,15 +148,38 @@ async function loadSummary() {
         document.getElementById('st-hadir-hari').textContent     = fmtNum(s.hadir_hari_ini);
         document.getElementById('updated-at').textContent        = fmtTime(s.updated_at);
     } catch (err) {
+        if (request !== _summaryRequest) return;
+        for (const id of ['st-siswa','st-pkl','st-staf','st-program','st-kelas','st-kehadiran-bulan','st-sesi','st-hadir-hari','updated-at']) {
+            document.getElementById(id).textContent = '—';
+        }
         errBox.textContent   = 'Gagal memuat ringkasan. Periksa koneksi lalu coba lagi.';
         errBox.style.display = 'block';
     } finally {
-        btn.disabled    = false;
-        btn.textContent = 'Muat Ulang';
+        if (request === _summaryRequest) {
+            btn.disabled    = false;
+            btn.textContent = 'Muat Ulang';
+        }
     }
 }
 
+function clearMonitoring() {
+    for (const id of ['ks-pct-siswa', 'ks-pct-guru', 'ks-count-late', 'ks-count-exits']) {
+        document.getElementById(id).textContent = '—';
+    }
+    for (const id of ['ks-detail-siswa', 'ks-detail-guru', 'ks-chart-hint']) {
+        document.getElementById(id).textContent = '';
+    }
+    if (_ksChart) { _ksChart.destroy(); _ksChart = null; }
+}
+
+function monitoringPct(value, total) {
+    return total === 0 || value == null || !Number.isFinite(Number(value)) ? '—' : value + '%';
+}
+
 async function loadKepsekMonitoring(period, academicYear = null, dateStart = null, dateEnd = null) {
+    if (_accessEnded) return;
+    _monitoringFilter = { period, academicYear, dateStart, dateEnd };
+    const request = ++_monitoringRequest;
     const errEl    = document.getElementById('ks-monitoring-error');
     const pctSiswa = document.getElementById('ks-pct-siswa');
     const pctGuru  = document.getElementById('ks-pct-guru');
@@ -117,6 +187,7 @@ async function loadKepsekMonitoring(period, academicYear = null, dateStart = nul
     const detGuru  = document.getElementById('ks-detail-guru');
     const hintEl   = document.getElementById('ks-chart-hint');
 
+    clearMonitoring();
     pctSiswa.textContent = '…';
     pctGuru.textContent  = '…';
     detSiswa.textContent = '';
@@ -124,21 +195,12 @@ async function loadKepsekMonitoring(period, academicYear = null, dateStart = nul
     errEl.style.display  = 'none';
 
     try {
-        // 'hari_ini' pakai tanggal lokal browser, bukan CURRENT_DATE UTC di DB
-        let _period    = period;
-        let _dateStart = dateStart;
-        let _dateEnd   = dateEnd;
-        if (period === 'hari_ini') {
-            const today = localDateStr();
-            _period    = 'rentang';
-            _dateStart = today;
-            _dateEnd   = today;
-        }
-        const d = await getKepsekMonitoring(_period, academicYear, _dateStart, _dateEnd);
+        const d = await getKepsekMonitoring(period, academicYear, dateStart, dateEnd);
+        if (request !== _monitoringRequest) return;
         const s = d.summary ?? {};
 
-        pctSiswa.textContent = (s.pct_siswa != null && !isNaN(s.pct_siswa)) ? s.pct_siswa + '%' : '0%';
-        pctGuru.textContent  = (s.pct_guru != null && !isNaN(s.pct_guru)) ? s.pct_guru + '%' : '0%';
+        pctSiswa.textContent = monitoringPct(s.pct_siswa, s.siswa_total);
+        pctGuru.textContent  = monitoringPct(s.pct_guru, s.guru_total);
         const countLate  = document.getElementById('ks-count-late');
         const countExits = document.getElementById('ks-count-exits');
         if (countLate)  countLate.textContent  = s.count_late  != null ? s.count_late  + ' siswa' : '—';
@@ -169,6 +231,8 @@ async function loadKepsekMonitoring(period, academicYear = null, dateStart = nul
             }
         }
     } catch (err) {
+        if (request !== _monitoringRequest) return;
+        clearMonitoring();
         errEl.textContent   = `Gagal memuat data monitoring: ${err.message ?? err}`;
         errEl.style.display = 'block';
         pctSiswa.textContent = '—';
@@ -249,7 +313,7 @@ function renderKepsekChart(chartData, byMonth) {
                             if (ctx.dataset.yAxisID === 'y2') {
                                 return `${ctx.dataset.label}: ${v != null ? v + ' siswa' : '—'}`;
                             }
-                            return `${ctx.dataset.label}: ${v != null ? v + '%' : '0%'}`;
+                            return `${ctx.dataset.label}: ${v != null ? v + '%' : '—'}`;
                         },
                     },
                 },

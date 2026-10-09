@@ -1,4 +1,4 @@
-import { supabase, loginWithIdentifier, getCurrentUserRow, STAKEHOLDER_ROLES } from './api.js';
+import { supabase, loginWithIdentifier, getCurrentUserRow, STAKEHOLDER_ROLES, isActiveStakeholder } from './api.js';
 import { applyBranding } from '../../shared/branding.js';
 import { checkMustChangePassword } from '../../shared/change-password.js';
 
@@ -38,9 +38,14 @@ applyBranding().then(b => {
 supabase.auth.getUser().then(async ({ data }) => {
     if (!data?.user) return;
     const row = await getCurrentUserRow();
-    if (row && STAKEHOLDER_ROLES.includes(row.role_type) && row.is_active !== false) {
+    if (isActiveStakeholder(row)) {
         window.location.replace('dashboard.html');
+    } else {
+        await supabase.auth.signOut({ scope: 'local' });
     }
+}).catch(() => {
+    errEl.textContent = 'Gagal memeriksa sesi. Silakan masuk kembali.';
+    errEl.style.display = 'block';
 });
 
 form.addEventListener('submit', async (e) => {
@@ -53,11 +58,11 @@ form.addEventListener('submit', async (e) => {
         await loginWithIdentifier(identEl.value.trim().toUpperCase(), passEl.value, _schoolId);
         const row = await getCurrentUserRow();
         if (!row || !STAKEHOLDER_ROLES.includes(row.role_type)) {
-            await supabase.auth.signOut();
+            await supabase.auth.signOut({ scope: 'local' });
             throw new Error('Akun ini tidak memiliki akses ke Portal Stakeholder.');
         }
-        if (row.is_active === false) {
-            await supabase.auth.signOut();
+        if (!isActiveStakeholder(row)) {
+            await supabase.auth.signOut({ scope: 'local' });
             throw new Error('Akun Anda telah dinonaktifkan. Hubungi admin sekolah.');
         }
         await checkMustChangePassword(supabase, row);

@@ -20,6 +20,11 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // Role yang boleh masuk portal ini
 export const STAKEHOLDER_ROLES = ['STAKEHOLDER'];
 
+export function isActiveStakeholder(user) {
+    return !!user && STAKEHOLDER_ROLES.includes(user.role_type)
+        && user.is_active === true && user.deleted_at == null;
+}
+
 export async function loginWithIdentifier(identifier, password, schoolId = null) {
     const { data: email, error: resolveErr } = await supabase
         .rpc('fn_resolve_login_email', { p_identifier: identifier, p_school_id: schoolId });
@@ -42,7 +47,7 @@ export async function getCurrentUserRow(authUser = null) {
     if (!user) return null;
     const { data, error } = await supabase
         .from('users')
-        .select('user_id, school_id, full_name, role_type, is_active, must_change_password, last_seen_at, last_seen_ua')
+        .select('user_id, school_id, full_name, role_type, is_active, deleted_at, must_change_password, last_seen_at, last_seen_ua')
         .eq('auth_user_id', user.id)
         .maybeSingle();
     if (error) throw error;
