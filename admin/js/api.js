@@ -1126,14 +1126,9 @@ export async function releaseTeacherFromSchedules(user_id) {
 
 // ─── Forum Kelas: penugasan BK & Guru Wali ───────────────
 
-/** Ambil semua staf dengan role BK aktif di sekolah ini. */
+/** Ambil staf BK aktif, termasuk jabatan tambahan, di sekolah ini. */
 export async function getForumBkStaff() {
-    const { data, error } = await supabase
-        .from('v_users_staff_directory')
-        .select('user_id, full_name, role_type')
-        .eq('role_type', 'BK')
-        .eq('is_active', true)
-        .order('full_name');
+    const { data, error } = await supabase.rpc('fn_get_forum_bk_staff');
     if (error) throw error;
     return data ?? [];
 }
@@ -1146,8 +1141,10 @@ export async function getForumGuruWaliCandidates() {
     ];
     const { data, error } = await supabase
         .from('v_users_staff_directory')
-        .select('user_id, full_name, role_type')
+        .select('user_id, full_name, role_type, login_identifier')
         .in('role_type', INTERNAL_ROLES)
+        .eq('is_active', true)
+        .is('deleted_at', null)
         .order('full_name');
     if (error) throw error;
     return data ?? [];
@@ -1178,19 +1175,30 @@ export async function getGuruWaliAssignments(academicYear) {
 /**
  * Tetapkan BK ke kelas. Jika sudah ada assignment aktif untuk
  * kombinasi (class_id, bk_user_id, academic_year), skip (idempoten).
- * Untuk mencabut: set is_active=false via updateBkAssignment.
+ * Untuk mencabut: set is_active=false via revokeBkFromClass.
  */
 export async function assignBkToClass(classId, bkUserId, academicYear, assignedByUserId) {
-    // Cek apakah sudah ada
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
         .from('bk_class_assignments')
-        .select('assignment_id')
+        .select('assignment_id, is_active')
         .eq('class_id',      classId)
         .eq('bk_user_id',   bkUserId)
         .eq('academic_year', academicYear)
-        .eq('is_active',     true)
         .maybeSingle();
-    if (existing) return 'exists'; // idempoten — sinyal ke caller
+    if (existingError) throw existingError;
+    if (existing?.is_active) return 'exists';
+
+    if (existing) {
+        const { data, error } = await supabase
+            .from('bk_class_assignments')
+            .update({ is_active: true, assigned_by_user_id: assignedByUserId })
+            .eq('assignment_id', existing.assignment_id)
+            .eq('is_active', false)
+            .select('assignment_id')
+            .single();
+        if (error) throw error;
+        return data.assignment_id;
+    }
 
     const { data, error } = await supabase
         .from('bk_class_assignments')
@@ -1348,15 +1356,33 @@ export async function getLateArrivals(lateDate) {
 export async function assignGuruWaliToStudent(
     studentId, guruUserId, academicYear, assignedByUserId
 ) {
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
         .from('guru_wali_assignments')
-        .select('assignment_id')
+        .select('assignment_id, guru_user_id, is_active')
         .eq('student_id',    studentId)
-        .eq('guru_user_id',  guruUserId)
         .eq('academic_year', academicYear)
-        .eq('is_active',     true)
         .maybeSingle();
-    if (existing) return 'exists'; // idempoten — sinyal ke caller
+    if (existingError) throw existingError;
+    if (existing?.is_active) {
+        if (existing.guru_user_id === guruUserId) return 'exists';
+        throw new Error('Siswa sudah memiliki Guru Wali aktif. Cabut penugasan lama terlebih dahulu.');
+    }
+
+    if (existing) {
+        const { data, error } = await supabase
+            .from('guru_wali_assignments')
+            .update({
+                guru_user_id: guruUserId,
+                is_active: true,
+                assigned_by_user_id: assignedByUserId,
+            })
+            .eq('assignment_id', existing.assignment_id)
+            .eq('is_active', false)
+            .select('assignment_id')
+            .single();
+        if (error) throw error;
+        return data.assignment_id;
+    }
 
     const { data, error } = await supabase
         .from('guru_wali_assignments')

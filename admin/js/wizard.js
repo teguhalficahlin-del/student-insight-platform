@@ -662,23 +662,34 @@ let _wzGpSemester    = null;
 
 // ── Import BK & Guru Wali ─────────────────────────────────
 
+function parseForumCsv(csvText, requiredHeaders) {
+    if (typeof XLSX === 'undefined') {
+        throw new Error('Pustaka pembaca file gagal dimuat. Periksa koneksi internet.');
+    }
+    // raw mempertahankan nol awal dan presisi NIP; SheetJS menangani kutip/multiline.
+    const workbook = XLSX.read(csvText.replace(/^\uFEFF/, ''), {
+        type: 'string', raw: true, FS: ',',
+    });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const lines = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', blankrows: true })
+        .map(row => row.map(value => String(value).trim().replace(/^'+/, '')));
+    const headers = (lines[0] ?? []).map(value => value.toLowerCase());
+    if (requiredHeaders.some(header => !headers.includes(header))) {
+        throw new Error(`Header CSV tidak sesuai. Kolom wajib: ${requiredHeaders.join(', ')}`);
+    }
+    return { lines, headers };
+}
+
 /**
  * Import penugasan BK ke kelas dari CSV.
  * Format kolom: nama_kelas, kode_program, nip_bk
  * Return: { success, skipped, errors: [{row, reason}] }
  */
 async function importForumBk(csvText) {
-    const lines = csvText.trim().split('\n');
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const { lines, headers } = parseForumCsv(csvText, ['nama_kelas', 'kode_program', 'nip_bk']);
     const idxKelas   = headers.indexOf('nama_kelas');
     const idxProgram = headers.indexOf('kode_program');
     const idxNip     = headers.indexOf('nip_bk');
-
-    if (idxKelas < 0 || idxProgram < 0 || idxNip < 0) {
-        throw new Error(
-            'Header CSV tidak sesuai. Kolom wajib: nama_kelas, kode_program, nip_bk'
-        );
-    }
 
     const config = await getSchoolConfig();
     const academicYear = config.current_academic_year;
@@ -698,24 +709,16 @@ async function importForumBk(csvText) {
         classes.map(c => [`${c.name.toLowerCase()}::${c.program_id}`, c])
     );
 
-    // Fetch login_identifier untuk BK — tersedia di v_users_staff_directory
-    // sejak migration 20260802120000_add-login-identifier-to-view.sql
-    const { data: bkUsers } = await supabase
-        .from('v_users_staff_directory')
-        .select('user_id, login_identifier')
-        .eq('role_type', 'BK')
-        .eq('is_active', true);
     const bkNipToUserId = new Map(
-        (bkUsers ?? []).map(u => [u.login_identifier, u.user_id])
+        bkStaff.map(u => [u.login_identifier, u.user_id])
     );
 
     let success = 0, skipped = 0;
     const errors = [];
 
     for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-        const cols = line.split(',').map(c => c.trim());
+        const cols = lines[i] ?? [];
+        if (!cols.some(Boolean)) continue;
         const namaKelas  = cols[idxKelas]   ?? '';
         const kodeProgram = cols[idxProgram] ?? '';
         const nipBk      = cols[idxNip]     ?? '';
@@ -766,36 +769,23 @@ async function importForumBk(csvText) {
  * Return: { success, skipped, errors: [{row, reason}] }
  */
 async function importForumGuruWali(csvText) {
-    const lines = csvText.trim().split('\n');
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const { lines, headers } = parseForumCsv(csvText, ['nis_siswa', 'nip_guru_wali']);
     const idxNis  = headers.indexOf('nis_siswa');
     const idxNip  = headers.indexOf('nip_guru_wali');
-
-    if (idxNis < 0 || idxNip < 0) {
-        throw new Error(
-            'Header CSV tidak sesuai. Kolom wajib: nis_siswa, nip_guru_wali'
-        );
-    }
 
     const config = await getSchoolConfig();
     const academicYear = config.current_academic_year;
     const currentUserRow = await getCurrentUserRow();
 
     // Fetch semua siswa aktif dan staf internal sekali saja
-    const [{ data: students }, { data: gwStaff }] = await Promise.all([
+    const [{ data: students, error: studentsError }, gwStaff] = await Promise.all([
         supabase
             .from('students')
             .select('student_id, nis')
             .eq('student_status', 'AKTIF'),
-        supabase
-            .from('v_users_staff_directory')
-            .select('user_id, login_identifier')
-            .in('role_type', [
-                'GURU','BK','WALI_KELAS','KAPRODI','KEPSEK',
-                'WAKA_KURIKULUM','WAKA_KESISWAAN','WAKA_HUMAS',
-            ])
-            .eq('is_active', true),
+        getForumGuruWaliCandidates(),
     ]);
+    if (studentsError) throw studentsError;
 
     const studentByNis = new Map(
         (students ?? []).map(s => [s.nis, s.student_id])
@@ -808,9 +798,8 @@ async function importForumGuruWali(csvText) {
     const errors = [];
 
     for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-        const cols = line.split(',').map(c => c.trim());
+        const cols = lines[i] ?? [];
+        if (!cols.some(Boolean)) continue;
         const nisSiswa   = cols[idxNis] ?? '';
         const nipGuru    = cols[idxNip] ?? '';
 
@@ -854,28 +843,16 @@ const VALID_DAYS = new Set(['SENIN','SELASA','RABU','KAMIS','JUMAT','SABTU']);
  * Return: { success, skipped, errors: [{row, reason}] }
  */
 async function importDutySchedule(csvText) {
-    const lines = csvText.trim().split('\n');
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const { lines, headers } = parseForumCsv(csvText, ['nip_guru', 'hari']);
     const idxNip = headers.indexOf('nip_guru');
     const idxHari = headers.indexOf('hari');
-
-    if (idxNip < 0 || idxHari < 0) {
-        throw new Error(
-            'Header CSV tidak sesuai. Kolom wajib: nip_guru, hari'
-        );
-    }
 
     const config = await getSchoolConfig();
     const academicYear = _wzGpAcademicYear ?? config.current_academic_year;
     const semester     = _wzGpSemester    ?? config.current_semester ?? 1;
     const currentUserRow = await getCurrentUserRow();
 
-    const { data: staffRows } = await supabase
-        .from('v_users_staff_directory')
-        .select('user_id, login_identifier')
-        .in('role_type', ['GURU','BK','WALI_KELAS','KEPSEK',
-            'WAKA_KURIKULUM','WAKA_KESISWAAN','WAKA_HUMAS'])
-        .eq('is_active', true);
+    const staffRows = await getDutyStaffCandidates();
     const staffByNip = new Map(
         (staffRows ?? []).map(u => [u.login_identifier, u.user_id])
     );
@@ -884,9 +861,8 @@ async function importDutySchedule(csvText) {
     const errors = [];
 
     for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-        const cols = line.split(',').map(c => c.trim());
+        const cols = lines[i] ?? [];
+        if (!cols.some(Boolean)) continue;
         const nipGuru = cols[idxNip]  ?? '';
         // Normalisasi: "JUM'AT" (dengan apostrof straight/curly dari Excel) → "JUMAT" (nilai enum DB)
         const hari    = (cols[idxHari] ?? '').toUpperCase().replace(/JUM[’']AT/, 'JUMAT');
@@ -1026,7 +1002,7 @@ function renderForumImportResult({ success = 0, skipped = 0, errors = [] }) {
     return html;
 }
 
-async function renderWzFkBkTab() {
+async function renderWzFkBkTab(importResult = null) {
     const tabEl = document.getElementById('wz-forum-tab-content');
     if (!_wzFkClasses.length) {
         tabEl.innerHTML = '<p class="hint">Belum ada kelas di tahun ajaran ini.</p>';
@@ -1116,7 +1092,7 @@ async function renderWzFkBkTab() {
             <button type="button" class="btn btn-primary wz-import-btn" id="wz-fk-bk-import-btn"
                 disabled>Impor BK</button>
         </div>
-        <div id="wz-fk-bk-result"></div>
+        <div id="wz-fk-bk-result">${importResult ? renderForumImportResult(importResult) : ''}</div>
     `;
 
     // ── Unduh template BK ──
@@ -1185,7 +1161,7 @@ async function renderWzFkBkTab() {
         const file = bkFileInput.files?.[0];
         if (!file) { bkCsvText = null; bkImportBtn.disabled = true; return; }
         try {
-            bkCsvText = stripEmptyCsvLines(await fileToCsv(file));
+            bkCsvText = await fileToCsv(file, { preserveCsv: true });
             bkImportBtn.disabled = !bkCsvText.trim();
         } catch (err) {
             bkCsvText = null;
@@ -1204,7 +1180,7 @@ async function renderWzFkBkTab() {
             bkResultEl.innerHTML = renderForumImportResult(res);
             if (res.success > 0) {
                 _wzFkBkAssignments = await getBkAssignments(_wzFkAcademicYear);
-                await renderWzFkBkTab();
+                await renderWzFkBkTab(res);
             } else {
                 bkImportBtn.textContent = 'Impor BK';
                 bkImportBtn.disabled = false;
@@ -1217,7 +1193,7 @@ async function renderWzFkBkTab() {
     });
 }
 
-async function renderWzFkGuruWaliTab() {
+async function renderWzFkGuruWaliTab(importResult = null) {
     const tabEl = document.getElementById('wz-forum-tab-content');
     if (!_wzFkClasses.length) {
         tabEl.innerHTML = '<p class="hint">Belum ada kelas di tahun ajaran ini.</p>';
@@ -1354,7 +1330,7 @@ async function renderWzFkGuruWaliTab() {
             <button type="button" class="btn btn-primary wz-import-btn" id="wz-fk-gw-import-btn"
                 disabled>Impor Guru Wali</button>
         </div>
-        <div id="wz-fk-gw-result"></div>
+        <div id="wz-fk-gw-result">${importResult ? renderForumImportResult(importResult) : ''}</div>
     `;
 
     // ── Unduh template Guru Wali (pre-filled siswa aktif) ──
@@ -1495,7 +1471,7 @@ async function renderWzFkGuruWaliTab() {
         const file = gwFileInput.files?.[0];
         if (!file) { gwCsvText = null; gwImportBtn.disabled = true; return; }
         try {
-            gwCsvText = stripEmptyCsvLines(await fileToCsv(file));
+            gwCsvText = await fileToCsv(file, { preserveCsv: true });
             gwImportBtn.disabled = !gwCsvText.trim();
         } catch (err) {
             gwCsvText = null;
@@ -1514,7 +1490,7 @@ async function renderWzFkGuruWaliTab() {
             gwResultEl.innerHTML = renderForumImportResult(res);
             if (res.success > 0) {
                 _wzFkGwAssignments = await getGuruWaliAssignments(_wzFkAcademicYear);
-                await renderWzFkGuruWaliTab();
+                await renderWzFkGuruWaliTab(res);
             } else {
                 gwImportBtn.textContent = 'Impor Guru Wali';
                 gwImportBtn.disabled = false;
@@ -1527,7 +1503,7 @@ async function renderWzFkGuruWaliTab() {
     });
 }
 
-async function renderWzGpTab() {
+async function renderWzGpTab(importResult = null) {
     const tabEl = document.getElementById('wz-forum-tab-content');
     if (!_wzGpStaff.length) {
         tabEl.innerHTML = '<p class="hint">Belum ada staf yang bisa ditugaskan sebagai guru piket.</p>';
@@ -1584,7 +1560,7 @@ async function renderWzGpTab() {
             <button type="button" class="btn btn-primary wz-import-btn" id="wz-gp-import-btn"
                 disabled>Impor Guru Piket</button>
         </div>
-        <div id="wz-gp-result"></div>
+        <div id="wz-gp-result">${importResult ? renderForumImportResult(importResult) : ''}</div>
     `;
 
     // ── Unduh template ──
@@ -1626,7 +1602,7 @@ async function renderWzGpTab() {
         const file = gpFileInput.files?.[0];
         if (!file) { gpCsvText = null; gpImportBtn.disabled = true; return; }
         try {
-            gpCsvText = stripEmptyCsvLines(await fileToCsv(file));
+            gpCsvText = await fileToCsv(file, { preserveCsv: true });
             gpImportBtn.disabled = !gpCsvText.trim();
         } catch (err) {
             gpCsvText = null;
@@ -1645,7 +1621,7 @@ async function renderWzGpTab() {
             gpResultEl.innerHTML = renderForumImportResult(res);
             if (res.success > 0) {
                 _wzGpSchedules = await getDutySchedules(_wzGpAcademicYear, _wzGpSemester);
-                await renderWzGpTab();
+                await renderWzGpTab(res);
             } else {
                 gpImportBtn.textContent = 'Impor Guru Piket';
                 gpImportBtn.disabled = false;
@@ -2614,7 +2590,7 @@ function injectColumn(csvText, columnName, value, defaultOnly = false) {
 
 /** Baca file unggahan (.xlsx/.xls/.csv) menjadi teks CSV.
  *  Excel dikonversi via SheetJS (global XLSX dari CDN di wizard.html). */
-async function fileToCsv(file) {
+async function fileToCsv(file, { preserveCsv = false } = {}) {
     const name = file.name.toLowerCase();
     if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
         if (typeof XLSX === 'undefined') {
@@ -2626,7 +2602,8 @@ async function fileToCsv(file) {
         stripLeadingApostropheCells(ws);
         return XLSX.utils.sheet_to_csv(ws);
     }
-    return stripLeadingApostropheCsv(await file.text());
+    const text = await file.text();
+    return preserveCsv ? text : stripLeadingApostropheCsv(text);
 }
 
 /** Buang tanda kutip satu di awal nilai sel (penanda teks Excel yang
