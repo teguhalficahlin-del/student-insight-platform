@@ -73,7 +73,7 @@
                 </div>
                 <div class="summary-card" style="background:var(--color-success-bg);color:var(--color-success)">
                     <span class="count" id="stat-hadir-today">0</span>
-                    <span class="label">Hadir Hari Ini</span>
+                    <span class="label">Hadir di Tanggal Dipilih</span>
                 </div>
                 <div class="summary-card" style="background:var(--color-danger-bg);color:var(--color-danger)">
                     <span class="count" id="stat-absent-today">0</span>
@@ -96,7 +96,7 @@
                     <p class="hint">Memuat...</p>
                 </div>
                 <p id="attendance-empty" class="hint" style="display:none">
-                    Belum ada siswa PKL yang ditugaskan ke tempat usaha ini.
+                    Tidak ada penempatan PKL pada tanggal ini.
                 </p>
             </section>
 
@@ -138,6 +138,7 @@
                     <div class="field field-full">
                         <label for="obs-content">Catatan Siswa <span class="hint" style="display:inline">(10–1000 karakter)</span></label>
                         <textarea id="obs-content" class="input" rows="4"
+                                  minlength="10" maxlength="1000"
                                   placeholder="Tulis catatan perkembangan siswa di tempat PKL..." required></textarea>
                         <p class="hint"><span id="obs-char-count">0</span>/1000 karakter</p>
                     </div>

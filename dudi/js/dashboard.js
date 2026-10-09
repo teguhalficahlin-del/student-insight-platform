@@ -12,7 +12,7 @@ import {
     getCurrentUserRow,
     isDudi,
     logout,
-    fetchMyStudents,
+    fetchMyPlacements,
     fetchAttendanceForDate,
     fetchRecentAttendance,
     fetchMyObservations,
@@ -75,7 +75,30 @@ const LC = (() => {
 
 // ── State ─────────────────────────────────────────────────────
 let currentUser = null;
-let students    = [];
+let placements  = [];
+let placementVersion = 0;
+let placementsVerified = false;
+let attendanceRequest = 0;
+let historyRequest = 0;
+let observationRequest = 0;
+
+function queueOwner() {
+    return { userId: currentUser?.user_id, schoolId: currentUser?.school_id };
+}
+
+function placementsForDate(date) {
+    return placements.filter(p => date >= p.start_date && date <= p.end_date);
+}
+
+function canRecord(p, date) {
+    return placementsVerified && p.is_active === true && date <= todayStr()
+        && date >= p.start_date && date <= p.end_date;
+}
+
+async function refreshViews() {
+    populateStudentSelect();
+    await Promise.all([loadAttendanceForDate(attendanceDateEl.value), loadHistory(), loadObservationHistory()]);
+}
 
 const DIMENSION_LABELS = {
     AKADEMIK:    'Akademik / Kompetensi',
@@ -120,7 +143,7 @@ function showFlushFailures(failed) {
 }
 
 async function updateOfflineBanner() {
-    const n = await pendingCount();
+    const n = await pendingCount(queueOwner());
     const parts = [];
     if (flushFailNotice) parts.push(flushFailNotice);
     if (n > 0) parts.push(`${n} absensi menunggu sinkron — akan terkirim otomatis saat koneksi kembali.`);
@@ -153,12 +176,14 @@ offlineBannerEl?.addEventListener('click', () => {
 });
 
 window.addEventListener('online', async () => {
-    const result = await flushPending();
+    if (!currentUser) return;
+    const result = await flushPending(queueOwner());
     // DUD-05: dulu banner cuma di-update kalau `synced > 0`, sehingga kasus
     // "semua ditolak" tidak pernah tampil sama sekali.
     showFlushFailures(result.failed);
     if (!result.failed?.length && result.remaining === 0) flushFailNotice = null;
     await updateOfflineBanner();
+    if (result.synced > 0) await refreshViews();
 });
 
 // ── Init ──────────────────────────────────────────────────────
@@ -177,10 +202,11 @@ async function init() {
     userNameEl.textContent = 'PJ: ' + userRow.full_name;
 
     // Flush antrian offline + tampilkan banner bila ada sisa
-    flushPending()
+    flushPending(queueOwner())
         .then(result => {
             showFlushFailures(result.failed);
             if (!result.failed?.length && result.remaining === 0) flushFailNotice = null;
+            if (result.synced > 0 && placementsVerified) refreshViews();
             return updateOfflineBanner();
         })
         .catch(err => console.warn('[dudi] flush awal gagal:', err));
@@ -188,47 +214,36 @@ async function init() {
     const uid = currentUser.user_id;
 
     // Cache-first: tampilkan data lama dulu
-    const cachedStudents = LC.get(`students-${uid}`);
-    if (cachedStudents?.length) {
-        students = cachedStudents;
-        statTotal.textContent = students.length;
-        populateStudentSelect();
-        attendanceDateEl.value = todayStr();
+    attendanceDateEl.value = todayStr();
+    attendanceDateEl.max = todayStr();
+    const cachedPlacements = LC.get(`placements-${uid}`);
+    if (cachedPlacements?.length) {
+        placements = cachedPlacements;
+        placementVersion++;
         loadingEl.style.display  = 'none';
         dashBodyEl.style.display = 'block';
         // Render cache segera, fetch latar belakang
-        loadAttendanceForDate(attendanceDateEl.value);
-        loadHistory();
-        loadObservationHistory();
+        refreshViews();
     }
 
     // Fetch latar belakang → update cache + re-render
     try {
-        const fresh = await fetchMyStudents();
-        LC.set(`students-${uid}`, fresh);
-        if (JSON.stringify(fresh) !== JSON.stringify(students)) {
-            students = fresh;
-            statTotal.textContent = students.length;
-            populateStudentSelect();
-        }
+        const fresh = await fetchMyPlacements();
+        LC.set(`placements-${uid}`, fresh);
+        placements = fresh;
+        placementVersion++;
+        placementsVerified = true;
     } catch (err) {
-        if (!cachedStudents?.length) {
+        if (!cachedPlacements?.length) {
             loadingEl.textContent = fe(err);
             return;
         }
         // Data lama sudah tampil — biarkan saja
     }
 
-    if (!cachedStudents?.length) {
-        attendanceDateEl.value = todayStr();
-        loadingEl.style.display  = 'none';
-        dashBodyEl.style.display = 'block';
-        await Promise.all([
-            loadAttendanceForDate(attendanceDateEl.value),
-            loadHistory(),
-            loadObservationHistory(),
-        ]);
-    }
+    loadingEl.style.display  = 'none';
+    dashBodyEl.style.display = 'block';
+    await refreshViews();
 
     initAckQueue({ userId: currentUser.user_id });
 
@@ -238,54 +253,62 @@ async function init() {
 
 // ── Attendance ────────────────────────────────────────────────
 async function loadAttendanceForDate(date) {
-    if (students.length === 0) {
+    const request = ++attendanceRequest;
+    const version = placementVersion;
+    const relevant = date && date <= todayStr() ? placementsForDate(date) : [];
+    if (relevant.length === 0) {
         attendanceListEl.innerHTML = '';
         attendanceEmptyEl.style.display = 'block';
-        updateSummary(new Map());
+        updateSummary(new Map(), relevant);
         return;
     }
 
     attendanceEmptyEl.style.display = 'none';
     attendanceListEl.innerHTML = '<p class="hint">Memuat...</p>';
 
-    const ids = students.map(s => s.student_id);
+    const ids = relevant.map(s => s.placement_id);
     let byStudent;
     try {
         byStudent = await fetchAttendanceForDate(ids, date);
     } catch (err) {
+        if (request !== attendanceRequest || version !== placementVersion || date !== attendanceDateEl.value) return;
         attendanceListEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
         return;
     }
 
-    updateSummary(byStudent);
-    renderAttendanceRows(byStudent, date);
+    if (request !== attendanceRequest || version !== placementVersion || date !== attendanceDateEl.value) return;
+    updateSummary(byStudent, relevant);
+    renderAttendanceRows(byStudent, date, relevant);
 }
 
-function updateSummary(byStudent) {
-    const hadirCount  = [...byStudent.values()].filter(r => r.status === 'HADIR').length;
-    const notRecorded = students.length - byStudent.size;
+function updateSummary(byPlacement, relevant) {
+    const rows = relevant.map(p => byPlacement.get(p.placement_id)).filter(Boolean);
+    const hadirCount = rows.filter(r => r.status === 'HADIR').length;
+    const notRecorded = relevant.length - rows.length;
+    statTotal.textContent = relevant.length;
     statHadir.textContent  = hadirCount;
     statAbsent.textContent = notRecorded;
 }
 
-function renderAttendanceRows(byStudent, date) {
-    if (students.length === 0) {
+function renderAttendanceRows(byStudent, date, relevant) {
+    if (relevant.length === 0) {
         attendanceListEl.innerHTML = '';
         return;
     }
 
-    attendanceListEl.innerHTML = students.map(s => {
-        const existing = byStudent.get(s.student_id);
+    attendanceListEl.innerHTML = relevant.map(s => {
+        const existing = byStudent.get(s.placement_id);
         const currentStatus = existing?.status ?? '';
+        const writable = canRecord(s, date);
 
         const radios = ['HADIR', 'IZIN', 'SAKIT', 'ALPA'].map(st => `
             <span class="status-radio radio-${st.toLowerCase()}">
                 <input type="radio"
-                       name="status-${s.student_id}"
-                       id="st-${s.student_id}-${st}"
+                       name="status-${s.placement_id}"
+                       id="st-${s.placement_id}-${st}"
                        value="${st}"
                        ${currentStatus === st ? 'checked' : ''} />
-                <label for="st-${s.student_id}-${st}">${STATUS_LABELS[st]}</label>
+                <label for="st-${s.placement_id}-${st}">${STATUS_LABELS[st]}</label>
             </span>
         `).join('');
 
@@ -296,12 +319,12 @@ function renderAttendanceRows(byStudent, date) {
                     <div class="student-nis">NIS: ${esc(s.nis)}</div>
                 </div>
                 <div class="status-radios">${radios}</div>
-                <button class="btn btn-primary btn-sm attendance-save-btn"
+                ${writable ? `<button class="btn btn-primary btn-sm attendance-save-btn"
                         data-student-id="${s.student_id}"
                         data-placement-id="${s.placement_id}">
                     Simpan
-                </button>
-                <span class="save-status" id="save-status-${s.student_id}"></span>
+                </button>` : `<span class="hint">${placementsVerified ? 'Penempatan selesai' : 'Memverifikasi penempatan...'}</span>`}
+                <span class="save-status" id="save-status-${s.placement_id}"></span>
             </div>
         `;
     }).join('');
@@ -310,13 +333,19 @@ function renderAttendanceRows(byStudent, date) {
     attendanceListEl.querySelectorAll('.attendance-save-btn').forEach(btn => {
         btn.addEventListener('click', () => handleSaveAttendance(btn, date));
     });
+    relevant.filter(p => !canRecord(p, date)).forEach(p => {
+        attendanceListEl.querySelectorAll(`input[name="status-${p.placement_id}"]`).forEach(el => { el.disabled = true; });
+    });
 }
 
 async function handleSaveAttendance(btn, date) {
     const studentId   = btn.dataset.studentId;
     const placementId = btn.dataset.placementId;
-    const statusEl    = document.querySelector(`input[name="status-${studentId}"]:checked`);
-    const saveStatusEl = document.getElementById(`save-status-${studentId}`);
+    const placement = placements.find(p => p.placement_id === placementId && p.student_id === studentId);
+    if (!btn.isConnected || date !== attendanceDateEl.value || !placement || !canRecord(placement, date)) return;
+    const version = placementVersion;
+    const statusEl    = document.querySelector(`input[name="status-${placementId}"]:checked`);
+    const saveStatusEl = document.getElementById(`save-status-${placementId}`);
 
     if (!statusEl) {
         saveStatusEl.textContent = '⚠ Pilih status dulu';
@@ -348,9 +377,11 @@ async function handleSaveAttendance(btn, date) {
             saveStatusEl.textContent = '✓ Tersimpan';
             saveStatusEl.style.color = 'var(--color-success)';
             // Update summary
-            const ids = students.map(s => s.student_id);
+            const relevant = placementsForDate(date);
+            const ids = relevant.map(s => s.placement_id);
             const updated = await fetchAttendanceForDate(ids, date);
-            updateSummary(updated);
+            if (date === attendanceDateEl.value && version === placementVersion) updateSummary(updated, relevant);
+            await loadHistory();
         }
     } catch (err) {
         saveStatusEl.textContent = '✗ ' + fe(err, 's');
@@ -379,27 +410,35 @@ function renderHistoryRows(rows, nameById) {
 }
 
 async function loadHistory() {
-    const ids      = students.map(s => s.student_id);
-    const nameById = new Map(students.map(s => [s.student_id, s.full_name]));
+    const request = ++historyRequest;
+    const version = placementVersion;
+    const ids      = placements.map(s => s.placement_id);
+    const nameById = new Map(placements.map(s => [s.student_id, s.full_name]));
     const uid      = currentUser.user_id;
     const ckey     = `att-hist-${uid}`;
 
     const cached = LC.get(ckey);
-    if (cached) renderHistoryRows(cached, nameById);
+    if (cached) renderHistoryRows(cached.filter(r => ids.includes(r.placement_id)), nameById);
 
     try {
         const rows = await fetchRecentAttendance(ids, 90);
+        if (request !== historyRequest || version !== placementVersion) return;
         LC.set(ckey, rows);
         renderHistoryRows(rows, nameById);
     } catch (err) {
+        if (request !== historyRequest || version !== placementVersion) return;
         if (!cached) historyTbody.innerHTML = `<tr><td colspan="4" class="hint">Gagal memuat data. ${esc(fe(err))}</td></tr>`;
     }
 }
 
 // ── Observation form ──────────────────────────────────────────
 function populateStudentSelect() {
+    const selected = obsStudentEl.value;
+    const students = [...new Map(placementsForDate(todayStr()).filter(p => canRecord(p, todayStr()))
+        .map(p => [p.student_id, p])).values()];
     obsStudentEl.innerHTML = '<option value="">-- Pilih siswa --</option>'
         + students.map(s => `<option value="${s.student_id}">${esc(s.full_name)} (${esc(s.nis)})</option>`).join('');
+    if (students.some(s => s.student_id === selected)) obsStudentEl.value = selected;
 }
 
 obsContentEl.addEventListener('input', () => {
@@ -410,6 +449,17 @@ obsForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     obsSuccessEl.style.display = 'none';
     obsErrorEl.style.display   = 'none';
+    const content = obsContentEl.value.trim();
+    if ([...content].length < 10 || [...content].length > 1000) {
+        obsErrorEl.textContent = 'Catatan harus berisi 10 sampai 1000 karakter.';
+        obsErrorEl.style.display = 'block';
+        return;
+    }
+    if (!placementsForDate(todayStr()).some(p => p.student_id === obsStudentEl.value && canRecord(p, todayStr()))) {
+        obsErrorEl.textContent = 'Pilih siswa dengan penempatan PKL aktif hari ini.';
+        obsErrorEl.style.display = 'block';
+        return;
+    }
     obsSubmitBtn.disabled      = true;
     obsSubmitBtn.textContent   = 'Menyimpan...';
 
@@ -418,7 +468,7 @@ obsForm.addEventListener('submit', async (e) => {
             studentId:  obsStudentEl.value,
             sentiment:  obsSentimentEl.value,
             dimension:  obsDimensionEl.value,
-            content:    obsContentEl.value.trim(),
+            content,
             userId:     currentUser.user_id,
             schoolId:   currentUser.school_id,
         });
@@ -458,19 +508,23 @@ function renderObsHistory(rows, nameById) {
 }
 
 async function loadObservationHistory() {
-    const ids      = students.map(s => s.student_id);
-    const nameById = new Map(students.map(s => [s.student_id, s.full_name]));
+    const request = ++observationRequest;
+    const version = placementVersion;
+    const ids      = [...new Set(placements.map(s => s.student_id))];
+    const nameById = new Map(placements.map(s => [s.student_id, s.full_name]));
     const uid      = currentUser.user_id;
     const ckey     = `obs-${uid}`;
 
     const cached = LC.get(ckey);
-    if (cached) renderObsHistory(cached, nameById);
+    if (cached) renderObsHistory(cached.filter(r => ids.includes(r.student_id)), nameById);
 
     try {
         const rows = await fetchMyObservations(ids);
+        if (request !== observationRequest || version !== placementVersion) return;
         LC.set(ckey, rows);
         renderObsHistory(rows, nameById);
     } catch (err) {
+        if (request !== observationRequest || version !== placementVersion) return;
         if (!cached) obsHistoryListEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
     }
 }
@@ -507,7 +561,7 @@ logoutBtn.addEventListener('click', async () => {
         // Antrian tak terbaca (IndexedDB bermasalah) tidak boleh mengunci
         // logout — anggap kosong dan lanjut.
         const countPending = async () => {
-            try { return await pendingCount(); } catch { return 0; }
+            try { return await pendingCount(queueOwner()); } catch { return 0; }
         };
 
         let pending = await countPending();
@@ -515,7 +569,7 @@ logoutBtn.addEventListener('click', async () => {
 
         if (pending > 0 && navigator.onLine) {
             const flushed = await Promise.race([
-                flushPending().catch(() => null),
+                flushPending(queueOwner()).catch(() => null),
                 new Promise(res => setTimeout(() => res(null), 5000)),
             ]);
             if (flushed?.failed?.length) {
@@ -548,7 +602,7 @@ logoutBtn.addEventListener('click', async () => {
         }
 
         LC.clear();
-        await clearOfflineQueue();
+        await clearOfflineQueue(queueOwner());
         await logout();
         window.location.replace(getLoginUrl());
     } finally {

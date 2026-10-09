@@ -16,6 +16,21 @@ import { supabase } from './api.js';
 const DB_NAME       = 'smkhr-dudi-offline';
 const STORE_ATT     = 'pkl_att_queue';
 const OFFLINE_SCHEMA_VER = 'v1';
+let queueWork = Promise.resolve();
+let activeSubmission = null;
+
+// Serialize save/flush across tabs on supported browsers, with a same-page fallback.
+function withQueueLock(work) {
+    if (navigator.locks) return navigator.locks.request(DB_NAME, work);
+    const result = queueWork.then(work, work);
+    queueWork = result.catch(() => {});
+    return result;
+}
+
+function belongsTo(item, owner) {
+    return !!owner?.userId && !!owner?.schoolId
+        && item.recorded_by_user_id === owner.userId && item.school_id === owner.schoolId;
+}
 
 // ── IndexedDB helpers ──────────────────────────────────────────
 function openDB() {
@@ -68,16 +83,23 @@ async function idbPurgeSlot(placementId, date) {
 // ── Kirim satu item ke Supabase (idempoten) ────────────────────
 async function submitOne(item) {
     const { idempotency_key: _k, _schema_ver: _v, ...payload } = item;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    activeSubmission = { ...payload, controller };
     try {
         const { error } = await supabase
             .from('pkl_attendance')
-            .upsert(payload, { onConflict: 'placement_id,attendance_date' });
+            .upsert(payload, { onConflict: 'placement_id,attendance_date' })
+            .abortSignal(controller.signal);
         if (!error) return { ok: true };
         // Penolakan nyata server (constraint, auth, dll)
-        const isNetwork = /fetch|network|failed to fetch/i.test(error.message ?? '');
+        const isNetwork = /fetch|network|abort|timeout|timed out/i.test(error.message ?? '');
         return { ok: false, networkError: isNetwork, error: error.message };
     } catch (e) {
         return { ok: false, networkError: true, error: String(e) };
+    } finally {
+        clearTimeout(timeout);
+        activeSubmission = null;
     }
 }
 
@@ -88,6 +110,10 @@ async function submitOne(item) {
  * @returns {{status:'synced'|'queued'|'error', error?:string}}
  */
 export async function saveAttendanceOffline({ placementId, studentId, date, status, notes, userId, schoolId }) {
+    return withQueueLock(() => saveOne({ placementId, studentId, date, status, notes, userId, schoolId }));
+}
+
+async function saveOne({ placementId, studentId, date, status, notes, userId, schoolId }) {
     const payload = {
         placement_id:        placementId,
         student_id:          studentId,
@@ -100,7 +126,10 @@ export async function saveAttendanceOffline({ placementId, studentId, date, stat
 
     if (navigator.onLine) {
         const r = await submitOne({ idempotency_key: `${placementId}_${date}`, _schema_ver: OFFLINE_SCHEMA_VER, ...payload });
-        if (r.ok) return { status: 'synced' };
+        if (r.ok) {
+            await idbPurgeSlot(placementId, date);
+            return { status: 'synced' };
+        }
         if (!r.networkError) return { status: 'error', error: r.error };
     }
 
@@ -124,8 +153,13 @@ export async function saveAttendanceOffline({ placementId, studentId, date, stat
  *
  * @returns {{synced:number, remaining:number, failed:Array<object>}}
  */
-export async function flushPending() {
-    const pending = await idbGetAll();
+export async function flushPending(owner) {
+    if (!owner?.userId || !owner?.schoolId) return { synced: 0, remaining: 0, failed: [] };
+    return withQueueLock(() => flushOwned(owner));
+}
+
+async function flushOwned(owner) {
+    const pending = (await idbGetAll()).filter(item => belongsTo(item, owner));
     if (pending.length === 0) return { synced: 0, remaining: 0, failed: [] };
     if (!navigator.onLine)    return { synced: 0, remaining: pending.length, failed: [] };
 
@@ -155,23 +189,24 @@ export async function flushPending() {
             });
         } else break;
     }
-    return { synced, remaining: (await idbGetAll()).length, failed };
+    return { synced, remaining: await pendingCount(owner), failed };
 }
 
 /**
  * Jumlah item tertunda di antrian offline.
  */
-export async function pendingCount() {
-    return (await idbGetAll()).length;
+export async function pendingCount(owner) {
+    return (await idbGetAll()).filter(item => belongsTo(item, owner)).length;
 }
 
 /**
  * Hapus semua antrian offline (dipanggil saat logout).
  */
-export async function clearOfflineQueue() {
-    const db = await openDB();
-    return new Promise((res, rej) => {
-        const t = db.transaction(STORE_ATT, 'readwrite').objectStore(STORE_ATT).clear();
-        t.onsuccess = () => res(); t.onerror = () => rej(t.error);
+export async function clearOfflineQueue(owner) {
+    if (activeSubmission && belongsTo(activeSubmission, owner)) activeSubmission.controller.abort();
+    return withQueueLock(async () => {
+        for (const item of await idbGetAll()) {
+            if (belongsTo(item, owner)) await idbDelete(item.idempotency_key);
+        }
     });
 }

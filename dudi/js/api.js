@@ -60,51 +60,30 @@ export async function logout() {
 }
 
 /**
- * Daftar siswa PKL yang ditugaskan ke DUDI ini (penempatan aktif).
- * RLS rls_pkl_read_dudi membatasi ke dudi_user_id = current user.
+ * Penempatan milik DUDI, termasuk yang selesai, dengan identitas siswa terbatas.
  */
-export async function fetchMyStudents() {
-    const { data, error } = await supabase
-        .from('pkl_placements')
-        .select(`
-            placement_id,
-            start_date,
-            end_date,
-            student:students!pkl_placements_student_id_fkey (
-                student_id, nis, full_name
-            )
-        `)
-        .eq('is_active', true)
-        .order('start_date', { ascending: true });
-
+export async function fetchMyPlacements() {
+    const { data, error } = await supabase.rpc('fn_dudi_placements');
     if (error) throw error;
-
-    return (data || []).map(p => ({
-        placement_id: p.placement_id,
-        start_date:   p.start_date,
-        end_date:     p.end_date,
-        student_id:   p.student.student_id,
-        nis:          p.student.nis,
-        full_name:    p.student.full_name,
-    }));
+    return data || [];
 }
 
 /**
  * Absensi siswa-siswa untuk tanggal tertentu.
- * Mengembalikan Map<student_id, record> untuk lookup cepat.
+ * Mengembalikan Map<placement_id, record> agar riwayat siswa pindahan tidak tercampur.
  */
-export async function fetchAttendanceForDate(studentIds, date) {
-    if (!studentIds.length) return new Map();
+export async function fetchAttendanceForDate(placementIds, date) {
+    if (!placementIds.length) return new Map();
 
     const { data, error } = await supabase
         .from('pkl_attendance')
         .select('pkl_attendance_id, placement_id, student_id, status, notes, check_in_time, check_out_time')
-        .in('student_id', studentIds)
+        .in('placement_id', placementIds)
         .eq('attendance_date', date);
 
     if (error) throw error;
 
-    return new Map((data || []).map(r => [r.student_id, r]));
+    return new Map((data || []).map(r => [r.placement_id, r]));
 }
 
 /**
@@ -132,8 +111,8 @@ export async function saveAttendance({ placementId, studentId, date, status, not
 /**
  * Riwayat absensi N hari terakhir untuk daftar siswa.
  */
-export async function fetchRecentAttendance(studentIds, days = 14) {
-    if (!studentIds.length) return [];
+export async function fetchRecentAttendance(placementIds, days = 14) {
+    if (!placementIds.length) return [];
 
     const since = new Date();
     since.setDate(since.getDate() - days);
@@ -146,9 +125,10 @@ export async function fetchRecentAttendance(studentIds, days = 14) {
 
     const { data, error } = await supabase
         .from('pkl_attendance')
-        .select('pkl_attendance_id, student_id, attendance_date, status, notes')
-        .in('student_id', studentIds)
+        .select('pkl_attendance_id, placement_id, student_id, attendance_date, status, notes')
+        .in('placement_id', placementIds)
         .gte('attendance_date', sinceStr)
+        .lte('attendance_date', localDateStr())
         .order('attendance_date', { ascending: false });
 
     if (error) throw error;
@@ -164,12 +144,13 @@ export async function fetchMyObservations(studentIds) {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData?.user) return [];
 
-    const { data: userRow } = await supabase
+    const { data: userRow, error: userError } = await supabase
         .from('users')
         .select('user_id')
         .eq('auth_user_id', authData.user.id)
         .maybeSingle();
 
+    if (userError) throw userError;
     if (!userRow) return [];
 
     const { data, error } = await supabase
@@ -212,6 +193,10 @@ export async function markNotificationsRead(ids) {
 }
 
 export async function saveObservation({ studentId, sentiment, dimension, content, userId, schoolId }) {
+    content = content.trim();
+    if ([...content].length < 10 || [...content].length > 1000) {
+        throw new Error('Catatan harus berisi 10 sampai 1000 karakter.');
+    }
     const observationId = crypto.randomUUID();
 
     const { error } = await supabase
