@@ -40,9 +40,17 @@ export interface AuthUser {
     school_id:            string;
     is_kepsek:            boolean;
     is_active:            boolean;
+    teaching_assignments?: Array<{ count: number }>;
 }
 
 export type AuthResult = { user: AuthUser } | Response;
+
+export function isTeacherUser(
+    user: Pick<AuthUser, 'teacher_code' | 'teaching_assignments'>,
+): boolean {
+    return Boolean(user.teacher_code?.trim())
+        || (user.teaching_assignments?.[0]?.count ?? 0) > 0;
+}
 
 
 // ─────────────────────────────────────────────────────────────
@@ -79,7 +87,7 @@ export async function resolveAuth(
     // 3. Resolve user row from DB
     const { data: userRow, error: dbError } = await supabaseAdmin
         .from('users')
-        .select('user_id, auth_user_id, full_name, email, role_type, teacher_code, wali_kelas_class_id, program_id, kaprodi_program_id, school_id, is_kepsek, is_active')
+        .select('user_id, auth_user_id, full_name, email, role_type, teacher_code, teaching_assignments(count), wali_kelas_class_id, program_id, kaprodi_program_id, school_id, is_kepsek, is_active')
         .eq('auth_user_id', authUser.id)
         .single();
 

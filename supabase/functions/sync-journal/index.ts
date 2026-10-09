@@ -15,12 +15,11 @@ import { handleCors, corsHeaders }     from '../_shared/cors.ts';
 import { ok, badRequest,
          forbidden, internalError,
          checkSchemaVersion }          from '../_shared/response.ts';
-import { resolveAuth, isAuthError }    from '../_shared/auth.ts';
+import { resolveAuth, isAuthError,
+         isTeacherUser }               from '../_shared/auth.ts';
 import { validatePayload,
          JOURNAL_SCHEMA }              from '../_shared/validate.ts';
 import { getAdminClient }              from '../_shared/db.ts';
-
-const STAFF_ROLES = ['GURU','WALI_KELAS','BK','KAPRODI','KEPSEK','WAKA_KURIKULUM','WAKA_KESISWAAN','ADMINISTRATIVE'];
 
 Deno.serve(async (req: Request): Promise<Response> => {
     if (req.method === 'OPTIONS') return handleCors();
@@ -37,8 +36,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (isAuthError(authResult)) return authResult;
         const { user } = authResult;
 
-        if (!STAFF_ROLES.includes(user.role_type)) {
-            return forbidden('Hanya staf sekolah yang dapat menyimpan jurnal');
+        if (!isTeacherUser(user)) {
+            return forbidden('Hanya guru yang dapat menyimpan jurnal');
         }
 
         let body: Record<string, unknown>;
