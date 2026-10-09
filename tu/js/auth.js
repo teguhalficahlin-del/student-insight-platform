@@ -40,13 +40,15 @@ form.addEventListener('submit', async (e) => {
 
         const userRow = await getCurrentUserRow();
         if (!userRow || userRow.role_type !== 'TU') {
+            await supabase.auth.signOut({ scope: 'local' });
             errorEl.textContent   = 'Akun ini tidak memiliki akses ke portal Tata Usaha.';
             errorEl.style.display = 'block';
             submitBtn.disabled    = false;
             submitBtn.textContent = 'Masuk';
             return;
         }
-        if (userRow.is_active === false) {
+        if (userRow.is_active !== true || userRow.deleted_at) {
+            await supabase.auth.signOut({ scope: 'local' });
             errorEl.textContent   = 'Akun Anda telah dinonaktifkan. Hubungi admin sekolah.';
             errorEl.style.display = 'block';
             submitBtn.disabled    = false;

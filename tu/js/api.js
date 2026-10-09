@@ -37,7 +37,7 @@ export async function getCurrentUserRow(authUser = null) {
     if (!user) return null;
     const { data, error } = await supabase
         .from('users')
-        .select('user_id, school_id, full_name, role_type, login_identifier, identifier_type, is_active, must_change_password')
+        .select('user_id, school_id, full_name, role_type, login_identifier, identifier_type, is_active, deleted_at, must_change_password')
         .eq('auth_user_id', user.id)
         .maybeSingle();
     if (error) throw error;
@@ -271,10 +271,10 @@ export async function getForumSekolahComments(postId) {
     return data ?? [];
 }
 
-export async function addForumSekolahComment(postId, body, schoolId) {
+export async function addForumSekolahComment(postId, body, schoolId, userId) {
     const { error } = await supabase
         .from('forum_post_comments')
-        .insert({ post_id: postId, body, school_id: schoolId });
+        .insert({ post_id: postId, body, school_id: schoolId, author_user_id: userId });
     if (error) throw error;
 }
 

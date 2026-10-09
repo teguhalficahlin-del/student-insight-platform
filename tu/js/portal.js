@@ -439,6 +439,7 @@ let _forumHasMore     = false;
 let _forumInitDone    = false;
 let _forumScope       = null;
 let _forumEditPostId  = null;
+let _forumDetailPost  = null;
 let _forumRecipients  = new Map();
 let _forumGroupLabels = new Map(); // groupKey → label string
 let _forumGroupBtns   = new Map(); // groupKey → btnEl
@@ -544,8 +545,7 @@ async function initForumSection() {
     });
     document.getElementById('btn-forum-comment-submit').addEventListener('click', submitForumComment);
     document.getElementById('btn-forum-edit').addEventListener('click', () => {
-        const postId = document.getElementById('modal-forum-detail').dataset.postId;
-        openForumModal(postId);
+        if (_forumDetailPost) openForumModal(_forumDetailPost);
     });
     document.getElementById('btn-forum-delete').addEventListener('click', async () => {
         const postId = document.getElementById('modal-forum-detail').dataset.postId;
@@ -639,7 +639,10 @@ function newIdemKey() {
     });
 }
 
-function openForumModal(postId = null) {
+function openForumModal(post = null) {
+    if (post && post.author_user_id !== currentUser.user_id) return;
+    const postId = post?.post_id ?? null;
+    closeForumDetail();
     _forumEditPostId = postId;
     _forumIdemKey    = postId ? null : newIdemKey();   // FUNC-03
     _forumRecipients.clear();
@@ -648,15 +651,16 @@ function openForumModal(postId = null) {
     _forumGroupUids.clear();
     renderRecipientChips();
     document.getElementById('modal-forum-title').textContent = postId ? 'Edit Posting' : 'Buat Posting';
-    document.getElementById('forum-input-title').value = '';
-    document.getElementById('forum-input-body').value  = '';
+    document.getElementById('forum-input-title').value = post?.title ?? '';
+    document.getElementById('forum-input-body').value  = post?.body ?? '';
     document.getElementById('forum-input-file').value  = '';
-    document.getElementById('forum-file-name').textContent = '';
+    document.getElementById('forum-file-name').textContent = post?.attachment_name ?? '';
+    document.getElementById('forum-recipient-field').style.display = postId ? 'none' : '';
     document.getElementById('forum-post-error').style.display = 'none';
     document.getElementById('forum-filter-jurusan-wrap').style.display = 'none';
     document.getElementById('forum-filter-kelas-wrap').style.display   = 'none';
     document.getElementById('forum-filter-hari-wrap').style.display    = 'none';
-    buildRecipientGroupButtons();
+    if (!postId) buildRecipientGroupButtons();
     document.getElementById('modal-forum-post').style.display = 'flex';
 }
 
@@ -1920,6 +1924,7 @@ async function submitForumPost() {
 }
 
 async function openForumDetail(post) {
+    _forumDetailPost = post;
     const modal = document.getElementById('modal-forum-detail');
     modal.dataset.postId = post.post_id;
     modal.dataset.withdrawn = String(post.is_withdrawn === true);
@@ -1968,6 +1973,7 @@ async function openForumDetail(post) {
 
 function closeForumDetail() {
     document.getElementById('modal-forum-detail').style.display = 'none';
+    _forumDetailPost = null;
 }
 
 async function loadForumComments(postId) {
@@ -2003,7 +2009,7 @@ async function submitForumComment() {
     errEl.style.display = 'none';
     if (!body) return;
     try {
-        await addForumSekolahComment(postId, body, currentUser.school_id);
+        await addForumSekolahComment(postId, body, currentUser.school_id, currentUser.user_id);
         input.value = '';
         await loadForumComments(postId);
     } catch (err) {
@@ -2012,6 +2018,38 @@ async function submitForumComment() {
 }
 
 // ── Init ───────────────────────────────────────────────────────
+async function verifyTuAccess(authUser = null) {
+    const user = await getCurrentUserRow(authUser);
+    if (!user || user.role_type !== 'TU' || user.is_active !== true || user.deleted_at) {
+        try {
+            await supabase.auth.signOut({ scope: 'local' });
+        } finally {
+            window.location.replace(getLoginUrl());
+        }
+        return false;
+    }
+    currentUser = user;
+    return true;
+}
+
+function initTuAccessGuard() {
+    let checking = false;
+    const check = async () => {
+        if (document.visibilityState !== 'visible' || checking) return;
+        checking = true;
+        try {
+            await verifyTuAccess();
+        } catch (err) {
+            console.warn('[tu:access]', err);
+        } finally {
+            checking = false;
+        }
+    };
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+    setInterval(check, 60000);
+}
+
 async function init() {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData?.user) {
@@ -2019,11 +2057,8 @@ async function init() {
         return;
     }
 
-    currentUser = await getCurrentUserRow(authData.user);
-    if (!currentUser || currentUser.role_type !== 'TU') {
-        window.location.replace(getLoginUrl());
-        return;
-    }
+    if (!await verifyTuAccess(authData.user)) return;
+    initTuAccessGuard();
 
     registerLoginDevice(supabase);
     portalUserName.textContent = currentUser.full_name;
