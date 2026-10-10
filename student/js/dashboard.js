@@ -11,7 +11,7 @@ import {
     supabase, logout, getCurrentUserRow, STUDENT_ROLES, ACTIVE_STUDENT_STATUSES,
     getMyStudent, getSchoolConfig, getMyClass,
     getScheduleForDate, getMyAttendance, getMyObservations,
-    getMyPklPlacement, getMyPklAttendance,
+    getMyPklPlacements, getMyPklAttendance,
     getMyCases,
     getUnreadNotifCount, getRecentNotifications, markNotificationsRead,
     getForumSekolahPosts, addForumSekolahAck,
@@ -31,6 +31,9 @@ let myClass     = null;   // enrollment + class
 let obsLoaded        = false;
 let pklLoaded        = false;
 let lateExitsLoaded  = false;
+let jadwalInitialized = false;
+let pklRequest = 0;
+let forumDetailRequest = 0;
 
 const DIMENSION_LABELS = { AKADEMIK:'Akademik', KEHADIRAN:'Kehadiran', PERILAKU:'Perilaku', SOSIAL:'Sosial', AFEKTIF:'Afektif', BAKAT_MINAT:'Bakat & Minat', FISIK:'Fisik', LAINNYA:'Lainnya' };
 // EKSKUL dihapus dari absensi → dipetakan ke Hadir (kompat data lama)
@@ -200,11 +203,10 @@ function activateTab(key, { replace = false, noHistory = false } = {}) {
 
 async function loadTabContent(key) {
     switch (key) {
-        case 'jadwal':    await loadSchedule(); break;       // muat ulang tanggal aktif
+        case 'jadwal':    await initJadwalTab(); break;
         case 'kehadiran':
             await loadAttendance();
             if (!lateExitsLoaded) {
-                lateExitsLoaded = true;
                 const [lr, er] = await Promise.allSettled([
                     getMyLateArrivals(student.student_id),
                     getMyExits(student.student_id),
@@ -213,6 +215,7 @@ async function loadTabContent(key) {
                 else { const h = document.getElementById('late-hint'); if (h) { h.style.display='block'; h.textContent=`Gagal memuat riwayat keterlambatan. ${fe(lr.reason)}`; } }
                 if (er.status === 'fulfilled') renderExits(er.value);
                 else { const h = document.getElementById('exits-hint'); if (h) { h.style.display='block'; h.textContent=`Gagal memuat riwayat izin keluar. ${fe(er.reason)}`; } }
+                lateExitsLoaded = lr.status === 'fulfilled' && er.status === 'fulfilled';
             }
             break;
         case 'observasi': if (!obsLoaded) await loadObservations(); break;
@@ -237,19 +240,22 @@ async function initJadwalTab() {
     const dateEl = document.getElementById('sched-date');
     if (!dateEl.value) dateEl.value = localDateStr();
 
-    document.querySelectorAll('.sched-view-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            document.querySelectorAll('.sched-view-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            const isWeek = btn.dataset.view === 'minggu';
-            document.getElementById('sched-view-hari-panel').style.display  = isWeek ? 'none' : 'block';
-            document.getElementById('sched-view-minggu-panel').style.display = isWeek ? 'block' : 'none';
-            if (isWeek) await loadWeekSchedule();
-            else await loadSchedule();
+    if (!jadwalInitialized) {
+        document.querySelectorAll('.sched-view-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                document.querySelectorAll('.sched-view-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const isWeek = btn.dataset.view === 'minggu';
+                document.getElementById('sched-view-hari-panel').style.display  = isWeek ? 'none' : 'block';
+                document.getElementById('sched-view-minggu-panel').style.display = isWeek ? 'block' : 'none';
+                if (isWeek) await loadWeekSchedule();
+                else await loadSchedule();
+            });
         });
-    });
-
-    await loadSchedule();
+    }
+    jadwalInitialized = true;
+    if (document.getElementById('sched-view-minggu').classList.contains('active')) await loadWeekSchedule();
+    else await loadSchedule();
 }
 
 function localDateStr(d = new Date()) {
@@ -712,18 +718,33 @@ function renderCases(cases) {
 // ─── TAB PKL ─────────────────────────────────────────────────
 
 async function loadPkl() {
+    const request = ++pklRequest;
+    pklLoaded = false;
     const infoEl    = document.getElementById('pkl-info');
     const statsEl   = document.getElementById('pkl-stats');
     const recapCard = document.getElementById('pkl-recap-card');
     const recapBody = document.getElementById('pkl-recap-body');
+    const placementSelect = document.getElementById('pkl-placement-select');
+    const selectedId = placementSelect.value;
+    placementSelect.onchange = () => loadPkl();
+    statsEl.style.display = 'none';
+    recapCard.style.display = 'none';
+    recapBody.innerHTML = '';
     infoEl.innerHTML = '<p class="hint">Memuat…</p>';
 
     try {
-        const placement = await getMyPklPlacement(student.student_id);
-        pklLoaded = true;
+        const placements = await getMyPklPlacements(student.student_id);
+        if (request !== pklRequest) return;
+        const placement = placements.find(p => p.placement_id === selectedId)
+            ?? placements.find(p => p.is_active) ?? placements[0] ?? null;
+        placementSelect.innerHTML = placements.map(p => `<option value="${esc(p.placement_id)}">${
+            esc(p.dudi?.dudi_org_name ?? p.dudi?.full_name ?? 'Tempat PKL')} · ${fmt(p.start_date)}${p.is_active ? ' · Aktif' : ''}</option>`).join('');
+        if (placement) placementSelect.value = placement.placement_id;
+        document.getElementById('pkl-placement-field').style.display = placements.length > 1 ? 'block' : 'none';
 
         if (!placement) {
             infoEl.innerHTML = '<p class="hint">Belum ada penempatan PKL yang tercatat.</p>';
+            pklLoaded = true;
             return;
         }
 
@@ -737,7 +758,8 @@ async function loadPkl() {
                     : '<span class="badge badge-izin">Selesai</span>'}</div>
             </div>`;
 
-        const att = await getMyPklAttendance(student.student_id);
+        const att = await getMyPklAttendance(student.student_id, placement.placement_id);
+        if (request !== pklRequest) return;
         const agg = { HADIR:0, IZIN:0, SAKIT:0, ALPA:0, total:0 };
         for (const r of att) {
             if (agg[r.status] !== undefined) agg[r.status]++;
@@ -759,7 +781,9 @@ async function loadPkl() {
                 <td>${esc(r.notes || '—')}</td>
             </tr>`).join('');
         }
+        pklLoaded = true;
     } catch (err) {
+        if (request !== pklRequest) return;
         infoEl.innerHTML = `<p class="hint" style="color:var(--color-danger)">Gagal memuat data. ${esc(fe(err))}</p>`;
     }
 }
@@ -951,6 +975,7 @@ function renderForumCard(post) {
 }
 
 async function openForumDetail(post) {
+    const request = ++forumDetailRequest;
     const modal = document.getElementById('modal-forum-detail');
     modal.style.display = 'flex';
 
@@ -965,14 +990,24 @@ async function openForumDetail(post) {
         `${author} · ${time}${edited}`;
 
     const attEl = document.getElementById('detail-forum-attachment');
+    attEl.innerHTML = '';
+    ackWithRetry(
+        'forum_ack',
+        { postId: post.post_id, userId: currentUser.user_id, schoolId: currentUser.school_id },
+        `forum_ack:${post.post_id}:${currentUser.user_id}`);
     if (post.attachment_url || post.attachment_path) {
         let attachmentHref = post.attachment_url ?? null;
         if (post.attachment_path) {
-            const { data: signed } = await supabase.storage
-                .from('forum-attachments')
-                .createSignedUrl(post.attachment_path, 172800);
-            if (signed?.signedUrl) attachmentHref = signed.signedUrl;
+            // A stored path must be authorized; never fall back to a stale URL.
+            attachmentHref = null;
+            try {
+                const { data: signed, error } = await supabase.storage
+                    .from('forum-attachments')
+                    .createSignedUrl(post.attachment_path, 172800);
+                if (!error && signed?.signedUrl) attachmentHref = signed.signedUrl;
+            } catch (err) { console.warn('[forum] lampiran:', err); }
         }
+        if (request !== forumDetailRequest) return;
         if (attachmentHref) {
             attEl.innerHTML = `<a href="${esc(attachmentHref)}" target="_blank"
                 class="btn btn-secondary" style="font-size:13px">
@@ -984,16 +1019,11 @@ async function openForumDetail(post) {
     } else {
         attEl.innerHTML = '';
     }
-
-    // Acknowledge otomatis saat dibuka
-    // NOTIF-01: kegagalan ack tidak lagi dibuang — masuk antrean retry.
-    ackWithRetry(
-        'forum_ack',
-        { postId: post.post_id, userId: currentUser.user_id, schoolId: currentUser.school_id },
-        `forum_ack:${post.post_id}:${currentUser.user_id}`);
 }
 
 function closeForumDetail() {
+    ++forumDetailRequest;
+    document.getElementById('detail-forum-attachment').innerHTML = '';
     document.getElementById('modal-forum-detail').style.display = 'none';
 }
 
@@ -1064,11 +1094,12 @@ function renderNilaiGrid(grades, gridEl) {
     gridEl.innerHTML = Object.entries(bySem).map(([label, items]) => `
         <div style="margin-bottom:24px">
           <h4 style="margin:0 0 8px; color:var(--color-text-muted); font-size:13px;
-                     text-transform:uppercase; letter-spacing:0.5px">${esc(label)}</h4>
-          <table style="width:100%; border-collapse:collapse; font-size:13px">
+                     text-transform:uppercase; letter-spacing:0">${esc(label)}</h4>
+          <div class="table-wrapper"><table style="width:100%; border-collapse:collapse; font-size:13px">
             <thead>
               <tr style="border-bottom:2px solid var(--color-border)">
                 <th style="text-align:left; padding:8px 4px">Mata Pelajaran</th>
+                <th style="text-align:left; padding:8px 4px">Penilaian</th>
                 <th style="text-align:center; padding:8px 4px; width:80px">Nilai</th>
                 <th style="text-align:center; padding:8px 4px; width:80px">Predikat</th>
                 <th style="text-align:left; padding:8px 4px">Deskripsi</th>
@@ -1078,6 +1109,7 @@ function renderNilaiGrid(grades, gridEl) {
               ${items.map(g => `
                 <tr style="border-bottom:1px solid var(--color-border)">
                   <td style="padding:8px 4px">${esc(g.subject_name || '—')}</td>
+                  <td style="padding:8px 4px">${esc(g.label || '—')}</td>
                   <td style="padding:8px 4px; text-align:center; font-weight:600">
                     ${g.nilai_akhir != null ? Number(g.nilai_akhir).toFixed(1) : '—'}
                   </td>
@@ -1088,7 +1120,7 @@ function renderNilaiGrid(grades, gridEl) {
                 </tr>
               `).join('')}
             </tbody>
-          </table>
+          </table></div>
         </div>
     `).join('');
 }

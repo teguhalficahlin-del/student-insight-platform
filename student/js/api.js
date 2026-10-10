@@ -9,6 +9,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { attachPortalUserLabels } from '../../shared/portal-user-labels.js';
 
 const SUPABASE_URL      = 'https://xovvuuwexoweoqyltepq.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvdnZ1dXdleG93ZW9xeWx0ZXBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDk0NzUsImV4cCI6MjA5Nzc4NTQ3NX0.mFwmVfSqYM7ITURtLC143BsurK6Yr31WFViJe5PFGN8';
@@ -105,42 +106,24 @@ export async function getScheduleForDate(classId, date) {
         .select(`
             schedule_id, session_date, session_start, session_end,
             subject:subjects ( name ),
-            teacher:users ( full_name ),
+            scheduled_teacher_id,
             class:classes ( name )
         `)
         .eq('class_id', classId)
         .eq('session_date', date)
         .order('session_start');
     if (error) throw error;
-    return data ?? [];
+    return attachPortalUserLabels(supabase, data ?? [], [['teacher', 'scheduled_teacher_id']]);
 }
 
 /**
  * Kehadiran diri sendiri dalam rentang tanggal.
- * RLS rls_attendance_read_student membatasi otomatis ke student_id ini (non-void).
+ * RPC memvalidasi siswa pemanggil dan tenant, termasuk riwayat kelas lama (non-void).
  */
 export async function getMyAttendance(studentId, dateStart, dateEnd) {
-    let q = supabase
-        .from('teaching_schedules')
-        .select(`
-            schedule_id,
-            block_group_id,
-            session_date,
-            session_start,
-            session_end,
-            subject:subjects ( name ),
-            teacher:users!teaching_schedules_scheduled_teacher_id_fkey ( full_name ),
-            attendance!inner ( attendance_id, status, is_void, notes )
-        `)
-        .eq('attendance.student_id', studentId)
-        .eq('attendance.is_void', false)
-        .order('session_date', { ascending: false })
-        .order('session_start', { ascending: true });
-
-    if (dateStart) q = q.gte('session_date', dateStart);
-    if (dateEnd)   q = q.lte('session_date', dateEnd);
-
-    const { data, error } = await q;
+    const { data, error } = await supabase.rpc('fn_portal_attendance', {
+        p_student_id: studentId, p_date_start: dateStart || null, p_date_end: dateEnd || null,
+    });
     if (error) throw error;
 
     // Group by block_group_id
@@ -186,16 +169,16 @@ export async function getMyCases(studentId) {
         .select(`
             case_id, title, description, status, created_at,
             current_handler_user_id,
-            handler:users!coaching_cases_current_handler_user_id_fkey ( full_name ),
             events:coaching_case_events (
-                event_id, event_type, payload, created_at, is_visible_to_student,
-                author:users!coaching_case_events_author_user_id_fkey ( full_name )
+                event_id, event_type, payload, created_at, is_visible_to_student, author_user_id
             )
         `)
         .eq('student_id', studentId)
         .eq('is_shared_to_student', true)
         .order('created_at', { ascending: false });
     if (error) throw error;
+    await attachPortalUserLabels(supabase, data ?? [], [['handler', 'current_handler_user_id']]);
+    await attachPortalUserLabels(supabase, (data ?? []).flatMap(c => c.events ?? []), [['author', 'author_user_id']]);
     return (data ?? []).map(c => ({
         ...c,
         events: (c.events ?? [])
@@ -214,7 +197,7 @@ export async function getMyObservations(studentId, dateStart = null, dateEnd = n
         .from('observations')
         .select(`
             observation_id, dimension, sentiment, content, observed_at, created_at,
-            author:users!observations_author_user_id_fkey ( full_name )
+            author_user_id
         `)
         .eq('student_id', studentId)
         .order('observed_at', { ascending: false })
@@ -223,25 +206,29 @@ export async function getMyObservations(studentId, dateStart = null, dateEnd = n
     if (dateEnd)   query = query.lte('observed_at', dateEnd + 'T23:59:59');
     const { data, error } = await query;
     if (error) throw error;
-    return data ?? [];
+    return attachPortalUserLabels(supabase, data ?? [], [['author', 'author_user_id']]);
 }
 
 /**
- * Penempatan PKL aktif siswa (jika ada).
+ * Penempatan PKL siswa, termasuk riwayat, diurutkan aktif terlebih dahulu.
  * RLS: butuh kebijakan SISWA read pkl_placements (migrasi yang sama).
  */
-export async function getMyPklPlacement(studentId) {
+export async function getMyPklPlacements(studentId) {
     const { data, error } = await supabase
         .from('pkl_placements')
         .select(`
             placement_id, start_date, end_date, is_active,
-            dudi:users!pkl_placements_dudi_user_id_fkey ( full_name, dudi_org_name )
+            dudi_user_id
         `)
         .eq('student_id', studentId)
         .order('is_active', { ascending: false })
         .order('start_date', { ascending: false });
     if (error) throw error;
-    const list = data ?? [];
+    return attachPortalUserLabels(supabase, data ?? [], [['dudi', 'dudi_user_id']]);
+}
+
+export async function getMyPklPlacement(studentId) {
+    const list = await getMyPklPlacements(studentId);
     return list.find(p => p.is_active) ?? list[0] ?? null;
 }
 
@@ -249,11 +236,13 @@ export async function getMyPklPlacement(studentId) {
  * Rekap absensi PKL siswa.
  * RLS: butuh kebijakan SISWA read pkl_attendance (migrasi yang sama).
  */
-export async function getMyPklAttendance(studentId) {
+export async function getMyPklAttendance(studentId, placementId) {
+    if (!placementId) throw new Error('Penempatan PKL wajib dipilih.');
     const { data, error } = await supabase
         .from('pkl_attendance')
-        .select('attendance_date, status, notes')
+        .select('placement_id, attendance_date, status, notes')
         .eq('student_id', studentId)
+        .eq('placement_id', placementId)
         .order('attendance_date', { ascending: false });
     if (error) throw error;
     return data ?? [];
@@ -294,7 +283,6 @@ export async function getForumSekolahPosts(schoolId, userId, limit = 20, offset 
             post_id, title, body, attachment_url, attachment_name, attachment_path,
             is_edited, created_at, updated_at,
             author_user_id,
-            author:users!forum_posts_author_user_id_fkey(user_id, full_name, role_type),
             acknowledgements:forum_post_acknowledgements(user_id),
             forum_post_audience!inner(user_id)
         `)
@@ -305,6 +293,7 @@ export async function getForumSekolahPosts(schoolId, userId, limit = 20, offset 
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
     if (error) throw error;
+    await attachPortalUserLabels(supabase, data ?? [], [['author', 'author_user_id']]);
     return (data ?? []).map(({ forum_post_audience: _a, ...rest }) => rest);
 }
 
@@ -326,7 +315,7 @@ export async function getMyLateArrivals(studentId) {
             .eq('student_id', studentId)
             .order('late_date', { ascending: false })
             .order('arrival_time', { ascending: false });
-        if (error) { console.warn('[late] getMyLateArrivals error:', error.message); return []; }
+        if (error) throw error;
         return (data ?? []).map(r => ({
             late_id:      r.late_id,
             date:         r.late_date,
@@ -335,7 +324,7 @@ export async function getMyLateArrivals(studentId) {
         }));
     } catch (e) {
         console.warn('[late] getMyLateArrivals exception:', e);
-        return [];
+        throw e;
     }
 }
 
@@ -347,7 +336,7 @@ export async function getMyExits(studentId) {
             .eq('student_id', studentId)
             .order('exit_date', { ascending: false })
             .order('exit_time', { ascending: false });
-        if (error) { console.warn('[exits] getMyExits error:', error.message); return []; }
+        if (error) throw error;
         return data ?? [];
-    } catch (e) { console.warn('[exits] getMyExits exception:', e); return []; }
+    } catch (e) { console.warn('[exits] getMyExits exception:', e); throw e; }
 }

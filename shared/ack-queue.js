@@ -90,7 +90,7 @@ function _scheduleFlush(delay = RETRY_DELAY) {
 }
 
 function _enqueue(entry) {
-    const list = _read().filter(e => e.key !== entry.key);
+    const list = _read().filter(e => e.key !== entry.key || e.userId !== (entry.userId ?? null));
     list.push({
         key:      entry.key,
         kind:     entry.kind,
@@ -98,13 +98,14 @@ function _enqueue(entry) {
         userId:   entry.userId ?? null,
         attempts: 0,
         queuedAt: Date.now(),
+        revision: `${Date.now()}:${Math.random()}`,
     });
     _write(list);
 }
 
-function _remove(key) {
+function _remove(key, original) {
     const list = _read();
-    const next = list.filter(e => e.key !== key);
+    const next = list.filter(e => e.key !== key || JSON.stringify(e) !== original);
     if (next.length !== list.length) _write(next);
 }
 
@@ -154,13 +155,15 @@ export async function ackWithRetry(kind, payload, dedupeKey) {
         console.warn(`[ack-queue] handler "${kind}" belum terdaftar.`);
         return false;
     }
+    const userId = _activeUserId;
+    const original = JSON.stringify(_read().find(e => e.key === key && e.userId === userId));
     try {
         await fn(payload);
-        _remove(key);
+        _remove(key, original);
         return true;
     } catch (err) {
         console.warn(`[ack-queue] ack "${kind}" gagal, masuk antrean:`, err?.message ?? err);
-        _enqueue({ key, kind, payload, userId: _activeUserId });
+        _enqueue({ key, kind, payload, userId });
         _scheduleFlush();
         return false;
     }
@@ -178,21 +181,31 @@ export async function flushAckQueue() {
     if (!list.length) return;
 
     _flushing = true;
+    const userId = _activeUserId;
     try {
         const now     = Date.now();
-        const keep    = [];
+        const outcomes = new Map();
         let anyOk     = false;
         let anyDrop   = false;
         let anyRemain = false;
 
         for (const entry of list) {
+            if (_activeUserId !== userId) break;
+            const original = JSON.stringify(entry);
+            const identity = JSON.stringify([entry.userId ?? null, entry.key]);
+            outcomes.set(identity, { original, next: null });
+            // Never consume another account's entries, including expired ones.
+            if (entry.userId && entry.userId !== userId) {
+                outcomes.delete(identity);
+                continue;
+            }
             // Kedaluwarsa → buang, hitung sebagai rollback.
             if (now - (entry.queuedAt ?? 0) > TTL_MS) { anyDrop = true; continue; }
 
             // Milik akun lain / handler tak ada di portal ini → simpan apa adanya.
             const fn = _handlers.get(entry.kind);
-            if (!fn || (entry.userId && entry.userId !== _activeUserId)) {
-                keep.push(entry);
+            if (!fn) {
+                outcomes.delete(identity);
                 continue;
             }
 
@@ -200,12 +213,18 @@ export async function flushAckQueue() {
                 await fn(entry.payload);
                 anyOk = true;
             } catch {
-                entry.attempts = (entry.attempts ?? 0) + 1;
-                if (entry.attempts >= MAX_ATTEMPTS) { anyDrop = true; }
-                else { keep.push(entry); anyRemain = true; }
+                const next = { ...entry, attempts: (entry.attempts ?? 0) + 1 };
+                if (next.attempts >= MAX_ATTEMPTS) { anyDrop = true; }
+                else { outcomes.set(identity, { original, next }); anyRemain = true; }
             }
         }
 
+        // Merge only unchanged snapshot entries; a new/requeued ack wins over this flush.
+        const keep = _read().flatMap(entry => {
+            const outcome = outcomes.get(JSON.stringify([entry.userId ?? null, entry.key]));
+            if (!outcome || outcome.original !== JSON.stringify(entry)) return [entry];
+            return outcome.next ? [outcome.next] : [];
+        });
         _write(keep);
         if (anyRemain) _scheduleFlush();
         if (anyOk || anyDrop) _emit(anyDrop);

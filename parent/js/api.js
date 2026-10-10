@@ -6,6 +6,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { attachPortalUserLabels } from '../../shared/portal-user-labels.js';
 
 const SUPABASE_URL      = 'https://xovvuuwexoweoqyltepq.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvdnZ1dXdleG93ZW9xeWx0ZXBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDk0NzUsImV4cCI6MjA5Nzc4NTQ3NX0.mFwmVfSqYM7ITURtLC143BsurK6Yr31WFViJe5PFGN8';
@@ -100,7 +101,7 @@ export async function fetchSchedule(classId, date, schoolId) {
         .select(`
             schedule_id, session_date, session_start, session_end,
             subject:subjects ( name ),
-            teacher:users ( full_name )
+            scheduled_teacher_id
         `)
         .eq('school_id', schoolId)
         .eq('class_id', classId)
@@ -108,6 +109,7 @@ export async function fetchSchedule(classId, date, schoolId) {
         .order('session_start');
 
     if (error) throw error;
+    await attachPortalUserLabels(supabase, data ?? [], [['teacher', 'scheduled_teacher_id']]);
     return (data ?? []).map(r => ({
         start:   r.session_start,
         end:     r.session_end,
@@ -155,7 +157,7 @@ export async function fetchAttendance(studentId, dateStart, dateEnd) {
             session_start,
             session_end,
             subject:subjects ( name ),
-            teacher:users ( full_name ),
+            scheduled_teacher_id,
             attendance!inner ( attendance_id, status, is_void, notes )
         `)
         .eq('attendance.student_id', studentId)
@@ -168,6 +170,7 @@ export async function fetchAttendance(studentId, dateStart, dateEnd) {
 
     const { data, error } = await q;
     if (error) throw error;
+    await attachPortalUserLabels(supabase, data ?? [], [['teacher', 'scheduled_teacher_id']]);
 
     const blockMap = new Map();
     for (const sched of (data ?? [])) {
@@ -215,7 +218,7 @@ export async function fetchObservations(studentId, dateStart = null, dateEnd = n
             content,
             visibility,
             observed_at,
-            author:users!observations_author_user_id_fkey ( full_name )
+            author_user_id
         `)
         .eq('student_id', studentId)
         .order('observed_at', { ascending: false })
@@ -226,6 +229,7 @@ export async function fetchObservations(studentId, dateStart = null, dateEnd = n
 
     const { data, error } = await query;
     if (error) throw error;
+    await attachPortalUserLabels(supabase, data ?? [], [['author', 'author_user_id']]);
     return (data || []).map(r => ({
         id:        r.observation_id,
         sentiment: r.sentiment,
@@ -242,16 +246,16 @@ export async function fetchCases(studentId) {
         .select(`
             case_id, title, description, status, created_at,
             current_handler_user_id,
-            handler:users!coaching_cases_current_handler_user_id_fkey ( full_name ),
             events:coaching_case_events (
-                event_id, event_type, payload, created_at, is_visible_to_student,
-                author:users!coaching_case_events_author_user_id_fkey ( full_name )
+                event_id, event_type, payload, created_at, is_visible_to_student, author_user_id
             )
         `)
         .eq('student_id', studentId)
         .eq('is_shared_to_parent', true)
         .order('created_at', { ascending: false });
     if (error) throw error;
+    await attachPortalUserLabels(supabase, data ?? [], [['handler', 'current_handler_user_id']]);
+    await attachPortalUserLabels(supabase, (data ?? []).flatMap(c => c.events ?? []), [['author', 'author_user_id']]);
     return (data ?? []).map(c => ({
         ...c,
         events: (c.events ?? [])
@@ -264,13 +268,14 @@ export async function fetchPklPlacement(studentId) {
         .from('pkl_placements')
         .select(`
             placement_id, start_date, end_date,
-            dudi:users!pkl_placements_dudi_user_id_fkey ( full_name, dudi_org_name )
+            dudi_user_id
         `)
         .eq('student_id', studentId)
         .eq('is_active', true)
         .maybeSingle();
     if (error) throw error;
     if (!data) return null;
+    await attachPortalUserLabels(supabase, [data], [['dudi', 'dudi_user_id']]);
     return {
         placement_id: data.placement_id,
         start_date:   data.start_date,
@@ -372,7 +377,6 @@ export async function getForumSekolahPosts(schoolId, userId, limit = 20, offset 
             post_id, title, body, attachment_url, attachment_name, attachment_path,
             is_edited, created_at, updated_at,
             author_user_id,
-            author:users!forum_posts_author_user_id_fkey(user_id, full_name, role_type),
             acknowledgements:forum_post_acknowledgements(user_id),
             forum_post_audience!inner(user_id)
         `)
@@ -383,6 +387,7 @@ export async function getForumSekolahPosts(schoolId, userId, limit = 20, offset 
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
     if (error) throw error;
+    await attachPortalUserLabels(supabase, data ?? [], [['author', 'author_user_id']]);
     return (data ?? []).map(({ forum_post_audience: _a, ...rest }) => rest);
 }
 
