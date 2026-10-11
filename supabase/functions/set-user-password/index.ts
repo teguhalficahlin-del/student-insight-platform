@@ -82,9 +82,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }
 
         // Tandai harus ganti password saat login berikutnya
-        await admin.from('users')
+        const { data: markedUser, error: markerErr } = await admin.from('users')
             .update({ must_change_password: true })
-            .eq('user_id', user_id);
+            .eq('user_id', user_id)
+            .select('user_id')
+            .maybeSingle();
+        if (markerErr) {
+            console.error('[set-user-password] must_change_password update failed:', markerErr);
+            return internalError(markerErr);
+        }
+        if (!markedUser) {
+            return internalError(new Error('Target user disappeared before password-change marker was saved'));
+        }
 
         return ok({
             reset: true,

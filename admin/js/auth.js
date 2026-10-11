@@ -57,7 +57,8 @@ form.addEventListener('submit', async (e) => {
             return;
         }
 
-        if (userRow.role_type !== 'ADMINISTRATIVE') {
+        if (userRow.role_type !== 'ADMINISTRATIVE'
+            || userRow.is_active === false || userRow.deleted_at) {
             errorEl.textContent = 'Akun ini tidak memiliki akses ke konsol admin.';
             errorEl.style.display = 'block';
             submitBtn.disabled = false;

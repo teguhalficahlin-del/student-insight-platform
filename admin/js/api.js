@@ -56,7 +56,7 @@ export async function getCurrentUserRow(authUser = null) {
 
     const { data, error } = await supabase
         .from('users')
-        .select('user_id, school_id, full_name, role_type, login_identifier, identifier_type, must_change_password')
+        .select('user_id, school_id, full_name, role_type, login_identifier, identifier_type, must_change_password, is_active, deleted_at')
         .eq('auth_user_id', user.id)
         .maybeSingle();
 
@@ -108,6 +108,9 @@ export async function getAlumniRecap(studentId) {
     ]);
 
     if (stuRes.error) throw stuRes.error;
+    if (attRes.error) throw attRes.error;
+    if (obsRes.error) throw obsRes.error;
+    if (pklRes.error) throw pklRes.error;
     const student = stuRes.data;
     if (!student) throw new Error('Data siswa tidak ditemukan.');
 
@@ -124,8 +127,9 @@ export async function getAlumniRecap(studentId) {
     const dudiIds = [...new Set(placements.map(p => p.dudi_user_id).filter(Boolean))];
     const dudiNames = {};
     if (dudiIds.length) {
-        const { data: dudis } = await supabase.from('v_users_staff_directory')
+        const { data: dudis, error: dudiErr } = await supabase.from('v_users_staff_directory')
             .select('user_id, full_name, dudi_org_name').in('user_id', dudiIds);
+        if (dudiErr) throw dudiErr;
         for (const d of (dudis ?? [])) dudiNames[d.user_id] = d.dudi_org_name || d.full_name;
     }
     const pkl = placements.map(p => ({
@@ -256,7 +260,8 @@ export async function voidObservation(observationId, reason) {
 }
 
 export function requireAdministrativeOrRedirect(userRow) {
-    if (!userRow || userRow.role_type !== 'ADMINISTRATIVE') {
+    if (!userRow || userRow.role_type !== 'ADMINISTRATIVE'
+        || userRow.is_active === false || userRow.deleted_at) {
         window.location.replace('index.html');
         return false;
     }

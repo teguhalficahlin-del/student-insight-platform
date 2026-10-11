@@ -237,7 +237,7 @@ async function renderForumKelasPanel() {
         const academicYear = config?.current_academic_year ?? '—';
 
         const [classes, programs, bkStaff, gwCandidates,
-               bkAsgn, gwAsgn, enrollData] =
+                 bkAsgn, gwAsgn, enrollments] =
             await Promise.all([
                 getClasses(academicYear),
                 getPrograms(),
@@ -245,11 +245,10 @@ async function renderForumKelasPanel() {
                 getForumGuruWaliCandidates(),
                 getBkAssignments(academicYear),
                 getGuruWaliAssignments(academicYear),
-                supabase
-                    .from('class_enrollments')
-                    .select('class_id, student:students(student_id, full_name, nis)')
-                    .eq('academic_year', academicYear)
-                    .is('withdrawn_at', null),
+                 fetchAllRows('class_enrollments', q => q
+                     .select('class_id, student:students(student_id, full_name, nis)')
+                     .eq('academic_year', academicYear)
+                     .is('withdrawn_at', null)),
             ]);
 
         const programNameById = new Map(
@@ -317,7 +316,7 @@ async function renderForumKelasPanel() {
 
         // class_id → [siswa]
         const classStudentMap = new Map(classes.map(c => [c.class_id, []]));
-        (enrollData.data ?? []).forEach(e => {
+        (enrollments ?? []).forEach(e => {
             if (e.student && classStudentMap.has(e.class_id)) {
                 classStudentMap.get(e.class_id).push(e.student);
             }
@@ -914,7 +913,7 @@ function buildJabatan(u, classMap = new Map(), progMap = new Map()) {
     if (u.role_type === 'WAKA_KURIKULUM' && !j.includes('Waka Kurikulum')) j.push('Waka Kurikulum');
     if (u.role_type === 'WAKA_KESISWAAN' && !j.includes('Waka Kesiswaan')) j.push('Waka Kesiswaan');
     if (u.role_type === 'WAKA_HUMAS' && !j.includes('Waka Humas')) j.push('Waka Humas');
-    return j.join(', ') || u.role_type;
+    return esc(j.join(', ') || u.role_type);
 }
 
 async function renderStaffPanel() {
@@ -1381,13 +1380,13 @@ async function renderParentsPanel() {
     ]);
 
     // Fetch semua kelas + enrollment tahun ajaran aktif
-    const [{ data: allClasses }, { data: enrollments }, programs] = await Promise.all([
-        supabase.from('classes').select('class_id, name, grade_level, program_id')
-            .order('grade_level').order('name'),
-        supabase.from('class_enrollments')
+    const [allClasses, enrollments, programs] = await Promise.all([
+        fetchAllRows('classes', q => q.select('class_id, name, grade_level, program_id')
+            .order('grade_level').order('name')),
+        fetchAllRows('class_enrollments', q => q
             .select('student_id, class_id')
             .eq('academic_year', config?.current_academic_year ?? '')
-            .is('withdrawn_at', null),
+            .is('withdrawn_at', null)),
         getPrograms(),
     ]);
     const programNameById = new Map(
@@ -1887,7 +1886,7 @@ async function renderDudiPanel() {
         users ?? [],
         u => u.program_id ? (pn.get(u.program_id) ?? '—') : 'Tanpa Program / Lintas Program',
         ['Nama Usaha', 'Penanggung Jawab', 'Aksi'],
-        u => `<tr><td>${u.dudi_org_name ?? '—'}</td><td>${u.full_name}</td><td>${pwActionCell(u.user_id, u.full_name, u.must_change_password)}</td></tr>`,
+        u => `<tr><td>${esc(u.dudi_org_name ?? '—')}</td><td>${esc(u.full_name)}</td><td>${pwActionCell(u.user_id, u.full_name, u.must_change_password)}</td></tr>`,
     );
     panelContent.innerHTML = `
         <h3>DUDI (${(users ?? []).length})</h3>
