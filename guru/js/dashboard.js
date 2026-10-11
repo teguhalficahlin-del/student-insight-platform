@@ -4846,9 +4846,17 @@ async function initForumTab() {
     _forumTabInit = true;
 
     // Ambil scope user (role, jabatan, dll)
-    const { data: scope } = await supabase
+    const { data: scope, error: scopeError } = await supabase
         .rpc('fn_get_user_forum_scope', { p_user_id: currentUser.user_id })
         .maybeSingle();
+    if (scopeError) {
+        _forumTabInit = false;
+        throw new Error('Scope Forum gagal dimuat. Silakan coba lagi.');
+    }
+    if (!scope) {
+        _forumTabInit = false;
+        throw new Error('Akses Forum tidak tersedia untuk akun ini.');
+    }
     _forumScope = scope;
 
     // Ambil program dan kelas untuk filter
@@ -4858,6 +4866,10 @@ async function initForumTab() {
         supabase.from('classes').select('class_id, name, grade_level, program_id')
             .eq('is_active', true).eq('school_id', currentUser.school_id).order('name'),
     ]);
+    if (progRes.error || classRes.error) {
+        _forumTabInit = false;
+        throw new Error('Data jurusan atau kelas gagal dimuat. Silakan coba lagi.');
+    }
     _forumPrograms = progRes.data ?? [];
     _forumClasses  = classRes.data ?? [];
 
@@ -4924,9 +4936,13 @@ async function initForumTab() {
             'Komentar, daftar penerima, tanda sudah dibaca, notifikasi, dan ' +
             'lampiran ikut terhapus. Tindakan ini TIDAK dapat dibatalkan.')) return;
         try {
-            await deleteForumSekolahPost(postId);
+            const result = await deleteForumSekolahPost(postId);
             closeForumDetail();
             loadForumPosts();
+            if (result?.attachmentCleanupError) {
+                alert('Posting terhapus, tetapi lampiran lama belum berhasil dibersihkan. ' +
+                    'Silakan laporkan kepada administrator.');
+            }
         } catch (err) { alert(fe(err)); }
     });
 
@@ -6258,7 +6274,17 @@ async function submitForumPost() {
                 errEl.textContent = 'Ukuran file maks. 10 MB.';
                 errEl.style.display = 'block'; return;
             }
-            const ext  = file.name.split('.').pop();
+            const ext = file.name.split('.').pop().toLowerCase();
+            const allowedTypes = new Set(['pdf', 'doc', 'docx']);
+            const allowedMime = new Set([
+                'application/pdf',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ]);
+            if (!allowedTypes.has(ext) || (file.type && !allowedMime.has(file.type))) {
+                errEl.textContent = 'Lampiran harus berupa PDF, DOC, atau DOCX.';
+                errEl.style.display = 'block'; return;
+            }
             const path = `${currentUser.school_id}/${Date.now()}.${ext}`;
             const { error: upErr } = await supabase.storage
                 .from('forum-attachments')
@@ -6274,6 +6300,7 @@ async function submitForumPost() {
             attachmentName = file.name;
         }
 
+        let attachmentCleanupWarning = false;
         if (_forumEditPostId) {
             // FUNC-01: jalur edit sebelumnya meng-upload file baru tapi TIDAK
             // pernah memasangnya ke posting — orphan permanen di bucket.
@@ -6296,8 +6323,12 @@ async function submitForumPost() {
                     attachmentName, newPath);
                 uploadedPath = null;   // sudah tereferensi posting — bukan orphan lagi
                 if (oldPath && oldPath !== newPath) {
-                    supabase.storage.from('forum-attachments').remove([oldPath])
-                        .catch(e => console.warn('[forum] hapus lampiran lama gagal:', e));
+                    const { error: oldCleanupError } = await supabase.storage
+                        .from('forum-attachments').remove([oldPath]);
+                    if (oldCleanupError) {
+                        attachmentCleanupWarning = true;
+                        console.warn('[forum] hapus lampiran lama gagal:', oldCleanupError);
+                    }
                 }
             }
         } else {
@@ -6316,6 +6347,10 @@ async function submitForumPost() {
         }
 
         closeForumModal();
+        if (attachmentCleanupWarning) {
+            alert('Posting tersimpan, tetapi lampiran lama belum berhasil dibersihkan. ' +
+                'Silakan laporkan kepada administrator.');
+        }
         _forumMode = 'terkirim';
         document.getElementById('forum-tab-masuk').className    = 'btn btn-secondary';
         document.getElementById('forum-tab-terkirim').className = 'btn btn-primary';
@@ -6380,16 +6415,31 @@ async function openForumDetail(postId) {
 
         if (post.attachment_url || post.attachment_path) {
             let attachmentHref = post.attachment_url ?? null;
+            let attachmentError = null;
             if (post.attachment_path) {
-                const { data: signed } = await supabase.storage
+                const { data: signed, error: signedError } = await supabase.storage
                     .from('forum-attachments')
                     .createSignedUrl(post.attachment_path, 172800);
+                attachmentError = signedError;
                 if (signed?.signedUrl) attachmentHref = signed.signedUrl;
             }
-            document.getElementById('detail-forum-attachment').innerHTML =
-                `<a href="${esc(attachmentHref)}" target="_blank" class="btn btn-secondary" style="font-size:13px">
-                    \uD83D\uDCCE ${esc(post.attachment_name ?? 'Unduh Lampiran')}
-                </a>`;
+            const attachmentEl = document.getElementById('detail-forum-attachment');
+            if (attachmentHref) {
+                attachmentEl.innerHTML =
+                    `<a href="${esc(attachmentHref)}" target="_blank" class="btn btn-secondary" style="font-size:13px">
+                        \uD83D\uDCCE ${esc(post.attachment_name ?? 'Unduh Lampiran')}
+                    </a>`;
+            } else {
+                if (attachmentError) {
+                    attachmentEl.innerHTML =
+                        '<span class="hint">Lampiran tersedia, tetapi belum dapat dibuka.</span> ' +
+                        '<button type="button" class="btn-link" id="btn-forum-attachment-retry">Coba lagi</button>';
+                    document.getElementById('btn-forum-attachment-retry')
+                        .addEventListener('click', () => openForumDetail(postId));
+                } else {
+                    attachmentEl.textContent = 'Lampiran tidak tersedia.';
+                }
+            }
         }
 
         // NOTIF-01: ack "posting sudah dibaca" ikut antrean retry.

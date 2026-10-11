@@ -1359,6 +1359,7 @@ export async function getForumSekolahSentPostById(postId, schoolId, callerId) {
             post_id, title, body, attachment_url, attachment_name, attachment_path,
             is_edited, is_withdrawn, edited_at, deleted_at, created_at, updated_at,
             author_user_id,
+            author:users!forum_posts_author_user_id_fkey(user_id, full_name, role_type),
             comments:forum_post_comments(comment_id),
             acknowledgements:forum_post_acknowledgements(user_id),
             audience:forum_post_audience(user_id)
@@ -1383,6 +1384,7 @@ export async function getForumSekolahSentPosts(schoolId, callerId, limit = 20, o
             post_id, title, body, attachment_url, attachment_name, attachment_path,
             is_edited, is_withdrawn, edited_at, deleted_at, created_at, updated_at,
             author_user_id,
+            author:users!forum_posts_author_user_id_fkey(user_id, full_name, role_type),
             comments:forum_post_comments(comment_id),
             acknowledgements:forum_post_acknowledgements(user_id),
             audience:forum_post_audience(user_id)
@@ -1499,10 +1501,17 @@ export async function deleteForumSekolahPost(postId) {
     });
     if (error) throw error;
     const path = data?.[0]?.attachment_path ?? null;
+    let attachmentCleanupError = null;
     if (path) {
-        supabase.storage.from('forum-attachments').remove([path])
-            .catch(e => console.warn('[forum] hapus storage gagal:', e));
+        const { error: storageError } = await supabase.storage
+            .from('forum-attachments')
+            .remove([path]);
+        if (storageError) {
+            attachmentCleanupError = storageError;
+            console.warn('[forum] hapus storage gagal:', storageError);
+        }
     }
+    return { attachmentCleanupError };
 }
 
 /**
