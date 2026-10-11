@@ -16,6 +16,12 @@ function previewParseCsv(text, maxRows = 10) {
     return { headers, rows, totalDataRows: lines.length - 1 };
 }
 
+function escapeHtml(value) {
+    const el = document.createElement('span');
+    el.textContent = String(value ?? '');
+    return el.innerHTML;
+}
+
 /**
  * Mounts a CSV importer into `container`.
  *
@@ -78,9 +84,9 @@ export function mountCsvImporter(container, { columns, onImport, onDone, templat
         previewArea.innerHTML = `
             <p class="hint">Pratinjau ${Math.min(10, totalDataRows)} dari ${totalDataRows} baris:</p>
             <table class="table">
-                <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+                <thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
                 <tbody>
-                    ${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}
+                    ${rows.map(r => `<tr>${r.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('')}
                 </tbody>
             </table>
         `;
@@ -108,7 +114,7 @@ export function mountCsvImporter(container, { columns, onImport, onDone, templat
         } catch (err) {
             resultArea.innerHTML = `
                 <div class="alert alert-danger">
-                    ${err.message ?? 'Impor gagal'}
+                    ${escapeHtml(err.message ?? 'Impor gagal')}
                 </div>
                 <div class="alert alert-warning">
                     Jika Anda tidak yakin apakah data sudah tersimpan,
@@ -169,7 +175,7 @@ function renderResult(resultArea, result) {
                 <p class="hint" style="margin:4px 0 8px">Bagikan ke masing-masing pengguna. Mereka wajib ganti saat login pertama.</p>
                 <table class="table" style="font-size:13px">
                     <thead><tr><th>Nama</th><th>Kode Login</th><th>Password Sementara</th></tr></thead>
-                    <tbody>${newAccounts.map(a => `<tr><td>${a.full_name ?? ''}</td><td><code>${a[idCol] ?? ''}</code></td><td><code>${a.temp_password ?? ''}</code></td></tr>`).join('')}</tbody>
+                    <tbody>${newAccounts.map(a => `<tr><td>${escapeHtml(a.full_name)}</td><td><code>${escapeHtml(a[idCol])}</code></td><td><code>${escapeHtml(a.temp_password)}</code></td></tr>`).join('')}</tbody>
                 </table>
             </div>
         `;
@@ -179,7 +185,7 @@ function renderResult(resultArea, result) {
         html += `
             <table class="table">
                 <thead><tr><th>Baris</th><th>Pesan</th></tr></thead>
-                <tbody>${errors.map(e => `<tr><td>${e.row}</td><td>${e.message}</td></tr>`).join('')}</tbody>
+                <tbody>${errors.map(e => `<tr><td>${escapeHtml(e.row)}</td><td>${escapeHtml(e.message)}</td></tr>`).join('')}</tbody>
             </table>
         `;
     }
@@ -189,7 +195,7 @@ function renderResult(resultArea, result) {
             <p class="hint">Konflik jadwal (perlu ditinjau manual):</p>
             <table class="table">
                 <thead><tr><th>Baris</th><th>Pesan</th></tr></thead>
-                <tbody>${conflicts.map(c => `<tr><td>${c.row}</td><td>${c.message}</td></tr>`).join('')}</tbody>
+                <tbody>${conflicts.map(c => `<tr><td>${escapeHtml(c.row)}</td><td>${escapeHtml(c.message)}</td></tr>`).join('')}</tbody>
             </table>
         `;
     }

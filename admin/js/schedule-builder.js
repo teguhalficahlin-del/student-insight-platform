@@ -9,9 +9,9 @@
 
 import {
     supabase, fetchAllRows,
-    getSchoolConfig, getClasses, getTeacherList,
-    getTimeSlots, saveTimeSlots,
-    getScheduleTemplates, saveScheduleTemplates,
+    getSchoolConfig, getClasses,
+    getTimeSlots, saveScheduleDay,
+    getScheduleTemplates,
     applyScheduleTemplates,
     checkActiveReapplyJob, prepareReapplyJob, runReapplyBatch, finalizeReapplyJob,
     getCoreSubjectsForSchedule,
@@ -493,9 +493,6 @@ async function save() {
     statusEl.textContent = 'Menyimpan...';
 
     try {
-        // Save time slots
-        await saveTimeSlots(state.academicYear, state.semester, state.day, state.slots);
-
         // Build templates from cells (all grades, not just current view)
         // Load ALL classes for this academic year to include other grades' data
         const allClasses = await getClasses(state.academicYear, state.schoolId);
@@ -526,7 +523,11 @@ async function save() {
             });
         }
 
-        await saveScheduleTemplates(state.academicYear, state.semester, state.day, templates);
+        // Save slots and templates in one transaction so a failed template
+        // validation cannot leave the day half-updated.
+        await saveScheduleDay(
+            state.academicYear, state.semester, state.day, state.slots, templates,
+        );
 
         state.dirty = false;
         let saveMsg = `Tersimpan: ${templates.length} slot untuk hari ${DAY_LABELS[state.day]}`;

@@ -49,6 +49,11 @@ const labelEl = document.getElementById('wizard-progress-label');
 
 function showError(message) { errorEl.textContent = message; errorEl.style.display = 'block'; }
 function clearError() { errorEl.style.display = 'none'; }
+function esc(value) {
+    const el = document.createElement('span');
+    el.textContent = String(value ?? '');
+    return el.innerHTML;
+}
 
 // ─────────────────────────────────────────────────────────────
 // NAVIGATION
@@ -164,10 +169,10 @@ async function setupStep1() {
         const progTotal = [...byClass.values()].reduce((t, arr) => t + arr.length, 0);
         const classHtml = [...byClass.keys()].sort((a, b) => a.localeCompare(b, 'id')).map(kls => {
             const list = byClass.get(kls);
-            const rows = list.map(s => `<tr><td>${s.full_name}</td><td>${s.nis}</td><td>${s.student_status}</td></tr>`).join('');
+            const rows = list.map(s => `<tr><td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td><td>${esc(s.student_status)}</td></tr>`).join('');
             return `
                 <details style="margin:4px 0 4px 16px">
-                    <summary style="cursor:pointer;font-weight:600">${kls} (${list.length})</summary>
+                <summary style="cursor:pointer;font-weight:600">${esc(kls)} (${list.length})</summary>
                     <table class="table" style="margin-top:4px">
                         <thead><tr><th>Nama</th><th>NIS</th><th>Status</th></tr></thead>
                         <tbody>${rows}</tbody>
@@ -176,7 +181,7 @@ async function setupStep1() {
         }).join('');
         return `
             <details style="margin-bottom:8px">
-                <summary style="cursor:pointer;font-weight:600">${prog} (${progTotal})</summary>
+                <summary style="cursor:pointer;font-weight:600">${esc(prog)} (${progTotal})</summary>
                 ${classHtml}
             </details>`;
     }).join('');
@@ -225,11 +230,11 @@ function setupStep2() {
                 const rows = list.map(s => `
                     <tr>
                         <td style="width:36px"><input type="checkbox" class="grad-checkbox" data-student-id="${s.student_id}" checked /></td>
-                        <td>${s.full_name}</td><td>${s.nis}</td>
+                        <td>${esc(s.full_name)}</td><td>${esc(s.nis)}</td>
                     </tr>`).join('');
                 return `
                     <details style="margin:4px 0 4px 16px">
-                        <summary style="cursor:pointer;font-weight:600">${kls} (${list.length})</summary>
+                        <summary style="cursor:pointer;font-weight:600">${esc(kls)} (${list.length})</summary>
                         <table class="table" style="margin-top:4px">
                             <thead><tr><th></th><th>Nama</th><th>NIS</th></tr></thead>
                             <tbody>${rows}</tbody>
@@ -238,7 +243,7 @@ function setupStep2() {
             }).join('');
             return `
                 <details style="margin-bottom:8px">
-                    <summary style="cursor:pointer;font-weight:600">${prog} (${progTotal})</summary>
+                <summary style="cursor:pointer;font-weight:600">${esc(prog)} (${progTotal})</summary>
                     ${classHtml}
                 </details>`;
         }).join('');
@@ -277,7 +282,7 @@ function updateGraduationPreview() {
     }
     const programRows = [...byProgram.entries()]
         .sort(([a], [b]) => a.localeCompare(b, 'id'))
-        .map(([prog, n]) => `<li>${prog}: <strong>${n} siswa</strong></li>`)
+        .map(([prog, n]) => `<li>${esc(prog)}: <strong>${n} siswa</strong></li>`)
         .join('');
 
     document.getElementById('graduation-preview').innerHTML = `
@@ -320,7 +325,7 @@ async function onConfirmGraduation() {
         resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
         renderStepVisibility();
     } catch (err) {
-        resultArea.innerHTML = `<div class="alert alert-danger" style="display:block">❌ Gagal: ${err.message}</div>`;
+        resultArea.innerHTML = `<div class="alert alert-danger" style="display:block">❌ Gagal: ${esc(err.message)}</div>`;
         resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
         btn.disabled = false;
         btn.textContent = 'Konfirmasi Kelulusan';
@@ -485,7 +490,7 @@ async function setupStep3() {
             const progTotal = classList.reduce((t, c) => t + c.studentIds.length, 0);
             return `
                 <details style="margin-bottom:8px">
-                    <summary style="cursor:pointer;font-weight:600">${prog} (${progTotal} siswa)</summary>
+                    <summary style="cursor:pointer;font-weight:600">${esc(prog)} (${progTotal} siswa)</summary>
                     <table class="table" style="margin-top:4px">
                         <thead><tr><th>Kelas Asal</th><th>Jumlah</th><th>Kelas Tujuan</th></tr></thead>
                         <tbody>${rows}</tbody>
@@ -534,7 +539,7 @@ function updatePromotionPreview() {
         byProgram[c.programName] = (byProgram[c.programName] ?? 0) + c.studentIds.length;
     }
     const programRows = Object.entries(byProgram)
-        .map(([prog, n]) => `<li>${prog}: <strong>${n} siswa</strong></li>`)
+        .map(([prog, n]) => `<li>${esc(prog)}: <strong>${n} siswa</strong></li>`)
         .join('');
 
     document.getElementById('promotion-preview').innerHTML = `
@@ -619,14 +624,14 @@ function setupStep4() {
         byProgram[c.programName] = (byProgram[c.programName] ?? 0) + c.studentIds.length;
     }
     const programRows = Object.entries(byProgram)
-        .map(([prog, n]) => `<li>${prog}: <strong>${n} siswa</strong></li>`)
+        .map(([prog, n]) => `<li>${esc(prog)}: <strong>${n} siswa</strong></li>`)
         .join('');
 
     const newYear = document.getElementById('new-academic-year').value || '—';
     document.getElementById('new-year-preview').innerHTML = `
         <div class="alert alert-warning" style="display:block;margin-top:16px">
             <strong>⚠️ Periksa sebelum konfirmasi — tindakan ini tidak dapat dibatalkan.</strong><br>
-            Akan dibuka tahun ajaran <strong>${newYear}</strong> dan <strong>${totalPromo} siswa</strong> dipindahkan ke kelas barunya.
+            Akan dibuka tahun ajaran <strong>${esc(newYear)}</strong> dan <strong>${totalPromo} siswa</strong> dipindahkan ke kelas barunya.
             <ul style="margin:8px 0 0 16px;padding:0">${programRows}</ul>
         </div>`;
 }
@@ -698,11 +703,11 @@ async function onConfirmNewYear() {
         state.newYearDone     = true;
 
         btn.textContent = 'Terkonfirmasi';
-        resultArea.innerHTML = `<div class="alert alert-success" style="display:block">✅ Tahun ajaran ${newAcademicYear} semester ${newSemester} aktif. ${data.enrolled_count} siswa naik kelas.</div>`;
+        resultArea.innerHTML = `<div class="alert alert-success" style="display:block">✅ Tahun ajaran ${esc(newAcademicYear)} semester ${esc(newSemester)} aktif. ${data.enrolled_count} siswa naik kelas.</div>`;
         resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
         renderStepVisibility();
     } catch (err) {
-        resultArea.innerHTML = `<div class="alert alert-danger" style="display:block">❌ Gagal: ${err.message}</div>`;
+        resultArea.innerHTML = `<div class="alert alert-danger" style="display:block">❌ Gagal: ${esc(err.message)}</div>`;
         resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
         btn.disabled = false;
         btn.textContent = 'Konfirmasi';
@@ -724,7 +729,7 @@ function setupStep5() {
         ${notProcessedCount > 0
             ? `<p><strong>${notProcessedCount}</strong> siswa tidak diproses (kelas XII, tidak lulus, tidak ada jalur kenaikan kelas)</p>`
             : ''}
-        <p>Tahun ajaran baru aktif: <strong>${state.newAcademicYear} Semester ${state.newSemester}</strong></p>
+        <p>Tahun ajaran baru aktif: <strong>${esc(state.newAcademicYear)} Semester ${esc(state.newSemester)}</strong></p>
     `;
 }
 
@@ -751,7 +756,7 @@ async function checkSemestersClosed(config) {
         .eq('academic_year', config.current_academic_year);
     if (error) {
         document.querySelector('.wizard-panel').innerHTML = `
-            <div class="alert alert-danger">Gagal memeriksa status semester: ${error.message}</div>`;
+            <div class="alert alert-danger">Gagal memeriksa status semester: ${esc(error.message)}</div>`;
         return false;
     }
 
@@ -770,8 +775,8 @@ async function checkSemestersClosed(config) {
             <div class="alert alert-danger" style="margin:2rem;">
                 <h3 style="margin-top:0">Tidak Dapat Melanjutkan</h3>
                 <p>
-                    <strong>${missing.join(' dan ')}</strong> tahun ajaran
-                    ${config.current_academic_year} belum ditutup.
+                    <strong>${esc(missing.join(' dan '))}</strong> tahun ajaran
+                    ${esc(config.current_academic_year)} belum ditutup.
                 </p>
                 <p>
                     Tutup kedua semester terlebih dahulu melalui menu

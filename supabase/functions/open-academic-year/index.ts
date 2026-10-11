@@ -86,6 +86,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return badRequest('Field promotion_mapping wajib berupa array');
         }
 
+        // The RPC runs with service_role, so it cannot infer the caller's
+        // tenant from auth.uid(). Bind the requested config to this admin
+        // before delegating the atomic write.
+        const { data: config, error: configError } = await admin
+            .from('school_config')
+            .select('config_id, current_academic_year')
+            .eq('config_id', config_id)
+            .eq('school_id', user.school_id)
+            .maybeSingle();
+        if (configError) return internalError(configError);
+        if (!config) return forbidden('Konfigurasi sekolah tidak cocok dengan akun ini');
+        if (config.current_academic_year !== old_academic_year) {
+            return badRequest('Tahun ajaran aktif berubah. Muat ulang wizard sebelum melanjutkan.');
+        }
+
         // ── Call fn_buka_tahun_ajaran via rpc() ──────────────────
         const { data, error: rpcError } = await admin.rpc('fn_buka_tahun_ajaran', {
             p_config_id:         config_id,

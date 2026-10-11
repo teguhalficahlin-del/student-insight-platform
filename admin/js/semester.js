@@ -17,6 +17,12 @@
 
 import { supabase, getSchoolConfig, getCurrentUserRow } from './api.js';
 
+function escapeHtml(value) {
+    const el = document.createElement('span');
+    el.textContent = String(value ?? '');
+    return el.innerHTML;
+}
+
 // ─────────────────────────────────────────────────────────────
 // ENTRY POINT
 // ─────────────────────────────────────────────────────────────
@@ -31,7 +37,7 @@ export async function mountSemesterPanel(container) {
     } catch (err) {
         container.innerHTML = `
             <h3>Tutup Semester</h3>
-            <div class="alert alert-danger">Gagal memuat data: ${err.message}</div>
+            <div class="alert alert-danger">Gagal memuat data: ${escapeHtml(err.message)}</div>
         `;
     }
 }
@@ -110,7 +116,7 @@ async function renderByState(container, period, config) {
     } catch (err) {
         container.innerHTML = `
             <h3>Tutup Semester</h3>
-            <div class="alert alert-danger">Gagal memuat ringkasan: ${err.message}</div>
+            <div class="alert alert-danger">Gagal memuat ringkasan: ${escapeHtml(err.message)}</div>
         `;
     }
 }
@@ -197,7 +203,7 @@ async function onCloseClick(container, period, config, summary) {
         renderByState(container, newPeriod, newConfig);
 
     } catch (err) {
-        resultArea.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        resultArea.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`;
         btn.disabled    = false;
         btn.textContent = `Tutup Semester ${period.semester} Sekarang`;
     }
@@ -339,7 +345,7 @@ async function onOpenNextSemester(container, closedPeriod, config) {
         `;
 
     } catch (err) {
-        resultArea.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+        resultArea.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`;
         btn.disabled    = false;
         btn.textContent = 'Buka Semester 2 Sekarang';
     }

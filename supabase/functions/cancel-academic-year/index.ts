@@ -38,6 +38,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return badRequest('Field config_id wajib diisi (string)');
         }
 
+        // The rollback RPC is executed with service_role. Validate the
+        // caller's tenant here before the privileged RPC is reached.
+        const { data: config, error: configError } = await admin
+            .from('school_config')
+            .select('config_id')
+            .eq('config_id', config_id)
+            .eq('school_id', user.school_id)
+            .maybeSingle();
+        if (configError) return internalError(configError);
+        if (!config) return forbidden('Konfigurasi sekolah tidak cocok dengan akun ini');
+
         const { data, error } = await admin.rpc('fn_batalkan_tahun_ajaran', { p_config_id: config_id });
         if (error) {
             console.error('[cancel-academic-year] fn_batalkan_tahun_ajaran failed:', error);

@@ -165,7 +165,7 @@ async function navigateToPanel(panelId, { replace = false } = {}) {
     try {
         await renderer(panelId);
     } catch (err) {
-        panelContent.innerHTML = `<p class="hint" style="color:var(--color-danger,red)">Gagal memuat panel: ${err.message}</p>`;
+        panelContent.innerHTML = `<p class="hint" style="color:var(--color-danger,red)">Gagal memuat panel: ${esc(err.message)}</p>`;
     } finally {
         _panelRendering = false;
     }
@@ -563,18 +563,7 @@ function renderSharePortalPanel() {
 // ─────────────────────────────────────────────────────────────
 
 async function renderSetupPanel() {
-    const [
-        { count: programCount },
-        { count: classCount },
-        { count: stafCount },
-        { count: siswaCount },
-        { count: alumniCount },
-        { count: dudiCount },
-        { count: stakeholderCount },
-        { count: tuCount },
-        { count: jadwalCount },
-        { count: ortuCount },
-    ] = await Promise.all([
+    const countResults = await Promise.all([
         supabase.from('programs').select('*', { count: 'exact', head: true }),
         supabase.from('classes').select('*', { count: 'exact', head: true }),
         supabase.from('v_users_staff_directory').select('*', { count: 'exact', head: true }).not('role_type', 'in', '("SISWA","ORTU","DUDI","ADMINISTRATIVE","STAKEHOLDER")').is('deleted_at', null),
@@ -586,6 +575,14 @@ async function renderSetupPanel() {
         supabase.from('schedule_templates').select('*', { count: 'exact', head: true }),
         supabase.from('users').select('*', { count: 'exact', head: true }).eq('role_type', 'ORTU').is('deleted_at', null),
     ]);
+    const countError = countResults.find(r => r.error)?.error;
+    if (countError) throw countError;
+    const [
+        { count: programCount }, { count: classCount }, { count: stafCount },
+        { count: siswaCount }, { count: alumniCount }, { count: dudiCount },
+        { count: stakeholderCount }, { count: tuCount }, { count: jadwalCount },
+        { count: ortuCount },
+    ] = countResults;
 
     const base = window.location.href.replace(/\/admin\/.*$/, '');
     const slug = schoolSlug ? encodeURIComponent(schoolSlug) : '';
@@ -778,7 +775,7 @@ function renderGroupedTable(items, groupOf, headers, rowOf) {
         const list = groups.get(g);
         return `
             <details style="margin-bottom:8px">
-                <summary style="cursor:pointer;font-weight:600">${g} (${list.length})</summary>
+                <summary style="cursor:pointer;font-weight:600">${esc(g)} (${list.length})</summary>
                 <table class="table" style="margin-top:4px">
                     <thead><tr>${head}</tr></thead>
                     <tbody>${list.map(rowOf).join('')}</tbody>
@@ -848,7 +845,7 @@ function renderNestedYearProgramClass(rows, headers, rowOf) {
                 const list = byClass.get(kls);
                 return `
                     <details style="margin:4px 0 4px 32px">
-                        <summary style="cursor:pointer;font-weight:600">${kls} (${list.length})</summary>
+                        <summary style="cursor:pointer;font-weight:600">${esc(kls)} (${list.length})</summary>
                         <table class="table" style="margin-top:4px">
                             <thead><tr>${head}</tr></thead>
                             <tbody>${list.map(rowOf).join('')}</tbody>
@@ -857,14 +854,14 @@ function renderNestedYearProgramClass(rows, headers, rowOf) {
             }).join('');
             return `
                 <details style="margin:4px 0 4px 16px">
-                    <summary style="cursor:pointer;font-weight:600">${prog} (${totalOf(byClass)})</summary>
+                    <summary style="cursor:pointer;font-weight:600">${esc(prog)} (${totalOf(byClass)})</summary>
                     <div style="padding:2px 0">${classHtml}</div>
                 </details>`;
         }).join('');
 
         return `
             <details style="margin-bottom:8px">
-                <summary style="cursor:pointer;font-weight:600">Lulusan ${year} (${yearTotal})</summary>
+                <summary style="cursor:pointer;font-weight:600">Lulusan ${esc(year)} (${yearTotal})</summary>
                 <div style="padding:2px 0">${progHtml}</div>
             </details>`;
     }).join('');
@@ -876,7 +873,7 @@ async function renderProgramsPanel() {
         <h3>Program Keahlian (${programs.length})</h3>
         <table class="table">
             <thead><tr><th>Kode</th><th>Nama</th></tr></thead>
-            <tbody>${programs.map(p => `<tr><td>${p.code}</td><td>${p.name}</td></tr>`).join('')}</tbody>
+            <tbody>${programs.map(p => `<tr><td>${esc(p.code)}</td><td>${esc(p.name)}</td></tr>`).join('')}</tbody>
         </table>
     `;
 }
@@ -888,7 +885,7 @@ async function renderClassesPanel() {
         classes,
         c => pn.get(c.program_id) ?? 'Tanpa Program',
         ['Nama Kelas', 'Tingkat'],
-        c => `<tr><td>${c.name}</td><td>${c.grade_level}</td></tr>`,
+        c => `<tr><td>${esc(c.name)}</td><td>${esc(c.grade_level)}</td></tr>`,
     );
     panelContent.innerHTML = `
         <h3>Kelas & Rombel (${classes.length})</h3>
@@ -1188,7 +1185,7 @@ async function renderStaffPanel() {
             warnRow.className = 'staff-warn-row';
             warnRow.innerHTML = `
                 <td colspan="5" style="padding:10px 12px;background:#fef9c3;border-left:3px solid #ca8a04">
-                    <strong style="color:#92400e">⚠ ${nama} masih punya ${warnParts.join(' dan ')}.</strong><br>
+                    <strong style="color:#92400e">⚠ ${esc(nama)} masih punya ${warnParts.join(' dan ')}.</strong><br>
                     <span style="font-size:12px;color:#78350f">
                         Jika dinonaktifkan, semua template jadwal dan sesi mulai <em>besok</em> akan dihapus otomatis.
                         Sesi hari ini dan data absensi yang sudah tercatat <em>tidak</em> ikut terhapus.
@@ -1233,12 +1230,12 @@ async function renderStaffPanel() {
 
 async function renderStudentsPanel() {
     const [noAccount, config] = await Promise.all([
-        countStudentsWithoutAccount().catch(() => 0),
+        countStudentsWithoutAccount(),
         getSchoolConfig(),
     ]);
 
     // Fetch semua kelas + enrollment tahun ajaran aktif sekaligus
-    const [{ data: allClasses }, enrollments, pendingPwUsers, programs] = await Promise.all([
+    const [classesResult, enrollments, pendingPwUsers, programs] = await Promise.all([
         supabase.from('classes').select('class_id, name, grade_level, program_id')
             .order('grade_level').order('name'),
         fetchAllRows('class_enrollments', q => q
@@ -1249,6 +1246,8 @@ async function renderStudentsPanel() {
         fetchAllRows('users', q => q.select('user_id').eq('role_type', 'SISWA').eq('must_change_password', true)),
         getPrograms(),
     ]);
+    if (classesResult.error) throw classesResult.error;
+    const allClasses = classesResult.data ?? [];
     const programNameById = new Map(
         (programs ?? []).map(p => [p.program_id, p.name])
     );
@@ -1363,9 +1362,9 @@ async function runProvisionStudents() {
         statusEl.innerHTML = `✓ Selesai — <strong>${created}</strong> akun dibuat`
             + (linked ? `, ${linked} ditautkan` : '')
             + (failed ? `, <span style="color:var(--color-danger,#dc2626)">${failed} gagal</span>` : '')
-            + (firstErrors.length ? `<br><span class="hint">${firstErrors.join('<br>')}</span>` : '');
+            + (firstErrors.length ? `<br><span class="hint">${firstErrors.map(esc).join('<br>')}</span>` : '');
     } catch (err) {
-        statusEl.innerHTML = `<span style="color:var(--color-danger,#dc2626)">✗ ${err.message}</span>`;
+        statusEl.innerHTML = `<span style="color:var(--color-danger,#dc2626)">✗ ${esc(err.message)}</span>`;
     } finally {
         btn.disabled = false;
         btn.textContent = 'Buatkan Akun Siswa';
@@ -1803,7 +1802,7 @@ async function renderAlumniPanel() {
                 });
             }
         } catch (err) {
-            resultDiv.innerHTML = `<p style="color:var(--color-danger,#dc2626)">${err.message}</p>`;
+            resultDiv.innerHTML = `<p style="color:var(--color-danger,#dc2626)">${esc(err.message)}</p>`;
         } finally {
             btn.disabled = false; btn.textContent = 'Cek Kandidat Hapus…';
         }
@@ -1995,11 +1994,13 @@ async function renderJadwalPanel() {
     const config = await getSchoolConfig();
     const ay  = config?.current_academic_year ?? '';
     const sem = config?.current_semester ?? 1;
-    const [allClasses, teachers] = await Promise.all([
+    const [allClasses, teacherResult] = await Promise.all([
         getClasses(ay),
         supabase.from('v_users_staff_directory').select('user_id, teacher_code')
-            .not('teacher_code', 'is', null).then(r => r.data ?? []).catch(() => []),
+            .not('teacher_code', 'is', null),
     ]);
+    if (teacherResult.error) throw teacherResult.error;
+    const teachers = teacherResult.data ?? [];
     const teacherIdMap = new Map(teachers.map(t => [t.user_id, t.teacher_code]));
 
     const wizardUrl = schoolSlug ? `wizard.html?school=${encodeURIComponent(schoolSlug)}` : 'wizard.html';
@@ -2191,8 +2192,16 @@ async function renderActivityLogPanel() {
             .limit(50),
     ]);
 
-    const caseEvents = evRes.status  === 'fulfilled' ? (evRes.value.data  ?? []) : [];
-    const obsRows    = obsRes.status === 'fulfilled' ? (obsRes.value.data ?? []) : [];
+    const errors = [evRes, obsRes].flatMap(r => {
+        if (r.status === 'rejected') return [r.reason?.message ?? 'Gagal membaca sumber log'];
+        return r.value?.error ? [r.value.error.message ?? 'Gagal membaca sumber log'] : [];
+    });
+    if (errors.length > 0) {
+        panelContent.innerHTML = `<div class="alert alert-danger">Gagal memuat log aktivitas: ${esc(errors.join('; '))}</div>`;
+        return;
+    }
+    const caseEvents = evRes.value.data ?? [];
+    const obsRows    = obsRes.value.data ?? [];
 
     const caseHtml = caseEvents.length === 0
         ? '<p class="hint">Belum ada aktivitas kasus.</p>'
@@ -2201,10 +2210,10 @@ async function renderActivityLogPanel() {
             <tbody>${caseEvents.map(e => `
                 <tr>
                     <td style="white-space:nowrap">${fmtTs(e.created_at)}</td>
-                    <td>${EVENT_LABELS[e.event_type] ?? e.event_type}</td>
-                    <td>${e.coaching_case?.title ?? '—'}</td>
-                    <td>${e.coaching_case?.student?.full_name ?? '—'}</td>
-                    <td>${e.author?.full_name ?? '—'}</td>
+                    <td>${esc(EVENT_LABELS[e.event_type] ?? e.event_type)}</td>
+                    <td>${esc(e.coaching_case?.title ?? '—')}</td>
+                    <td>${esc(e.coaching_case?.student?.full_name ?? '—')}</td>
+                    <td>${esc(e.author?.full_name ?? '—')}</td>
                 </tr>`).join('')}
             </tbody>
            </table>`;
@@ -2216,7 +2225,7 @@ async function renderActivityLogPanel() {
             <tbody>${obsRows.map(o => `
                 <tr style="${o.is_void ? 'opacity:.55' : ''}">
                     <td style="white-space:nowrap">${fmtTs(o.created_at)}</td>
-                    <td${o.is_void ? ' style="text-decoration:line-through"' : ''}>${DIMENSION_LABELS_ADMIN[o.dimension] ?? o.dimension}</td>
+                    <td${o.is_void ? ' style="text-decoration:line-through"' : ''}>${esc(DIMENSION_LABELS_ADMIN[o.dimension] ?? o.dimension)}</td>
                     <td>${o.sentiment === 'POSITIF' ? '✅ Positif' : '⚠ Perlu Perhatian'}</td>
                     <td>${esc(o.student?.full_name ?? '—')}</td>
                     <td>${esc(o.author?.full_name ?? '—')}</td>

@@ -422,6 +422,29 @@ export async function saveScheduleTemplates(academicYear, semester, dayOfWeek, t
     if (error) throw error;
 }
 
+export async function saveScheduleDay(academicYear, semester, dayOfWeek, slots, templates) {
+    const { error } = await supabase.rpc('fn_save_schedule_day', {
+        p_academic_year: academicYear,
+        p_semester:      semester,
+        p_day_of_week:   dayOfWeek,
+        p_slots:         JSON.stringify(slots.map((s, i) => ({
+            slot_number: i + 1,
+            start_time:  s.start_time,
+            end_time:    s.end_time,
+            is_break:    s.is_break ?? false,
+            break_label: s.break_label ?? null,
+        }))),
+        p_templates: JSON.stringify(templates.map(t => ({
+            start_time:   t.start_time,
+            end_time:     t.end_time,
+            class_id:     t.class_id,
+            teacher_id:   t.teacher_id,
+            subject_label: t.subject_label || null,
+        }))),
+    });
+    if (error) throw error;
+}
+
 export async function bulkSaveTimeSlots(schoolId, academicYear, semester, slots) {
     const { error: delErr } = await supabase
         .from('schedule_time_slots')
@@ -511,36 +534,13 @@ export async function addClass({ name, program_id, academic_year, grade_level })
 // ─────────────────────────────────────────────────────────────
 
 export async function updateProgram(programId, { code, name }, oldCode) {
-    // Ambil kode saat ini dari DB (lebih reliable daripada oldCode dari UI)
-    const { data: currentProg } = await supabase.from('programs')
-        .select('code').eq('program_id', programId).single();
-    const dbOldCode = currentProg?.code;
-
-    const { error } = await supabase.from('programs')
-        .update({ code, name }).eq('program_id', programId);
+    const { data, error } = await supabase.rpc('fn_update_program', {
+        p_program_id: programId,
+        p_code:       code,
+        p_name:       name,
+    });
     if (error) throw new Error(error.message);
-
-    // Rename kelas: coba kode dari DB, lalu kode dari UI sebagai fallback
-    const codesToTry = [...new Set([dbOldCode, oldCode].filter(Boolean))];
-    if (codesToTry.length === 0 || codesToTry.every(c => c === code)) return [];
-
-    const { data: classes } = await supabase.from('classes')
-        .select('class_id, name')
-        .eq('program_id', programId);
-
-    const renames = [];
-    for (const c of (classes ?? [])) {
-        for (const tryCode of codesToTry) {
-            if (tryCode !== code && c.name.includes(tryCode)) {
-                const newName = c.name.replace(new RegExp(tryCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), code);
-                const { error: renameErr } = await supabase.from('classes')
-                    .update({ name: newName }).eq('class_id', c.class_id);
-                if (!renameErr) renames.push({ from: c.name, to: newName });
-                break;
-            }
-        }
-    }
-    return renames;
+    return data?.renames ?? [];
 }
 
 export async function updateClass(classId, { name }) {

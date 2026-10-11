@@ -30,6 +30,12 @@ import { mountCsvImporter } from './import.js';
 const STATE_KEY = 'smk_setup_wizard_state';
 const TOTAL_STEPS = 11;
 
+function escapeHtml(value) {
+    const el = document.createElement('span');
+    el.textContent = String(value ?? '');
+    return el.innerHTML;
+}
+
 const defaultState = () => ({
     currentStep: 1,
     maxReachedStep: 1,
@@ -237,7 +243,7 @@ async function renderClassTable() {
     const programById = new Map(programsCache.map(p => [p.program_id, p.name]));
     const tbody = document.querySelector('#class-table tbody');
     tbody.innerHTML = classesCache.map(c => `
-        <tr><td>${c.name}</td><td>${programById.get(c.program_id) ?? '—'}</td><td>${c.grade_level}</td></tr>
+        <tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(programById.get(c.program_id) ?? '—')}</td><td>${escapeHtml(c.grade_level)}</td></tr>
     `).join('') || '<tr><td colspan="3" class="hint">Belum ada kelas</td></tr>';
 }
 
@@ -490,7 +496,7 @@ async function setupStep11() {
     classesCache = await getClasses();
     programsCache = await getPrograms();
     document.getElementById('final-summary').innerHTML = `
-        <p><strong>Sekolah:</strong> ${state.schoolName} — Tahun Ajaran ${state.academicYear}, Semester ${state.semester}</p>
+        <p><strong>Sekolah:</strong> ${escapeHtml(state.schoolName)} — Tahun Ajaran ${escapeHtml(state.academicYear)}, Semester ${escapeHtml(state.semester)}</p>
         <p><strong>Program Keahlian:</strong> ${programsCache.length} program</p>
         <p><strong>Kelas:</strong> ${classesCache.length} kelas</p>
         <p><strong>Impor Kepsek:</strong> <span class="badge ${state.stepDone[4] ? 'badge-success' : 'badge-muted'}">${state.stepDone[4] ? 'Sudah diimpor' : 'Belum/dilewati'}</span></p>
