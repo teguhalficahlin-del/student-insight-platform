@@ -32,7 +32,7 @@ function _slugToAbbr(slug) {
 
 // Buat data-URI SVG ikon style K: mortarboard + SMK + SIP serif
 function _makeIconDataURI(abbr, color) {
-    var bg  = color || '#1d4ed8';
+    var bg  = /^#[0-9a-fA-F]{6}$/.test(color || '') ? color : '#1d4ed8';
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">' +
         '<rect width="512" height="512" rx="96" fill="' + bg + '"/>' +
         '<polygon points="256,112 340,152 256,192 172,152" fill="rgba(255,255,255,0.85)"/>' +
@@ -52,7 +52,9 @@ function _injectDynamicManifest(slug, branding = null) {
     const name      = branding?.name || slug.toUpperCase();
     // "SMKN 1 Ujungbatu" → "SMKN1 Ujungbatu" sehingga Android wrap jadi 2 baris
     const shortName = name.replace(/\b(SMK[A-Za-z]*)\s+(\d)/i, '$1$2');
-    const color     = branding?.primary_color || '#1a56db';
+    const color     = /^#[0-9a-fA-F]{6}$/.test(branding?.primary_color || '')
+        ? branding.primary_color
+        : '#1a56db';
     const iconURI   = _makeIconDataURI('SIP', color);
     const dynIcon   = { src: iconURI, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' };
     const icons     = branding?.logo_url
@@ -172,9 +174,14 @@ export async function applyBrandingById(schoolId, supabaseClient) {
 
 function _applyToDom(branding) {
     const root = document.documentElement;
-    if (branding.primary_color) {
-        root.style.setProperty('--color-primary', branding.primary_color);
-        const dark = branding.secondary_color || adjustColor(branding.primary_color, -30);
+    const primary = /^#[0-9a-fA-F]{6}$/.test(branding.primary_color || '')
+        ? branding.primary_color
+        : null;
+    if (primary) {
+        root.style.setProperty('--color-primary', primary);
+        const dark = /^#[0-9a-fA-F]{6}$/.test(branding.secondary_color || '')
+            ? branding.secondary_color
+            : adjustColor(primary, -30);
         root.style.setProperty('--color-primary-dark', dark);
     }
     document.querySelectorAll('[data-brand="school-name"]').forEach(el => {

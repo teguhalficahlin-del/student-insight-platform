@@ -93,6 +93,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
             return json({ error: 'phone hanya boleh angka, +, -, dan spasi; panjang 6-20' }, 400);
         }
 
+        const primaryColor = primary_color == null || String(primary_color).trim() === ''
+            ? '#1a56db'
+            : String(primary_color).trim();
+        const secondaryColor = secondary_color == null || String(secondary_color).trim() === ''
+            ? '#1e40af'
+            : String(secondary_color).trim();
+        if (!/^#[0-9A-Fa-f]{6}$/.test(primaryColor) || !/^#[0-9A-Fa-f]{6}$/.test(secondaryColor)) {
+            return json({ error: 'Warna primer dan sekunder harus berformat hex #RRGGBB' }, 400);
+        }
+
         const admin = getAdminClient();
 
         // ── 1. Idempotency: cek NPSN sudah terdaftar ─────────
@@ -119,8 +129,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 phone:           phone           || null,
                 slug:            resolvedSlug,
                 logo_url:        logo_url        || null,
-                primary_color:   primary_color   || '#1a56db',
-                secondary_color: secondary_color || '#1e40af',
+                primary_color:   primaryColor,
+                secondary_color: secondaryColor,
             })
             .select('school_id')
             .single();

@@ -53,7 +53,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
                 .from('users')
                 .select('school_id, full_name, login_identifier')
                 .eq('role_type', 'ADMINISTRATIVE')
-                .eq('is_active', true),
+                .eq('is_active', true)
+                .is('deleted_at', null),
 
             // Health: hitung jabatan singleton + total staf per sekolah
             // Satu query GROUP BY — tidak ada N+1
@@ -66,30 +67,43 @@ Deno.serve(async (req: Request): Promise<Response> => {
             // (punya minimal 1 baris di login_devices = pernah login)
             admin
                 .from('users')
-                .select('school_id, role_type, login_devices!inner(user_id)')
-                .in('role_type', ['GURU','WALI_KELAS','BK','WAKA_KURIKULUM','WAKA_HUMAS','WAKA_KESISWAAN','KEPSEK','KAPRODI','TU','ADMINISTRATIVE','SISWA','ORTU','DUDI','STAKEHOLDER']),
+                .select('user_id, school_id, role_type, login_devices!inner(user_id)')
+                .in('role_type', ['GURU','WALI_KELAS','BK','WAKA_KURIKULUM','WAKA_HUMAS','WAKA_KESISWAAN','KEPSEK','KAPRODI','TU','ADMINISTRATIVE','SISWA','ORTU','DUDI','STAKEHOLDER'])
+                .eq('is_active', true)
+                .is('deleted_at', null),
         ]);
 
-        if (schoolsRes.error) throw schoolsRes.error;
+        for (const result of [schoolsRes, adminsRes, staffHealthRes, studentHealthRes, userCountsRes]) {
+            if (result.error) throw result.error;
+        }
 
         type AdminRow    = { school_id: string; full_name: string; login_identifier: string | null };
         type StaffHealth = { school_id: string; kepsek_count: number; waka_kurikulum_count: number; waka_kesiswaan_count: number; waka_humas_count: number; staff_count: number };
         type StudentHealth = { school_id: string; student_count: number; provisioned_count: number };
-        type UserRow    = { school_id: string; role_type: string; login_devices: unknown[] };
+        type UserRow    = { user_id: string; school_id: string; role_type: string; login_devices: unknown[] };
 
-        // Agregasi jumlah pengguna per role group per sekolah
+        // Agregasi jumlah pengguna unik per role group per sekolah.
+        // login_devices adalah relasi 1:N; gunakan user_id sebagai kunci agar
+        // beberapa perangkat tidak menggandakan angka health dashboard.
         const GURU_ROLES = new Set(['GURU','WALI_KELAS','BK','WAKA_KURIKULUM','WAKA_HUMAS','WAKA_KESISWAAN','KEPSEK','KAPRODI','TU','ADMINISTRATIVE']);
-        const userCountsBySchool: Record<string, { guru: number; siswa: number; ortu: number; dudi: number; stakeholder: number }> = {};
+        type UserGroup = 'guru' | 'siswa' | 'ortu' | 'dudi' | 'stakeholder';
+        const userIdsBySchool: Record<string, Record<UserGroup, Set<string>>> = {};
         for (const u of ((userCountsRes.data ?? []) as UserRow[])) {
-            if (!userCountsBySchool[u.school_id]) {
-                userCountsBySchool[u.school_id] = { guru: 0, siswa: 0, ortu: 0, dudi: 0, stakeholder: 0 };
+            const group: UserGroup | null = GURU_ROLES.has(u.role_type)
+                ? 'guru'
+                : u.role_type === 'SISWA' ? 'siswa'
+                : u.role_type === 'ORTU' ? 'ortu'
+                : u.role_type === 'DUDI' ? 'dudi'
+                : u.role_type === 'STAKEHOLDER' ? 'stakeholder'
+                : null;
+            if (!group) continue;
+            if (!userIdsBySchool[u.school_id]) {
+                userIdsBySchool[u.school_id] = {
+                    guru: new Set(), siswa: new Set(), ortu: new Set(),
+                    dudi: new Set(), stakeholder: new Set(),
+                };
             }
-            const g = userCountsBySchool[u.school_id];
-            if (GURU_ROLES.has(u.role_type))    g.guru++;
-            else if (u.role_type === 'SISWA')   g.siswa++;
-            else if (u.role_type === 'ORTU')    g.ortu++;
-            else if (u.role_type === 'DUDI')    g.dudi++;
-            else if (u.role_type === 'STAKEHOLDER') g.stakeholder++;
+            userIdsBySchool[u.school_id][group].add(u.user_id);
         }
 
         const adminBySchool = Object.fromEntries(
@@ -105,7 +119,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const result = ((schoolsRes.data ?? []) as { school_id: string; [key: string]: unknown }[]).map(s => {
             const sh = staffBySchool[s.school_id];
             const st = studentBySchool[s.school_id];
-            const uc = userCountsBySchool[s.school_id] ?? { guru: 0, siswa: 0, ortu: 0, dudi: 0, stakeholder: 0 };
+            const ids = userIdsBySchool[s.school_id];
+            const uc = ids
+                ? {
+                    guru: ids.guru.size, siswa: ids.siswa.size, ortu: ids.ortu.size,
+                    dudi: ids.dudi.size, stakeholder: ids.stakeholder.size,
+                }
+                : { guru: 0, siswa: 0, ortu: 0, dudi: 0, stakeholder: 0 };
             return {
                 ...s,
                 has_admin_account:        !!adminBySchool[s.school_id],

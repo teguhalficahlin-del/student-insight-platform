@@ -51,24 +51,31 @@ Deno.serve(async (req: Request): Promise<Response> => {
             .eq('school_id', school_id)
             .eq('role_type', 'ADMINISTRATIVE')
             .eq('is_active', true)
+            .is('deleted_at', null)
             .maybeSingle();
 
         if (userErr) throw userErr;
         if (!user) return json({ error: 'Akun admin tidak ditemukan untuk sekolah ini' }, 404);
 
-        // 2. Generate password baru & update via Auth Admin API
+        // 2. Tandai wajib ganti password terlebih dahulu. Jika update ini gagal,
+        // jangan mengganti password Auth tanpa policy flag yang menyertainya.
         const newPassword = randomPassword();
+        const { data: flagRow, error: flagErr } = await admin
+            .from('users')
+            .update({ must_change_password: true })
+            .eq('auth_user_id', user.auth_user_id)
+            .eq('school_id', school_id)
+            .select('user_id')
+            .maybeSingle();
+        if (flagErr) throw flagErr;
+        if (!flagRow) throw new Error('Akun admin tidak ditemukan saat mengaktifkan kewajiban ganti password');
+
+        // 3. Ganti password Auth setelah flag policy berhasil disimpan.
         const { error: updateErr } = await admin.auth.admin.updateUserById(
             user.auth_user_id,
             { password: newPassword },
         );
         if (updateErr) throw updateErr;
-
-        // 3. Set must_change_password supaya admin wajib ganti saat login berikutnya
-        await admin
-            .from('users')
-            .update({ must_change_password: true })
-            .eq('auth_user_id', user.auth_user_id);
 
         return json({
             success:          true,
