@@ -26,6 +26,7 @@ import {
     markNotificationsRead,
     getMyChildren,
     getForumSekolahPosts, getForumSekolahSentPosts, addForumSekolahAck, createParentForumPost,
+    getForumPostComments, addForumPostComment,
     getChildLateArrivals,
     getChildExits,
 } from './api.js';
@@ -94,6 +95,7 @@ let currentClassId = null;
 let tabLoaded = { pkl:false, schedule:false, attendance:false,
                   observations:false, cases:false, forum:false, nilai:false };
 let _loadChildAbort = null;
+let _forumDetailToken = 0;
 
 const STATUS_LABELS = {
     HADIR:       'Hadir',
@@ -141,7 +143,7 @@ async function init() {
         applyBrandingById(currentUser.school_id, supabase),
         checkMustChangePassword(supabase, currentUser),
         initLoginGuard(supabase, currentUser),
-        fetchChildren(currentUser.user_id).then(c => { children = c; }).catch(err => {
+        fetchChildren(currentUser.user_id, currentUser.school_id).then(c => { children = c; }).catch(err => {
             loadingEl.textContent = 'Gagal memuat data anak.';
             throw err;
         }),
@@ -224,30 +226,33 @@ async function showTab(sectionId, signal = null, { replace = false, noHistory = 
     // Update tombol aktif
     tabBtns.forEach(b => b.classList.toggle('active',
         b.dataset.tab === sectionId));
-    // Lazy load — hanya load sekali per anak
+    // Lazy load — hanya menandai selesai jika request benar-benar berhasil.
     const key = getTabKey(sectionId);
     if (!key || tabLoaded[key]) return;
     if (signal?.aborted) return;
-    tabLoaded[key] = true;
     const idx   = Number(selectChild.value);
     const child = children[idx];
     if (!child) return;
-    if (key === 'pkl')          await loadPkl(child.student_id);
+    let loaded = false;
+    if (key === 'pkl')          loaded = await loadPkl(child.student_id, signal);
     if (key === 'schedule') {
         currentClassId = child.class_id;
-        await loadSchedule(child.class_id);
+        loaded = await loadSchedule(child.class_id, signal);
     }
     if (key === 'attendance') {
-        await loadAttendance(child.student_id);
-        await loadLateArrivals(child.student_id);
-        await loadExits(child.student_id);
+        const attendance = await loadAttendance(child.student_id, signal);
+        const late       = await loadLateArrivals(child.student_id, signal);
+        const exits      = await loadExits(child.student_id, signal);
+        loaded = attendance && late && exits;
     }
     if (key === 'observations') {
-        await loadObservations(child.student_id);
-        await loadCases(child.student_id);
+        const observations = await loadObservations(child.student_id, signal);
+        const cases        = await loadCases(child.student_id, signal);
+        loaded = observations && cases;
     }
-    if (key === 'forum')         await initForumSection();
-    if (key === 'nilai')         await initNilaiTab(child.student_id);
+    if (key === 'forum')         loaded = await initForumSection(signal);
+    if (key === 'nilai')         loaded = await initNilaiTab(child.student_id, signal);
+    if (!signal?.aborted) tabLoaded[key] = loaded;
 }
 
 const STATUS_STUDENT_LABEL = { AKTIF: 'Aktif', PKL: 'Sedang PKL', LULUS: 'Lulus', KELUAR: 'Tidak aktif' };
@@ -294,21 +299,22 @@ async function loadChildData(index) {
                      :                  'section-schedule';
     await showTab(defaultTab, signal, { replace: true });
     if (signal.aborted) return;
-    _loadChildAbort = null;
+    if (_loadChildAbort?.signal === signal) _loadChildAbort = null;
 }
 
-async function loadSchedule(classId) {
+async function loadSchedule(classId, signal = null) {
     const contentEl = document.getElementById('sched-content');
     contentEl.innerHTML = '<p class="hint">Memuat jadwal…</p>';
     if (!classId) {
         contentEl.innerHTML = '<p class="hint">Anak belum terdaftar di kelas.</p>';
-        return;
+        return true;
     }
     const date     = localDateStr();
     const label    = new Date(date + 'T00:00:00')
         .toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     try {
         const rows = await fetchSchedule(classId, date, currentUser.school_id);
+        if (signal?.aborted) return false;
         const sesiCount = rows.length;
         const tableHtml = sesiCount === 0
             ? '<p class="hint" style="margin:8px 0 4px">Tidak ada jadwal pada hari ini.</p>'
@@ -332,26 +338,30 @@ async function loadSchedule(classId) {
                 </summary>
                 <div style="padding:0 12px 8px">${tableHtml}</div>
             </details>`;
+        return true;
     } catch (err) {
+        if (signal?.aborted) return false;
         contentEl.innerHTML = `<div class="status-err">Gagal memuat jadwal. ${esc(fe(err))}</div>`;
+        return false;
     }
 }
 
-async function loadWeekSchedule(classId) {
+async function loadWeekSchedule(classId, signal = null) {
     const contentEl = document.getElementById('sched-week-content');
     contentEl.innerHTML = '<p class="hint">Memuat jadwal minggu ini…</p>';
     if (!classId) {
         contentEl.innerHTML = '<p class="hint">Anak belum terdaftar di kelas.</p>';
-        return;
+        return true;
     }
     try {
         const results  = await fetchWeekSchedule(classId, currentUser.school_id);
+        if (signal?.aborted) return false;
         const todayStr = localDateStr();
         const DAY_NAMES = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
         const hasAny = results.some(r => r.rows.length > 0);
         if (!hasAny) {
             contentEl.innerHTML = '<p class="hint">Tidak ada jadwal pelajaran minggu ini.</p>';
-            return;
+            return true;
         }
         contentEl.innerHTML = results.map((r, idx) => {
             const label     = `${DAY_NAMES[idx]}, ${new Date(r.date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`;
@@ -380,17 +390,21 @@ async function loadWeekSchedule(classId) {
                     <div style="padding:0 12px 8px">${tableHtml}</div>
                 </details>`;
         }).join('');
+        return true;
     } catch (err) {
+        if (signal?.aborted) return false;
         contentEl.innerHTML = `<div class="status-err">Gagal memuat jadwal. ${esc(fe(err))}</div>`;
+        return false;
     }
 }
 
-async function loadAttendance(studentId) {
+async function loadAttendance(studentId, signal = null) {
     attTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--color-text-muted)">Memuat...</td></tr>';
     attEmpty.style.display = 'none';
 
     try {
         const rows = await fetchAttendance(studentId, filterStart.value, filterEnd.value);
+        if (signal?.aborted) return false;
 
         // Card: hitung per blok (satu pertemuan = satu kejadian)
         const counts = { HADIR: 0, ALPA: 0, IZIN: 0, SAKIT: 0 };
@@ -420,7 +434,7 @@ async function loadAttendance(studentId) {
         if (rows.length === 0) {
             attTbody.innerHTML = '';
             attEmpty.style.display = 'block';
-            return;
+            return true;
         }
 
         const STATUS_BADGE_MAP = {
@@ -443,8 +457,11 @@ async function loadAttendance(studentId) {
                 </span></td>
                 <td>${esc(block.slots[0]?.notes || '—')}</td>
             </tr>`).join('');
+        return true;
     } catch (err) {
+        if (signal?.aborted) return false;
         attTbody.innerHTML = `<tr><td colspan="6" class="hint">Gagal memuat data. ${esc(fe(err))}</td></tr>`;
+        return false;
     }
 }
 
@@ -465,14 +482,15 @@ function renderObsRows(rows) {
     `).join('');
 }
 
-async function loadPkl(studentId) {
+async function loadPkl(studentId, signal = null) {
     pklInfo.innerHTML = '<p class="hint">Memuat…</p>';
     pklAttWrap.style.display = 'none';
     try {
         const placement = await fetchPklPlacement(studentId);
+        if (signal?.aborted) return false;
         if (!placement) {
             pklInfo.innerHTML = '<p class="hint">Tidak ada data penempatan PKL aktif.</p>';
-            return;
+            return true;
         }
         pklInfo.innerHTML = `
             <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px;margin-bottom:4px">
@@ -482,7 +500,13 @@ async function loadPkl(studentId) {
                 <span>${formatDate(placement.start_date)} – ${formatDate(placement.end_date)}</span>
             </div>`;
 
-        const rows = await fetchPklAttendanceSummary(studentId);
+        const endDate = localDateStr();
+        const startDate = new Date(`${endDate}T00:00:00`);
+        startDate.setDate(startDate.getDate() - 29);
+        const rows = await fetchPklAttendanceSummary(
+            studentId, placement.placement_id, localDateStr(startDate), endDate
+        );
+        if (signal?.aborted) return false;
         pklAttWrap.style.display = 'block';
         const counts = { HADIR: 0, ALPA: 0, IZIN: 0, SAKIT: 0 };
         for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1;
@@ -494,7 +518,7 @@ async function loadPkl(studentId) {
         if (!rows.length) {
             pklTbody.innerHTML = '';
             pklEmpty.style.display = 'block';
-            return;
+            return true;
         }
         pklEmpty.style.display = 'none';
         pklTbody.innerHTML = rows.map(r => `
@@ -503,18 +527,21 @@ async function loadPkl(studentId) {
                 <td><span class="badge ${STATUS_BADGE[r.status] || ''}">${STATUS_LABELS[r.status] || r.status}</span></td>
                 <td>${esc(r.notes || '-')}</td>
             </tr>`).join('');
+        return true;
     } catch (err) {
+        if (signal?.aborted) return false;
         pklInfo.innerHTML = `<p class="hint">Gagal memuat data PKL. ${esc(fe(err))}</p>`;
+        return false;
     }
 }
 
-async function loadObservations(studentId) {
+async function loadObservations(studentId, signal = null) {
     const dateStart = obsDateStart.value || null;
     const dateEnd   = obsDateEnd.value   || null;
     const cacheKey  = `ortu-obs-${studentId}-${dateStart}-${dateEnd}`;
     const cached    = LC.get(cacheKey);
     if (cached) {
-        renderObsRows(cached);
+        if (!signal?.aborted) renderObsRows(cached);
     } else {
         obsListEl.innerHTML = '<p class="hint">Memuat catatan…</p>';
         obsEmpty.style.display = 'none';
@@ -522,25 +549,30 @@ async function loadObservations(studentId) {
 
     try {
         const rows = await fetchObservations(studentId, dateStart, dateEnd);
+        if (signal?.aborted) return false;
         LC.set(cacheKey, rows);
         renderObsRows(rows);
+        return true;
     } catch (err) {
+        if (signal?.aborted) return false;
         if (!cached) obsListEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
+        return false;
     }
 }
 
-async function loadLateArrivals(studentId) {
+async function loadLateArrivals(studentId, signal = null) {
     const hintEl = document.getElementById('late-hint');
     const bodyEl = document.getElementById('late-body');
-    if (!hintEl || !bodyEl) return;
+    if (!hintEl || !bodyEl) return true;
     hintEl.style.display = 'block';
     hintEl.textContent = 'Memuat…';
     bodyEl.innerHTML = '';
     try {
         const rows = await getChildLateArrivals(studentId);
+        if (signal?.aborted) return false;
         if (!rows.length) {
             hintEl.textContent = 'Belum ada riwayat keterlambatan.';
-            return;
+            return true;
         }
         hintEl.style.display = 'none';
         bodyEl.innerHTML = `
@@ -556,23 +588,27 @@ async function loadLateArrivals(studentId) {
                     </tbody>
                 </table>
             </div>`;
+        return true;
     } catch (err) {
+        if (signal?.aborted) return false;
         hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
+        return false;
     }
 }
 
-async function loadExits(studentId) {
+async function loadExits(studentId, signal = null) {
     const hintEl = document.getElementById('exits-hint');
     const bodyEl = document.getElementById('exits-body');
-    if (!hintEl || !bodyEl) return;
+    if (!hintEl || !bodyEl) return true;
     hintEl.style.display = 'block';
     hintEl.textContent = 'Memuat…';
     bodyEl.innerHTML = '';
     try {
         const rows = await getChildExits(studentId);
+        if (signal?.aborted) return false;
         if (!rows.length) {
             hintEl.textContent = 'Belum ada riwayat izin keluar.';
-            return;
+            return true;
         }
         hintEl.style.display = 'none';
         bodyEl.innerHTML = `
@@ -589,8 +625,11 @@ async function loadExits(studentId) {
                     </tbody>
                 </table>
             </div>`;
+        return true;
     } catch (err) {
+        if (signal?.aborted) return false;
         hintEl.textContent = `Gagal memuat data. ${fe(err)}`;
+        return false;
     }
 }
 
@@ -619,15 +658,16 @@ function localDateStr(d = new Date()) {
 
 const CASE_STATUS_LABEL = { OPEN: 'Terbuka', CLOSED: 'Selesai' };
 
-async function loadCases(studentId) {
+async function loadCases(studentId, signal = null) {
     casesListEl.innerHTML = '<p class="hint">Memuat…</p>';
     casesEmpty.style.display = 'none';
     try {
         const cases = await fetchCases(studentId);
+        if (signal?.aborted) return false;
         if (!cases.length) {
             casesListEl.innerHTML = '';
             casesEmpty.style.display = 'block';
-            return;
+            return true;
         }
         casesListEl.innerHTML = cases.map(c => {
             const isClosed = c.status === 'CLOSED';
@@ -654,8 +694,11 @@ async function loadCases(studentId) {
                 ${eventsHtml}
             </div>`;
         }).join('');
+        return true;
     } catch (err) {
+        if (signal?.aborted) return false;
         casesListEl.innerHTML = `<p class="hint">Gagal memuat data. ${esc(fe(err))}</p>`;
+        return false;
     }
 }
 
@@ -800,16 +843,16 @@ let _forumHasMore   = false;
 let _forumInitDone  = false;
 let _forumChildren  = [];   // [{ user_id, full_name, class_id, academic_year }]
 
-async function initForumSection() {
-    if (_forumInitDone) { await loadForumPosts(); return; }
-    _forumInitDone = true;
+async function initForumSection(signal = null) {
+    if (_forumInitDone) return loadForumPosts(false, signal);
 
     // Ambil daftar anak
     try {
         _forumChildren = await getMyChildren(currentUser.school_id);
+        if (signal?.aborted) return false;
     } catch (e) {
         document.getElementById('forum-loading').textContent = 'Gagal memuat data anak.';
-        return;
+        return false;
     }
 
     // Isi dropdown anak di modal buat posting
@@ -820,7 +863,9 @@ async function initForumSection() {
           ).join('')
         : '<option value="">Tidak ada anak terdaftar</option>';
 
-    await loadForumPosts();
+    const loaded = await loadForumPosts(false, signal);
+    if (loaded && !signal?.aborted) _forumInitDone = true;
+    return loaded;
 }
 
 // ORT-07: listener forum didaftarkan SEKALI saat module load, BUKAN di dalam
@@ -852,6 +897,7 @@ function initForumListeners() {
 
     // Modal detail
     document.getElementById('btn-forum-detail-close')?.addEventListener('click', closeForumDetail);
+    document.getElementById('btn-forum-comment-submit')?.addEventListener('click', submitForumComment);
     document.getElementById('modal-forum-detail')?.addEventListener('click', e => {
         if (e.target === e.currentTarget) closeForumDetail();
     });
@@ -871,7 +917,7 @@ function initForumListeners() {
 
 initForumListeners();
 
-async function loadForumPosts(loadMore = false) {
+async function loadForumPosts(loadMore = false, signal = null) {
     const loadingEl = document.getElementById('forum-loading');
     const listEl    = document.getElementById('forum-posts-list');
     const moreBtn   = document.getElementById('btn-load-more-forum');
@@ -894,6 +940,7 @@ async function loadForumPosts(loadMore = false) {
             posts = await getForumSekolahSentPosts(
                 currentUser.school_id, currentUser.user_id, LIMIT, _forumOffset);
         }
+        if (signal?.aborted) return false;
 
         loadingEl.style.display = 'none';
 
@@ -902,16 +949,19 @@ async function loadForumPosts(loadMore = false) {
             loadingEl.textContent   = _forumMode === 'masuk'
                 ? 'Belum ada pengumuman untukmu.'
                 : 'Belum ada pesan yang dikirim.';
-            return;
+            return true;
         }
 
         posts.forEach(p => listEl.appendChild(renderForumCard(p)));
         _forumOffset += posts.length;
         _forumHasMore = posts.length === LIMIT;
         moreBtn.style.display = _forumHasMore ? '' : 'none';
+        return true;
     } catch (e) {
+        if (signal?.aborted) return false;
         loadingEl.style.display = '';
         loadingEl.textContent   = 'Gagal memuat forum.';
+        return false;
     }
 }
 
@@ -950,53 +1000,69 @@ function renderForumCard(post) {
 
 async function openForumDetail(post) {
     const modal = document.getElementById('modal-forum-detail');
+    const token = ++_forumDetailToken;
     modal.style.display = 'flex';
     modal.dataset.postId = post.post_id;
-
-    const { data: state, error: stateError } = await supabase
-        .from('forum_posts')
-        .select('is_withdrawn')
-        .eq('post_id', post.post_id)
-        .eq('school_id', currentUser.school_id)
-        .maybeSingle();
-    if (stateError) throw stateError;
-    post.is_withdrawn = state?.is_withdrawn === true;
-
-    document.getElementById('detail-forum-title').textContent = post.title ?? '(tanpa judul)';
-    document.getElementById('detail-forum-body').textContent  = post.body ?? '';
-
-    const time   = new Date(post.created_at).toLocaleString('id-ID',
-        { dateStyle: 'long', timeStyle: 'short' });
-    const author = post.author?.full_name
-        ? post.author.full_name
-        : _forumMode === 'terkirim' ? 'Anda' : '—';
-    const edited = post.is_edited ? ' • diedit' : '';
-    document.getElementById('detail-forum-meta').textContent =
-        `${author} · ${time}${edited}${post.is_withdrawn ? ' • Ditarik' : ''}`;
-    // FORUM-DEL-01: aksi penulis tidak lagi bergantung status "ditarik" --
-    // fitur tarik posting sudah diganti hard delete permanen.
-    document.getElementById('forum-author-actions').style.display =
-        post.author_user_id === currentUser.user_id ? 'block' : 'none';
-
     const attEl = document.getElementById('detail-forum-attachment');
-    if (post.attachment_url || post.attachment_path) {
-        let attachmentHref = post.attachment_url ?? null;
-        if (post.attachment_path) {
-            const { data: signed } = await supabase.storage
-                .from('forum-attachments')
-                .createSignedUrl(post.attachment_path, 172800);
-            if (signed?.signedUrl) attachmentHref = signed.signedUrl;
-        }
-        if (attachmentHref) {
-            attEl.innerHTML = `<a href="${esc(attachmentHref)}" target="_blank"
+    const commentsEl = document.getElementById('detail-forum-comments-list');
+    attEl.innerHTML = '<p class="hint" style="font-size:13px">Memuat lampiran…</p>';
+    commentsEl.innerHTML = '<p class="hint">Memuat komentar…</p>';
+
+    try {
+        const [{ data: state, error: stateError }, comments] = await Promise.all([
+            supabase.from('forum_posts')
+                .select('is_withdrawn')
+                .eq('post_id', post.post_id)
+                .eq('school_id', currentUser.school_id)
+                .maybeSingle(),
+            getForumPostComments(post.post_id),
+        ]);
+        if (stateError) throw stateError;
+        if (token !== _forumDetailToken) return;
+        post.is_withdrawn = state?.is_withdrawn === true;
+
+        document.getElementById('detail-forum-title').textContent = post.title ?? '(tanpa judul)';
+        document.getElementById('detail-forum-body').textContent  = post.body ?? '';
+
+        const time   = new Date(post.created_at).toLocaleString('id-ID',
+            { dateStyle: 'long', timeStyle: 'short' });
+        const author = post.author?.full_name
+            ? post.author.full_name
+            : _forumMode === 'terkirim' ? 'Anda' : '—';
+        const edited = post.is_edited ? ' • diedit' : '';
+        document.getElementById('detail-forum-meta').textContent =
+            `${author} · ${time}${edited}${post.is_withdrawn ? ' • Ditarik' : ''}`;
+        document.getElementById('forum-author-actions').style.display =
+            post.author_user_id === currentUser.user_id ? 'block' : 'none';
+
+        renderForumComments(comments, commentsEl);
+        if (!post.attachment_url && !post.attachment_path) {
+            attEl.innerHTML = '';
+        } else if (post.attachment_path) {
+            try {
+                const { data: signed, error: signError } = await supabase.storage
+                    .from('forum-attachments')
+                    .createSignedUrl(post.attachment_path, 172800);
+                if (signError || !signed?.signedUrl) throw signError || new Error('signed URL kosong');
+                if (token !== _forumDetailToken) return;
+                attEl.innerHTML = `<a href="${esc(signed.signedUrl)}" target="_blank"
+                      class="btn btn-secondary" style="font-size:13px">
+                      📎 ${esc(post.attachment_name ?? 'Unduh Lampiran')}</a>`;
+            } catch {
+                if (token === _forumDetailToken)
+                    attEl.innerHTML = '<p class="hint" style="font-size:13px">Gagal memuat lampiran.</p>';
+            }
+        } else {
+            attEl.innerHTML = `<a href="${esc(post.attachment_url)}" target="_blank"
                   class="btn btn-secondary" style="font-size:13px">
                   📎 ${esc(post.attachment_name ?? 'Unduh Lampiran')}</a>`;
-        } else {
-            // ORT-12: signed URL gagal — jangan render <a href="null">.
-            attEl.innerHTML = '<p class="hint" style="font-size:13px">Gagal memuat lampiran.</p>';
         }
-    } else {
+    } catch (err) {
+        if (token !== _forumDetailToken) return;
+        document.getElementById('detail-forum-meta').textContent = 'Gagal memuat detail posting.';
+        document.getElementById('detail-forum-body').textContent = fe(err);
         attEl.innerHTML = '';
+        commentsEl.innerHTML = '';
     }
 
     // Acknowledge otomatis saat dibuka (hanya untuk inbox)
@@ -1006,6 +1072,45 @@ async function openForumDetail(post) {
             'forum_ack',
             { postId: post.post_id, userId: currentUser.user_id, schoolId: currentUser.school_id },
             `forum_ack:${post.post_id}:${currentUser.user_id}`);
+    }
+}
+
+function renderForumComments(comments, target) {
+    if (!comments?.length) {
+        target.innerHTML = '<p class="hint">Belum ada komentar.</p>';
+        return;
+    }
+    target.innerHTML = comments.map(c => `
+        <div style="border-top:1px solid var(--color-border);padding:8px 0">
+            <div class="hint" style="font-size:12px">${esc(c.author?.full_name ?? '—')} · ${formatDate(c.created_at)}</div>
+            <div style="white-space:pre-wrap">${esc(c.body ?? '')}</div>
+        </div>`).join('');
+}
+
+async function submitForumComment() {
+    const input = document.getElementById('forum-comment-input');
+    const errorEl = document.getElementById('forum-comment-error');
+    const btn = document.getElementById('btn-forum-comment-submit');
+    const body = input.value.trim();
+    const postId = document.getElementById('modal-forum-detail').dataset.postId;
+    errorEl.style.display = 'none';
+    if (!body || !postId) {
+        errorEl.textContent = 'Komentar wajib diisi.';
+        errorEl.style.display = 'block';
+        return;
+    }
+    btn.disabled = true;
+    try {
+        await addForumPostComment(postId, body, currentUser.school_id, currentUser.user_id);
+        input.value = '';
+        const comments = await getForumPostComments(postId);
+        if (postId === document.getElementById('modal-forum-detail').dataset.postId)
+            renderForumComments(comments, document.getElementById('detail-forum-comments-list'));
+    } catch (err) {
+        errorEl.textContent = fe(err);
+        errorEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
     }
 }
 
@@ -1038,6 +1143,7 @@ async function deleteParentForumPost(e) {
 }
 
 function closeForumDetail() {
+    _forumDetailToken++;
     document.getElementById('modal-forum-detail').style.display = 'none';
 }
 
@@ -1104,6 +1210,7 @@ async function submitForumBuat() {
             child.class_id,
             child.academic_year,
             currentUser.school_id,
+            child.student_id,
             _forumIdemKey
         );
         closeForumBuat();
@@ -1129,7 +1236,7 @@ async function submitForumBuat() {
 // ── Tab Nilai (ortu) ──
 let _nilaiStudentId = null;
 
-async function initNilaiTab(studentId) {
+async function initNilaiTab(studentId, signal = null) {
     // Populate tahun ajaran hanya sekali
     const selYear = document.getElementById('nilai-year-select');
     if (!selYear.dataset.populated) {
@@ -1138,6 +1245,7 @@ async function initNilaiTab(studentId) {
             .select('current_academic_year')
             .eq('school_id', currentUser.school_id)
             .single();
+        if (signal?.aborted) return false;
         const activeYear    = cfg?.current_academic_year ?? null;
         const activeStartYr = activeYear ? parseInt(activeYear) : new Date().getFullYear();
         [activeStartYr - 1, activeStartYr, activeStartYr + 1].forEach(y => {
@@ -1152,17 +1260,17 @@ async function initNilaiTab(studentId) {
             .addEventListener('change', () => loadNilaiGrid(_nilaiStudentId));
     }
     _nilaiStudentId = studentId;
-    await loadNilaiGrid(studentId);
+    return loadNilaiGrid(studentId, signal);
 }
 
-async function loadNilaiGrid(studentId) {
+async function loadNilaiGrid(studentId, signal = null) {
     const gridEl = document.getElementById('nilai-grid');
     const year   = document.getElementById('nilai-year-select').value || null;
     const semStr = document.getElementById('nilai-semester-select').value;
     const sem    = semStr ? parseInt(semStr) : null;
     if (!studentId) {
         gridEl.innerHTML = '<p class="hint">Pilih anak terlebih dahulu.</p>';
-        return;
+        return true;
     }
     gridEl.innerHTML = '<p class="hint">Memuat…</p>';
     try {
@@ -1173,10 +1281,14 @@ async function loadNilaiGrid(studentId) {
         });
         if (error) throw error;
         if (!data?.success) throw new Error(data?.error || 'Gagal memuat nilai');
+        if (signal?.aborted) return false;
         renderNilaiGrid(data.grades || [], gridEl);
+        return true;
     } catch (e) {
+        if (signal?.aborted) return false;
         gridEl.innerHTML =
             `<p class="hint" style="color:var(--color-danger)">Gagal memuat nilai: ${esc(e.message)}</p>`;
+        return false;
     }
 }
 

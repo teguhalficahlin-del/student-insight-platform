@@ -56,7 +56,15 @@ export async function logout() {
     await supabase.auth.signOut();
 }
 
-export async function fetchChildren(parentUserId) {
+export async function fetchChildren(parentUserId, schoolId) {
+    if (!parentUserId || !schoolId) return [];
+    const { data: config, error: configError } = await supabase
+        .from('school_config')
+        .select('current_academic_year')
+        .eq('school_id', schoolId)
+        .maybeSingle();
+    if (configError) throw configError;
+    const academicYear = config?.current_academic_year ?? null;
     const { data, error } = await supabase
         .from('student_parents')
         .select(`
@@ -67,17 +75,20 @@ export async function fetchChildren(parentUserId) {
                 full_name,
                 student_status,
                 program:programs ( name ),
-                enrollment:class_enrollments ( class_id, withdrawn_at, class:classes ( name ), academic_year, semester )
+                enrollment:class_enrollments ( class_id, school_id, withdrawn_at, class:classes ( name ), academic_year, semester )
             )
         `)
-        .eq('parent_user_id', parentUserId);
+        .eq('parent_user_id', parentUserId)
+        .eq('school_id', schoolId);
 
     if (error) throw error;
     return (data || []).map(r => {
         const s = r.students;
         const enrolls = Array.isArray(s.enrollment) ? s.enrollment : (s.enrollment ? [s.enrollment] : []);
-        // Pilih enrollment aktif (belum withdrawn); fallback ke yang pertama.
-        const active = enrolls.find(e => !e.withdrawn_at) ?? enrolls[0] ?? null;
+        // Enrollment historis tidak boleh menentukan kelas portal.
+        const active = enrolls.find(e =>
+            e.school_id === schoolId && e.academic_year === academicYear && !e.withdrawn_at
+        ) ?? null;
         return {
             student_id: s.student_id,
             nis:        s.nis,
@@ -137,12 +148,10 @@ export async function fetchWeekSchedule(classId, schoolId) {
     });
 
     const results = await Promise.all(
-        days.map(date =>
-            // ORT-06: schoolId diteruskan ke tiap pemanggilan, bukan berhenti di sini.
-            fetchSchedule(classId, date, schoolId)
-                .then(rows => ({ date, rows }))
-                .catch(() => ({ date, rows: [] }))
-        )
+        days.map(async date => ({
+            date,
+            rows: await fetchSchedule(classId, date, schoolId),
+        }))
     );
     return results;
 }
@@ -284,11 +293,15 @@ export async function fetchPklPlacement(studentId) {
     };
 }
 
-export async function fetchPklAttendanceSummary(studentId) {
+export async function fetchPklAttendanceSummary(studentId, placementId, dateStart, dateEnd) {
+    if (!studentId || !placementId) return [];
     const { data, error } = await supabase
         .from('pkl_attendance')
-        .select('pkl_attendance_id, attendance_date, status, notes')
+        .select('pkl_attendance_id, placement_id, attendance_date, status, notes')
         .eq('student_id', studentId)
+        .eq('placement_id', placementId)
+        .gte('attendance_date', dateStart)
+        .lte('attendance_date', dateEnd)
         .order('attendance_date', { ascending: false });
     if (error) throw error;
     return data ?? [];
@@ -339,7 +352,7 @@ export async function getMyChildren(schoolId) {
             student:students (
                 student_id, full_name, nis,
                 enrollment:class_enrollments (
-                    class_id, academic_year,
+                    class_id, school_id, academic_year, withdrawn_at,
                     class:classes ( name )
                 )
             )
@@ -351,7 +364,7 @@ export async function getMyChildren(schoolId) {
         const s = row.student;
         if (!s) continue;
         const enr = (s.enrollment ?? []).find(e =>
-            e.academic_year === academicYear && e.class_id
+            e.school_id === schoolId && e.academic_year === academicYear && e.class_id && !e.withdrawn_at
         );
         result.push({
             student_id:    s.student_id,
@@ -399,7 +412,8 @@ export async function getForumSekolahSentPosts(schoolId, callerId, limit = 20, o
     const { data, error } = await supabase
         .from('forum_posts')
         .select(`
-            post_id, title, body, created_at, is_edited,
+            post_id, title, body, attachment_url, attachment_name, attachment_path,
+            created_at, is_edited,
             author_user_id,
             acknowledgements:forum_post_acknowledgements(user_id),
             audience:forum_post_audience(user_id)
@@ -439,14 +453,17 @@ export async function getWaliKelasUserId(classId) {
  * Penerima: Wali Kelas + Guru BK + Guru Wali + Guru yang mengajar hari ini.
  * Bug #8 fix: tambah filter school_id eksplisit di semua query.
  */
-export async function getParentForumRecipients(classId, schoolId) {
+export async function getParentForumRecipients(studentId, classId, schoolId) {
+    if (!studentId || !classId || !schoolId) return [];
     const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
 
     // Langkah A: ambil student_id di kelas ini (pre-fetch, sequential)
     const { data: enrollData, error: enrollErr } = await supabase
         .from('class_enrollments')
         .select('student_id')
+        .eq('student_id', studentId)
         .eq('class_id', classId)
+        .eq('school_id', schoolId)
         .is('withdrawn_at', null);
     if (enrollErr) throw enrollErr;
     const studentIds = (enrollData ?? []).map(r => r.student_id);
@@ -462,7 +479,7 @@ export async function getParentForumRecipients(classId, schoolId) {
             .eq('school_id', schoolId)
             .eq('is_active', true),
 
-        // Langkah B: query guru_wali_assignments dengan array student_id
+        // Guru Wali hanya untuk anak yang dipilih, bukan seluruh siswa di kelas.
         studentIds.length > 0
             ? supabase.from('guru_wali_assignments')
                 .select('guru_user_id')
@@ -494,8 +511,8 @@ export async function getParentForumRecipients(classId, schoolId) {
  * Buat posting Forum Sekolah dari ortu ke guru terkait anak.
  */
 export async function createParentForumPost(title, body, classId, academicYear, schoolId,
-                                            idempotencyKey = null) {
-    const recipientIds = await getParentForumRecipients(classId, schoolId);
+                                            studentId, idempotencyKey = null) {
+    const recipientIds = await getParentForumRecipients(studentId, classId, schoolId);
 
     if (recipientIds.length === 0) {
         throw new Error('Tidak ada guru yang dapat ditemukan untuk anak ini hari ini.');
@@ -506,7 +523,7 @@ export async function createParentForumPost(title, body, classId, academicYear, 
         p_academic_year:       academicYear,
         p_content:             body,
         p_category_code:       null,
-        p_subject_student_ids: [],
+        p_subject_student_ids: [studentId],
         p_audience_type:       'ORANG_TERTENTU',
         p_specific_user_ids:   recipientIds,
         p_audience_type_2:     null,
@@ -516,6 +533,28 @@ export async function createParentForumPost(title, body, classId, academicYear, 
         p_idempotency_key:     idempotencyKey,   // FUNC-03
     });
     if (error) throw error;
+    return data;
+}
+
+export async function getForumPostComments(postId) {
+    const { data, error } = await supabase
+        .from('forum_post_comments')
+        .select('comment_id, post_id, body, created_at, author_user_id')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true });
+    if (error) throw error;
+    await attachPortalUserLabels(supabase, data ?? [], [['author', 'author_user_id']]);
+    return data ?? [];
+}
+
+export async function addForumPostComment(postId, body, schoolId, authorUserId) {
+    const { data, error } = await supabase
+        .from('forum_post_comments')
+        .insert({ post_id: postId, school_id: schoolId, author_user_id: authorUserId, body })
+        .select('comment_id, post_id, body, created_at, author_user_id')
+        .single();
+    if (error) throw error;
+    await attachPortalUserLabels(supabase, [data], [['author', 'author_user_id']]);
     return data;
 }
 
