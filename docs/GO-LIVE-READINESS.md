@@ -105,7 +105,7 @@ Keputusan: GO / NO-GO
 
 **Tidak terpenuhi jika:** Satu pun portal tidak mengirim event ke error tracking, atau notifikasi tidak berfungsi.
 
-**Status saat ini (13 Okt 2026):** ⚠️ Kode ada — Sentry (DSN terisi, bukan placeholder) dimuat di halaman login dan/atau dashboard kedelapan portal. Yang BELUM terbukti: event benar-benar tiba di dashboard dan alert terkirim ke Romo. Hanya bisa diverifikasi di dashboard Sentry.
+**Status saat ini (13 Okt 2026):** ✅ Alur terbukti ujung-ke-ujung di portal Admin (tenant uji SMK Negeri 3 Rambah): `Sentry.captureException` -> issue `JAVASCRIPT-6` muncul di dashboard (org `sip-smk`, project `javascript`) -> email "New issue" diterima Romo (01.21 WIB). Kedelapan portal memuat snippet dengan DSN yang identik (diverifikasi `grep`). Sisa untuk memenuhi indikator secara harfiah: uji sengaja di 7 portal lain satu per satu. Catatan: error yang diketik langsung di Console TIDAK sampai ke Sentry (Chrome tidak meneruskannya ke `window.onerror`); uji dengan `Sentry.captureException(...)` atau `setTimeout(() => { throw ... })`.
 
 ---
 
@@ -234,7 +234,7 @@ Blocker yang paling mendesak:
 | T1-02 | Alur absensi end-to-end | ⚠️ Test otomatis lulus (`wali-attendance-sql` 18); uji manual formal belum |
 | T1-03 | Alur penilaian end-to-end | ⚠️ Belum ada uji E2E formal |
 | T1-04 | Data tidak hilang saat error | ⚠️ Sebagian. Review Codex diverifikasi ke kode + DB live (13 Okt): NOT NULL kolom kritis `assessment_results`/`grade_recap`/`attendance` terverifikasi live; penilaian ganda saat simpan sumatif gagal DIPERBAIKI (`a7ec7f3`). Belum atomik penuh: simpan sumatif bertahap per siswa (kini dapat diulang tanpa duplikat) dan absensi lintas beberapa sesi (tiap sesi atomik + idempoten). Atomik penuh butuh RPC baru, ditunda |
-| T1-05 | Error tracking aktif | ⚠️ Kode ada di 8 portal; dashboard + alert belum terbukti |
+| T1-05 | Error tracking aktif | ⚠️ Hampir: alur + alert email terbukti di portal Admin; DSN identik di 8 portal; uji per-portal 7 lainnya belum |
 | T1-06 | Uptime monitoring aktif | ⚠️ Sudah didaftarkan Romo; cakupan 8 portal dan test alert belum tercatat |
 | T1-07 | Guard rls_cc_update student↔school | ✅ Terverifikasi live |
 
@@ -248,4 +248,4 @@ Keputusan: **NO-GO** (tidak berubah).
 |-------|---------|-----------|
 | 1.0 | 26 Agu 2026 | Dokumen pertama dibuat |
 | 1.1 | 26 Agu 2026 | Revisi berdasarkan review: T1-04 rapor turun ke T2-06 (export Excel e-Rapor); rls_cc_update naik dari T2-03 ke T1-07; T1-05 cara verifikasi diubah ke code review; T1-06/T1-07 renumbered dari T1-06/T1-07 sebelumnya |
-| 1.2 | 13 Okt 2026 | Status T1-01 (audit live CHECK 1–18 diulang pasca migrasi parent), T1-04 (review Codex + perbaikan `a7ec7f3`), T1-05 (kode Sentry ada, dashboard belum terbukti), T1-06 (monitor sudah didaftarkan, test alert belum tercatat) dan T1-07 (terpenuhi, terverifikasi live) diperbarui; ditambah tabel status 13 Okt |
+| 1.2 | 13 Okt 2026 | Status T1-01 (audit live CHECK 1–18 diulang pasca migrasi parent), T1-04 (review Codex + perbaikan `a7ec7f3`), T1-05 (alur + alert email terbukti di portal Admin), T1-06 (monitor sudah didaftarkan, test alert belum tercatat) dan T1-07 (terpenuhi, terverifikasi live) diperbarui; ditambah tabel status 13 Okt |
