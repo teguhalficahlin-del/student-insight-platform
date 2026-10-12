@@ -33,7 +33,7 @@ Fitur utama: absensi, BK (kasus siswa), jadwal, forum, perangkat ajar (AI pipeli
 
 | Key | Value |
 |-----|-------|
-| HEAD (3 Okt 2026) | `8f82ed6` (lokal) — push 664af64+8f82ed6 pending |
+| HEAD (12 Okt 2026) | `4c8fd4e` — sudah di `origin/main` |
 | SMKN 1 Ujungbatu `school_id` | `244e389c-de7d-4d70-ac95-346d33a5d02c` |
 | SMKN 1 Ujungbatu slug | `smkn1ujungbatu` (URL pendek: `smkn1ub`) |
 | **SMK Negeri 3 Rambah** `school_id` | `561cc906-e6e0-40c7-a5b0-d8f69a15258a` |
@@ -422,7 +422,7 @@ Kandidat: refactor ke Edge Function (rate-limit penuh) di sprint security beriku
 
 ---
 
-## 9. STATUS PROYEK (per HEAD 8f82ed6, 3 Okt 2026)
+## 9. STATUS PROYEK (per HEAD 4c8fd4e, 12 Okt 2026)
 
 ### Selesai
 - Audit keamanan Fase 1–3 ✅ (test suite 93/93)
@@ -502,8 +502,50 @@ Laporan lengkap ada di percakapan; ringkasan status per temuan:
 | 14 | Policy ld_* pakai EXISTS langsung ke tabel ber-RLS | ✅ SELESAI live (e9e6e7c) |
 | 18 | Tombol admin tanpa min-height (CSS) | ✅ SELESAI live (cf7fb62) |
 
-**Catatan sesi 3 Okt 2026:** Dua commit pending push ke remote — `664af64` dan `8f82ed6`.
-Jalankan `git push origin main` untuk menyelesaikan. Migration `20261003110000` sudah live.
+**Catatan sesi 3 Okt 2026:** `664af64` dan `8f82ed6` sudah di remote (terverifikasi 12 Okt 2026).
+Migration `20261003110000` live.
+
+- Sesi 7–11 Okt 2026 ✅ — gelombang hardening per portal (rincian di git log). Ringkasan per portal:
+  guru/wali/kaprodi/waka (7–9 Okt: `93ee5c3` `eff878c` `9161ccc` `ca0860b` `ecb53e9` `fca74a2`
+  `ee2bef2` `00a2474` `e61ec70` `7548a75` `3e1e59e` `6b465a4`), stakeholder `4de7057`,
+  TU `6c362ac`, forum `2e93641`, DUDI `d06550b`, siswa `4d3cf55` (10 Okt),
+  admin `829e89f` `25d9a43` `38721ed`, superadmin `9018eea`, guru-forum `e438c5b` (11 Okt).
+  Laporan audit per portal ada di `scratchpad/audit-*.md` (belum di-track).
+
+- Sesi 12 Okt 2026 ✅ — portal orang tua + audit live. Dua commit, live:
+  `1ad79ec` feat(parent): penerima forum dibatasi ke anak yang dipilih, komentar forum,
+            loader anti-balapan (kelas dari enrollment tahun ajaran aktif saja,
+            tab ditandai termuat hanya bila request sukses, absensi PKL 30 hari terakhir)
+  `4c8fd4e` fix(parent): trigger `trg_validate_parent_forum_audience` +
+            `fn_validate_parent_forum_audience` (SECURITY DEFINER, GRANT authenticated,
+            REVOKE anon + PUBLIC). MIGRATION LIVE: `20261012100000`.
+            Nama file semula `20261011005806` — diganti karena lebih kecil dari migration
+            remote terakhir (`20261011050000`) sehingga `db push` menolaknya.
+  Audit `tests/tenant-isolation.mjs` terhadap DB live: LULUS semua check (1–17) SEBELUM
+  migration parent dipasang; belum diulang sesudahnya.
+
+#### STATUS GO-LIVE (audit Codex read-only, 12 Okt 2026) — NO-GO untuk publik, layak pilot internal
+| Blocker | Status |
+|---------|--------|
+| Working tree parent portal + migration belum dikomit | ✅ SELESAI (1ad79ec + 4c8fd4e) |
+| Verifikasi isolasi tenant live (`api-keys 403`) | ✅ SELESAI — lulus dengan token akun yang punya akses project (lihat catatan di bawah) |
+| Test UI (Chromium Playwright) | ✅ 23 file test lokal lulus; `coaching-cases` butuh `node --experimental-vm-modules` |
+| `index.html` di root + workflow deployment publik | ⬜ belum — keputusan Romo: tidak ada perubahan (12 Okt 2026) |
+| Audit ulang tenant-isolation pasca migration parent | ⬜ belum |
+| Backup aktif, restore drill, rollback migration | ⬜ belum terbukti |
+| Monitoring + jalur dukungan + kebijakan privasi data siswa | ⬜ belum |
+| Rekonsiliasi `docs/konsep/go-live-10-sekolah-checklist.md` (terakhir Juli 2026) | ⬜ belum |
+
+**Catatan operasional (12 Okt 2026):**
+- `tests/tenant-isolation.mjs` butuh `SUPABASE_ACCESS_TOKEN` dengan izin Database + API Keys
+  (Read cukup untuk API Keys). Buat token berumur 1 hari di
+  `supabase.com/dashboard/account/tokens`, isi lewat `Read-Host` (jangan di `.env`/chat),
+  lalu HAPUS (tombolnya bernama Delete) setelah audit selesai.
+- `git push` 403 walau remote benar: helper `gh auth git-credential` memakai akun AKTIF `gh`.
+  Perbaiki dengan `gh auth switch --user teguhalficahlin-del`, bukan menghapus entri
+  Credential Manager.
+- Perubahan #1 portal orang tua (kelas hanya dari enrollment tahun ajaran aktif): saat rollover
+  tahun ajaran, anak tampil "belum terdaftar di kelas" sampai admin menaikkan kelas.
 
 ### Koreksi atas backlog lama (diverifikasi ke kode 30 Sep 2026)
 Tiga item di bawah pernah tercatat keliru dan sempat dua kali memperlambat kerja:
