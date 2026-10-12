@@ -121,7 +121,7 @@ Keputusan: GO / NO-GO
 
 **Tidak terpenuhi jika:** Monitoring belum ada, atau alert tidak terkirim saat endpoint down.
 
-**Status saat ini (13 Okt 2026):** ⚠️ Monitor uptime SUDAH didaftarkan oleh Romo (disampaikan lisan; tidak terlihat dari repo). Yang belum tercatat: apakah kedelapan URL portal terdaftar, dan apakah test alert (endpoint dimatikan lalu alert diterima) sudah dilakukan.
+**Status saat ini (13 Okt 2026):** ✅ Terpenuhi. UptimeRobot (akun Romo): kedelapan URL portal (`/admin/`, `/guru/`, `/student/`, `/parent/`, `/dudi/`, `/stakeholder/`, `/superadmin/`, `/tu/` di `teguhalficahlin-del.github.io/student-insight-platform/`) terdaftar sebagai monitor HTTP(s), interval 5 menit, semua Up (uptime 100% dalam 24 jam, berjalan >1 bulan). Alert email aktif untuk Up + Down events. Uji alert 13 Okt: monitor sementara ke URL 404 (`/uji-alert-404/`) memicu email "is down" lalu "is up" yang diterima Romo; monitor uji sudah dihapus. Riwayat 30 hari tersedia di dashboard.
 
 ---
 
@@ -235,7 +235,7 @@ Blocker yang paling mendesak:
 | T1-03 | Alur penilaian end-to-end | ⚠️ Belum ada uji E2E formal |
 | T1-04 | Data tidak hilang saat error | ⚠️ Sebagian. Review Codex diverifikasi ke kode + DB live (13 Okt): NOT NULL kolom kritis `assessment_results`/`grade_recap`/`attendance` terverifikasi live; penilaian ganda saat simpan sumatif gagal DIPERBAIKI (`a7ec7f3`). Belum atomik penuh: simpan sumatif bertahap per siswa (kini dapat diulang tanpa duplikat) dan absensi lintas beberapa sesi (tiap sesi atomik + idempoten). Atomik penuh butuh RPC baru, ditunda |
 | T1-05 | Error tracking aktif | ⚠️ Hampir: alur + alert email terbukti di portal Admin; DSN identik di 8 portal; uji per-portal 7 lainnya belum |
-| T1-06 | Uptime monitoring aktif | ⚠️ Sudah didaftarkan Romo; cakupan 8 portal dan test alert belum tercatat |
+| T1-06 | Uptime monitoring aktif | ✅ 8 portal terdaftar di UptimeRobot, alert email Down+Up terbukti lewat uji 13 Okt |
 | T1-07 | Guard rls_cc_update student↔school | ✅ Terverifikasi live |
 
 Keputusan: **NO-GO** (tidak berubah).
@@ -248,4 +248,4 @@ Keputusan: **NO-GO** (tidak berubah).
 |-------|---------|-----------|
 | 1.0 | 26 Agu 2026 | Dokumen pertama dibuat |
 | 1.1 | 26 Agu 2026 | Revisi berdasarkan review: T1-04 rapor turun ke T2-06 (export Excel e-Rapor); rls_cc_update naik dari T2-03 ke T1-07; T1-05 cara verifikasi diubah ke code review; T1-06/T1-07 renumbered dari T1-06/T1-07 sebelumnya |
-| 1.2 | 13 Okt 2026 | Status T1-01 (audit live CHECK 1–18 diulang pasca migrasi parent), T1-04 (review Codex + perbaikan `a7ec7f3`), T1-05 (alur + alert email terbukti di portal Admin), T1-06 (monitor sudah didaftarkan, test alert belum tercatat) dan T1-07 (terpenuhi, terverifikasi live) diperbarui; ditambah tabel status 13 Okt |
+| 1.2 | 13 Okt 2026 | Status T1-01 (audit live CHECK 1–18 diulang pasca migrasi parent), T1-04 (review Codex + perbaikan `a7ec7f3`), T1-05 (alur + alert email terbukti di portal Admin), T1-06 (terpenuhi: 8 portal terdaftar, alert Down+Up terbukti) dan T1-07 (terpenuhi, terverifikasi live) diperbarui; ditambah tabel status 13 Okt |
