@@ -1422,6 +1422,10 @@ async function openAsmtModal(editAsmt) {
         '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:normal;color:var(--color-text)"><input type="checkbox" id="pai-vis-ortu"' + (editAsmt?.is_visible_ortu ? ' checked' : '') + '> Tampilkan ke Orang Tua</label>' +
         '</div>';
 
+    // Jika simpan hasil siswa gagal di tengah jalan, modal tetap terbuka. Simpan id
+    // assessment yang sudah terbentuk agar klik Simpan berikutnya memperbarui baris
+    // yang sama, bukan membuat penilaian ganda.
+    let createdAsmtId = null;
     openModal({ title: editAsmt ? 'Edit Penilaian' : 'Tambah Penilaian', bodyHtml, wide: true,
         onSave: async (_ov, close) => {
             const jenis     = _ov.querySelector('#pai-jenis-sel').value;
@@ -1452,10 +1456,14 @@ async function openAsmtModal(editAsmt) {
             if (editAsmt) {
                 await updateAssessment(editAsmt.id, payload);
                 asmtId = editAsmt.id;
+            } else if (createdAsmtId) {
+                await updateAssessment(createdAsmtId, payload);
+                asmtId = createdAsmtId;
             } else {
                 const created = await createAssessment(
                     _schoolId, _kelasId, _subjectId, _year, Number(_semester), _teacherId, payload);
                 asmtId = created.id;
+                createdAsmtId = asmtId;
             }
 
             if (jenis === 'SUMATIF') {
