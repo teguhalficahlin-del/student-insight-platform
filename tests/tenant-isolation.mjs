@@ -1843,6 +1843,126 @@ async function main() {
         }
     }
 
+    // ══════════════════════════════════════════════════════
+    // CHECK 18 — Forum orang tua: trigger trg_validate_parent_forum_audience
+    // ══════════════════════════════════════════════════════
+    // MANDIRI — data sintetis dalam satu transaksi BEGIN...ROLLBACK.
+    // Membuktikan trigger (migrasi 20261012100000) menolak penerima yang
+    // TIDAK terkait anak pengirim dan menerima wali kelas anak itu.
+    //
+    // F1 : ORTU -> guru yang tidak terkait anaknya   -> ditolak 42501
+    // F2 : ORTU -> wali kelas anaknya                -> diterima
+    //
+    // Cara: baris posting dibuat sebagai postgres, lalu claims JWT diset ke
+    // ORTU (tanpa SET ROLE) sehingga fn_current_user_role() = 'ORTU' dan
+    // trigger aktif; RLS tidak ikut campur, jadi penolakan yang terukur
+    // benar-benar dari trigger (pesan "Penerima forum orang tua ...").
+    log.head('CHECK 18 — Forum orang tua: trigger audiens (BEGIN...ROLLBACK)');
+    {
+        const d18 = (await mgmtQuery(`
+            WITH cur AS (SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::date AS d),
+            cand AS (
+                SELECT sp.parent_user_id AS p_uid, pu.auth_user_id AS p_auth,
+                       sp.student_id, sp.school_id, ce.class_id, ce.academic_year,
+                       w.user_id AS w_uid
+                FROM student_parents sp
+                JOIN users pu ON pu.user_id = sp.parent_user_id AND pu.school_id = sp.school_id
+                             AND pu.is_active AND pu.deleted_at IS NULL
+                             AND pu.auth_user_id IS NOT NULL
+                JOIN class_enrollments ce ON ce.student_id = sp.student_id
+                             AND ce.school_id = sp.school_id AND ce.withdrawn_at IS NULL
+                JOIN school_config sc ON sc.school_id = sp.school_id
+                             AND sc.current_academic_year = ce.academic_year
+                JOIN users w ON w.school_id = sp.school_id
+                             AND w.wali_kelas_class_id = ce.class_id
+                             AND w.is_active AND w.deleted_at IS NULL
+                ORDER BY sp.parent_user_id, sp.student_id
+                LIMIT 1
+            ),
+            outsider AS (
+                SELECT u.user_id
+                FROM users u, cand c, cur
+                WHERE u.school_id = c.school_id AND u.role_type = 'GURU'
+                  AND u.is_active AND u.deleted_at IS NULL
+                  AND u.user_id <> c.p_uid AND u.user_id <> c.w_uid
+                  AND u.wali_kelas_class_id IS DISTINCT FROM c.class_id
+                  AND NOT EXISTS (SELECT 1 FROM bk_class_assignments b
+                                  WHERE b.bk_user_id = u.user_id
+                                    AND b.class_id = c.class_id AND b.is_active)
+                  AND NOT EXISTS (SELECT 1 FROM guru_wali_assignments g
+                                  WHERE g.guru_user_id = u.user_id
+                                    AND g.student_id = c.student_id AND g.is_active)
+                  AND NOT EXISTS (SELECT 1 FROM teaching_schedules ts
+                                  WHERE ts.scheduled_teacher_id = u.user_id
+                                    AND ts.class_id = c.class_id
+                                    AND ts.session_date = cur.d)
+                ORDER BY u.user_id
+                LIMIT 1
+            )
+            SELECT c.p_auth::text AS p_auth, c.p_uid::text AS p_uid,
+                   c.student_id::text AS student_id, c.school_id::text AS school_id,
+                   c.class_id::text AS class_id, c.academic_year,
+                   c.w_uid::text AS w_uid, o.user_id::text AS out_uid
+            FROM cand c LEFT JOIN outsider o ON true;
+        `))[0];
+
+        if (!d18?.p_auth || !d18.w_uid || !d18.out_uid) {
+            log.warn('CHECK 18 SKIP — tidak ada ortu + wali kelas + guru tak-terkait untuk data sintetis');
+        } else {
+            const POST18 = '00000000-0000-0000-0000-0000000f1800';
+            let rows18 = null;
+            try {
+                rows18 = await mgmtQuery(
+                    `begin;` +
+                    ` create temp table _f18 (k text primary key, v text) on commit drop;` +
+                    ` insert into forum_posts` +
+                    `   (post_id, school_id, class_id, author_user_id, academic_year,` +
+                    `    title, body, visibility, is_pinned, is_withdrawn)` +
+                    ` values ('${POST18}', '${d18.school_id}', '${d18.class_id}', '${d18.p_uid}',` +
+                    `   '${d18.academic_year}', 'Uji trigger CHECK 18', 'data sintetis - dirollback',` +
+                    `   'INTERNAL', false, false);` +
+                    ` insert into forum_post_subjects (post_id, student_id, school_id)` +
+                    `   values ('${POST18}', '${d18.student_id}', '${d18.school_id}');` +
+                    ` select set_config('request.jwt.claims', $c$` +
+                    `{"sub":"${d18.p_auth}","role":"authenticated"}$c$, true);` +
+                    ` do $b$ begin` +
+                    `   insert into forum_post_audience (post_id, user_id, school_id)` +
+                    `   values ('${POST18}', '${d18.out_uid}', '${d18.school_id}');` +
+                    `   insert into _f18 values ('F1', 'BREACH');` +
+                    ` exception when others then` +
+                    `   insert into _f18 values ('F1', sqlstate || '|' || sqlerrm);` +
+                    ` end $b$;` +
+                    ` do $b$ begin` +
+                    `   insert into forum_post_audience (post_id, user_id, school_id)` +
+                    `   values ('${POST18}', '${d18.w_uid}', '${d18.school_id}');` +
+                    `   insert into _f18 values ('F2', 'OK');` +
+                    ` exception when others then` +
+                    `   insert into _f18 values ('F2', sqlstate || '|' || sqlerrm);` +
+                    ` end $b$;` +
+                    ` select k, v from _f18 order by k;` +
+                    ` rollback;`
+                );
+            } catch (e) {
+                log.fail(`CHECK 18 — Transaksi sintetis gagal: ${e.message.slice(0, 200)}`);
+            }
+
+            if (rows18) {
+                const R18 = Object.fromEntries(rows18.map((r) => [r.k, r.v]));
+                if (R18.F1 === undefined) log.fail('F1: tidak ada hasil terukur');
+                else if (R18.F1.startsWith('42501|') && R18.F1.includes('Penerima forum orang tua'))
+                    log.pass('F1: ortu -> guru tak terkait anaknya ditolak trigger (42501)');
+                else
+                    log.fail(`F1: trigger TIDAK menolak penerima tak terkait (terukur=${String(R18.F1).slice(0, 120)})`);
+
+                if (R18.F2 === undefined) log.fail('F2: tidak ada hasil terukur');
+                else if (R18.F2 === 'OK')
+                    log.pass('F2: ortu -> wali kelas anaknya diterima — uji tidak vacuous');
+                else
+                    log.fail(`F2: wali kelas anak ditolak (terukur=${String(R18.F2).slice(0, 120)})`);
+            }
+        }
+    }
+
     // ── Ringkasan ────────────────────────────────────────────────
     console.log(`\n${'='.repeat(52)}`);
     if (failures === 0) {
