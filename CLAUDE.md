@@ -532,7 +532,7 @@ Migration `20261003110000` live.
 | Test UI (Chromium Playwright) | ✅ 23 file test lokal lulus; `coaching-cases` butuh `node --experimental-vm-modules` |
 | `index.html` di root + workflow deployment publik | ⬜ belum — keputusan Romo: tidak ada perubahan (12 Okt 2026) |
 | Tier 1 `docs/GO-LIVE-READINESS.md` v1.2 (13 Okt) | T1-07 ✅ terverifikasi live; T1-01/05 ⚠️ (audit lulus 12 + 13 Okt, Sentry ada di 8 portal tapi dashboard belum terbukti); T1-02/03 ⚠️ uji formal belum; T1-04 ⚠️ sebagian (`a7ec7f3` tutup penilaian ganda, belum atomik penuh); T1-06 ⚠️ monitor uptime sudah didaftarkan Romo, test alert belum tercatat |
-| Audit ulang tenant-isolation pasca migration parent | ✅ SELESAI 13 Okt — CHECK 1–17 lulus |
+| Audit ulang tenant-isolation pasca migration parent | ✅ SELESAI 13 Okt — CHECK 1–18 lulus (CHECK 18 = trigger forum orang tua) |
 | Backup aktif, restore drill, rollback migration | ⬜ belum terbukti |
 | Monitoring + jalur dukungan + kebijakan privasi data siswa | ⬜ belum |
 | Rekonsiliasi `docs/konsep/go-live-10-sekolah-checklist.md` (terakhir Juli 2026) | ⬜ belum |
