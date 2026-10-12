@@ -230,10 +230,10 @@ Blocker yang paling mendesak:
 
 | Kode  | Item | Status |
 |-------|------|--------|
-| T1-01 | Zero critical/high vulnerability | ⚠️ `tests/tenant-isolation.mjs` CHECK 1–17 LULUS di DB live (12 Okt); belum diulang pasca migrasi `20261012100000` |
+| T1-01 | Zero critical/high vulnerability | ⚠️ `tests/tenant-isolation.mjs` CHECK 1–17 LULUS di DB live, diulang 13 Okt SETELAH migrasi `20261012100000` terpasang. Belum ✅: temuan audit Codex terkait perangkat ajar masih open (dikecualikan atas perintah pemilik), dan suite ini belum memuat uji perilaku untuk trigger `trg_validate_parent_forum_audience` (hanya diuji sintetis di `tests/parent-portal-sql.mjs`) |
 | T1-02 | Alur absensi end-to-end | ⚠️ Test otomatis lulus (`wali-attendance-sql` 18); uji manual formal belum |
 | T1-03 | Alur penilaian end-to-end | ⚠️ Belum ada uji E2E formal |
-| T1-04 | Data tidak hilang saat error | ⚠️ Review transaksi tabel sensitif belum lengkap |
+| T1-04 | Data tidak hilang saat error | ⚠️ Sebagian. Review Codex diverifikasi ke kode + DB live (13 Okt): NOT NULL kolom kritis `assessment_results`/`grade_recap`/`attendance` terverifikasi live; penilaian ganda saat simpan sumatif gagal DIPERBAIKI (`a7ec7f3`). Belum atomik penuh: simpan sumatif bertahap per siswa (kini dapat diulang tanpa duplikat) dan absensi lintas beberapa sesi (tiap sesi atomik + idempoten). Atomik penuh butuh RPC baru, ditunda |
 | T1-05 | Error tracking aktif | ⚠️ Kode ada di 8 portal; dashboard + alert belum terbukti |
 | T1-06 | Uptime monitoring aktif | ⚠️ Sudah didaftarkan Romo; cakupan 8 portal dan test alert belum tercatat |
 | T1-07 | Guard rls_cc_update student↔school | ✅ Terverifikasi live |
@@ -248,4 +248,4 @@ Keputusan: **NO-GO** (tidak berubah).
 |-------|---------|-----------|
 | 1.0 | 26 Agu 2026 | Dokumen pertama dibuat |
 | 1.1 | 26 Agu 2026 | Revisi berdasarkan review: T1-04 rapor turun ke T2-06 (export Excel e-Rapor); rls_cc_update naik dari T2-03 ke T1-07; T1-05 cara verifikasi diubah ke code review; T1-06/T1-07 renumbered dari T1-06/T1-07 sebelumnya |
-| 1.2 | 13 Okt 2026 | Status T1-05 (kode Sentry ada, dashboard belum terbukti), T1-06 (monitor sudah didaftarkan, test alert belum tercatat) dan T1-07 (terpenuhi, terverifikasi live) diperbarui; ditambah tabel status 13 Okt |
+| 1.2 | 13 Okt 2026 | Status T1-01 (audit live diulang pasca migrasi parent), T1-04 (review Codex + perbaikan `a7ec7f3`), T1-05 (kode Sentry ada, dashboard belum terbukti), T1-06 (monitor sudah didaftarkan, test alert belum tercatat) dan T1-07 (terpenuhi, terverifikasi live) diperbarui; ditambah tabel status 13 Okt |
