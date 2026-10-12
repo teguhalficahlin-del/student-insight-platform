@@ -1,6 +1,6 @@
 # GO-LIVE READINESS — SIP SMK
 
-**Versi:** 1.1  
+**Versi:** 1.2  
 **Tanggal dibuat:** 26 Agustus 2026  
 **Tujuan:** Dokumen ini adalah standar resmi yang menentukan kapan SIP SMK layak digunakan massal. Setiap audit, sprint, dan keputusan go-live harus mengacu pada dokumen ini.
 
@@ -105,7 +105,7 @@ Keputusan: GO / NO-GO
 
 **Tidak terpenuhi jika:** Satu pun portal tidak mengirim event ke error tracking, atau notifikasi tidak berfungsi.
 
-**Status saat ini:** ❌ Belum dikonfigurasi.
+**Status saat ini (13 Okt 2026):** ⚠️ Kode ada — Sentry (DSN terisi, bukan placeholder) dimuat di halaman login dan/atau dashboard kedelapan portal. Yang BELUM terbukti: event benar-benar tiba di dashboard dan alert terkirim ke Romo. Hanya bisa diverifikasi di dashboard Sentry.
 
 ---
 
@@ -121,7 +121,7 @@ Keputusan: GO / NO-GO
 
 **Tidak terpenuhi jika:** Monitoring belum ada, atau alert tidak terkirim saat endpoint down.
 
-**Status saat ini:** ❌ Belum dikonfigurasi.
+**Status saat ini (13 Okt 2026):** ⚠️ Monitor uptime SUDAH didaftarkan oleh Romo (disampaikan lisan; tidak terlihat dari repo). Yang belum tercatat: apakah kedelapan URL portal terdaftar, dan apakah test alert (endpoint dimatikan lalu alert diterima) sudah dilakukan.
 
 ---
 
@@ -137,7 +137,7 @@ Keputusan: GO / NO-GO
 
 **Tidak terpenuhi jika:** UPDATE berhasil mengganti `student_id` ke siswa sekolah lain tanpa error.
 
-**Status saat ini:** ❌ Belum ada — `rls_cc_update` saat ini hanya cek `school_id = fn_current_school_id()`, tidak ada guard `student_id`.
+**Status saat ini (13 Okt 2026):** ✅ Terpenuhi — diverifikasi di DB live (`pg_policies`): `with_check` `rls_cc_update` = `(school_id = fn_current_school_id()) AND fn_student_in_current_school(student_id)`. Migrasi final: `20260828140000_rls-cc-update-remove-guc.sql`. Uji perilaku UPDATE-langsung ditolak ada di `tests/tenant-isolation.mjs` CHECK 14 (W2a/W2b).
 
 ---
 
@@ -226,6 +226,20 @@ Blocker yang paling mendesak:
 3. T1-07 — rls_cc_update perlu ditambahkan guard student↔school
 4. T1-01 — Sprint Forum-1 perlu diselesaikan
 
+### Pembaruan 13 Oktober 2026
+
+| Kode  | Item | Status |
+|-------|------|--------|
+| T1-01 | Zero critical/high vulnerability | ⚠️ `tests/tenant-isolation.mjs` CHECK 1–17 LULUS di DB live (12 Okt); belum diulang pasca migrasi `20261012100000` |
+| T1-02 | Alur absensi end-to-end | ⚠️ Test otomatis lulus (`wali-attendance-sql` 18); uji manual formal belum |
+| T1-03 | Alur penilaian end-to-end | ⚠️ Belum ada uji E2E formal |
+| T1-04 | Data tidak hilang saat error | ⚠️ Review transaksi tabel sensitif belum lengkap |
+| T1-05 | Error tracking aktif | ⚠️ Kode ada di 8 portal; dashboard + alert belum terbukti |
+| T1-06 | Uptime monitoring aktif | ⚠️ Sudah didaftarkan Romo; cakupan 8 portal dan test alert belum tercatat |
+| T1-07 | Guard rls_cc_update student↔school | ✅ Terverifikasi live |
+
+Keputusan: **NO-GO** (tidak berubah).
+
 ---
 
 ## RIWAYAT PERUBAHAN
@@ -234,3 +248,4 @@ Blocker yang paling mendesak:
 |-------|---------|-----------|
 | 1.0 | 26 Agu 2026 | Dokumen pertama dibuat |
 | 1.1 | 26 Agu 2026 | Revisi berdasarkan review: T1-04 rapor turun ke T2-06 (export Excel e-Rapor); rls_cc_update naik dari T2-03 ke T1-07; T1-05 cara verifikasi diubah ke code review; T1-06/T1-07 renumbered dari T1-06/T1-07 sebelumnya |
+| 1.2 | 13 Okt 2026 | Status T1-05 (kode Sentry ada, dashboard belum terbukti), T1-06 (monitor sudah didaftarkan, test alert belum tercatat) dan T1-07 (terpenuhi, terverifikasi live) diperbarui; ditambah tabel status 13 Okt |
